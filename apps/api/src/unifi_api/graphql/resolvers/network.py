@@ -115,6 +115,7 @@ from unifi_api.services.controllers import get_controller
 from unifi_api.services.incident_evidence import (
     collect_network_evidence,
     network_request,
+    network_site,
     presentation,
     require_product,
 )
@@ -3671,9 +3672,11 @@ class NetworkQuery:
         mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
         detail: str = "view",
         max_records_returned: int | None = None,
+        resume_after: str | None = None,
     ) -> IncidentEvidence:
         ctx: GraphQLContext = info.context
         # Validated before any controller I/O: invalid input never acquires a manager.
+        network_site(site)
         incident = network_request(
             start=start,
             end=end,
@@ -3685,7 +3688,7 @@ class NetworkQuery:
             max_elapsed_ms=max_elapsed_ms,
             mappings=mappings,
         )
-        view = presentation(detail=detail, max_records_returned=max_records_returned)
+        view = presentation(detail=detail, max_records_returned=max_records_returned, resume_after=resume_after)
         async with ctx.sessionmaker() as session:
             # From the database only, before collecting: NOT_FOUND, then CAPABILITY_MISMATCH (REST: 404, 409).
             require_product(await get_controller(session, controller), "network")

@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import ValidationError
-from unifi_core.incident_collection import describe_validation_error
+from unifi_core.incident_collection import LABEL_RULE, MAX_LABEL_LENGTH, describe_validation_error, is_label
 from unifi_core.incident_evidence import IncidentEvidence
 from unifi_core.incident_evidence_view import EvidencePresentation
 from unifi_core.network.incident_collection import collect_network_incident_evidence
@@ -30,6 +30,7 @@ __all__ = [
     "collect_network_evidence",
     "collect_protect_evidence",
     "network_request",
+    "network_site",
     "presentation",
     "protect_request",
     "require_product",
@@ -87,9 +88,21 @@ def protect_request(**arguments: Any) -> ProtectIncidentRequest:
     return _build_request(ProtectIncidentRequest, arguments)
 
 
-def presentation(*, detail: Any = None, max_records_returned: Any = None) -> EvidencePresentation:
+def presentation(
+    *, detail: Any = None, max_records_returned: Any = None, resume_after: Any = None
+) -> EvidencePresentation:
     """Validate how the evidence is returned (the bounded view by default); raises ``IncidentRequestError``."""
-    return _build_request(EvidencePresentation, {"detail": detail, "max_records_returned": max_records_returned})
+    return _build_request(
+        EvidencePresentation,
+        {"detail": detail, "max_records_returned": max_records_returned, "resume_after": resume_after},
+    )
+
+
+def network_site(site: Any) -> str:
+    """Validate the Network site, recorded in each source's scope like a label; raises ``IncidentRequestError``."""
+    if not is_label(site, MAX_LABEL_LENGTH):
+        raise IncidentRequestError(f"site: must be 1-{MAX_LABEL_LENGTH} characters {LABEL_RULE}")
+    return site
 
 
 async def collect_network_evidence(acquire: Acquire, request: NetworkIncidentRequest, *, site: str) -> IncidentEvidence:

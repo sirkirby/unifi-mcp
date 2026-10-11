@@ -242,6 +242,7 @@ _GRAPHQL_TYPES = {
     "mappings": "JSON",
     "detail": "String",
     "max_records_returned": "Int",
+    "resume_after": "String",
 }
 
 
@@ -304,6 +305,27 @@ async def test_mcp_rest_and_graphql_return_the_same_evidence(
         (source,) = view.sources
         assert view.record_selection.max_records_returned == arguments.get("max_records_returned", 25)
     assert source.outcome.value == RESPONSES[product][scenario]["outcome"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_rest_and_graphql_resume_a_view_alike(frozen_clocks, monkeypatch, tmp_path):
+    resumed = 0
+    for product, scenario in CASES:
+        build = network_manager if product == "network" else protect_manager
+        first = await via_mcp(product, build(scenario), monkeypatch, {"max_records_returned": 1})
+        cursor = first["record_selection"]["next_cursor"]
+        if cursor is None:
+            continue
+        arguments = {"max_records_returned": 1, "resume_after": cursor}
+        from_mcp = await via_mcp(product, build(scenario), monkeypatch, arguments)
+        from_rest = await via_rest(product, build(scenario), tmp_path / f"{scenario}-rest", monkeypatch, arguments)
+        from_graphql = await via_graphql(
+            product, build(scenario), tmp_path / f"{scenario}-graphql", monkeypatch, arguments
+        )
+        assert from_mcp == from_rest == from_graphql
+        assert from_rest["record_selection"]["before_resume"]["total"] == 1
+        resumed += 1
+    assert resumed, "some recorded answer holds more than one record"
 
 
 @pytest.mark.asyncio

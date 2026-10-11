@@ -198,6 +198,48 @@ async def test_detail_full_returns_the_contract_document_and_the_view_counts_omi
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("path", "product"), [(NETWORK_PATH, "network"), (PROTECT_PATH, "protect")])
+async def test_a_view_resumes_after_its_cursor_alike_on_rest_and_graphql(
+    tmp_path, monkeypatch, clock, path, product
+) -> None:
+    harness = await make_harness(tmp_path, monkeypatch)
+    scenario = network_scenario if product == "network" else protect_scenario
+    first = (await harness.rest(path, lambda: scenario("events"), max_records_returned=1)).json()["data"]
+    cursor = first["record_selection"]["next_cursor"]
+    assert cursor is not None
+    rest = (await harness.rest(path, lambda: scenario("events"), max_records_returned=1, resume_after=cursor)).json()
+    resumed = rest["data"]
+    check_document(resumed)
+    assert resumed["record_selection"]["resume_after"] == cursor
+    assert resumed["record_selection"]["before_resume"]["total"] == 1
+    assert {r["evidence_id"] for r in resumed["records"]}.isdisjoint(r["evidence_id"] for r in first["records"])
+    harness.build = lambda: scenario("events")
+    arguments = gql_args(
+        harness.cid, locationId='"fixture-location-a"', maxRecordsReturned="1", resumeAfter=json.dumps(cursor)
+    )
+    gql = await harness.graphql(f"{{ {product} {{ incidentEvidence({arguments}) {{ document }} }} }}")
+    assert gql.status_code == 200 and "errors" not in gql.json(), gql.text
+    assert without_wall_time(gql.json()["data"][product]["incidentEvidence"]["document"]) == without_wall_time(resumed)
+
+
+@pytest.mark.asyncio
+async def test_a_network_site_is_bounded_like_a_label_before_any_read(tmp_path, monkeypatch, clock) -> None:
+    harness = await make_harness(tmp_path, monkeypatch)
+    for site in (SENTINEL + '"', "x" * 129):
+        response = await harness.rest(f"/v1/sites/{site}/incident-evidence/network", lambda: network_scenario("events"))
+        assert response.status_code == 422, response.text
+        assert SENTINEL not in response.text and response.json()["detail"].startswith("site:")
+    harness.build = lambda: network_scenario("events")
+    response = await harness.graphql(
+        f"{{ network {{ incidentEvidence({gql_args(harness.cid, site=json.dumps(SENTINEL + chr(92)))}) "
+        "{ document } } }"
+    )
+    assert response.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert SENTINEL not in response.text
+    assert harness.calls == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("product", ["network", "protect"])
 async def test_graphql_detail_full_returns_the_contract_document(tmp_path, monkeypatch, clock, product) -> None:
     harness = await make_harness(tmp_path, monkeypatch)
@@ -265,6 +307,9 @@ async def test_protect_camera_ids_are_each_their_own_source(tmp_path, monkeypatc
         {"max_records_returned": 0},
         {"max_records_returned": 51},
         {"detail": "full", "max_records_returned": 5},
+        {"resume_after": SENTINEL},
+        {"detail": "full", "resume_after": "1||network.events|int|7"},
+        {"location_id": SENTINEL + '"'},
     ],
 )
 async def test_invalid_input_is_a_422_that_never_echoes_it(tmp_path, monkeypatch, clock, path, overrides) -> None:

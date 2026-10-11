@@ -85,6 +85,13 @@ async def get_protect_incident_evidence(
             f"1-{MAX_RECORDS_RETURNED}); omitted records stay in coverage. View only"
         ),
     ),
+    resume_after: str | None = Query(
+        None,
+        description=(
+            "record_selection.next_cursor from an earlier view of the same request; returns the records "
+            "after it. View only"
+        ),
+    ),
     controller=Depends(resolve_controller),
 ) -> dict:
     require_capability(controller, "protect")
@@ -101,7 +108,7 @@ async def get_protect_incident_evidence(
             max_elapsed_ms=max_elapsed_ms,
             mappings=mappings,
         )
-        view = presentation(detail=detail, max_records_returned=max_records_returned)
+        view = presentation(detail=detail, max_records_returned=max_records_returned, resume_after=resume_after)
     except IncidentRequestError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     factory = request.app.state.manager_factory

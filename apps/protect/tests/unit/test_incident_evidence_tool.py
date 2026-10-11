@@ -116,6 +116,8 @@ async def test_source_failures_stay_inside_a_successful_response(tool):
         ({**WINDOW, "camera_ids": [f"cam-fixture-{i:04d}" for i in range(6)]}, "camera_ids"),
         ({**WINDOW, "detail": "Front Door"}, "detail"),
         ({**WINDOW, "max_records_returned": 0}, "max_records_returned"),
+        ({**WINDOW, "resume_after": "Front Door"}, "resume_after"),
+        ({**WINDOW, "detail": "full", "resume_after": "1||protect.events|str|Front"}, "apply only to detail=view"),
     ],
 )
 async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool, arguments, message):

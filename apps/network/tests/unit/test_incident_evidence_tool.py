@@ -111,6 +111,11 @@ async def test_returns_the_bounded_view_of_the_same_document_by_default(tool):
     assert view["record_selection"]["omitted"]["in_window"] == 1
     default = await module.get_incident_evidence(**WINDOW)
     assert default["data"]["record_selection"]["max_records_returned"] == 25
+    resumed = await module.get_incident_evidence(
+        **WINDOW, max_records_returned=2, resume_after=view["record_selection"]["next_cursor"]
+    )
+    assert resumed["data"]["record_selection"]["before_resume"]["total"] == 2
+    assert [record["source_record_id"] for record in resumed["data"]["records"]] == ["evt-2"]
 
 
 @pytest.mark.asyncio
@@ -147,7 +152,22 @@ async def test_source_failures_stay_inside_a_successful_response(tool):
         ),
         ({**WINDOW, "detail": "fixture-ap-1"}, "detail"),
         ({**WINDOW, "max_records_returned": 51}, "max_records_returned"),
-        ({**WINDOW, "detail": "full", "max_records_returned": 5}, "applies only to detail=view"),
+        ({**WINDOW, "detail": "full", "max_records_returned": 5}, "apply only to detail=view"),
+        ({**WINDOW, "resume_after": "fixture-ap-1"}, "resume_after"),
+        ({**WINDOW, "location_id": "fixture-ap-1\n"}, "location_id"),
+        (
+            {
+                **WINDOW,
+                "mappings": [
+                    {
+                        "entity": {"kind": "network_device", "id_kind": "mac", "id": DEVICE},
+                        "target": {"kind": "location", "id_kind": "location_id", "id": "fixture-ap-1" * 6},
+                        "source": "operator_input",
+                    }
+                ],
+            },
+            "mapping identifiers must be 1-64 characters",
+        ),
     ],
 )
 async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool, arguments, message):

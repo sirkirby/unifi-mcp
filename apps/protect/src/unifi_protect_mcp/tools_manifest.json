@@ -2583,6 +2583,10 @@
               "description": "Longest window to read; a longer window is not read (1-2592000)",
               "type": "integer"
             },
+            "resume_after": {
+              "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+              "type": "string"
+            },
             "start": {
               "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
               "type": "string"

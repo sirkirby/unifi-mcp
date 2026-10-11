@@ -1525,7 +1525,7 @@ type NetworkQuery {
   """
   Collect bounded, read-only Network event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
   """
-  incidentEvidence(controller: ID!, start: String!, end: String!, site: String! = "default", deviceMacs: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null): IncidentEvidence!
+  incidentEvidence(controller: ID!, start: String!, end: String!, site: String! = "default", deviceMacs: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null, resumeAfter: String = null): IncidentEvidence!
 
   """
   Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
@@ -1774,7 +1774,7 @@ type ProtectQuery {
   """
   Collect bounded, read-only Protect event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
   """
-  incidentEvidence(controller: ID!, start: String!, end: String!, cameraIds: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null): IncidentEvidence!
+  incidentEvidence(controller: ID!, start: String!, end: String!, cameraIds: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null, resumeAfter: String = null): IncidentEvidence!
 
   """List cameras on the Protect controller (paginated)."""
   cameras(controller: ID!, limit: Int! = 50, cursor: String = null): CameraPage!

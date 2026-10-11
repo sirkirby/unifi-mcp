@@ -16486,6 +16486,24 @@
             }
           },
           {
+            "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+            "in": "query",
+            "name": "resume_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+              "title": "Resume After"
+            }
+          },
+          {
             "description": "Controller UUID; omit to use default",
             "in": "query",
             "name": "controller",
@@ -16701,6 +16719,24 @@
               ],
               "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
               "title": "Max Records Returned"
+            }
+          },
+          {
+            "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+            "in": "query",
+            "name": "resume_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+              "title": "Resume After"
             }
           },
           {

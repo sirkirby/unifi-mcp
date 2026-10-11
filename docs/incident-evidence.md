@@ -402,13 +402,14 @@ other consumers.
 
 Tool arguments, REST query parameters and GraphQL arguments are the request
 fields above (`mappings` is a JSON-encoded string in REST and a JSON value in
-GraphQL), plus two presentation arguments, validated with the request before
+GraphQL), plus three presentation arguments, validated with the request before
 any read:
 
 | Argument | Meaning |
 |----------|---------|
 | `detail` | `view` (default) returns the [client view](#client-view); `full` returns the whole evidence document, for programmatic consumers. |
 | `max_records_returned` | Record citations in the view, 1 to 50, default 25. Rejected with `detail=full`. |
+| `resume_after` | A view's `record_selection.next_cursor`; the view of the same request then returns the records after it (see [continuation](#client-view)). Rejected with `detail=full`. |
 
 Every surface renders through `EvidencePresentation.render`, so the same input
 and controller answers give the same payload. MCP returns
@@ -417,7 +418,8 @@ and controller answers give the same payload. MCP returns
 JSON `document` field, because the JSON Schema artifacts, not the GraphQL
 schema, are the contract. Invalid input is an MCP error response, REST 422 or
 GraphQL `BAD_REQUEST`, naming declared fields and list indexes only (an
-undeclared key is never echoed); framework argument coercion errors drop the
+undeclared key is never echoed). The Network site, recorded in each source's
+scope, follows the `location_id` rule; framework argument coercion errors drop the
 rejected value too, and expected client errors are logged as one fixed line,
 without a traceback or the query source. GraphQL classifies errors by
 exception type, never by message text. A controller that does not run the

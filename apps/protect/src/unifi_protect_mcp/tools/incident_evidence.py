@@ -89,6 +89,15 @@ async def get_incident_evidence(
             )
         ),
     ] = None,
+    resume_after: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "record_selection.next_cursor from an earlier view of the same request; returns the records "
+                "after it. View only"
+            )
+        ),
+    ] = None,
 ) -> Dict[str, Any]:
     """Collect bounded Protect incident evidence."""
     try:
@@ -106,7 +115,9 @@ async def get_incident_evidence(
     except ValidationError as exc:
         return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, ProtectIncidentRequest)}"}
     try:
-        presentation = EvidencePresentation(detail=detail, max_records_returned=max_records_returned)
+        presentation = EvidencePresentation(
+            detail=detail, max_records_returned=max_records_returned, resume_after=resume_after
+        )
     except ValidationError as exc:
         return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, EvidencePresentation)}"}
     try:

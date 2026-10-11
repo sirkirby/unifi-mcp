@@ -738,6 +738,7 @@ Collect bounded, read-only Network event evidence for one incident window. Retur
 - `mappings` (query)
 - `detail` (query)
 - `max_records_returned` (query)
+- `resume_after` (query)
 - `controller` (query)
 
 
@@ -1882,6 +1883,7 @@ Collect bounded, read-only Protect event evidence for one incident window. Retur
 - `mappings` (query)
 - `detail` (query)
 - `max_records_returned` (query)
+- `resume_after` (query)
 - `controller` (query)
 
 
