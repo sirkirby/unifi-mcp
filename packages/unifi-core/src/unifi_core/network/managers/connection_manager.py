@@ -23,9 +23,16 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
 from unifi_core.auth import AuthenticationStatus, UniFiAuth
+from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
 from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
+from unifi_core.request_budget import (
+    RequestBudgetSpent,
+    charge_request,
+    charged_session_middleware,
+    prepaid_attempt,
+)
 from unifi_core.support_bundle import (
     ConnectivityProbe,
     SafeConnectionAttempt,
@@ -173,6 +180,8 @@ async def detect_unifi_os_pre_login(
         logger.debug("Pre-login detection: timeout")
     except aiohttp.ClientError as e:
         logger.debug("Pre-login detection failed: %s", e)
+    except RequestBudgetSpent:
+        raise
     except Exception as e:
         logger.debug("Pre-login detection unexpected error: %s", e)
 
@@ -215,6 +224,8 @@ async def detect_with_retry(
             result = await detect_func(session, base_url, timeout)
             if result is not None:
                 return result
+        except RequestBudgetSpent:
+            raise
         except Exception as e:
             if attempt < max_retries - 1:
                 delay = 2**attempt  # Exponential backoff: 1s, 2s, 4s
@@ -263,6 +274,8 @@ async def _probe_endpoint(
         logger.debug("%s endpoint probe timed out", endpoint_name)
     except aiohttp.ClientError as e:
         logger.debug("%s endpoint probe failed: %s", endpoint_name, e)
+    except RequestBudgetSpent:
+        raise
     except Exception as e:
         logger.debug("Unexpected error probing %s endpoint: %s", endpoint_name, e)
 
@@ -370,6 +383,8 @@ class ConnectionManager:
         self._last_cache_update: Dict[str, float] = {}
         self._cache_generations: Dict[str, int] = {}
         self._last_connection_error: Optional[str] = None
+        # The category of the failure behind _last_connection_error, with fixed text only.
+        self._last_connection_failure: Optional[tuple[str, ControllerConnectionFailed]] = None
         self._reconnect_block_error: Optional[str] = None
         self._last_reauthentication_attempt_at: float | None = None
         self._reauthentication_clock = _time.monotonic
@@ -459,6 +474,10 @@ class ConnectionManager:
     def _record_connection_error(self, error: BaseException) -> str:
         self._support_attempt = connection_attempt_failed(error)
         self._last_connection_error = self._sanitize_connection_error(error)
+        self._last_connection_failure = (
+            self._last_connection_error,
+            connection_failure("Connecting to the Network controller failed.", error),
+        )
         return self._last_connection_error
 
     @property
@@ -467,11 +486,21 @@ class ConnectionManager:
         return self._last_connection_error
 
     def _not_connected_error(self) -> ConnectionError:
-        if self._last_connection_error:
-            return ConnectionError(
-                f"Not connected to controller: last connection attempt failed: {self._last_connection_error}"
-            )
-        return ConnectionError("Not connected to controller")
+        """Fixed text, keeping the last failure's category (auth, permission, timeout) and status."""
+        if not self._last_connection_error:
+            return ConnectionError("Not connected to controller")
+        message = f"Not connected to controller: last connection attempt failed: {self._last_connection_error}"
+        recorded = self._last_connection_failure
+        if recorded is None or recorded[0] != self._last_connection_error:
+            return ConnectionError(message)
+        error = type(recorded[1])(message)
+        error.status = recorded[1].status
+        return error
+
+    @property
+    def initialization_failure(self) -> Optional[ConnectionError]:
+        """Why the last initialization failed, as a fixed-text error keeping its category."""
+        return self._not_connected_error() if self._last_connection_error else None
 
     @staticmethod
     def _is_terminal_auth_error(error: BaseException) -> bool:
@@ -910,8 +939,12 @@ class ConnectionManager:
                         self._aiohttp_session = None
 
                     connector = aiohttp.TCPConnector(ssl=False if not self.verify_ssl else None)
+                    # Charges every non-login request a bounded read's cold connection sends
+                    # (detection, sites checks); a no-op outside a bounded read.
                     self._aiohttp_session = aiohttp.ClientSession(
-                        connector=connector, cookie_jar=aiohttp.CookieJar(unsafe=True)
+                        connector=connector,
+                        cookie_jar=aiohttp.CookieJar(unsafe=True),
+                        middlewares=(charged_session_middleware,),
                     )
 
                     # Controller type detection/override configuration
@@ -1012,6 +1045,10 @@ class ConnectionManager:
                     self._connected_event.set()
                     return True
 
+                except RequestBudgetSpent:
+                    # A bounded read could not pay for the next request: not a controller fault.
+                    await self._discard_connection()
+                    raise
                 except (
                     LoginRequired,
                     RequestError,
@@ -1274,6 +1311,8 @@ class ConnectionManager:
         """Make a request to the controller API, handling raw responses."""
         if not await self.ensure_connected() or not self.controller:
             raise self._not_connected_error()
+        # A bounded read charges (or refuses) each attempt before it is sent.
+        charge_request()
 
         # Apply override if we have better detection (FR-003: use cached detection)
         original_controller = self.controller
@@ -1295,7 +1334,8 @@ class ConnectionManager:
         try:
             # Diagnostics: capture timing and payloads without leaking secrets
             start_ts = _time.perf_counter()
-            response = await request_method(api_request)
+            with prepaid_attempt():
+                response = await request_method(api_request)
             duration_ms = (_time.perf_counter() - start_ts) * 1000.0
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
@@ -1327,9 +1367,11 @@ class ConnectionManager:
                     raise ConnectionError("Re-authentication failed, controller not available.")
                 logger.info("Re-authentication successful, retrying original request...")
                 request_method = self.controller.connectivity._request if return_raw else self.controller.request
+                charge_request()
                 try:
                     start_ts = _time.perf_counter()
-                    retry_response = await request_method(api_request)
+                    with prepaid_attempt():
+                        retry_response = await request_method(api_request)
                     duration_ms = (_time.perf_counter() - start_ts) * 1000.0
                     try:
                         from unifi_core.diagnostics import diagnostics_enabled, log_api_request

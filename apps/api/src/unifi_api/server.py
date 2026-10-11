@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
@@ -113,6 +116,7 @@ from unifi_api.routes.resources.network import (
 from unifi_api.routes.resources.network import (
     gateway_settings as net_gateway_settings_routes,
 )
+from unifi_api.routes.resources.network import incident_evidence as net_incident_evidence_routes
 from unifi_api.routes.resources.network import (
     legacy_firewall_rules as net_legacy_firewall_rules_routes,
 )
@@ -192,6 +196,9 @@ from unifi_api.routes.resources.protect import (
     events as protect_events_routes,
 )
 from unifi_api.routes.resources.protect import (
+    incident_evidence as protect_incident_evidence_routes,
+)
+from unifi_api.routes.resources.protect import (
     lights as protect_lights_routes,
 )
 from unifi_api.routes.resources.protect import (
@@ -256,6 +263,16 @@ class _UnifiGraphQLRouter(GraphQLRouter):
         if result.extensions:
             data["extensions"] = result.extensions
         return data
+
+
+async def _request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI's 422 body without the rejected input it would otherwise echo.
+
+    Keeps each error's type, location and message, the parts that say what
+    to fix, and drops ``input``, ``ctx`` and ``url``.
+    """
+    detail = [{key: error[key] for key in ("type", "loc", "msg") if key in error} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
 
 
 def create_app(config: ApiConfig) -> FastAPI:
@@ -382,6 +399,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         docs_url="/v1/docs",
         lifespan=lifespan,
     )
+    app.add_exception_handler(RequestValidationError, _request_validation_error)
 
     # Auth doesn't use FastAPI's HTTPBearer dependency (the middleware reads
     # the header directly to keep the audit-on-failure path simple), so the
@@ -517,6 +535,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_mgmt_routes,
         net_threat_management_routes,
         net_threat_posture_routes,
+        net_incident_evidence_routes,
         # Cluster 6: stats / events / system. The network events router owns
         # the bare /events path for both products via a capability-aware
         # dispatcher; it must be included before protect_events_routes so the
@@ -529,6 +548,7 @@ def create_app(config: ApiConfig) -> FastAPI:
     for r in (
         protect_cameras_routes,
         protect_events_routes,
+        protect_incident_evidence_routes,
         protect_recordings_routes,
         protect_lights_routes,
         protect_sensors_routes,

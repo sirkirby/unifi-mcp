@@ -8,14 +8,27 @@ import asyncio
 import logging
 import time
 from collections import deque
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.message import MessageKey
 
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiConnectionError,
+    UniFiMalformedResponseError,
+    UniFiOperationError,
+    UniFiPermissionError,
+    UniFiRateLimitError,
+    http_status,
+)
 from unifi_core.mac import mac_equal
 from unifi_core.network.managers.connection_manager import ConnectionManager, response_status
+from unifi_core.request_budget import RequestBudgetSpent, create_uncharged_task
+from unifi_core.source_page import SourcePage
+from unifi_core.support_bundle import ErrorCategory, classify_error
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -25,6 +38,125 @@ _V2_UNSUPPORTED_STATUSES = frozenset({404, 405, 501})
 _V2_PROBE_BACKOFF_BASE = 30.0
 _V2_PROBE_BACKOFF_MAX = 300.0
 _V2_PROBE_MAX_FAILURES = 32
+
+
+_V2_ENVELOPE_KEYS = frozenset(
+    {"data", "logs", "total_element_count", "totalElementCount", "total_page_count", "totalPageCount"}
+)
+_LEGACY_EVENTS_CAP = 3000
+_V2_PAGE_CAP = 100
+
+
+@dataclass(frozen=True)
+class _V2Page:
+    rows: List[Any]
+    total_elements: Optional[int]
+    total_pages: Optional[int]
+
+
+def _count(envelope: Dict[str, Any], *keys: str) -> Optional[int]:
+    for key in keys:
+        value = envelope.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
+
+
+def _v2_page(response: Any, endpoint: str) -> _V2Page:
+    """Read one v2 system-log envelope, or raise on any shape it cannot read.
+
+    ``ApiRequestV2.decode`` wraps an object body as ``[body]`` and
+    ``ConnectionManager.request`` returns that list, so the envelope arrives
+    as the single element of a list (tests may pass the bare object). The
+    envelope must hold its rows under ``data`` or ``logs``; a list of rows,
+    an unknown envelope or a non-list collection is malformed, never empty.
+    """
+    envelope: Any = response
+    if isinstance(response, list):
+        if len(response) != 1 or not isinstance(response[0], dict):
+            raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+        envelope = response[0]
+    if not isinstance(envelope, dict) or not _V2_ENVELOPE_KEYS & envelope.keys():
+        raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+    key = "data" if "data" in envelope else "logs" if "logs" in envelope else None
+    rows = envelope[key] if key is not None else []
+    if not isinstance(rows, list):
+        raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+    if key is None and _count(envelope, "total_element_count", "totalElementCount") != 0:
+        # Counts without a collection only describe an empty result when they say zero.
+        raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+    return _V2Page(
+        rows=rows,
+        total_elements=_count(envelope, "total_element_count", "totalElementCount"),
+        total_pages=_count(envelope, "total_page_count", "totalPageCount"),
+    )
+
+
+def _legacy_rows(response: Any, endpoint: str) -> List[Any]:
+    """Return legacy ``data`` rows, or raise when the envelope carries none."""
+    if isinstance(response, list):
+        return response
+    if isinstance(response, dict) and isinstance(response.get("data"), list):
+        return response["data"]
+    raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+
+
+def _records_or_raise(page: SourcePage, endpoint: str) -> List[Dict[str, Any]]:
+    """List callers get readable rows only; an unreadable row fails the read instead of vanishing."""
+    if page.malformed:
+        raise UniFiMalformedResponseError(f"Unreadable rows in response from {endpoint}")
+    return page.records
+
+
+def _safe_status(error: BaseException) -> Optional[int]:
+    try:
+        category_status = classify_error(error)[1]
+    except Exception:
+        category_status = None
+    if category_status is None:
+        try:
+            category_status = http_status(error)
+        except Exception:
+            category_status = None
+    if isinstance(category_status, int) and not isinstance(category_status, bool) and 100 <= category_status <= 599:
+        return category_status
+    return None
+
+
+_SAFE_ERROR_CLASSES = {
+    ErrorCategory.AUTHENTICATION: UniFiAuthError,
+    ErrorCategory.PERMISSION: UniFiPermissionError,
+    ErrorCategory.RATE_LIMITED: UniFiRateLimitError,
+    ErrorCategory.TIMEOUT: TimeoutError,
+    ErrorCategory.CONNECTION: UniFiConnectionError,
+}
+
+
+def _describe_failure(error: BaseException) -> str:
+    """Exception class and HTTP status only; controller text never leaves the manager."""
+    status = _safe_status(error)
+    return f"{type(error).__name__}, HTTP {status}" if status is not None else type(error).__name__
+
+
+def safe_request_error(operation: str, error: BaseException, *, note: str = "") -> Exception:
+    """Translate a controller failure into fixed operation and class text.
+
+    The returned exception keeps the failure's category (authentication,
+    permission, rate limit, timeout, connection) and HTTP status so callers can
+    still classify it, but carries no controller text. Raise it ``from None``.
+    """
+    try:
+        category = classify_error(error)[0]
+    except Exception:
+        category = ErrorCategory.UNKNOWN
+    status = _safe_status(error)
+    message = f"{operation} failed ({_describe_failure(error)}).{note}"
+    if status is not None:
+        # Keeps HTTP-status classification working on the fixed text.
+        message += f" Controller call received {status}."
+    translated = _SAFE_ERROR_CLASSES.get(category, UniFiOperationError)(message)
+    translated.status = status  # type: ignore[attr-defined]
+    return translated
 
 
 def _positive_config_int(value: Any, env_var: str) -> int:
@@ -112,6 +244,11 @@ _DEFAULT_CATEGORIES = [
 
 # Default severities
 _DEFAULT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"]
+
+# What ``get_events`` sends on the v2 path when the caller names no categories
+# or severities; evidence records them as the filters actually applied.
+DEFAULT_EVENT_CATEGORIES: tuple[str, ...] = tuple(_DEFAULT_CATEGORIES)
+DEFAULT_EVENT_SEVERITIES: tuple[str, ...] = tuple(_DEFAULT_SEVERITIES)
 
 
 class EventManager:
@@ -221,7 +358,8 @@ class EventManager:
             return
         self._stopping = False
         self._subscribe(self._cm.controller)
-        self._ws_task = asyncio.create_task(self._run_websocket(), name="network-event-websocket")
+        # Uncharged: a websocket started while a bounded read runs must never draw on its budget.
+        self._ws_task = create_uncharged_task(self._run_websocket(), name="network-event-websocket")
         self._ws_task.add_done_callback(self._on_task_done)
         logger.info("[network-event-mgr] websocket listener started")
 
@@ -518,7 +656,8 @@ class EventManager:
             self._v2_probe_error = None
             self._v2_probe_failures = 0
             return True
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, RequestBudgetSpent):
+            # A refused probe says nothing about the controller's API version.
             raise
         except Exception as probe_error:
             # Log why, not just that: a legacy fallback that modern controllers
@@ -528,11 +667,12 @@ class EventManager:
                 # probe to blame for a later legacy error.
                 self._v2_probe_error = None
                 logger.warning(
-                    "[events] v2 system-log endpoint not available, using legacy /stat/event API: %s",
-                    probe_error,
+                    "[events] v2 system-log endpoint not available (%s), using legacy /stat/event API",
+                    _describe_failure(probe_error),
                 )
                 return False
-            self._v2_probe_error = f"{type(probe_error).__name__}: {probe_error}"
+            # Class and status only: the probe's message can carry controller text.
+            self._v2_probe_error = _describe_failure(probe_error)
             # Saturate the counter so the exponent stays small however long the outage lasts.
             self._v2_probe_failures = min(self._v2_probe_failures + 1, _V2_PROBE_MAX_FAILURES)
             delay = min(_V2_PROBE_BACKOFF_BASE * 2 ** (self._v2_probe_failures - 1), _V2_PROBE_BACKOFF_MAX)
@@ -544,20 +684,16 @@ class EventManager:
             )
             return None
 
-    def _explain_legacy_failure(self, endpoint: str, error: Exception) -> Exception:
-        """Attach the v2 probe failure to a legacy error, when it caused the fallback.
-
-        Returns the original error untouched on a controller that legitimately has
-        no v2 API — there is nothing extra to say about that case.
-        """
-        if not self._v2_probe_error:
-            return error
-        return RuntimeError(
-            f"{endpoint} failed ({error}). This controller was put on the legacy events API "
-            f"because the v2 system-log probe failed: {self._v2_probe_error}. "
-            "On current UniFi Network versions the legacy endpoint no longer exists, so the "
-            "underlying problem is the failed v2 probe, not the missing legacy path."
-        )
+    def _legacy_failure(self, endpoint: str, error: Exception) -> Exception:
+        """A fixed-text legacy failure, naming the failed v2 probe when it caused the fallback."""
+        note = ""
+        if self._v2_probe_error:
+            note = (
+                " This controller was put on the legacy events API because the v2 system-log probe "
+                f"failed ({self._v2_probe_error}). On current UniFi Network versions the legacy endpoint "
+                "no longer exists, so the underlying problem is the failed v2 probe, not the missing legacy path."
+            )
+        return safe_request_error(endpoint, error, note=note)
 
     async def _ensure_api_version(self) -> bool:
         """Return True to use v2, False for legacy; probes on first use and after a transient failure."""
@@ -586,7 +722,9 @@ class EventManager:
         """Get events from the controller.
 
         Uses the v2 system-log API on modern controllers (10.x+),
-        falls back to legacy /stat/event for older versions.
+        falls back to legacy /stat/event for older versions. Raises
+        ``UniFiMalformedResponseError`` when any returned row is unreadable,
+        rather than silently dropping it.
 
         Args:
             within: Hours to look back (default 24).
@@ -598,6 +736,23 @@ class EventManager:
 
         Returns:
             List of event objects.
+        """
+        page = await self.get_events_page(within, limit, start, event_type, categories, severities)
+        return _records_or_raise(page, "/system-log/all" if page.api_path == "v2" else "/stat/event")
+
+    async def get_events_page(
+        self,
+        within: int = 24,
+        limit: int = 100,
+        start: int = 0,
+        event_type: Optional[str] = None,
+        categories: Optional[List[str]] = None,
+        severities: Optional[List[str]] = None,
+    ) -> SourcePage:
+        """Read events with the totals, continuation and bounds evidence needs.
+
+        Unreadable rows stay in ``rows`` for evidence to count. Failures are
+        raised as fixed-text errors carrying no controller text.
         """
         use_v2 = await self._ensure_api_version()
 
@@ -613,17 +768,18 @@ class EventManager:
         event_type: Optional[str],
         categories: Optional[List[str]],
         severities: Optional[List[str]],
-    ) -> List[Dict[str, Any]]:
+    ) -> SourcePage:
         """Get events using the v2 system-log API."""
+        offset = max(start, 0)
         if limit <= 0:
-            return []
+            return SourcePage(rows=[], offset=offset, cap=0, api_path="v2")
 
         try:
             now_ms = int(time.time() * 1000)
             from_ms = now_ms - (within * 3600 * 1000)
-            page_size = min(limit, 100)
-            page_number = max(start, 0) // page_size
-            page_offset = max(start, 0) % page_size
+            page_size = min(limit, _V2_PAGE_CAP)
+            page_number = offset // page_size
+            page_offset = offset % page_size
 
             payload: Dict[str, Any] = {
                 "timestampFrom": from_ms,
@@ -642,8 +798,10 @@ class EventManager:
                 # for values such as CLIENT_DISCONNECTED_WIRELESS_2.
                 payload["keys"] = [event_type]
 
-            events: List[Dict[str, Any]] = []
-            while len(events) < limit + page_offset:
+            rows: List[Any] = []
+            total_elements: Optional[int] = None
+            exhausted = False
+            while len(rows) < limit + page_offset:
                 payload["pageNumber"] = page_number
                 api_request = ApiRequestV2(
                     method="post",
@@ -651,35 +809,39 @@ class EventManager:
                     data=payload.copy(),
                 )
                 response = await self._connection.request(api_request)
-
-                envelope: Any = response
-                if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-                    envelope = response[0]
-
-                if isinstance(envelope, dict):
-                    page = envelope.get("data", envelope.get("logs", []))
-                    total_pages = envelope.get("total_page_count", envelope.get("totalPageCount"))
-                elif isinstance(envelope, list):
-                    page = envelope
-                    total_pages = None
-                else:
-                    page = []
-                    total_pages = None
-
-                if not isinstance(page, list) or not page:
+                page = _v2_page(response, "/system-log/all")
+                if total_elements is None:
+                    total_elements = page.total_elements
+                if not page.rows:
+                    exhausted = True
                     break
-                events.extend(event for event in page if isinstance(event, dict))
+                rows.extend(page.rows)
                 page_number += 1
 
-                if isinstance(total_pages, int) and page_number >= total_pages:
+                if page.total_pages is not None and page_number >= page.total_pages:
+                    exhausted = True
                     break
-                if total_pages is None and len(page) < page_size:
+                if len(page.rows) < page_size:
+                    exhausted = True
                     break
 
-            return events[page_offset : page_offset + limit]
-        except Exception as e:
-            logger.error("Error getting events (v2): %s", e)
+            returned = rows[page_offset : page_offset + limit]
+            cut = len(rows) > page_offset + limit
+            return SourcePage(
+                rows=returned,
+                has_more=True if cut else (False if exhausted and total_elements is None else None),
+                total_reported=total_elements,
+                offset=offset,
+                cap=limit,
+                api_path="v2",
+                submitted_window_ms=(from_ms, now_ms),
+            )
+        except UniFiMalformedResponseError:
+            logger.error("Error getting events (v2): malformed response")
             raise
+        except Exception as e:
+            logger.error("Error getting events (v2): %s", _describe_failure(e))
+            raise safe_request_error("/system-log/all", e) from None
 
     async def _get_events_legacy(
         self,
@@ -687,12 +849,13 @@ class EventManager:
         limit: int,
         start: int,
         event_type: Optional[str],
-    ) -> List[Dict[str, Any]]:
+    ) -> SourcePage:
         """Get events using the legacy /stat/event API."""
         try:
+            sent_limit = min(max(limit, 0), _LEGACY_EVENTS_CAP)
             payload: Dict[str, Any] = {
                 "within": within,
-                "_limit": min(limit, 3000),
+                "_limit": sent_limit,
                 "_start": start,
             }
             if event_type:
@@ -700,15 +863,100 @@ class EventManager:
 
             api_request = ApiRequest(method="post", path="/stat/event", data=payload)
             response = await self._connection.request(api_request)
-
-            if isinstance(response, list):
-                return response
-            if isinstance(response, dict):
-                return response.get("data", [])
-            return []
+            rows = _legacy_rows(response, "/stat/event")
+            return SourcePage(
+                rows=rows,
+                # A page shorter than the limit actually sent is the controller saying it ran out.
+                has_more=False if 0 < sent_limit and len(rows) < sent_limit else None,
+                offset=max(start, 0),
+                cap=sent_limit,
+                api_path="legacy",
+            )
+        except UniFiMalformedResponseError:
+            logger.error("Error getting events (legacy): malformed response")
+            raise
         except Exception as e:
-            logger.error("Error getting events (legacy): %s", e)
-            raise self._explain_legacy_failure("/stat/event", e) from e
+            logger.error("Error getting events (legacy): %s", _describe_failure(e))
+            raise self._legacy_failure("/stat/event", e) from None
+
+    async def read_events_page(
+        self,
+        *,
+        within: int,
+        limit: int,
+        offset: int = 0,
+        window_ms: tuple[int, int] | None = None,
+    ) -> SourcePage:
+        """Exactly one request for one page of the event log, for bounded evidence.
+
+        Unlike :meth:`get_events_page`, which loops over pages and slices them,
+        this sends one request and returns every row it answered with, so the
+        rows a caller counts are the rows fetched. On the v2 path ``offset``
+        must be a multiple of ``limit`` (at most 100), because the controller
+        pages by number. Choosing the API version may first send the probe,
+        which is a request of its own.
+
+        ``window_ms`` gives the v2 path absolute ``timestampFrom``/``timestampTo``
+        bounds instead of a ``within``-hour lookback from now; the page records
+        exactly what was sent. The legacy path only takes a lookback, so it
+        always uses ``within``.
+        """
+        offset = max(offset, 0)
+        if limit <= 0:
+            return SourcePage(rows=[], offset=offset, cap=0)
+        use_v2 = await self._ensure_api_version()
+        endpoint = "/system-log/all" if use_v2 else "/stat/event"
+        if use_v2 and (limit > _V2_PAGE_CAP or offset % limit):
+            raise ValueError("v2 event pages need a limit of at most 100 and an offset that is a multiple of it")
+        try:
+            if use_v2:
+                if window_ms is not None:
+                    from_ms, to_ms = window_ms
+                else:
+                    to_ms = int(time.time() * 1000)
+                    from_ms = to_ms - (within * 3600 * 1000)
+                payload: Dict[str, Any] = {
+                    "timestampFrom": from_ms,
+                    "timestampTo": to_ms,
+                    "severities": _DEFAULT_SEVERITIES,
+                    "categories": _DEFAULT_CATEGORIES,
+                    "type": "GENERAL",
+                    "pageNumber": offset // limit,
+                    "pageSize": limit,
+                    "searchText": "",
+                }
+                response = await self._connection.request(ApiRequestV2(method="post", path=endpoint, data=payload))
+                page = _v2_page(response, endpoint)
+                return SourcePage(
+                    rows=page.rows,
+                    has_more=False if len(page.rows) < limit and page.total_elements is None else None,
+                    total_reported=page.total_elements,
+                    offset=offset,
+                    cap=limit,
+                    api_path="v2",
+                    submitted_window_ms=(from_ms, to_ms),
+                )
+            sent_limit = min(limit, _LEGACY_EVENTS_CAP)
+            payload = {"within": within, "_limit": sent_limit, "_start": offset}
+            response = await self._connection.request(ApiRequest(method="post", path=endpoint, data=payload))
+            rows = _legacy_rows(response, endpoint)
+            return SourcePage(
+                rows=rows,
+                has_more=False if len(rows) < sent_limit else None,
+                offset=offset,
+                cap=sent_limit,
+                api_path="legacy",
+            )
+        except RequestBudgetSpent:
+            raise
+        except UniFiMalformedResponseError:
+            logger.error("Error reading an event page: malformed response")
+            raise
+        except Exception as e:
+            logger.error("Error reading an event page: %s", _describe_failure(e))
+            if use_v2:
+                raise safe_request_error(endpoint, e) from None
+            raise self._legacy_failure(endpoint, e) from None
 
     async def get_alarms(
         self,
@@ -718,20 +966,27 @@ class EventManager:
         """Get active alarms/alerts from the controller.
 
         Uses v2 system-log/critical on modern controllers,
-        falls back to legacy /stat/alarm for older versions.
+        falls back to legacy /stat/alarm for older versions. Raises
+        ``UniFiMalformedResponseError`` when any returned row is unreadable.
         """
+        page = await self.get_alarms_page(archived, limit)
+        return _records_or_raise(page, "/system-log/critical" if page.api_path == "v2" else "/stat/alarm")
+
+    async def get_alarms_page(self, archived: bool = False, limit: int = 100) -> SourcePage:
+        """Read alarms with the totals, continuation and bounds evidence needs."""
         use_v2 = await self._ensure_api_version()
 
         if use_v2:
             return await self._get_alarms_v2(archived, limit)
         return await self._get_alarms_legacy(archived, limit)
 
-    async def _get_alarms_v2(self, archived: bool, limit: int) -> List[Dict[str, Any]]:
-        """Get alarms using the v2 system-log/critical API."""
+    async def _get_alarms_v2(self, archived: bool, limit: int) -> SourcePage:
+        """Get alarms using the v2 system-log/critical API (one page)."""
         try:
             now_ms = int(time.time() * 1000)
             # Look back 30 days for alarms
             from_ms = now_ms - (30 * 24 * 3600 * 1000)
+            page_size = min(max(limit, 0), _V2_PAGE_CAP)
 
             payload: Dict[str, Any] = {
                 "timestampFrom": from_ms,
@@ -740,7 +995,7 @@ class EventManager:
                 "categories": _DEFAULT_CATEGORIES,
                 "type": "GENERAL",
                 "pageNumber": 0,
-                "pageSize": min(limit, 100),
+                "pageSize": page_size,
                 "searchText": "",
             }
 
@@ -751,20 +1006,28 @@ class EventManager:
             )
             response = await self._connection.request(api_request)
 
-            # V2 response comes as [{"data": [...], "total_element_count": N}] or {"data": [...]}
-            if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-                return response[0]["data"][:limit]
-            if isinstance(response, dict):
-                return response.get("data", response.get("logs", []))[:limit]
-            if isinstance(response, list):
-                return response[:limit]
-            return []
-        except Exception as e:
-            logger.error("Error getting alarms (v2): %s", e)
+            page = _v2_page(response, "/system-log/critical")
+            returned = page.rows[: max(limit, 0)]
+            cut = len(page.rows) > len(returned)
+            short = 0 < page_size and len(page.rows) < page_size
+            return SourcePage(
+                rows=returned,
+                has_more=True if cut else (False if short and page.total_elements is None else None),
+                total_reported=page.total_elements,
+                offset=0,
+                cap=page_size,
+                api_path="v2",
+                submitted_window_ms=(from_ms, now_ms),
+            )
+        except UniFiMalformedResponseError:
+            logger.error("Error getting alarms (v2): malformed response")
             raise
+        except Exception as e:
+            logger.error("Error getting alarms (v2): %s", _describe_failure(e))
+            raise safe_request_error("/system-log/critical", e) from None
 
-    async def _get_alarms_legacy(self, archived: bool, limit: int) -> List[Dict[str, Any]]:
-        """Get alarms using the legacy /stat/alarm API."""
+    async def _get_alarms_legacy(self, archived: bool, limit: int) -> SourcePage:
+        """Get alarms using the legacy /stat/alarm API, which returns every alarm."""
         try:
             path = "/stat/alarm"
             if archived:
@@ -773,17 +1036,22 @@ class EventManager:
             api_request = ApiRequest(method="get", path=path)
             response = await self._connection.request(api_request)
 
-            alarms = (
-                response
-                if isinstance(response, list)
-                else response.get("data", [])
-                if isinstance(response, dict)
-                else []
+            rows = _legacy_rows(response, "/stat/alarm")
+            cap = max(limit, 0)
+            return SourcePage(
+                rows=rows[:cap],
+                has_more=len(rows) > cap,
+                total_reported=len(rows),
+                offset=0,
+                cap=cap,
+                api_path="legacy",
             )
-            return alarms[:limit]
+        except UniFiMalformedResponseError:
+            logger.error("Error getting alarms (legacy): malformed response")
+            raise
         except Exception as e:
-            logger.error("Error getting alarms (legacy): %s", e)
-            raise self._explain_legacy_failure("/stat/alarm", e) from e
+            logger.error("Error getting alarms (legacy): %s", _describe_failure(e))
+            raise self._legacy_failure("/stat/alarm", e) from None
 
     def get_event_type_prefixes(self) -> List[Dict[str, str]]:
         """Get legacy event type prefixes for backward compatibility."""

@@ -1,4 +1,4 @@
-# Network Server Tool Reference (209 tools)
+# Network Server Tool Reference (210 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -19,6 +19,7 @@ Complete reference for `unifi_*` tools. All read tools are always available. Mut
 - [Routing](#routing)
 - [MAC ACL Rules](#mac-acl-rules)
 - [Events & Alarms](#events--alarms)
+- [Incident Evidence](#incident-evidence)
 - [Statistics](#statistics)
 - [Hotspot / Vouchers](#hotspot--vouchers)
 - [User Groups](#user-groups)
@@ -499,6 +500,18 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 **Tips:**
 - Use `unifi_get_event_types` first to understand what event types are available for filtering
 - Events are the primary audit trail for network changes
+
+---
+
+## Incident Evidence
+
+<!-- AUTO:tools:incident_evidence -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_incident_evidence` | Read | Collects bounded, read-only Network event evidence for one incident window and returns a versioned unifi-incident-evidence document: cite... |
+<!-- /AUTO:tools:incident_evidence -->
 
 ---
 

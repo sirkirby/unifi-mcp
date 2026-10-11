@@ -390,12 +390,16 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
     assert len(payload["actions"]) == 286
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
+        "protect_get_incident_evidence",
         "protect_subscribe_events",
         "unifi_create_traffic_route",
+        "unifi_get_incident_evidence",
         "unifi_subscribe_events",
     ]
     excluded_by_name = {item["name"]: item["reason"] for item in payload["excluded"]}
     assert "controller-payload" in excluded_by_name["unifi_create_traffic_route"]
+    assert "incident-evidence routes" in excluded_by_name["unifi_get_incident_evidence"]
+    assert "incident-evidence routes" in excluded_by_name["protect_get_incident_evidence"]
     by_name = {item["name"]: item for item in payload["actions"]}
     assert (by_name["unifi_list_events"]["manager_attr"], by_name["unifi_list_events"]["manager_method"]) == (
         "event_manager",

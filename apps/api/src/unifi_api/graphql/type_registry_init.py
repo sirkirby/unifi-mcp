@@ -51,6 +51,7 @@ from unifi_api.graphql.types.access.users import (
 from unifi_api.graphql.types.access.visitors import (
     Visitor as AccessVisitorType,
 )
+from unifi_api.graphql.types.incident_evidence import IncidentEvidence as IncidentEvidenceType
 from unifi_api.graphql.types.network.acl import (
     AclRule as NetworkAclRuleType,
 )
@@ -569,6 +570,7 @@ def build_type_registry() -> TypeRegistry:
         "detail",
     )
     reg.register_tool_type("unifi_get_threat_posture", NetworkThreatPostureType, "detail")
+    reg.register_tool_type("unifi_get_incident_evidence", IncidentEvidenceType, "detail")
     reg.register_tool_type("unifi_get_mgmt_settings", NetworkMgmtSettingsType, "detail")
     reg.register_tool_type("unifi_get_event_types", NetworkEventTypesType, "detail")
     reg.register_tool_type(
@@ -645,6 +647,7 @@ def build_type_registry() -> TypeRegistry:
     reg.register_type("protect", "events", ProtectEventType)
     reg.register_tool_type("protect_list_events", ProtectEventType, "event_log")
     reg.register_tool_type("protect_get_event", ProtectEventType, "detail")
+    reg.register_tool_type("protect_get_incident_evidence", IncidentEvidenceType, "detail")
     reg.register_tool_type(
         "protect_get_event_thumbnail",
         ProtectEventThumbnailType,

@@ -1,5 +1,5 @@
 {
-  "count": 209,
+  "count": 210,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -77,6 +77,7 @@
     "unifi_get_firewall_policy_ordering": "unifi_network_mcp.tools.firewall",
     "unifi_get_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
     "unifi_get_gateway_stats": "unifi_network_mcp.tools.stats",
+    "unifi_get_incident_evidence": "unifi_network_mcp.tools.incident_evidence",
     "unifi_get_ips_events": "unifi_network_mcp.tools.stats",
     "unifi_get_lldp_neighbors": "unifi_network_mcp.tools.switch",
     "unifi_get_mdns_settings": "unifi_network_mcp.tools.system",
@@ -8370,6 +8371,132 @@
         }
       },
       "title": "Get Gateway Stats"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Collects bounded, read-only Network event evidence for one incident window and returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+      "name": "unifi_get_incident_evidence",
+      "schema": {
+        "input": {
+          "properties": {
+            "device_macs": {
+              "description": "Exact device MAC addresses; keeps only events naming one. Never device names",
+              "type": "array"
+            },
+            "end": {
+              "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+              "type": "string"
+            },
+            "location_id": {
+              "description": "Your label for the investigated location, recorded in source scope",
+              "type": "string"
+            },
+            "mappings": {
+              "description": "Explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "type": "array"
+            },
+            "max_calls": {
+              "description": "Most HTTP requests to the controller, retries and the API probe included (1-100)",
+              "type": "integer"
+            },
+            "max_elapsed_ms": {
+              "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
+              "type": "integer"
+            },
+            "max_events": {
+              "description": "Most event rows to read, including rows outside the window (1-10000)",
+              "type": "integer"
+            },
+            "max_window_seconds": {
+              "description": "Longest window to read; a longer window is not read (1-2592000)",
+              "type": "integer"
+            },
+            "start": {
+              "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Incident Evidence"
     },
     {
       "annotations": {

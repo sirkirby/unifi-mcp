@@ -1,0 +1,166 @@
+{
+  "description": "A source was collected against a shorter window than the evidence set's.",
+  "rejected_by": "semantic",
+  "derived_from": "healthy_empty",
+  "evidence": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": "/system-log/all",
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T12:30:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:04:59.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "requested_cap": 100,
+            "cap": 100,
+            "returned": 0,
+            "has_more": false,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      },
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "requested_cap": 100,
+            "cap": 100,
+            "returned": 0,
+            "has_more": false,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      }
+    ],
+    "records": [],
+    "overall": "empty",
+    "coverage_complete": true
+  }
+}
