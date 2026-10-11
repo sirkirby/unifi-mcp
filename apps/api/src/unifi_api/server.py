@@ -113,6 +113,7 @@ from unifi_api.routes.resources.network import (
 from unifi_api.routes.resources.network import (
     gateway_settings as net_gateway_settings_routes,
 )
+from unifi_api.routes.resources.network import incident_evidence as net_incident_evidence_routes
 from unifi_api.routes.resources.network import (
     legacy_firewall_rules as net_legacy_firewall_rules_routes,
 )
@@ -190,6 +191,9 @@ from unifi_api.routes.resources.protect import (
 )
 from unifi_api.routes.resources.protect import (
     events as protect_events_routes,
+)
+from unifi_api.routes.resources.protect import (
+    incident_evidence as protect_incident_evidence_routes,
 )
 from unifi_api.routes.resources.protect import (
     lights as protect_lights_routes,
@@ -517,6 +521,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_mgmt_routes,
         net_threat_management_routes,
         net_threat_posture_routes,
+        net_incident_evidence_routes,
         # Cluster 6: stats / events / system. The network events router owns
         # the bare /events path for both products via a capability-aware
         # dispatcher; it must be included before protect_events_routes so the
@@ -529,6 +534,7 @@ def create_app(config: ApiConfig) -> FastAPI:
     for r in (
         protect_cameras_routes,
         protect_events_routes,
+        protect_incident_evidence_routes,
         protect_recordings_routes,
         protect_lights_routes,
         protect_sensors_routes,

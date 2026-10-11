@@ -8157,6 +8157,11 @@
       "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
     },
     {
+      "name": "protect_get_incident_evidence",
+      "product": "protect",
+      "reason": "bounded multi-read evidence collection is served by dedicated incident-evidence routes; the action dispatcher invokes a single manager method"
+    },
+    {
       "name": "protect_subscribe_events",
       "product": "protect",
       "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
@@ -8165,6 +8170,11 @@
       "name": "unifi_create_traffic_route",
       "product": "network",
       "reason": "requires controller-payload construction that the REST action dispatcher does not provide"
+    },
+    {
+      "name": "unifi_get_incident_evidence",
+      "product": "network",
+      "reason": "bounded multi-read evidence collection is served by dedicated incident-evidence routes; the action dispatcher invokes a single manager method"
     },
     {
       "name": "unifi_subscribe_events",

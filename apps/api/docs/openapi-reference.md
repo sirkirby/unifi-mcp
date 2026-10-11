@@ -716,6 +716,32 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 **Returns:** `Detail_UserGroupModel_`
 
 
+## network/incident_evidence
+
+### `GET /v1/sites/{site_id}/incident-evidence/network` — Get Network Incident Evidence
+
+
+Collect bounded, read-only Network event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `start` (query) (required)
+- `end` (query) (required)
+- `device_macs` (query)
+- `location_id` (query)
+- `max_window_seconds` (query)
+- `max_events` (query)
+- `max_calls` (query)
+- `max_elapsed_ms` (query)
+- `mappings` (query)
+- `controller` (query)
+
+
+**Returns:** `Detail_dict_`
+
+
 ## network/lldp
 
 ### `GET /v1/sites/{site_id}/lldp-neighbors` — List Lldp Neighbors
@@ -1830,6 +1856,32 @@ raises 404 via UniFiNotFoundError if the camera is unknown.
 
 
 **Returns:** `object`
+
+
+## protect/incident_evidence
+
+### `GET /v1/sites/{site_id}/incident-evidence/protect` — Get Protect Incident Evidence
+
+
+Collect bounded, read-only Protect event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `start` (query) (required)
+- `end` (query) (required)
+- `camera_ids` (query)
+- `location_id` (query)
+- `max_window_seconds` (query)
+- `max_events` (query)
+- `max_calls` (query)
+- `max_elapsed_ms` (query)
+- `mappings` (query)
+- `controller` (query)
+
+
+**Returns:** `Detail_dict_`
 
 
 ## protect/lights

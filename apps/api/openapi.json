@@ -2126,6 +2126,33 @@
         "title": "Detail[WlanModel]",
         "type": "object"
       },
+      "Detail_dict_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[dict]",
+        "type": "object"
+      },
       "DetectionSearchLabelsModel": {
         "additionalProperties": true,
         "properties": {
@@ -16284,6 +16311,382 @@
         "summary": "Get Gateway Settings",
         "tags": [
           "network/gateway_settings"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/incident-evidence/network": {
+      "get": {
+        "description": "Collect bounded, read-only Network event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+        "operationId": "get_network_incident_evidence_v1_sites__site_id__incident_evidence_network_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact device MAC addresses; keeps only events naming one. Never device names",
+            "in": "query",
+            "name": "device_macs",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact device MAC addresses; keeps only events naming one. Never device names",
+              "title": "Device Macs"
+            }
+          },
+          {
+            "description": "Your label for the investigated location, recorded in source scope",
+            "in": "query",
+            "name": "location_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Your label for the investigated location, recorded in source scope",
+              "title": "Location Id"
+            }
+          },
+          {
+            "description": "Longest window to read; a longer window is not read (1-2592000)",
+            "in": "query",
+            "name": "max_window_seconds",
+            "required": false,
+            "schema": {
+              "default": 86400,
+              "description": "Longest window to read; a longer window is not read (1-2592000)",
+              "title": "Max Window Seconds",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most event rows to read, including rows outside the window (1-10000)",
+            "in": "query",
+            "name": "max_events",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "description": "Most event rows to read, including rows outside the window (1-10000)",
+              "title": "Max Events",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most controller page reads (1-100)",
+            "in": "query",
+            "name": "max_calls",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Most controller page reads (1-100)",
+              "title": "Max Calls",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+            "in": "query",
+            "name": "max_elapsed_ms",
+            "required": false,
+            "schema": {
+              "default": 30000,
+              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "title": "Max Elapsed Ms",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+            "in": "query",
+            "name": "mappings",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "title": "Mappings"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Network Incident Evidence",
+        "tags": [
+          "network/incident_evidence"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/incident-evidence/protect": {
+      "get": {
+        "description": "Collect bounded, read-only Protect event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+        "operationId": "get_protect_incident_evidence_v1_sites__site_id__incident_evidence_protect_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact Protect camera IDs, each read as its own source; omit for every camera",
+            "in": "query",
+            "name": "camera_ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact Protect camera IDs, each read as its own source; omit for every camera",
+              "title": "Camera Ids"
+            }
+          },
+          {
+            "description": "Your label for the investigated location, recorded in source scope",
+            "in": "query",
+            "name": "location_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Your label for the investigated location, recorded in source scope",
+              "title": "Location Id"
+            }
+          },
+          {
+            "description": "Longest window to read; a longer window is not read (1-2592000)",
+            "in": "query",
+            "name": "max_window_seconds",
+            "required": false,
+            "schema": {
+              "default": 86400,
+              "description": "Longest window to read; a longer window is not read (1-2592000)",
+              "title": "Max Window Seconds",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most event rows to read across cameras (1-10000)",
+            "in": "query",
+            "name": "max_events",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "description": "Most event rows to read across cameras (1-10000)",
+              "title": "Max Events",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most NVR page reads across cameras (1-100)",
+            "in": "query",
+            "name": "max_calls",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Most NVR page reads across cameras (1-100)",
+              "title": "Max Calls",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+            "in": "query",
+            "name": "max_elapsed_ms",
+            "required": false,
+            "schema": {
+              "default": 30000,
+              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "title": "Max Elapsed Ms",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+            "in": "query",
+            "name": "mappings",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "title": "Mappings"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_dict_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Protect Incident Evidence",
+        "tags": [
+          "protect/incident_evidence"
         ]
       }
     },
