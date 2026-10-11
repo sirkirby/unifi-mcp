@@ -7,11 +7,13 @@ target=claude
 flags=()
 input_json=false
 refresh=false
+migrate=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) [ $# -ge 2 ] || { echo 'ERROR: target is required.' >&2; exit 1; }; target=$2; shift 2 ;;
     --target=*) target=${1#*=}; shift ;;
     --refresh) refresh=true; flags+=(--refresh); shift ;;
+    --migrate) migrate=true; flags+=(--migrate); shift ;;
     --dry-run) flags+=(--dry-run); shift ;;
     --input-json) input_json=true; shift ;;
     --) shift; break ;;
@@ -40,6 +42,12 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 if [ "$refresh" = true ]; then
   [ "$target" = codex ] && [ "$input_json" = false ] && [ $# -eq 0 ] || {
     echo 'ERROR: --refresh requires --target codex and no environment arguments.' >&2; exit 1;
+  }
+  exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}" </dev/null
+fi
+if [ "$migrate" = true ]; then
+  [ "$target" = claude ] && [ "$input_json" = false ] && [ $# -eq 0 ] || {
+    echo 'ERROR: --migrate requires --target claude and no environment arguments.' >&2; exit 1;
   }
   exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}" </dev/null
 fi

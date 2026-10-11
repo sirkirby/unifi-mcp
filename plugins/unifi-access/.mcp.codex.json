@@ -13,8 +13,7 @@
         "UNIFI_POLICY_CREATE",
         "UNIFI_POLICY_UPDATE",
         "UNIFI_POLICY_DELETE",
-        "UNIFI_TOOL_PERMISSION_MODE",
-        "UNIFI_AUTO_CONFIRM"
+        "UNIFI_TOOL_PERMISSION_MODE"
       ]
     }
   }

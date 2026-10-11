@@ -14,6 +14,8 @@ real client installs or launches a bundle.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 import shutil
 import subprocess
@@ -32,9 +34,20 @@ SUPPORT_DOC = Path("docs/plugin-support.md")
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-# Same pattern the release workflow uses to rewrite package pins.
+# Package pins track server versions independently of plugin versions.
 PACKAGE_PIN = re.compile(r"^(unifi-[a-z]+-mcp)==(.+)$")
-ENV_REFERENCE = re.compile(r"^\$\{[A-Z0-9_]+(?::-[^}]*)?\}$")
+USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
+# Variables the servers resolve with resolve_env, where an empty value counts as unset.
+EMPTY_IS_UNSET = re.compile(
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:HOST|USERNAME|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+)
+RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:PASSWORD|API_KEY)$")
+# Claude option defaults must match today's closed, preview-first behaviour.
+SAFE_DEFAULTS = (
+    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS)_(?:CREATE|UPDATE|DELETE)$"), False),
+    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_TOOL_PERMISSION_MODE$"), "confirm"),
+    (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
+)
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
 CODEX_INSTALL_POLICIES = {"AVAILABLE", "INSTALLED_BY_DEFAULT", "NOT_AVAILABLE"}
 CODEX_INTERFACE_FIELDS = ("displayName", "shortDescription", "longDescription", "developerName", "category")
@@ -251,10 +264,49 @@ def check_mcp_servers(
         for key, value in (server.get("env") or {}).items():
             if codex and "${" in str(value):
                 errors.append(f"{server_where}: Codex env {key} must not contain interpolation templates")
-            elif not codex and not ENV_REFERENCE.match(str(value)):
-                errors.append(f"{server_where}: env {key} must be a ${{VAR}} reference, not a literal")
+            elif not codex and not USER_CONFIG_REFERENCE.match(str(value)):
+                errors.append(f"{server_where}: env {key} must be a ${{user_config.KEY}} reference, not a literal")
         pins[server_name] = (package, version)
     return pins
+
+
+def check_claude_user_config(bundle: Path, manifest: dict, errors: list[str]) -> None:
+    """Every Claude option variable is declared, safe by default and conflict-free."""
+    where = f"{bundle.name}/.claude-plugin/plugin.json"
+    schema = manifest.get("userConfig")
+    servers = _load(bundle / ".mcp.json").get("mcpServers") or {}
+    if not servers:
+        return
+    if not isinstance(schema, dict):
+        errors.append(f"{where}: an MCP bundle must declare userConfig for its Claude options")
+        return
+    referenced: set[str] = set()
+    for server_name, server in servers.items():
+        env = server.get("env") or {}
+        for variable, template in env.items():
+            match = USER_CONFIG_REFERENCE.match(str(template))
+            if not match:
+                continue
+            option = schema.get(match[1])
+            referenced.add(match[1])
+            label = f"{where}: option {match[1]!r} for {variable}"
+            if not isinstance(option, dict):
+                errors.append(f"{label} is not declared")
+                continue
+            sensitive = option.get("sensitive") is True
+            if sensitive != bool(RAW_SECRET.match(variable)):
+                errors.append(f"{label} must be sensitive exactly when it holds a raw secret")
+            if "default" not in option and not EMPTY_IS_UNSET.match(variable):
+                errors.append(f"{label} needs a default: the server does not treat an empty value as unset")
+            for pattern, safe in SAFE_DEFAULTS:
+                if pattern.match(variable) and option.get("default") != safe:
+                    errors.append(f"{label} must default to {safe!r}")
+        for base in (v for v in env if RAW_SECRET.match(v)):
+            for suffix in ("_FILE", "_COMMAND"):
+                if base + suffix not in env:
+                    errors.append(f"{where}: {server_name} maps {base} but not {base + suffix}")
+    for option in sorted(set(schema) - referenced):
+        errors.append(f"{where}: option {option!r} is declared but no MCP server uses it")
 
 
 def check_skills(bundle: Path, root: Path, errors: list[str]) -> list[str]:
@@ -292,12 +344,11 @@ def packaging_errors(root: Path) -> list[str]:
         if plugin_dir.parent.resolve() not in advertised:
             check_claude_manifest(plugin_dir.parent, None, errors)
 
-    workflow = (root / BUMP_WORKFLOW).read_text(encoding="utf-8")
-    synced = set(re.findall(r'update_plugin_version "plugins/([a-z0-9-]+)"', workflow))
-
     for name in sorted(set(claude) | set(codex)):
         bundle = claude.get(name) or codex[name]
         claude_manifest = check_claude_manifest(bundle, name, errors)
+        if claude_manifest is not None and (bundle / ".mcp.json").is_file():
+            check_claude_user_config(bundle, claude_manifest, errors)
         resolved = check_codex_manifest(bundle, name, errors)
         portable = resolved is not None and resolved["layout"] == "portable"
         # Validate Claude and Codex launch files independently.
@@ -313,8 +364,8 @@ def packaging_errors(root: Path) -> list[str]:
         versions = {"Claude manifest": (claude_manifest or {}).get("version")}
         if resolved is not None:
             versions["Codex manifest"] = resolved["identity"].get("version")
-        versions.update({f".mcp.json {server} pin": version for server, (_, version) in pins.items()})
-        versions.update({f"Codex MCP config {server} pin": version for server, (_, version) in portable_pins.items()})
+        if pins != portable_pins:
+            errors.append(f"{name}: mismatched client pins")
         inline = (claude_manifest or {}).get("mcpServers")
         claude_mcp = bundle / ".mcp.json"
         if isinstance(inline, dict) and claude_mcp.is_file():
@@ -326,15 +377,8 @@ def packaging_errors(root: Path) -> list[str]:
                 if actual != expected:
                     errors.append(f"{name}: inline Claude mcpServers.{server_name} differs from the MCP config file")
         if len(set(versions.values())) != 1:
-            errors.append(f"{name}: versions out of lockstep: {versions}")
+            errors.append(f"{name}: plugin manifests disagree: {versions}")
 
-        if pins:
-            if name not in synced:
-                errors.append(f"{name}: {BUMP_WORKFLOW} does not sync this bundle's versions")
-            if portable:
-                for required in ('"$plugin_dir/plugin.json"', '"$plugin_dir/mcp.json"'):
-                    if required not in workflow:
-                        errors.append(f"{name}: {BUMP_WORKFLOW} does not update portable {required}")
     return errors
 
 
@@ -458,7 +502,7 @@ def test_package_pin_drift_is_reported(tmp_path: Path) -> None:
 
     errors = packaging_errors(root)
 
-    assert any(f"{name}: versions out of lockstep" in error for error in errors)
+    assert any(f"{name}: mismatched client pins" in error for error in errors)
 
 
 def test_unknown_package_name_is_reported(tmp_path: Path) -> None:
@@ -486,7 +530,7 @@ def test_literal_env_value_is_reported(tmp_path: Path) -> None:
 
     errors = packaging_errors(root)
 
-    assert any("env UNIFI_HOST must be a ${VAR} reference" in error for error in errors)
+    assert any("env UNIFI_HOST must be a ${user_config.KEY} reference" in error for error in errors)
 
 
 def test_bundle_missing_from_one_marketplace_is_reported(tmp_path: Path) -> None:
@@ -499,18 +543,10 @@ def test_bundle_missing_from_one_marketplace_is_reported(tmp_path: Path) -> None
     assert f"{name}: advertised only in the Claude marketplace" in errors
 
 
-def test_bundle_not_synced_by_release_workflow_is_reported(tmp_path: Path) -> None:
-    root = _copy_packaging_tree(tmp_path)
-    name = _advertised_bundles()[0]
-    workflow = root / BUMP_WORKFLOW
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(f'update_plugin_version "plugins/{name}"', "true"),
-        encoding="utf-8",
-    )
-
-    errors = packaging_errors(root)
-
-    assert any(f"{name}: {BUMP_WORKFLOW} does not sync" in error for error in errors)
+def test_release_workflow_delegates_to_version_module() -> None:
+    workflow = yaml.safe_load((REPO_ROOT / BUMP_WORKFLOW).read_text())
+    runs = [step.get("run", "") for job in workflow["jobs"].values() for step in job["steps"]]
+    assert any("python3 scripts/plugin_versions.py sync" in run for run in runs)
 
 
 def test_claude_author_string_is_reported(tmp_path: Path) -> None:
@@ -636,41 +672,146 @@ def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
     path = mcp_config_path(bundle, check_codex_manifest(bundle, name, []))
     _edit_json(path, lambda d: next(iter(d["mcpServers"].values())).update(args=[name + "-mcp==999.0.0"]))
 
-    assert any("versions out of lockstep" in error for error in packaging_errors(root))
+    assert any("mismatched client pins" in error for error in packaging_errors(root))
 
 
 @pytest.mark.parametrize("name", _advertised_bundles())
 @pytest.mark.parametrize("filename", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
-def test_every_client_package_pin_matches_plugin_version(name: str, filename: str) -> None:
+def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
-    version = _load(bundle / ".codex-plugin/plugin.json")["version"]
+    expected = check_mcp_servers(bundle / ".mcp.json", REPO_ROOT, [], portable=False)
     pins = check_mcp_servers(bundle / filename, REPO_ROOT, [], portable=False, codex="codex" in filename)
 
-    assert pins == {name: (f"{name}-mcp", version)}
+    assert pins == expected
 
 
-@pytest.mark.parametrize("name", _advertised_bundles())
-def test_version_workflow_updates_every_client_pin(tmp_path: Path, name: str) -> None:
+def _claude_manifest(root: Path, name: str) -> Path:
+    return root / "plugins" / name / ".claude-plugin" / "plugin.json"
+
+
+def _mcp_bundles() -> list[str]:
+    return [name for name in _advertised_bundles() if (REPO_ROOT / "plugins" / name / ".mcp.json").is_file()]
+
+
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> None:
     root = _copy_packaging_tree(tmp_path)
-    workflow = yaml.safe_load((root / BUMP_WORKFLOW).read_text())
-    run = next(
-        step["run"]
-        for job in workflow["jobs"].values()
-        for step in job["steps"]
-        if "update_plugin_version()" in step.get("run", "")
-    )
-    # Exercise the real workflow functions without tag discovery, commits or publication.
-    functions = run.split("NETWORK_VERSION=", 1)[0]
-    subprocess.run(
-        ["bash", "-c", functions + '\nupdate_plugin_version "$1" "$2"', "fixture", f"plugins/{name}", "999.0.0"],
-        cwd=root,
+    _edit_json(_claude_manifest(root, name), lambda d: d["userConfig"]["policy_delete"].update(default=True))
+
+    errors = packaging_errors(root)
+
+    assert any("'policy_delete'" in error and "must default to False" in error for error in errors)
+
+
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_no_client_exposes_the_deprecated_auto_confirm_switch(name: str) -> None:
+    bundle = REPO_ROOT / "plugins" / name
+    assert "auto_confirm" not in _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
+    for filename in (".claude-plugin/plugin.json", ".mcp.json", ".mcp.codex.json"):
+        assert "UNIFI_AUTO_CONFIRM" not in (bundle / filename).read_text(encoding="utf-8")
+
+
+def test_claude_option_errors_are_reported(tmp_path: Path) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    name = _mcp_bundles()[0]
+
+    def mutate(data: dict) -> None:
+        options = data["userConfig"]
+        options["permission_mode"].pop("default")
+        options["password_file"]["sensitive"] = True
+        options.pop("host")
+        options["unused"] = {"type": "string", "title": "Unused", "description": "Unused"}
+
+    _edit_json(_claude_manifest(root, name), mutate)
+
+    errors = packaging_errors(root)
+
+    assert any("'permission_mode'" in error and "needs a default" in error for error in errors)
+    assert any("'password_file'" in error and "must be sensitive exactly" in error for error in errors)
+    assert any("'host'" in error and "is not declared" in error for error in errors)
+    assert any("'unused' is declared but no MCP server uses it" in error for error in errors)
+
+
+@pytest.mark.skipif(shutil.which("claude") is None, reason="claude CLI not installed")
+@pytest.mark.parametrize("name", _advertised_bundles())
+def test_claude_plugin_validate_passes(tmp_path: Path, name: str) -> None:
+    # A private HOME keeps the check away from the developer's Claude settings.
+    result = subprocess.run(
+        ["claude", "plugin", "validate", str(REPO_ROOT / "plugins" / name)],
+        env={"HOME": str(tmp_path), "PATH": os.environ["PATH"]},
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        check=True,
+        timeout=120,
     )
-    bundle = root / "plugins" / name
-    for filename in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
-        assert _load(bundle / filename)["version"] == "999.0.0"
-    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
-        pins = check_mcp_servers(bundle / filename, root, [], portable=False, codex="codex" in filename)
-        assert pins == {name: (f"{name}-mcp", "999.0.0")}, filename
+
+    assert result.returncode == 0 and "Validation passed" in result.stdout, result.stdout + result.stderr
+    assert "warning" not in result.stdout.lower(), result.stdout
+
+
+def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
+    """The env Claude hands the server: saved values, else defaults, else empty."""
+    options = _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
+    server = next(iter(_load(REPO_ROOT / "plugins" / name / ".mcp.json")["mcpServers"].values()))
+    env = {}
+    for variable, template in server["env"].items():
+        option = USER_CONFIG_REFERENCE.match(template)[1]
+        default = options[option].get("default", "")
+        value = values.get(option, default)
+        env[variable] = str(value).lower() if isinstance(value, bool) else str(value)
+    return env
+
+
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_claude_options_resolve_like_unset_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, name: str
+) -> None:
+    bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
+    policy_gate = pytest.importorskip("unifi_core.policy_gate")
+    # Resolve as a fresh process would: no .env provenance left by another test's server start.
+    monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
+    product = name.removeprefix("unifi-").upper()
+    password = tmp_path / "password"
+    password.write_text("FAKE-file-password\n", encoding="utf-8")
+    shared = tmp_path / "shared"
+    shared.write_text("FAKE-shared-password", encoding="utf-8")
+    # Project settings from an earlier plugin version, inherited by the server process.
+    inherited = {
+        f"UNIFI_{product}_HOST": "192.0.2.50",
+        f"UNIFI_{product}_PASSWORD_COMMAND": "/bin/false",
+        "UNIFI_PASSWORD_FILE": str(shared),
+    }
+    for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+        monkeypatch.delenv(key)
+    logger = logging.getLogger("test")
+
+    def resolve(values: dict[str, str]) -> None:
+        for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+            monkeypatch.delenv(key)
+        for key, value in {**inherited, **_claude_server_env(name, values)}.items():
+            monkeypatch.setenv(key, value)
+
+    resolve({"host": "192.0.2.10", "password_file": str(password)})
+    assert bootstrap.resolve_env("host", env_prefix=product, logger=logger) == "192.0.2.10"
+    # The option's empty siblings mask the inherited command: no ambiguity at the product level.
+    assert bootstrap.resolve_env("password", env_prefix=product, logger=logger) == "FAKE-file-password"
+    assert bootstrap.resolve_env("api_key", env_prefix=product, logger=logger) is None
+    checker = policy_gate.PolicyGateChecker(product)
+    assert not any(checker.check("any_category", action) for action in ("create", "update", "delete"))
+    assert policy_gate.resolve_permission_mode(product) == "confirm"
+    assert bootstrap.validate_registration_mode(logger) == "lazy"
+    # A default setup must not trip the deprecated auto-confirm warning at startup.
+    assert "UNIFI_AUTO_CONFIRM" not in _claude_server_env(name, {})
+    with caplog.at_level(logging.WARNING):
+        policy_gate.check_deprecated_env_vars(product, logger)
+    assert "deprecated" not in caplog.text.lower()
+
+    resolve({})
+    # Unset options behave as unset variables: the shared level still applies.
+    assert bootstrap.resolve_env("host", env_prefix=product, logger=logger) is None
+    assert bootstrap.resolve_env("password", env_prefix=product, logger=logger) == "FAKE-shared-password"
+
+    resolve({"policy_update": True, "permission_mode": "bypass", "registration_mode": "eager"})
+    assert checker.check("any_category", "update") and not checker.check("any_category", "delete")
+    assert policy_gate.resolve_permission_mode(product) == "bypass"
+    assert bootstrap.validate_registration_mode(logger) == "eager"

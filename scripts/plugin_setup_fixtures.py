@@ -2,6 +2,8 @@
 """Credential-free integration fixtures for the shell and PowerShell harnesses."""
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -11,20 +13,36 @@ import sys
 import tempfile
 import time
 import tomllib
+import traceback
 from pathlib import Path
+
+
+class FixtureAssertionError(AssertionError):
+    """An assertion with a fixture-authored label, never captured client output."""
+
+
+def report_failure(error):
+    # Exception messages, source lines and locals can contain captured credentials.
+    # Keep the traceback locations and only our own fixed assertion labels.
+    for frame in traceback.extract_tb(error.__traceback__):
+        print(f"Fixture diagnostic: {Path(frame.filename).name}:{frame.lineno} in {frame.name}", file=sys.stderr)
+    label = ": " + str(error) if isinstance(error, FixtureAssertionError) else ""
+    print(f"Fixture failure: {type(error).__name__}{label}", file=sys.stderr)
 
 
 def toml_literal(value):
     if isinstance(value, dict):
-        return "{" + ",".join(json.dumps(k) + "=" + toml_literal(v) for k, v in value.items()) + "}"
+        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in value.items()) + "}"
     return json.dumps(value, ensure_ascii=False)
 
 
 def write_toml(path, document):
-    lines = [json.dumps(k) + "=" + toml_literal(v) for k, v in document.items() if k != "mcp_servers"]
+    lines = [
+        json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in document.items() if k != "mcp_servers"
+    ]
     for name, entry in document.get("mcp_servers", {}).items():
-        lines.append("[mcp_servers." + json.dumps(name) + "]")
-        lines.extend(json.dumps(k) + "=" + toml_literal(v) for k, v in entry.items())
+        lines.append("[mcp_servers." + json.dumps(name, ensure_ascii=False) + "]")
+        lines.extend(json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in entry.items())
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -52,6 +70,9 @@ def fake_client(name):
         assert args[:5] == ["run", "--no-project", "--python", ">=3.11", "python"]
         forward_runtime(args[5:])
     if name == "uvx":
+        return
+    if name == "claude":
+        fake_claude(args)
         return
     if name == "codex":
         path = Path(os.environ["CODEX_HOME"]) / "config.toml"
@@ -83,6 +104,84 @@ def forward_runtime(args):
             [sys.executable, *args], stdin=sys.stdin.buffer, stdout=sys.stdout.buffer, stderr=sys.stderr.buffer
         ).returncode
     )
+
+
+def fake_claude(args):
+    """Model `claude plugin list/configure`: options in settings.json, keychain_values in a fake keychain."""
+    root = Path(os.environ["FIXTURE_PLUGIN_ROOT"])
+    plugin_id = root.name + "@fixture-market"
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    settings_path, keychain_path = config / "settings.json", config / "fake-keychain.json"
+    if args[:3] == ["plugin", "list", "--json"]:
+        print(json.dumps([{"id": plugin_id, "installPath": str(root), "scope": "user"}]))
+        return
+    if args[:2] != ["plugin", "configure"] or args[2] != plugin_id:
+        sys.exit(1)
+    # Client calls may block or be forcibly terminated. Retained project secrets
+    # must stay in memory until replacement, with no settings copy here.
+    assert not list((Path.cwd() / ".claude").glob(".unifi-setup-*")), "project settings staged during configure"
+    schema = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["userConfig"]
+    settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
+    keychain = json.loads(keychain_path.read_text(encoding="utf-8")) if keychain_path.exists() else {}
+    options = settings.setdefault("pluginConfigs", {}).setdefault(plugin_id, {}).setdefault("options", {})
+    keychain_values = keychain.setdefault(plugin_id, {})
+    if args[3:] == ["--json"]:
+        inputs, configured = {}, []
+        for key, entry in schema.items():
+            value = keychain_values.get(key, "") if entry.get("sensitive") else options.get(key)
+            if value not in (None, ""):
+                configured.append(key)
+            if entry.get("sensitive"):
+                inputs[key] = ""  # Claude never reveals keychain values.
+            elif value is None:
+                default = entry.get("default")
+                # Claude reports a boolean or choice default, but an unset number as "".
+                inputs[key] = "" if default is None or entry["type"] == "number" else str(default).lower()
+            else:
+                inputs[key] = str(value).lower() if isinstance(value, bool) else str(value)
+        print(json.dumps({"pluginId": plugin_id, "schema": schema, "inputs": inputs, "configured": configured}))
+        return
+    if args[3:] != ["--values-stdin"]:
+        sys.exit(1)
+    # Claude consumes UTF-8 bytes; Windows Python text stdin uses a locale code page.
+    values = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    if os.environ.get("FIXTURE_FAIL") == "register":
+        marker = Path(os.environ["FIXTURE_OUTPUT_MARKER_FILE"]).read_bytes()
+        sys.stdout.buffer.write(marker)
+        sys.stderr.buffer.write(marker)
+        sys.exit(2)
+    for key, value in values.items():
+        entry = schema.get(key)
+        valid = isinstance(entry, dict) and isinstance(value, str) and "\n" not in value
+        if valid and value and entry["type"] == "boolean":
+            valid = value in ("true", "false")
+        if valid and value and entry["type"] == "number":
+            valid = value.isdigit() and entry.get("min", 0) <= int(value) <= entry.get("max", int(value))
+        if valid and value and entry.get("options"):
+            valid = value in entry["options"]
+        if not valid:
+            sys.exit(1)  # Claude validates every value before writing any of them.
+    # Report success without retaining the values once; the restore write then succeeds.
+    corrupt = os.environ.get("FIXTURE_FAIL") == "validate" and not (config / "not-retained").exists()
+    for key, value in values.items():
+        entry = schema[key]
+        if corrupt and not entry.get("sensitive"):
+            (config / "not-retained").touch()
+            value = value + "-not-retained"
+        if entry.get("sensitive"):
+            if value:
+                keychain_values[key] = value
+            else:
+                keychain_values.pop(key, None)
+        elif entry["type"] == "boolean" and value in ("true", "false"):
+            options[key] = value == "true"
+        elif entry["type"] == "number" and value.isdigit():
+            options[key] = int(value)
+        else:
+            options[key] = value
+    config.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+    keychain_path.write_text(json.dumps(keychain), encoding="utf-8")
 
 
 def executable(directory, name, source):
@@ -127,7 +226,7 @@ class Fixtures:
 
     def check(self, condition, label):
         if not condition:
-            raise AssertionError(label)
+            raise FixtureAssertionError(label)
         self.passes += 1
 
     def check_script_parity(self):
@@ -149,10 +248,31 @@ class Fixtures:
 
     def run(self):
         self.check_script_parity()
+        self.check_failure_reporting()
         self.check_runtime_forwarding()
         for product in ("network", "protect", "access"):
-            for target in ("claude", "codex", "openclaw"):
+            self.claude_scenario(product)
+            for target in ("codex", "openclaw"):
                 self.scenario(product, target)
+
+    def check_failure_reporting(self):
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            try:
+                raise RuntimeError("FAKE-diagnostic-value")
+            except RuntimeError as error:
+                report_failure(error)
+            try:
+                self.check(False, 'comment # and quoted table "name"')
+            except FixtureAssertionError as error:
+                report_failure(error)
+        diagnostic = output.getvalue()
+        self.check("FAKE-diagnostic-value" not in diagnostic, "failure diagnostics omit exception text and source")
+        self.check("in check_failure_reporting" in diagnostic, "failure diagnostics retain traceback locations")
+        self.check(
+            'Fixture failure: FixtureAssertionError: comment # and quoted table "name"' in diagnostic,
+            "failure diagnostics retain assertion labels with punctuation",
+        )
 
     def check_runtime_forwarding(self):
         marker = b"FAKE-runtime-input\x00\xce\xa9\xf0\x9f\x98\x80\r\n"
@@ -177,6 +297,526 @@ class Fixtures:
             self.check(result.returncode == 23, "fake runtime propagates failing child status")
             self.check(result.stdout == marker, "fake runtime preserves stdin bytes")
             self.check(result.stderr == b'FAKE spaced "argument" \\ tail', "fake runtime preserves quoted arguments")
+
+    def claude_scenario(self, product):
+        """Claude Code: options through the fake CLI, legacy project settings migration."""
+        upper = product.upper()
+        plugin = self.repo / f"plugins/unifi-{product}"
+        scripts = plugin / "scripts"
+        plugin_id = f"unifi-{product}@fixture-market"
+        workspace = self.root / (product + "-claude")
+        bindir = workspace / "bin"
+        bindir.mkdir(parents=True)
+        for name in ("uvx", "claude"):
+            client_executable(bindir, name)
+        executable(bindir, "fixture-provider", "pass\n")
+        config = workspace / "claude"
+        config.mkdir()
+        sample_value = 'FAKE-only "quotes" $dollar \\ slash spaces Ω 😀'
+        output_marker = workspace / "client-output-marker"
+        output_marker.write_bytes(sample_value.encode("utf-8"))
+        environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
+        environment.update(
+            HOME=str(workspace),
+            USERPROFILE=str(workspace),
+            CLAUDE_CONFIG_DIR=str(config),
+            PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+            FIXTURE_ARGV=str(workspace / "argv.jsonl"),
+            FIXTURE_OUTPUT_MARKER_FILE=str(output_marker),
+            FIXTURE_PLUGIN_ROOT=str(plugin),
+            # Windows Python pipes use the locale code page, unlike Claude's UTF-8 stdin.
+            # Exercise that difference on every platform and Python resolution route.
+            PYTHONIOENCODING="cp1252",
+        )
+        base = f"UNIFI_{upper}_PASSWORD"
+        settings_path, keychain_path = config / "settings.json", config / "fake-keychain.json"
+        project = workspace / "project"
+        (project / ".claude").mkdir(parents=True)
+        legacy_path = project / ".claude/settings.local.json"
+
+        def wrapper(name, *flags):
+            if self.powershell:
+                return [
+                    self.powershell,
+                    *("-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"),
+                    str(scripts / (name + ".ps1")),
+                    "-Target",
+                    "claude",
+                    *flags,
+                ]
+            return [self.shell, str(scripts / (name + ".sh")), "--target", "claude", *flags]
+
+        def seed():
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "permissions": {"allow": ['Bash(grep "x{2,}")']},
+                        "pluginConfigs": {
+                            "other@market": {"options": {"keep": "yes"}},
+                            plugin_id: {"options": {"host": "192.0.2.1"}},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            keychain_path.unlink(missing_ok=True)
+
+        def state():
+            return (
+                settings_path.read_bytes(),
+                keychain_path.read_bytes() if keychain_path.exists() else None,
+                legacy_path.read_bytes() if legacy_path.exists() else None,
+            )
+
+        def options():
+            saved = json.loads(settings_path.read_text(encoding="utf-8"))["pluginConfigs"][plugin_id]["options"]
+            keychain = json.loads(keychain_path.read_text(encoding="utf-8")) if keychain_path.exists() else {}
+            return dict(saved, **keychain.get(plugin_id, {}))
+
+        def run(command, patch=None, expected=0, extra=None):
+            result = subprocess.run(
+                command,
+                input=b"" if patch is None else patch if isinstance(patch, bytes) else json.dumps(patch).encode(),
+                cwd=project,
+                env=dict(environment, **(extra or {})),
+                capture_output=True,
+                timeout=60,
+            )
+            self.check(result.returncode == expected if expected == 0 else result.returncode != 0, "setup exit status")
+            self.check(sample_value.encode() not in result.stdout + result.stderr, "no secret in stdout/stderr")
+            argv_path = workspace / "argv.jsonl"
+            if argv_path.exists():
+                self.check(sample_value not in argv_path.read_text(encoding="utf-8"), "no secret in client argv")
+            return result
+
+        def invoke(patch, expected=0, extra=None):
+            return run(wrapper("set-env", "-InputJson" if self.powershell else "--input-json"), patch, expected, extra)
+
+        def migrate(expected=0, extra=None):
+            return run(wrapper("set-env", "-Migrate" if self.powershell else "--migrate"), None, expected, extra)
+
+        seed()
+        # Model Claude's UTF-8 wire format independently of Python's text streams.
+        # CRLF JSON whitespace must not affect the value saved in the fake keychain.
+        wire = (
+            json.dumps({"password": sample_value}, ensure_ascii=False, indent=2).replace("\n", "\r\n").encode("utf-8")
+        )
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--fake-client",
+            "claude",
+            "plugin",
+            "configure",
+            plugin_id,
+            "--values-stdin",
+        ]
+        result = subprocess.run(command, input=wire, env=environment, capture_output=True, timeout=30)
+        self.check(result.returncode == 0, "fake Claude accepts UTF-8 JSON with legacy text streams")
+        self.check(options()["password"] == sample_value, "fake Claude decodes stdin as UTF-8 exactly")
+        result = subprocess.run(
+            command, input=wire, env=dict(environment, FIXTURE_FAIL="register"), capture_output=True, timeout=30
+        )
+        self.check(result.returncode == 2, "fake Claude fails the selected operation")
+        self.check(result.stdout == output_marker.read_bytes(), "fake Claude emits output marker on stdout")
+        self.check(result.stderr == output_marker.read_bytes(), "fake Claude emits output marker on stderr")
+        seed()
+        before = state()
+        # Python resolution: a local interpreter first, managed Python through uv otherwise.
+        runtime_bin = workspace / "runtime-bin"
+        runtime_bin.mkdir()
+        for name in ("uv", "uvx", "claude"):
+            client_executable(runtime_bin, name)
+        if os.name != "nt":
+            (runtime_bin / "dirname").symlink_to(shutil.which("dirname"))
+        runtime_environment = {"PATH": str(runtime_bin)}
+        for mode in ("old", "missing", "stub", "second"):
+            for name in ("python3", "python"):
+                (runtime_bin / (name + (".cmd" if os.name == "nt" else ""))).unlink(missing_ok=True)
+            if mode != "missing":
+                client_executable(runtime_bin, "python3")
+            if mode == "second":
+                client_executable(runtime_bin, "python")
+            runtime_environment["FIXTURE_PYTHON_MODE"] = mode
+            invoke({base: sample_value}, extra=runtime_environment)
+            self.check(options()["password"] == sample_value, mode + " Python resolution preserves stdin exactly")
+            checked = run(wrapper("check-prereqs"), extra=runtime_environment)
+            self.check(b"Prerequisites passed" in checked.stdout, mode + " Python prerequisite resolution")
+            seed()
+        invoke(b"{ malformed JSON patch", 1)
+        self.check(state() == before, "malformed stdin JSON preserves prior options")
+        for patch in (
+            {"bad-key": sample_value},
+            {base + "_VAULT": sample_value},
+            {base + "_FILE": "relative"},
+            {base + "_COMMAND": "./relative"},
+            {base + "_COMMAND": "nonexistent-fixture-provider-command"},
+            {base + "_FILE": str(workspace / "missing-credential")},
+            {base: sample_value, base + "_FILE": str(workspace / "credential")},
+            {base: [sample_value]},
+            {base: sample_value + "\nsecond line"},
+            {f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true", base: sample_value},
+            {"UNIFI_PASSWORD_FILE": str(workspace / "credential")},
+            {"UNIFI_AUTO_CONFIRM": "false"},
+            {f"UNIFI_POLICY_{upper}_CREATE": "maybe"},
+            {f"UNIFI_{upper}_PORT": "70000"},
+            {f"UNIFI_{upper}_TOOL_PERMISSION_MODE": "always"},
+        ):
+            invoke(patch, 1)
+            self.check(state() == before, "invalid key/provider/type/option preserved prior options")
+        unsupported = invoke({f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true"}, 1)
+        deprecated = invoke({"UNIFI_AUTO_CONFIRM": "true"}, 1)
+        if not self.powershell:
+            self.check(b"per-category policy overrides" in unsupported.stderr, "per-category override names the limit")
+            self.check(
+                f"UNIFI_{upper}_TOOL_PERMISSION_MODE".encode() in deprecated.stderr,
+                "deprecated auto-confirm points at the permission mode",
+            )
+        # Missing dependencies and a failing client leave Claude's options untouched.
+        isolated = workspace / "isolated"
+        isolated.mkdir()
+        if os.name == "nt":
+            isolated_path = str(isolated) + os.pathsep + str(Path(sys.executable).parent)
+        else:
+            (isolated / "python3").symlink_to(sys.executable)
+            (isolated / "dirname").symlink_to(shutil.which("dirname"))
+            isolated_path = str(isolated)
+        invoke({base: sample_value}, 1, {"PATH": isolated_path})
+        self.check(state() == before, "missing uvx preserves options")
+        client_executable(isolated, "uvx")
+        invoke({base: sample_value}, 1, {"PATH": isolated_path})
+        self.check(state() == before, "missing Claude CLI preserves options")
+        invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
+        self.check(state() == before, "failed Claude configure preserves options")
+        invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
+        self.check(
+            options().get("host") == "192.0.2.1" and options().get("username") in (None, ""),
+            "unretained options are restored",
+        )
+        seed()
+        invoke({base: sample_value})
+        saved = options()
+        self.check(saved["password"] == sample_value, "special characters round-trip through stdin to the keychain")
+        self.check(saved["host"] == "192.0.2.1", "unrelated options preserved")
+        other = json.loads(settings_path.read_text(encoding="utf-8"))
+        self.check(
+            other["pluginConfigs"]["other@market"] == {"options": {"keep": "yes"}} and "permissions" in other,
+            "other plugins and settings preserved",
+        )
+        baseline_output = invoke({base: "FAKE-baseline-output"})
+        for small in ("x", "true", "1234"):
+            result = invoke({base: small})
+            self.check(
+                (result.stdout, result.stderr) == (baseline_output.stdout, baseline_output.stderr),
+                "output is invariant even for short/boolean-like credentials",
+            )
+        # Provider switching clears the sibling options, keychain included.
+        filename = str(workspace / "credential-Ω")
+        Path(filename).write_text("FAKE-file-provider", encoding="utf-8")
+        invoke({base + "_FILE": filename})
+        saved = options()
+        self.check("password" not in saved and saved["password_file"] == filename, "keychain-to-file switching")
+        invoke({base + "_COMMAND": "fixture-provider --no-prompt"})
+        saved = options()
+        self.check(
+            saved["password_file"] == "" and saved["password_command"] == "fixture-provider --no-prompt",
+            "file-to-command switching",
+        )
+        invoke({base + "_COMMAND": None})
+        self.check(options()["password_command"] == "", "null provider deletion")
+        # Safety options default closed and a null deletion restores the default.
+        invoke({f"UNIFI_POLICY_{upper}_CREATE": "TRUE", f"UNIFI_{upper}_TOOL_PERMISSION_MODE": "bypass"})
+        self.check(options()["policy_create"] is True and options()["permission_mode"] == "bypass", "safety options")
+        invoke({f"UNIFI_POLICY_{upper}_CREATE": None, f"UNIFI_{upper}_TOOL_PERMISSION_MODE": None})
+        self.check(
+            options()["policy_create"] is False and options()["permission_mode"] == "confirm",
+            "deleting a safety option restores its safe default",
+        )
+        dry = run(
+            wrapper(
+                "set-env",
+                "-DryRun" if self.powershell else "--dry-run",
+                *(["-InputJson"] if self.powershell else ["--input-json"]),
+            ),
+            {base: sample_value},
+        )
+        self.check(b"dry run" in dry.stdout and options().get("password") is None, "dry run saves nothing")
+        # Projects configured by earlier plugin versions.
+        provider = workspace / "legacy-provider"
+        provider.write_text("FAKE-legacy-provider", encoding="utf-8")
+        other_product = "PROTECT" if upper != "PROTECT" else "ACCESS"
+        legacy = {
+            "permissions": {"allow": ["Bash(ls)"]},
+            "env": {
+                f"UNIFI_{upper}_HOST": "192.0.2.50",
+                f"UNIFI_{upper}_USERNAME": "legacy-user",
+                f"{base}_FILE": str(provider),
+                f"UNIFI_POLICY_{upper}_UPDATE": "true",
+                f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true",
+                "UNIFI_TOOL_PERMISSION_MODE": "confirm",
+                f"UNIFI_{other_product}_HOST": "192.0.2.60",
+                f"UNIFI_{other_product}_PASSWORD": sample_value,
+                "UNIFI_API_KEY": sample_value,
+                "KEEP": "unrelated",
+            },
+        }
+        legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
+        legacy_bytes = legacy_path.read_bytes()
+        noticed = invoke({f"UNIFI_{upper}_PORT": "8443"})
+        self.check(b"--migrate" in noticed.stdout or b"-Migrate" in noticed.stdout, "setup names the migration")
+        self.check(b"192.0.2.50" not in noticed.stdout and b"legacy-user" not in noticed.stdout, "notice omits values")
+        self.check(legacy_path.read_bytes() == legacy_bytes, "ordinary setup leaves legacy project settings")
+        checked = run(wrapper("check-prereqs"))
+        self.check(b"--migrate" in checked.stdout, "prerequisite check names the migration")
+        hook = scripts / "claude-session-check.sh"
+        if os.name != "nt":
+            notice = subprocess.run(
+                ["sh", str(hook), product], env=dict(environment, CLAUDE_PROJECT_DIR=str(project)), capture_output=True
+            )
+            message = json.loads(notice.stdout)
+            self.check("--migrate" in message["systemMessage"], "session notice names the migration")
+            self.check(b"192.0.2.50" not in notice.stdout, "session notice omits values")
+            self.check(
+                "starts unconfigured" in message["systemMessage"] and "shared UNIFI_" not in message["systemMessage"],
+                "session notice says the server starts unconfigured when no shared keys exist",
+            )
+            shared_project = workspace / "shared-project"
+            (shared_project / ".claude").mkdir(parents=True)
+            (shared_project / ".claude/settings.local.json").write_text(
+                json.dumps(
+                    {
+                        "env": {
+                            f"UNIFI_{upper}_PORT": "8443",
+                            "UNIFI_HOST": "192.0.2.80",
+                            "UNIFI_USERNAME": "shared-user",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            shared_notice = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(shared_project)),
+                capture_output=True,
+            )
+            shared_message = json.loads(shared_notice.stdout)
+            for text in (shared_message["systemMessage"], shared_message["hookSpecificOutput"]["additionalContext"]):
+                self.check(
+                    "shared UNIFI_" in text and "different controller" in text and "unconfigured" not in text,
+                    "session notice says shared keys are used when they exist",
+                )
+            self.check("--migrate" in shared_message["systemMessage"], "shared-key notice still names the migration")
+            self.check(
+                b"192.0.2.80" not in shared_notice.stdout and b"shared-user" not in shared_notice.stdout,
+                "shared-key notice omits values",
+            )
+            quiet = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(project), CLAUDE_PLUGIN_OPTION_HOST="x"),
+                capture_output=True,
+            )
+            self.check(quiet.stdout == b"" and quiet.returncode == 0, "configured plugin prints no notice")
+        snapshot = state()
+        migrate(1, {"FIXTURE_FAIL": "register"})
+        self.check(state() == snapshot, "failed migration preserves options and project settings")
+        provider.rename(workspace / "moved-provider")
+        migrate(1)
+        self.check(state() == snapshot, "migration validates legacy providers before writing")
+        (workspace / "moved-provider").rename(provider)
+        result = migrate()
+        saved = options()
+        self.check(
+            saved["host"] == "192.0.2.50"
+            and saved["username"] == "legacy-user"
+            and saved["password_file"] == str(provider)
+            and saved["policy_update"] is True
+            and saved["port"] == 8443,
+            "legacy settings migrate into options over earlier values",
+        )
+        remaining = json.loads(legacy_path.read_text(encoding="utf-8"))
+        self.check(
+            remaining["permissions"] == legacy["permissions"]
+            and set(remaining["env"])
+            == {
+                "UNIFI_TOOL_PERMISSION_MODE",
+                f"UNIFI_{other_product}_HOST",
+                f"UNIFI_{other_product}_PASSWORD",
+                "UNIFI_API_KEY",
+                "KEEP",
+            },
+            "migration removes only this plugin's legacy variables",
+        )
+        self.check(
+            b"192.0.2.50" not in result.stdout + result.stderr and str(provider).encode() not in result.stdout,
+            "migration output omits values",
+        )
+        self.check(f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE".encode() in result.stdout, "dropped override is reported")
+        self.check(
+            f"UNIFI_{other_product}_HOST".encode() in result.stdout and b"UNIFI_API_KEY" in result.stdout,
+            "kept shared settings are named with the other plugin settings that keep them",
+        )
+        migrate(1)
+        # Interrupt before and after publication, with other/shared credentials
+        # retained in the project settings. Windows must clean up without finally.
+        legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
+        injection = workspace / "injection"
+        injection.mkdir()
+        (injection / "sitecustomize.py").write_text(
+            "import os,sys,time\nfrom pathlib import Path\n"
+            "def boundary(frame,event,arg):\n"
+            ' if (event == os.environ.get("FIXTURE_BOUNDARY", "call")\n'
+            '     and frame.f_code.co_name == "publish_project_settings"):\n'
+            '  if os.environ.get("FIXTURE_REPLACE_FAIL"): raise OSError("FAKE-only write failure")\n'
+            '  Path(os.environ["FIXTURE_READY"]).write_text(str(os.getpid()))\n'
+            "  while True: time.sleep(.02)\n"
+            "sys.setprofile(boundary)\n",
+            encoding="utf-8",
+        )
+        marker = workspace / "ready"
+        legacy_bytes = legacy_path.read_bytes()
+        migrate(1, {"PYTHONPATH": str(injection), "FIXTURE_REPLACE_FAIL": "1"})
+        self.check(legacy_path.read_bytes() == legacy_bytes, "failed publication leaves project settings intact")
+        self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "failed publication leaves no secret copy")
+        for boundary in ("call", "return"):
+            marker.unlink(missing_ok=True)
+            legacy_path.write_bytes(legacy_bytes)
+            process = subprocess.Popen(
+                wrapper("set-env", "-Migrate" if self.powershell else "--migrate"),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=project,
+                env=dict(environment, PYTHONPATH=str(injection), FIXTURE_READY=str(marker), FIXTURE_BOUNDARY=boundary),
+            )
+            try:
+                deadline = time.monotonic() + 30
+                while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.check(marker.exists(), "interruption reached project settings replacement")
+                if self.powershell and os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=False)
+                elif self.powershell:
+                    os.kill(int(marker.read_text()), signal.SIGTERM)
+                else:
+                    process.send_signal(signal.SIGTERM)
+                stdout, stderr = process.communicate(timeout=20)
+                self.check(process.returncode != 0, "interrupted migration exits nonzero")
+                if boundary == "call":
+                    self.check(
+                        legacy_path.read_bytes() == legacy_bytes, "interrupted migration leaves project settings intact"
+                    )
+                else:
+                    self.check(
+                        json.loads(legacy_path.read_bytes()) == remaining,
+                        "published settings survive interruption and handle closure",
+                    )
+                self.check(sample_value.encode() not in stdout + stderr, "interrupted output omits secret")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
+            leftovers = [p.name for p in (project / ".claude").iterdir() if p.name.startswith(".unifi-setup-")]
+            self.check(not leftovers, "no staging directory left after interruption")
+            artifacts = list(legacy_path.parent.glob(".unifi-setup-*"))
+            self.check(not artifacts, "interrupted migration leaves no files containing retained secrets")
+            if boundary == "call":
+                migrate()
+            self.check(json.loads(legacy_path.read_bytes()) == remaining, "retry preserves complete migrated settings")
+            remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
+            self.check(
+                remaining_env[f"UNIFI_{other_product}_PASSWORD"] == sample_value, "retry preserves other plugin secret"
+            )
+            self.check(remaining_env["UNIFI_API_KEY"] == sample_value, "retry preserves shared secret")
+            self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "retry leaves no replacement artifacts")
+        # Another product can rely entirely on shared fallbacks, without leaving
+        # any scoped keys to signal that its migration is still pending.
+        shared_fallbacks = {
+            "UNIFI_HOST": "192.0.2.80",
+            "UNIFI_USERNAME": "legacy-shared-user",
+            "UNIFI_PASSWORD_FILE": str(provider),
+        }
+        legacy_path.write_text(
+            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.70", **shared_fallbacks}}), encoding="utf-8"
+        )
+        result = migrate()
+        self.check(
+            json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == shared_fallbacks,
+            "migration preserves credentials for shared-fallback-only consumers",
+        )
+        self.check(
+            options()["host"] == "192.0.2.70"
+            and options()["username"] == "legacy-shared-user"
+            and options()["password_file"] == str(provider),
+            "migration saves this plugin without deleting other consumers fallbacks",
+        )
+        self.check(
+            all(key.encode() in result.stdout for key in shared_fallbacks)
+            and b"other consumers have not been verified" in result.stdout,
+            "retained shared keys name the missing consumer evidence",
+        )
+        # An apparent last migration still cannot prove shared consumers migrated.
+        last = {
+            "permissions": legacy["permissions"],
+            "env": {
+                f"UNIFI_{upper}_HOST": "192.0.2.70",
+                f"UNIFI_{upper}_USERNAME": "legacy-user",
+                f"UNIFI_POLICY_{upper}_UPDATE": "true",
+                "UNIFI_TOOL_PERMISSION_MODE": "confirm",
+                "UNIFI_API_KEY": sample_value,
+                "UNIFI_CUSTOM_FIXTURE": "kept",
+                "KEEP": "unrelated",
+            },
+        }
+        legacy_path.write_text(json.dumps(last), encoding="utf-8")
+        result = migrate()
+        remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
+        self.check(
+            remaining_env
+            == {
+                "UNIFI_TOOL_PERMISSION_MODE": "confirm",
+                "UNIFI_API_KEY": sample_value,
+                "UNIFI_CUSTOM_FIXTURE": "kept",
+                "KEEP": "unrelated",
+            },
+            "the apparent last migration retains shared settings without consumer evidence",
+        )
+        self.check(options()["api_key"] == sample_value, "the shared credential reached the options")
+        self.check(
+            b"UNIFI_API_KEY" in result.stdout and b"UNIFI_CUSTOM_FIXTURE" in result.stdout, "removed names are reported"
+        )
+        self.check(b"other consumers have not been verified" in result.stdout, "consumer uncertainty is reported")
+        self.check(
+            b"legacy-user" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted"
+        )
+        # A leftover deprecated UNIFI_AUTO_CONFIRM is named, called deprecated and kept, never valued.
+        for value, effect in (("on", b"turns on bypass"), ("garbage-marker", b"no effect")):
+            leftover = json.dumps({"env": {f"UNIFI_{upper}_PORT": "8443", "UNIFI_AUTO_CONFIRM": value}})
+            for label, action in (
+                ("setup", lambda: invoke({f"UNIFI_{upper}_PORT": "8444"})),
+                ("check", lambda: run(wrapper("check-prereqs"))),
+                ("migration", migrate),
+            ):
+                legacy_path.write_text(leftover, encoding="utf-8")
+                result = action()
+                output = result.stdout + result.stderr
+                self.check(
+                    b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout and effect in result.stdout,
+                    f"{label} names the deprecated auto-confirm and what it does ({value})",
+                )
+                self.check(
+                    effect == b"no effect" or b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout,
+                    f"{label} says what to set instead of a truthy auto-confirm",
+                )
+                self.check(
+                    b"UNIFI_AUTO_CONFIRM=" not in output
+                    and (value != "garbage-marker" or value.encode() not in output),
+                    f"{label} omits the auto-confirm value",
+                )
+            self.check(
+                json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == {"UNIFI_AUTO_CONFIRM": value},
+                "migration keeps the deprecated auto-confirm with the shared keys",
+            )
+        print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
     def scenario(self, product, target):
         workspace = self.root / (product + "-" + target)
@@ -238,22 +878,14 @@ class Fixtures:
             ]
         else:
             command = [self.shell, str(scripts / "set-env.sh"), "--target", target, "--input-json"]
-        if target == "claude":
-            path = workspace / ".claude/settings.local.json"
-            fixture = {
-                "permissions": {"allow": ['Bash(grep "x{2,}")']},
-                "deep": {"nested": [1]},
-                "env": {"KEEP": "old", base: "FAKE-old"},
-            }
-        else:
-            path = workspace / ("codex/config.toml" if target == "codex" else "openclaw/openclaw.json")
-            entry = {"command": "uvx", "args": ["previous"], "env": {"KEEP": "old", base: "FAKE-old"}}
-            registry = {f"unifi-{product}": entry, "unrelated": {"command": "keep", "env": {"KEEP": "yes"}}}
-            fixture = (
-                {"model": "fixture", "mcp_servers": registry}
-                if target == "codex"
-                else {"custom": {"keep": [True]}, "mcp": {"servers": registry}}
-            )
+        path = workspace / ("codex/config.toml" if target == "codex" else "openclaw/openclaw.json")
+        entry = {"command": "uvx", "args": ["previous"], "env": {"KEEP": "old", base: "FAKE-old"}}
+        registry = {f"unifi-{product}": entry, "unrelated": {"command": "keep", "env": {"KEEP": "yes"}}}
+        fixture = (
+            {"model": "fixture", "mcp_servers": registry}
+            if target == "codex"
+            else {"custom": {"keep": [True]}, "mcp": {"servers": registry}}
+        )
         path.parent.mkdir()
 
         def seed():
@@ -270,8 +902,6 @@ class Fixtures:
             )
 
         def get_env(data):
-            if target == "claude":
-                return data["env"]
             registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
             return registry[f"unifi-{product}"]["env"]
 
@@ -373,9 +1003,7 @@ class Fixtures:
             seed()
         invoke(b"{ malformed JSON patch", 1)
         self.check(path.read_bytes() == before, "malformed stdin JSON preserves prior configuration")
-        for malformed in (
-            (b"{ broken FAKE-only", b"[]", b'{"env":[]}') if target == "claude" else (b"{ broken FAKE-only",)
-        ):
+        for malformed in (b"{ broken FAKE-only",):
             path.write_bytes(malformed)
             invoke({base: sample_value}, 1)
             self.check(path.read_bytes() == malformed, "invalid existing document preserved")
@@ -412,27 +1040,20 @@ class Fixtures:
             invoke({base: sample_value}, 1, {"PATH": isolated_path})
             self.check(path.read_bytes() == before, "missing Python preserves configuration")
             (isolated / "python3").symlink_to(sys.executable)
-        if target != "claude":
-            executable(isolated, "uvx", "pass\n")
-            invoke({base: sample_value}, 1, {"PATH": isolated_path})
-            self.check(path.read_bytes() == before, "missing client preserves registration")
-            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
-            self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
-            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
-            self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
+        executable(isolated, "uvx", "pass\n")
+        invoke({base: sample_value}, 1, {"PATH": isolated_path})
+        self.check(path.read_bytes() == before, "missing client preserves registration")
+        invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
+        self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
+        invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
+        self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
         invoke({base: sample_value})
         data = load()
         self.check(get_env(data)[base] == sample_value, "special characters round-trip")
         self.check(get_env(data)["KEEP"] == "old", "unrelated environment preserved")
-        if target == "claude":
-            self.check(
-                data["permissions"] == fixture["permissions"] and data["deep"] == fixture["deep"],
-                "unrelated nested settings preserved",
-            )
-        else:
-            registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
-            original_registry = fixture["mcp_servers"] if target == "codex" else fixture["mcp"]["servers"]
-            self.check(registry["unrelated"] == original_registry["unrelated"], "unrelated registration preserved")
+        registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
+        original_registry = fixture["mcp_servers"] if target == "codex" else fixture["mcp"]["servers"]
+        self.check(registry["unrelated"] == original_registry["unrelated"], "unrelated registration preserved")
         baseline_output = invoke({base: "FAKE-baseline-output"})
         for small in ("x", "true", "1234"):
             result = invoke({base: small})
@@ -458,6 +1079,27 @@ class Fixtures:
         )
         invoke({base + "_COMMAND": None})
         self.check(base + "_COMMAND" not in get_env(load()), "null provider deletion")
+        # A deprecated UNIFI_AUTO_CONFIRM stays in the registration but is always named, never valued.
+        for value, effect in (("yes", b"turns on bypass"), ("garbage-marker", b"no effect")):
+            result = invoke({"UNIFI_AUTO_CONFIRM": value})
+            self.check(get_env(load())["UNIFI_AUTO_CONFIRM"] == value, "auto-confirm is kept, not dropped")
+            self.check(
+                b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout and effect in result.stdout,
+                f"setup names the deprecated auto-confirm and what it does ({value})",
+            )
+            self.check(
+                (effect == b"no effect" or b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout)
+                and b"UNIFI_AUTO_CONFIRM=" not in result.stdout + result.stderr
+                and (value != "garbage-marker" or value.encode() not in result.stdout + result.stderr),
+                "setup says what to set instead and omits the auto-confirm value",
+            )
+        quiet = invoke({base: sample_value})
+        self.check(
+            b"UNIFI_AUTO_CONFIRM" in quiet.stdout, "an unrelated setup still names a carried-forward auto-confirm"
+        )
+        result = invoke({"UNIFI_AUTO_CONFIRM": None})
+        self.check("UNIFI_AUTO_CONFIRM" not in get_env(load()), "null deletion removes auto-confirm")
+        self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "a removed auto-confirm is no longer named")
         if target == "codex":
             # Installed Codex plugins include a version directory in their path.
             cached = workspace / "cache" / f"unifi-{product}" / "9.8.7" / "scripts"
@@ -481,7 +1123,7 @@ class Fixtures:
         if target == "codex":
             manifest = cached.parent / ".codex-plugin/plugin.json"
             manifest.parent.mkdir(exist_ok=True)
-            manifest.write_text(json.dumps({"version": "9.8.7"}), encoding="utf-8")
+            manifest.write_text(json.dumps({"version": "1.2.3"}), encoding="utf-8")
             mcp = cached.parent / ".mcp.codex.json"
             mcp.write_text(
                 json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp==9.8.7"]}}}),
@@ -495,7 +1137,26 @@ class Fixtures:
             entry = load()["mcp_servers"][f"unifi-{product}"]
             self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
             self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
-            self.check("plugin 9.8.7" in path.read_text(), "Codex records pinned plugin version")
+            self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "refresh stays quiet without an auto-confirm")
+            invoke({"UNIFI_AUTO_CONFIRM": "garbage-marker"})
+            carried = get_env(load())
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0 and get_env(load()) == carried, "refresh keeps a carried auto-confirm")
+            self.check(
+                b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout
+                and b"no effect" in result.stdout
+                and b"garbage-marker" not in result.stdout + result.stderr,
+                "refresh names a carried-forward auto-confirm without its value",
+            )
+            invoke({"UNIFI_AUTO_CONFIRM": "true"})
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(
+                b"turns on bypass" in result.stdout and b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout,
+                "refresh says a truthy carried-forward auto-confirm enables bypass",
+            )
+            invoke({"UNIFI_AUTO_CONFIRM": None})
+            self.check(get_env(load()) == saved_env, "removing auto-confirm restores the saved environment")
+            self.check("unifi-plugin-setup" not in path.read_text(), "Codex setup keeps no pin note in config.toml")
             before_refresh = path.read_bytes()
             failed = subprocess.run(
                 refresh, cwd=workspace, env=dict(environment, FIXTURE_FAIL="validate"), capture_output=True, timeout=30
@@ -503,6 +1164,194 @@ class Fixtures:
             self.check(
                 failed.returncode != 0 and path.read_bytes() == before_refresh,
                 "failed Codex refresh preserves complete registration",
+            )
+
+            def pinned(version):
+                mcp.write_text(
+                    json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp=={version}"]}}}),
+                    encoding="utf-8",
+                )
+                return subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+
+            for valid in ("9.8.7rc2", "9.8.7.post1", "9.8.8.dev83", "9.8.8.dev83+ge51932dd"):
+                result = pinned(valid)
+                self.check(result.returncode == 0, "Codex accepts PEP 440 pin " + valid)
+                self.check(
+                    load()["mcp_servers"][f"unifi-{product}"]["args"][-1] == f"unifi-{product}-mcp=={valid}",
+                    "Codex registers PEP 440 pin " + valid,
+                )
+            before_pins = path.read_bytes()
+            for malformed in ("9.8", "9.8.7-rc1", "9.8.8.dev", "9.8.8+G1", "9.8.8+ge519-32"):
+                result = pinned(malformed)
+                self.check(result.returncode != 0, "Codex refuses malformed pin " + malformed)
+                self.check(path.read_bytes() == before_pins, "malformed pin preserves configuration " + malformed)
+            pinned("9.8.7")
+
+            # Codex drops comments in the MCP tables it saves; setup edits only this server's tables.
+            name = f"unifi-{product}"
+            commented = (
+                '# user note\nmodel = "fixture"  # trailing\n\n# my server\n[mcp_servers.unrelated]  # keep\n'
+                'command = "keep"\n# inside\nenv = { KEEP = "yes" }\n\n'
+                f"# unifi-plugin-setup: {name} plugin 0.0.1; package {name}-mcp==0.0.1\n"
+                f'# note for the entry\n[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "old" }\n\n# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+            )
+            # Model Windows' default text-write translation even on POSIX. Seed
+            # explicit bytes so both LF and CRLF inputs run on every host.
+            newline_injection = workspace / "newline-injection"
+            newline_injection.mkdir()
+            (newline_injection / "sitecustomize.py").write_text(
+                "from pathlib import Path\n"
+                "real_write_text = Path.write_text\n"
+                "def write_text(self, data, encoding=None, errors=None, newline=None):\n"
+                " if self.name == 'config.toml' and newline is None: newline = '\\r\\n'\n"
+                " return real_write_text(self, data, encoding=encoding, errors=errors, newline=newline)\n"
+                "Path.write_text = write_text\n",
+                encoding="utf-8",
+            )
+            for eol in ("\r\n", "\n"):
+                path.write_bytes(commented.replace("\n", eol).encode("utf-8"))
+                result = subprocess.run(
+                    refresh,
+                    cwd=workspace,
+                    env=dict(environment, PYTHONPATH=str(newline_injection)),
+                    capture_output=True,
+                    timeout=30,
+                )
+                self.check(result.returncode == 0, "Codex refresh edits a commented configuration")
+                text = path.read_bytes().decode("utf-8")
+                for comment in (
+                    "# user note",
+                    "# trailing",
+                    "# my server",
+                    "# keep",
+                    "# inside",
+                    "# note for the entry",
+                    "# about the next server",
+                ):
+                    self.check(comment in text, "Codex setup keeps the comment " + comment)
+                self.check(b"dropped the comments" not in result.stdout, "newline style needs no Codex rewrite")
+                self.check("\r\r\n" not in text, "Codex setup never doubles carriage returns")
+                self.check(
+                    "\r" not in text.replace(eol, "") and "\n" not in text.replace(eol, ""),
+                    "Codex setup preserves the original newline style",
+                )
+                prefix = commented.split(f"# unifi-plugin-setup: {name} ")[0]
+                suffix = '# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+                self.check(
+                    text.startswith(prefix.replace("\n", eol)) and text.endswith(suffix.replace("\n", eol)),
+                    "Codex setup preserves unrelated text exactly",
+                )
+            self.check("unifi-plugin-setup" not in text, "Codex setup drops its obsolete pin note")
+            document = tomllib.loads(text)
+            self.check(
+                document["mcp_servers"]["unrelated"] == {"command": "keep", "env": {"KEEP": "yes"}}
+                and document["mcp_servers"]["after"] == {"command": "after"}
+                and document["model"] == "fixture",
+                "Codex setup leaves other settings and servers untouched",
+            )
+            self.check(
+                document["mcp_servers"][name]["env"] == {"KEEP": "old"}
+                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
+                "Codex setup replaces only this server's pin",
+            )
+            self.check(text.index("# note for the entry") < text.index(f'[mcp_servers."{name}"]'), "entry stays put")
+
+            lexical_cases = {
+                "multiline basic": 'developer_instructions = """\nSample:\n'
+                f'[mcp_servers.{name}]\ncommand = "old"\n'
+                f'# unifi-plugin-setup: {name} example inside a string\n"""\n',
+                "multiline literal": "developer_instructions = '''\nSample:\n"
+                f"[[mcp_servers.{name}.example]]\ncommand = \"old\"\n'''\n",
+                "arrays and comments": 'custom = [\n"""\n[mcp_servers.fake]\n""", # """ ignored\n'
+                "['''\n[[mcp_servers.fake]]\n'''],\n]\n",
+                "array tables": '[[custom]]\nlabel = "a"\n[[custom]]\nlabel = "b"\n',
+                "escaped delimiters": 'developer_instructions = """\n'
+                + r'\""" still inside the string'
+                + '\n[mcp_servers.fake]\n"""\n',
+                "closing quote runs": 'developer_instructions = """two trailing quotes"""""\n',
+                "unicode line separators": 'developer_instructions = "first\u2028second"\n',
+                "unicode keys": '[profiles."\\U0001F600"]\nmodel = "fixture"\n',
+            }
+            server_text = (
+                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "old" }\n'
+                'note = """\n# string content\n[mcp_servers.fake]\n"""\n'
+            )
+            for label, prefix in lexical_cases.items():
+                source = prefix + server_text
+                if label == "unicode keys":
+                    source = source.replace(f'"{name}"', '"' + name[:-1] + f'\\U{ord(name[-1]):08X}"')
+                expected = tomllib.loads(source)
+                expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+                for eol in ("\n", "\r\n"):
+                    path.write_bytes(source.replace("\n", eol).encode("utf-8"))
+                    result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+                    self.check(result.returncode == 0, "Codex refresh handles " + label)
+                    self.check(load() == expected, "Codex preserves all TOML values for " + label)
+                    self.check(b"dropped the comments" not in result.stdout, "lexical layout needs no rewrite " + label)
+                    self.check(
+                        path.read_bytes().startswith(prefix.replace("\n", eol).encode("utf-8")),
+                        "Codex preserves unrelated TOML text for " + label,
+                    )
+
+            scanner_injection = workspace / "scanner-injection"
+            scanner_injection.mkdir()
+            (scanner_injection / "sitecustomize.py").write_text(
+                "import sys\n"
+                "def boundary(frame, event, arg):\n"
+                " if event == 'call' and frame.f_code.co_name == 'table_path':\n"
+                "  raise ValueError('FAKE scanner failure')\n"
+                "sys.setprofile(boundary)\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                refresh,
+                cwd=workspace,
+                env=dict(environment, PYTHONPATH=str(scanner_injection)),
+                capture_output=True,
+                timeout=30,
+            )
+            self.check(
+                result.returncode == 0 and b"dropped the comments" in result.stdout,
+                "scanner exceptions use the validated Codex rewrite fallback",
+            )
+            self.check(load() == expected, "scanner exception fallback preserves all settings")
+
+            # Control characters (DEL included) in an existing env are written back escaped; other Unicode stays raw.
+            escaped_env = (
+                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "synthetic", "\\u007f" = "synthetic", '
+                '"k\\u0001\\u001f\\u00e9" = "v\\u007f\\t\\u00e9\\u4e2d\\"\\\\" }\n'
+            )
+            escaped_expected = tomllib.loads(escaped_env)
+            escaped_expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+            for eol in ("\n", "\r\n"):
+                path.write_bytes(escaped_env.replace("\n", eol).encode("utf-8"))
+                result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+                self.check(result.returncode == 0, "Codex refresh accepts escaped control characters")
+                self.check(load() == escaped_expected, "Codex preserves escaped control characters")
+                written = path.read_bytes()
+                self.check(
+                    not any(byte < 0x20 and byte not in b"\r\n" or byte == 0x7F for byte in written),
+                    "Codex output has no raw control characters",
+                )
+                self.check("\u00e9\u4e2d".encode() in written, "Codex output keeps non-ASCII text raw")
+
+            # A layout setup cannot edit in place is rewritten by Codex, with a notice.
+            path.write_text(
+                f'# kept\n[mcp_servers]\nunrelated.command = "keep"\n"{name}".command = "old"\n'
+                f'"{name}".env.KEEP = "dotted"\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0 and b"dropped the comments" in result.stdout, "rewrite is announced")
+            document = tomllib.loads(path.read_text(encoding="utf-8"))
+            self.check(
+                document["mcp_servers"]["unrelated"] == {"command": "keep"}
+                and document["mcp_servers"][name]["env"] == {"KEEP": "dotted"}
+                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
+                "dotted layout is registered through Codex",
             )
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"
@@ -575,4 +1424,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--fake-client":
         fake_client(sys.argv[2])
     else:
-        main()
+        try:
+            main()
+        except Exception as error:
+            report_failure(error)
+            sys.exit(1)
