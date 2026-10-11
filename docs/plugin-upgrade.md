@@ -196,24 +196,17 @@ To supply a raw value deliberately, pipe a JSON patch from a private file:
 (`set-env.ps1 -Target <target> -InputJson` on Windows). Never put the secret in
 chat, a command argument or your shell history.
 
-### Rollback and pinning
+### Holding off and rollback
 
-Each client reads the default branch unless you pinned a ref when you added the
-marketplace. Plugin releases carry no tag, so to stay on the previous release,
-pin a branch or tag (for example in a fork) that points at the last commit
-before the 1.0.0 merge. In that commit the plugin versions equal the server
-versions: Network 0.37.0, Protect 0.8.17, Access 0.6.12.
+No client installs a plugin release on its own. Claude Code auto-update is off
+for this marketplace, Codex installs a new version only when you run
+`codex plugin marketplace upgrade`, and OpenClaw only when you run
+`openclaw plugins update`. To stay on your current plugins for now, don't run
+those commands.
 
-- **Claude Code:** add the marketplace as `<owner>/<repo>#<branch-or-tag>`.
-  Claude Code cannot pin a commit SHA. The earlier plugin reads project
-  settings, not plugin options.
-- **Codex:** add the marketplace as `<owner>/<repo>@<ref>`. Codex will not
-  re-add a marketplace from a different ref, so remove it first with
-  `codex plugin marketplace remove`, add it at the ref, then reinstall with
-  `codex plugin add <plugin>@unifi-plugins`. Re-run setup from that plugin with
-  `--refresh`.
-- **OpenClaw:** install with
-  `openclaw plugins install git:<owner>/<repo>@<ref>`.
+If a release breaks something for you, open an issue. A bad plugin release is
+rolled back by publishing a higher version with the fix or the revert, which
+you install with the same update commands as any other release.
 
 Hermes Agent cannot load the current plugin layout and is not supported.
 
