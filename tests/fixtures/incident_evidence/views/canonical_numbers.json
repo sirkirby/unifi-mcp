@@ -86,7 +86,8 @@
               },
               "complete": true,
               "population_total": 12
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -486,7 +487,8 @@
               },
               "complete": true,
               "population_total": 12
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -656,7 +658,8 @@
               },
               "complete": true,
               "population_total": 12
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [

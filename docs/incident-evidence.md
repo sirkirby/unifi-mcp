@@ -149,7 +149,7 @@ calls.
 | Field | Content |
 |-------|---------|
 | `requested_window`, `overall`, `coverage_complete`, `budgets`, `mappings` | Copied unchanged. |
-| `sources[]` | Each source's `source_id`, `product`, `source_tool`, `scope`, `outcome`, `failure`, `partial_reasons` and whole `coverage`, unchanged. API family, endpoint, query and collection time stay in the full document. |
+| `sources[]` | Each source's `source_id`, `product`, `source_tool`, `scope`, `outcome`, `failure`, `partial_reasons` and whole `coverage`, unchanged apart from cut labels, and `truncated`. API family, endpoint, query and collection time stay in the full document. |
 | `records[]` | Citations: `evidence_id`, `product`, `source_tool`, `source_record_id`, `time` (`status`, `utc`, `boundary_uncertain` and the original field, type and value), `event_type`, `summary`, `entity_ids`, `mapping` (`status`, `target_ids`, assertion `sources`), and `truncated`. Raw attributes are dropped. |
 | `record_selection` | `max_records_returned`; `omission: "presentation_limit"`; `resume_after`; `collected`, `before_resume`, `returned` and `omitted` tallies (`total`, `in_window`, `out_of_window`, `untimed`); `too_large`; `limited_by`; `next_cursor`. |
 
@@ -158,14 +158,28 @@ calls.
 clients accept. `estimated_tokens` costs the JSON an MCP server sends (indented
 by two spaces, non-ASCII text unescaped): every whitespace run and punctuation
 character is a token, letters count one token per four and digits one per
-three, a quote or backslash two and a control character four. Sources,
-coverage, failures, outcomes and assertions are never dropped or cut; request
-validation bounds them (at most 5 cameras, 20 assertions, and a bounded
-label and identifier length and character set), so only records are fitted to
-what remains.
+three, a quote or backslash two and a control character four. The bound
+holds for any valid document, not only for what valid requests collect:
+- Overall status, coverage, failures, outcomes, reasons and assertions are
+  never dropped or cut. A failure is a kind and an HTTP status, never
+  controller or exception text.
+- A source's labels (`source_tool` and the scope's `controller_id`, `site`
+  and `location_id`) are cut to their first 128 estimated tokens, and the
+  source's `truncated` names each cut label with its full length in
+  characters (`{}` when nothing was cut). A label the request rules accept is
+  never cut; only a document from elsewhere, such as an older relay's, can
+  carry a longer one.
+- Request validation bounds the rest (at most 5 cameras, 20 assertions, and
+  a bounded label and identifier length and character set), so only
+  records are fitted to what remains.
+- A document whose sources and assertions alone, labels cut, would exceed the
+  budget has no honest view: every surface refuses it with an error that
+  states the source and assertion counts and how to narrow the request
+  (`detail=full` still returns the document). Valid requests never reach it.
 
 **Free text and identifiers.** `summary` is cut to its first 200 estimated
-tokens, and `event_type` and a string `time.original_value` to 40. The cut
+tokens, `event_type` and a string `time.original_value` to 40, and
+`source_tool` to 128, as in its source. The cut
 text is a prefix of the original, and the record's `truncated` names each cut
 field with its full length in characters; it is `{}` when nothing was cut.
 Identifiers (`evidence_id`, `source_record_id`, `entity_ids`, `target_ids`)
@@ -176,8 +190,9 @@ it is counted in `too_large`, and only the full document shows it.
 **Selection.** Records are examined in selection order: in-window records
 earliest first, then untimed records, then out-of-window records, records at
 one time ordered by evidence ID. They are returned until `max_records_returned`
-records are returned or the next one would exceed the budget (at least one is
-returned when any can be); `limited_by` says which limit stopped the view, and
+records are returned or the next one would exceed the budget; a record that
+would exceed it even as the view's first is counted in `too_large`, like one
+over the citation limit. `limited_by` says which limit stopped the view, and
 is null when every record was examined. Returned records keep the document's
 order. Omission is a presentation limit: coverage, counts and outcomes still
 describe every collected record.
@@ -200,9 +215,12 @@ collected through the SDK decoders at each input bound (costly characters in
 every controller string, maximal labels and assertions, records sharing a
 timestamp, oversized identifiers), stays within the budget and states the same
 overall status, budgets, mappings, outcomes, failures, reasons and coverage as
-its document (`packages/unifi-core/tests/test_incident_evidence_view.py` and
+its document. So does every view of those documents with labels, assertions
+and sources beyond request validation added, or it is refused
+(`packages/unifi-core/tests/test_incident_evidence_view.py` and
 `test_incident_evidence_view_bounds.py`). `tests/fixtures/incident_evidence/view-bounds/`
-holds such documents with every page of their views for other consumers.
+holds such documents with every page of their views, or the refusal, for
+other consumers.
 
 ## Current product contracts
 

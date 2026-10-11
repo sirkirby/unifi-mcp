@@ -92,7 +92,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.events",
@@ -146,7 +147,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -301,7 +303,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.events",
@@ -355,7 +358,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [

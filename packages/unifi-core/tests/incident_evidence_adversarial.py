@@ -11,7 +11,9 @@ request validation allows. A seeded generator keeps every run reproducible.
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import patch
 
 from unifi_core.incident_collection import (
@@ -26,9 +28,11 @@ from unifi_core.incident_evidence import (
     BudgetUsage,
     FailureKind,
     IncidentEvidence,
+    MappingAssertion,
     Product,
     Scope,
     SourceContext,
+    SourceEvidence,
     SourceFailure,
     assemble_incident_evidence,
     format_utc,
@@ -243,4 +247,64 @@ async def largest_location_document(
     )
     return combine_incident_evidence(
         [network, protect, unsupported_access_document(location_id=location_id, mappings=mappings)]
+    )
+
+
+def document_as_received(
+    evidence: IncidentEvidence,
+    *,
+    labels: Mapping[str, str | None] | None = None,
+    assertion_ids: Sequence[str] = (),
+    failed_sources: int = 0,
+) -> IncidentEvidence:
+    """``evidence`` as a document from outside request validation could carry it.
+
+    Every source, and its records' provenance, takes ``labels`` (``source_tool``
+    or a scope field); one assertion naming no record is added per
+    ``assertion_ids`` item; and ``failed_sources`` unanswered Access sources are
+    added. Overall status and record mappings are derived again, so the result
+    is a valid document.
+    """
+    labels = dict(labels or {})
+    tool = {"source_tool": labels.pop("source_tool")} if "source_tool" in labels else {}
+
+    def relabel(item: Any) -> Any:
+        return item.model_copy(update={**tool, "scope": item.scope.model_copy(update=labels)})
+
+    sources = [
+        SourceEvidence(
+            source=relabel(source),
+            records=tuple(
+                record.model_copy(update={"provenance": relabel(record.provenance)})
+                for record in evidence.records
+                if record.source_id == source.source_id
+            ),
+        )
+        for source in evidence.sources
+    ]
+    for index in range(failed_sources):
+        context = SourceContext(
+            source_id=f"access.incident_evidence.{index:04d}",
+            product=Product.ACCESS,
+            api_family=None,
+            scope=Scope(location_id="fixture-location"),
+            query={},
+            collected_at=format_utc(NOW),
+            requested_window=evidence.requested_window,
+        )
+        sources.append(source_failed(context, SourceFailure(kind=FailureKind.UNSUPPORTED)))
+    # Location identifiers: no record names one, so no record's mapping changes.
+    extra = [
+        MappingAssertion.model_validate(
+            {
+                "entity": {"kind": "location", "id_kind": "location_id", "id": identifier},
+                "target": {"kind": "location", "id_kind": "location_id", "id": "fixture-location"},
+                "source": "operator_input",
+            }
+        )
+        for identifier in assertion_ids
+    ]
+    mappings = None if evidence.mappings is None and not extra else (*(evidence.mappings or ()), *extra)
+    return assemble_incident_evidence(
+        requested_window=evidence.requested_window, budgets=evidence.budgets, sources=sources, mappings=mappings
     )

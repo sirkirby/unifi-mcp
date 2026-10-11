@@ -147,7 +147,8 @@
               },
               "complete": true,
               "population_total": 3
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.events",
@@ -203,7 +204,8 @@
               },
               "complete": true,
               "population_total": 2
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -527,7 +529,8 @@
               },
               "complete": true,
               "population_total": 3
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.events",
@@ -583,7 +586,8 @@
               },
               "complete": true,
               "population_total": 2
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -824,7 +828,8 @@
               },
               "complete": true,
               "population_total": 3
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.events",
@@ -880,7 +885,8 @@
               },
               "complete": true,
               "population_total": 2
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [

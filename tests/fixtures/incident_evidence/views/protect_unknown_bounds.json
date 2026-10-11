@@ -85,7 +85,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.smart_detections",
@@ -143,7 +144,8 @@
               },
               "complete": true,
               "population_total": 0
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.smart_detections_default",
@@ -204,7 +206,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -352,7 +355,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.smart_detections",
@@ -410,7 +414,8 @@
               },
               "complete": true,
               "population_total": 0
-            }
+            },
+            "truncated": {}
           },
           {
             "source_id": "protect.smart_detections_default",
@@ -471,7 +476,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [

@@ -90,7 +90,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -793,7 +794,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -1496,7 +1498,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [
@@ -1670,7 +1673,8 @@
               },
               "complete": false,
               "population_total": null
-            }
+            },
+            "truncated": {}
           }
         ],
         "records": [

@@ -8,6 +8,8 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
 - ``overall``, ``coverage_complete``, budgets, mapping assertions and every
   source (outcome, failure, reasons and coverage) are copied unchanged, so
   every coverage and failure claim reads the same as in the full document.
+  A source's labels (its tool and scope) longer than their limit are cut to
+  a prefix and named in the source's ``truncated``.
 - Records are compact citations (evidence ID, product, source tool, source
   record ID, time and placement, type, summary, entities and mapping). Raw
   attributes and repeated provenance are dropped. Free text longer than its
@@ -15,9 +17,11 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
   identifiers are never cut, so a record whose citation cannot fit is
   skipped and counted as ``too_large`` instead.
 - The view stays within :data:`VIEW_TOKEN_BUDGET` estimated tokens as an MCP
-  tool result. Records are taken in selection order (in-window records
-  earliest first, then untimed, then out-of-window records; ties by evidence
-  ID) until ``max_records_returned`` or the budget is reached.
+  tool result, whatever the document holds. Records are taken in selection
+  order (in-window records earliest first, then untimed, then out-of-window
+  records; ties by evidence ID) until ``max_records_returned`` or the budget
+  is reached; a record that cannot fit even as the view's first is counted
+  as ``too_large``.
   ``record_selection`` counts what was collected, returned and omitted per
   placement; omission is a presentation limit, never missing coverage.
   ``next_cursor`` names the last record the view examined: passing it back as
@@ -25,7 +29,9 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
   progress, even through records that share a timestamp.
 
 Request validation bounds everything else the view repeats (sources, labels
-and mapping assertions), so every valid request's view fits the budget.
+and mapping assertions), so every valid request's view fits the budget. A
+document whose sources and assertions alone would exceed it has no honest
+view: :func:`client_view` raises :class:`EvidenceViewTooLarge` instead.
 
 The projection is pure and deterministic and keeps no state between calls.
 MCP tools, API routes, the relay and the worker return it by default;
@@ -82,9 +88,20 @@ VIEW_TOKEN_BUDGET = 20_000
 RECORD_TOKEN_LIMIT = 2_500
 #: Longest evidence ID a returned record, and so a cursor, carries.
 MAX_CITED_EVIDENCE_ID_LENGTH = 256
-#: Estimated tokens kept of each free-text field; longer text is cut to a prefix.
-TEXT_TOKEN_LIMITS: dict[str, int] = {"event_type": 40, "original_value": 40, "summary": 200}
-TruncatedField = Literal["event_type", "original_value", "summary"]
+#: Estimated tokens kept of each source label: ``source_tool`` and the scope's
+#: ``controller_id``, ``site`` and ``location_id``. A label request validation
+#: accepts (at most 128 characters, none escaped in JSON) is never cut.
+SOURCE_LABEL_TOKEN_LIMIT = 128
+#: Estimated tokens kept of each free-text field of a record citation; longer
+#: text is cut to a prefix. A citation repeats its source's ``source_tool``.
+TEXT_TOKEN_LIMITS: dict[str, int] = {
+    "event_type": 40,
+    "original_value": 40,
+    "source_tool": SOURCE_LABEL_TOKEN_LIMIT,
+    "summary": 200,
+}
+TruncatedField = Literal["event_type", "original_value", "source_tool", "summary"]
+SourceTruncatedField = Literal["controller_id", "location_id", "site", "source_tool"]
 
 _PLACED = (TimeStatus.IN_WINDOW, TimeStatus.OUT_OF_WINDOW)
 _UTC = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
@@ -248,7 +265,9 @@ class ViewSource(_ClosedModel):
     """A source's outcome, failure and coverage, exactly as in the full document.
 
     Request provenance (API family, endpoint, query, collection time) is left
-    to the full document; nothing it states changes coverage.
+    to the full document; nothing it states changes coverage. ``truncated``
+    names each label (``source_tool`` or a scope field) cut to a prefix, with
+    its full length in characters.
     """
 
     source_id: str
@@ -259,10 +278,14 @@ class ViewSource(_ClosedModel):
     failure: SourceFailure | None
     partial_reasons: tuple[PartialReason, ...]
     coverage: Coverage
+    truncated: dict[SourceTruncatedField, int]
 
+    @field_validator("truncated")
     @classmethod
-    def from_source(cls, source: SourceResult) -> ViewSource:
-        return cls(**{name: getattr(source, name) for name in cls.model_fields})
+    def _lengths(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(length < 1 for length in value.values()):
+            raise ValueError("a truncated label states its full length")
+        return value
 
 
 class RecordTally(_ClosedModel):
@@ -340,6 +363,14 @@ class RecordSelection(_ClosedModel):
         return self
 
 
+class EvidenceViewTooLarge(ValueError):
+    """A document's sources and mapping assertions alone exceed the view's output budget.
+
+    The message states only counts and how to narrow the request, never
+    document content.
+    """
+
+
 class IncidentEvidenceView(_ClosedModel):
     """A bounded projection of one evidence set, readable in one tool result."""
 
@@ -393,6 +424,25 @@ class IncidentEvidenceView(_ClosedModel):
 # --- projection ------------------------------------------------------------------------------
 
 
+def _view_source(source: SourceResult) -> dict[str, Any]:
+    """A source's JSON form in the view, its labels cut to :data:`SOURCE_LABEL_TOKEN_LIMIT`."""
+    shown = source.model_dump(mode="json", include=set(ViewSource.model_fields))
+    truncated: dict[str, int] = {}
+
+    def label(field: str, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cut = _cut(value, SOURCE_LABEL_TOKEN_LIMIT)
+        if cut != value:
+            truncated[field] = len(value)
+        return cut
+
+    shown["source_tool"] = label("source_tool", source.source_tool)
+    shown["scope"] = {field: label(field, getattr(source.scope, field)) for field in Scope.model_fields}
+    shown["truncated"] = truncated
+    return shown
+
+
 def _view_record(record: EvidenceRecord) -> dict[str, Any] | None:
     """A record's JSON citation, or None when its identifiers cannot be cited within the limit."""
     if len(record.evidence_id) > MAX_CITED_EVIDENCE_ID_LENGTH:
@@ -412,13 +462,14 @@ def _view_record(record: EvidenceRecord) -> dict[str, Any] | None:
             truncated[field] = len(value)
         return cut
 
+    source_tool = text("source_tool", record.provenance.source_tool)
     event_type = text("event_type", record.event_type)
     original_value = text("original_value", time.original_value)
     summary = text("summary", record.summary)
     citation = {
         "evidence_id": record.evidence_id,
         "product": record.provenance.product.value,
-        "source_tool": record.provenance.source_tool,
+        "source_tool": source_tool,
         "source_record_id": record.provenance.source_record_id,
         "time": {
             "status": time.status.value,
@@ -455,10 +506,13 @@ def client_view(
 
     Records after ``resume_after`` are examined in selection order: in-window
     records earliest first, then untimed, then out-of-window records, ties by
-    evidence ID. A record too large to cite is skipped and counted; the rest
-    are returned until ``max_records_returned`` or :data:`VIEW_TOKEN_BUDGET`
-    is reached, always at least one when any remains. Returned records keep
-    the document's order.
+    evidence ID. A record too large to cite, or to fit as the view's first,
+    is skipped and counted; the rest are returned until
+    ``max_records_returned`` or :data:`VIEW_TOKEN_BUDGET` is reached.
+    Returned records keep the document's order.
+
+    Raises :class:`EvidenceViewTooLarge` when the document's sources and
+    mapping assertions alone, labels cut, exceed the budget.
     """
     evidence = validate_incident_evidence(evidence)
     records = evidence.records
@@ -466,7 +520,7 @@ def client_view(
     order = sorted(range(len(records)), key=lambda i: _key(records[i]))
     pending = [i for i in order if after is None or _key(records[i]) > after]
 
-    sources = [ViewSource.from_source(source).model_dump(mode="json") for source in evidence.sources]
+    sources = [_view_source(source) for source in evidence.sources]
     # The selection's numbers and cursor are not known until the end, so its
     # largest possible form is reserved up front.
     count = max(len(records), MAX_RECORDS_RETURNED)
@@ -497,6 +551,13 @@ def client_view(
         "record_selection": reserved_selection,
     }
     used = _ENVELOPE_TOKENS + estimated_tokens(skeleton)
+    if used > VIEW_TOKEN_BUDGET:
+        raise EvidenceViewTooLarge(
+            f"the evidence view would exceed its {VIEW_TOKEN_BUDGET}-token output budget without any record "
+            f"(sources: {len(sources)}, mapping assertions: {len(evidence.mappings or ())}); narrow the request "
+            "to fewer sources (one location_id, fewer products or camera_ids) or fewer mapping assertions, "
+            "or use detail=full for the whole document"
+        )
 
     kept: dict[int, dict[str, Any]] = {}
     # Records too large to cite are counted once they lie before a returned
@@ -513,9 +574,14 @@ def client_view(
             limited_by = "max_records_returned"
             break
         cost = 2 + estimated_tokens(citation)
-        if kept and used + cost > VIEW_TOKEN_BUDGET:
-            limited_by = "output_budget"
-            break
+        if used + cost > VIEW_TOKEN_BUDGET:
+            if kept:
+                limited_by = "output_budget"
+                break
+            # Nothing is returned yet: the citation cannot fit beside the
+            # view's sources, so it is too large, like one over the record limit.
+            skipped += 1
+            continue
         kept[index] = citation
         used += cost
         too_large, skipped = too_large + skipped, 0
@@ -532,7 +598,7 @@ def client_view(
         coverage_complete=evidence.coverage_complete,
         budgets=evidence.budgets,
         mappings=evidence.mappings,
-        sources=tuple(ViewSource.from_source(source) for source in evidence.sources),
+        sources=tuple(ViewSource.model_validate(source) for source in sources),
         records=view_records,
         record_selection=RecordSelection(
             max_records_returned=max_records_returned,

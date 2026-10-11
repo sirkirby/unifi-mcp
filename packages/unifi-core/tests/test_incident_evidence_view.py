@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 from unifi_core.incident_evidence import (
     IncidentEvidence,
+    Scope,
     TimeStatus,
     evidence_to_json,
     validate_incident_evidence,
@@ -121,8 +122,16 @@ def _assert_same_semantics(evidence: IncidentEvidence, view: IncidentEvidenceVie
     assert view.mappings == evidence.mappings
     assert [s.source_id for s in view.sources] == [s.source_id for s in evidence.sources]
     for shown, source in zip(view.sources, evidence.sources, strict=True):
-        for name in ViewSource.model_fields:
+        for name in set(ViewSource.model_fields) - {"source_tool", "scope", "truncated"}:
             assert getattr(shown, name) == getattr(source, name), name
+        labels = {"source_tool": (shown.source_tool, source.source_tool)}
+        labels |= {name: (getattr(shown.scope, name), getattr(source.scope, name)) for name in Scope.model_fields}
+        for field, (shown_text, full_text) in labels.items():
+            if field in shown.truncated:
+                assert isinstance(full_text, str) and full_text.startswith(shown_text) and shown_text != full_text
+                assert shown.truncated[field] == len(full_text)
+            else:
+                assert shown_text == full_text, field
     selection = view.record_selection
     statuses = [record.time.status for record in evidence.records]
     assert selection.collected.total == len(evidence.records)
@@ -131,10 +140,10 @@ def _assert_same_semantics(evidence: IncidentEvidence, view: IncidentEvidenceVie
     for shown in view.records:
         record = by_id[shown.evidence_id]
         assert shown.product is record.provenance.product
-        assert shown.source_tool == record.provenance.source_tool
         assert shown.source_record_id == record.provenance.source_record_id
         assert shown.time.status is record.time.status and shown.time.utc == record.time.utc
         for field, shown_text, full_text in (
+            ("source_tool", shown.source_tool, record.provenance.source_tool),
             ("event_type", shown.event_type, record.event_type),
             ("summary", shown.summary, record.summary),
             ("original_value", shown.time.original_value, record.time.original_value),

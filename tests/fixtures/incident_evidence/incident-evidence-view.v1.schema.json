@@ -1144,6 +1144,7 @@
             "enum": [
               "event_type",
               "original_value",
+              "source_tool",
               "summary"
             ]
           },
@@ -1168,7 +1169,7 @@
     },
     "ViewSource": {
       "additionalProperties": false,
-      "description": "A source's outcome, failure and coverage, exactly as in the full document.\n\nRequest provenance (API family, endpoint, query, collection time) is left\nto the full document; nothing it states changes coverage.",
+      "description": "A source's outcome, failure and coverage, exactly as in the full document.\n\nRequest provenance (API family, endpoint, query, collection time) is left\nto the full document; nothing it states changes coverage. ``truncated``\nnames each label (``source_tool`` or a scope field) cut to a prefix, with\nits full length in characters.",
       "properties": {
         "coverage": {
           "$ref": "#/$defs/Coverage"
@@ -1213,6 +1214,21 @@
             }
           ],
           "title": "Source Tool"
+        },
+        "truncated": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "enum": [
+              "controller_id",
+              "location_id",
+              "site",
+              "source_tool"
+            ]
+          },
+          "title": "Truncated",
+          "type": "object"
         }
       },
       "required": [
@@ -1223,7 +1239,8 @@
         "outcome",
         "failure",
         "partial_reasons",
-        "coverage"
+        "coverage",
+        "truncated"
       ],
       "title": "ViewSource",
       "type": "object"

@@ -28,6 +28,7 @@ from unifi_core.incident_collection import (
     SourceRead,
     acquire_once,
     read_source_pages,
+    require_label,
     utc_now,
 )
 from unifi_core.incident_evidence import (
@@ -165,7 +166,11 @@ async def collect_network_incident_evidence(
     ``read_events_page``), or an awaitable factory for one, acquired inside
     the first read; no other method is called. Source failures, budget
     exhaustion and truncation are reported in the evidence, never raised.
+    A ``site`` that breaks the label rule raises ``ValueError`` before any
+    read: it is recorded in the source's scope and repeated in the view.
     """
+    if site is not None:
+        require_label("site", site)
     get_events = acquire_once(events, "read_events_page")
     meter = BudgetMeter(request.limits, clock=clock)
     planned_at = now()

@@ -100,6 +100,18 @@ def is_label(value: Any, max_length: int = MAX_LABEL_LENGTH) -> bool:
     return isinstance(value, str) and 0 < len(value) <= max_length and not _UNLABELLED.search(value)
 
 
+def require_label(name: str, value: Any, max_length: int = MAX_LABEL_LENGTH) -> str:
+    """Return ``value`` if it is a label, else raise ``ValueError`` naming ``name`` and the rule, never the value.
+
+    For labels that reach the evidence from configuration or a route rather
+    than a request model, such as the Network site recorded in each source's
+    scope.
+    """
+    if not is_label(value, max_length):
+        raise ValueError(f"{name}: must be 1-{max_length} characters {LABEL_RULE}")
+    return value
+
+
 def parse_window_bound(value: Any, name: str) -> datetime:
     """Parse an ISO 8601 window bound that states its UTC offset.
 
