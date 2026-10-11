@@ -628,7 +628,11 @@ product tools: `{"success": true, "data": <view or IncidentEvidence>}`. It
 calls each product tool with `detail: "full"`, combines the full documents,
 and returns the combined set's [client view](#client-view) unless its own
 `detail` is `full`; `max_records_returned` and `resume_after` apply to that
-view, which fits the same output budget. A successful
+view, which fits the same output budget. A product document from outside
+request validation, such as an older server's with a longer site, has its
+labels cut and marked in the view like any other; a combined set too broad
+for its view is refused with Core's message, and `detail: "full"` still
+returns it. A successful
 transport envelope does not establish complete collection: inspect `overall`,
 `coverage_complete`, each source outcome and `budgets.exhausted`. Total source
 failure returns `overall: "failed"`, never an empty all-clear.

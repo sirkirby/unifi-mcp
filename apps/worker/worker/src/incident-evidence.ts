@@ -350,11 +350,17 @@ export const VIEW_TOKEN_BUDGET = 20_000;
 export const RECORD_TOKEN_LIMIT = 2_500;
 const MAX_CITED_EVIDENCE_ID_LENGTH = 256;
 export const MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH;
-const textTokenLimits = { event_type: 40, original_value: 40, summary: 200 } as const;
+/** Core's `SOURCE_LABEL_TOKEN_LIMIT`: a source's tool and scope labels are cut to it; a valid request label never is. */
+const SOURCE_LABEL_TOKEN_LIMIT = 128;
+const textTokenLimits = { event_type: 40, original_value: 40, source_tool: SOURCE_LABEL_TOKEN_LIMIT, summary: 200 } as const;
 const evidenceIdPattern = new RegExp(String.raw`^[a-z0-9][a-z0-9_.:-]{0,127}\|(?:(?:int|str)\|[A-Za-z0-9%._~-]+` +
   String.raw`(?:\|version\|[0-9a-f]{24})?|sha256\|[0-9a-f]{24})$`);
 const cursorPattern = /^(?:[02]\|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z|1\|)\|(.+)$/;
 const viewSourceFields = ["source_id", "product", "source_tool", "scope", "outcome", "failure", "partial_reasons", "coverage"];
+const scopeFields = ["controller_id", "site", "location_id"];
+
+/** Core's `EvidenceViewTooLarge`: a document's sources and mapping assertions alone exceed the view's budget. */
+export class EvidenceViewTooLargeError extends Error {}
 
 // Core's `estimated_tokens`, exactly: JSON indented by two spaces as an MCP server sends it.
 const textParts = /[A-Za-z]+|[0-9]+| +|[\s\S]/gu;
@@ -417,6 +423,21 @@ function tally(records: EvidenceDocument[]): EvidenceDocument {
   const outOfWindow = records.filter((record) => record.time.status === "out_of_window").length;
   return { total: records.length, in_window: inWindow, out_of_window: outOfWindow, untimed: records.length - inWindow - outOfWindow };
 }
+/** A source in the view, its labels cut to `SOURCE_LABEL_TOKEN_LIMIT` and named in `truncated`. */
+function viewSource(source: EvidenceDocument): EvidenceDocument {
+  const truncated: Record<string, number> = {};
+  const label = (field: string, value: string | null): string | null => {
+    if (value === null) return null;
+    const kept = cut(value, SOURCE_LABEL_TOKEN_LIMIT);
+    if (kept !== value) truncated[field] = Array.from(value).length;
+    return kept;
+  };
+  const shown: EvidenceDocument = Object.fromEntries(viewSourceFields.map((field) => [field, source[field]]));
+  shown.source_tool = label("source_tool", source.source_tool);
+  shown.scope = Object.fromEntries(scopeFields.map((field) => [field, label(field, source.scope[field] ?? null)]));
+  shown.truncated = truncated;
+  return shown;
+}
 /** A record's citation, or null when its identifiers cannot be cited within the record limit. */
 function citation(record: EvidenceDocument): EvidenceDocument | null {
   if (record.evidence_id.length > MAX_CITED_EVIDENCE_ID_LENGTH) return null;
@@ -429,11 +450,12 @@ function citation(record: EvidenceDocument): EvidenceDocument | null {
     if (kept !== value) truncated[field] = Array.from(value).length;
     return kept;
   };
+  const sourceTool = text("source_tool", record.provenance.source_tool);
   const eventType = text("event_type", record.event_type);
   const originalValue = text("original_value", record.time.original_value);
   const summary = text("summary", record.summary);
   const cited = {
-    evidence_id: record.evidence_id, product: record.provenance.product, source_tool: record.provenance.source_tool,
+    evidence_id: record.evidence_id, product: record.provenance.product, source_tool: sourceTool,
     source_record_id: record.provenance.source_record_id,
     time: { status: record.time.status, utc: record.time.utc, boundary_uncertain: record.time.boundary_uncertain,
       original_field: record.time.original_field, original_type: record.time.original_type, original_value: originalValue },
@@ -448,6 +470,7 @@ function citation(record: EvidenceDocument): EvidenceDocument | null {
 /**
  * Core's bounded client view (`unifi_core.incident_evidence_view.client_view`) of a validated document:
  * coverage unchanged, record citations fitted to `VIEW_TOKEN_BUDGET` and `maxRecords`, resumed after a cursor.
+ * Throws `EvidenceViewTooLargeError` when the sources and mapping assertions alone, labels cut, exceed the budget.
  */
 export async function incidentEvidenceView(
   value: unknown, maxRecords = DEFAULT_MAX_RECORDS_RETURNED, resumeAfter: string | null = null,
@@ -458,7 +481,7 @@ export async function incidentEvidenceView(
   if (resumeAfter !== null && !after) fail("a cursor must be a next_cursor value returned by an evidence view");
   const order = records.map((_, index) => index).sort((a, b) => compareKeys(recordKey(records[a]), recordKey(records[b])));
   const pending = order.filter((index) => !after || compareKeys(recordKey(records[index]), after) > 0);
-  const sources = doc.sources.map((source: EvidenceDocument) => Object.fromEntries(viewSourceFields.map((field) => [field, source[field]])));
+  const sources = doc.sources.map(viewSource);
   // The selection's numbers and cursor are not known until the end, so its largest possible form is reserved up front.
   const count = Math.max(records.length, MAX_RECORDS_RETURNED);
   const reservedTally = { total: count, in_window: count, out_of_window: count, untimed: count };
@@ -471,6 +494,13 @@ export async function incidentEvidenceView(
       too_large: count, limited_by: "max_records_returned", next_cursor: "-".repeat(MAX_CURSOR_LENGTH) },
   };
   let used = envelopeTokens + estimatedTokens(skeleton);
+  if (used > VIEW_TOKEN_BUDGET) {
+    throw new EvidenceViewTooLargeError(
+      `the evidence view would exceed its ${VIEW_TOKEN_BUDGET}-token output budget without any record ` +
+      `(sources: ${sources.length}, mapping assertions: ${(doc.mappings ?? []).length}); narrow the request ` +
+      "to fewer sources (one location_id, fewer products or camera_ids) or fewer mapping assertions, " +
+      "or use detail=full for the whole document");
+  }
   const kept = new Map<number, EvidenceDocument>();
   // Records too large to cite are counted once they lie before a returned record, or when nothing after
   // them is left; otherwise the next view, resuming after the last returned record, counts them.
@@ -481,7 +511,11 @@ export async function incidentEvidenceView(
     if (!cited) { skipped += 1; continue; }
     if (kept.size === maxRecords) { limitedBy = "max_records_returned"; break; }
     const cost = 2 + estimatedTokens(cited);
-    if (kept.size && used + cost > VIEW_TOKEN_BUDGET) { limitedBy = "output_budget"; break; }
+    if (used + cost > VIEW_TOKEN_BUDGET) {
+      if (kept.size) { limitedBy = "output_budget"; break; }
+      // Nothing is returned yet: the citation cannot fit beside the view's sources, so it is too large.
+      skipped += 1; continue;
+    }
     kept.set(index, cited);
     used += cost;
     tooLarge += skipped; skipped = 0;
@@ -680,6 +714,11 @@ export async function collectIncidentEvidence(
   let combined: EvidenceDocument;
   try { combined = await combineIncidentEvidence(documents); }
   catch { return { success: false, error: "Failed to combine location incident evidence: conflicting or invalid evidence" }; }
-  return { success: true, data: detail === "full" ? combined :
-    await incidentEvidenceView(combined, (maxRecords as number | null) ?? undefined, resumeAfter as string | null) };
+  if (detail === "full") return { success: true, data: combined };
+  try {
+    return { success: true, data: await incidentEvidenceView(combined, (maxRecords as number | null) ?? undefined, resumeAfter as string | null) };
+  } catch (error) {
+    if (error instanceof EvidenceViewTooLargeError) return { success: false, error: `Failed to collect location evidence: ${error.message}` };
+    throw error;
+  }
 }

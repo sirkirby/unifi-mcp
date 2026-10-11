@@ -18,7 +18,13 @@ from unifi_core.incident_evidence import (
     evidence_to_json,
     validate_incident_evidence,
 )
-from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
+from unifi_core.incident_evidence_view import (
+    VIEW_TOKEN_BUDGET,
+    IncidentEvidenceView,
+    client_view,
+    estimated_tokens,
+    view_to_json,
+)
 from unifi_mcp_relay.location_timeline import (
     PRODUCT_TOOLS,
     TOOL_ANNOTATIONS,
@@ -270,6 +276,44 @@ async def test_the_view_resumes_after_its_cursor():
     combined = combine_incident_evidence(products.values())
     assert resumed["data"] == view_to_json(client_view(combined, max_records_returned=1, resume_after=cursor))
     assert resumed["data"]["record_selection"]["before_resume"]["total"] == 1
+
+
+def _network_answer(document):
+    async def forward(tool_name, arguments):
+        return {"success": True, "data": document}
+
+    return AsyncMock(forward=forward)
+
+
+async def test_a_product_documents_oversized_site_is_cut_and_marked_in_the_view():
+    """A product server outside request validation (an older one, say) cannot overfill the view."""
+    network = product_documents(read("healthy_empty"))["network"]
+    network["sources"][0]["scope"]["site"] = "-" * 30_000
+    request = {key: value for key, value in arguments(read("healthy_empty")).items() if key != "detail"}
+    result = await handle_location_timeline({**request, "products": ["network"]}, _network_answer(network))
+    assert result["success"] is True
+    (source,) = result["data"]["sources"]
+    assert source["truncated"] == {"site": 30_000} and source["scope"]["site"] == "-" * 128
+    assert estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+
+
+async def test_evidence_too_broad_for_its_view_is_refused_and_still_returned_in_full():
+    network = product_documents(read("healthy_empty"))["network"]
+    template = network["sources"][0]
+    network["sources"] = [{**copy.deepcopy(template), "source_id": f"network.events.{i:04d}"} for i in range(150)]
+    request = {key: value for key, value in arguments(read("healthy_empty")).items() if key != "detail"}
+    refused = await handle_location_timeline({**request, "products": ["network"]}, _network_answer(network))
+    assert refused == {
+        "success": False,
+        "error": "Failed to collect location evidence: the evidence view would exceed its 20000-token output budget "
+        "without any record (sources: 150, mapping assertions: 0); narrow the request to fewer sources (one "
+        "location_id, fewer products or camera_ids) or fewer mapping assertions, or use detail=full for the whole "
+        "document",
+    }
+    full = await handle_location_timeline(
+        {**request, "products": ["network"], "detail": "full"}, _network_answer(network)
+    )
+    assert full["success"] is True and len(full["data"]["sources"]) == 150
 
 
 async def test_valid_but_unrelated_document_is_parse_failed():

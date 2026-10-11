@@ -25,7 +25,7 @@ from unifi_core.incident_evidence import (
     source_failed,
     validate_incident_evidence,
 )
-from unifi_core.incident_evidence_view import EvidencePresentation
+from unifi_core.incident_evidence_view import EvidencePresentation, EvidenceViewTooLarge
 from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 
@@ -190,4 +190,8 @@ async def handle_location_timeline(
             "success": False,
             "error": "Failed to combine location incident evidence: conflicting or invalid evidence",
         }
-    return {"success": True, "data": presentation.render(combined)}
+    try:
+        data = presentation.render(combined)
+    except EvidenceViewTooLarge as exc:
+        return {"success": False, "error": f"Failed to collect location evidence: {exc}"}
+    return {"success": True, "data": data}

@@ -6,8 +6,8 @@ import Ajv from "ajv";
 import schema from "../../../../tests/fixtures/incident_evidence/incident-evidence.v1.schema.json";
 import viewSchema from "../../../../tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json";
 import {
-  canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, estimatedTokens, incidentEvidenceView,
-  MAX_TIMELINE_SOURCES, validateIncidentEvidence, VIEW_TOKEN_BUDGET,
+  canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, estimatedTokens, EvidenceViewTooLargeError,
+  incidentEvidenceView, MAX_TIMELINE_SOURCES, validateIncidentEvidence, VIEW_TOKEN_BUDGET,
 } from "../src/incident-evidence";
 import { validateEvidenceSchema } from "../src/incident-evidence-schema.js";
 import type { EvidenceTarget } from "../src/types";
@@ -70,6 +70,10 @@ describe("incident evidence corpus", () => {
   });
   it.each(bounded)("fits every page of %s to Core's output budget exactly", async (name) => {
     const fixture = read("view-bounds", name);
+    if (fixture.refusal !== undefined) {
+      await expect(incidentEvidenceView(fixture.evidence)).rejects.toThrow(new EvidenceViewTooLargeError(fixture.refusal));
+      return;
+    }
     const limits = new Set<string>();
     for (const { max_records_returned: limit, resume_after: cursor, expected } of fixture.views) {
       const actual = await incidentEvidenceView(fixture.evidence, limit, cursor);
@@ -79,6 +83,71 @@ describe("incident evidence corpus", () => {
       limits.add(String(actual.record_selection.limited_by));
     }
     expect(limits.size).toBeGreaterThan(1);
+  });
+  it("fits any document's view to the budget, or refuses it, however long its labels or many its sources", async () => {
+    // Core's property test, drawn from the largest location: oversized labels in every source and record,
+    // assertions with oversized identifiers, and added sources, as a relay outside request validation could send.
+    const base = read("view-bounds", "output_budget.json").evidence;
+    expect(base.overall).toBe("partial");
+    let seed = 794;
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const pick = <T,>(values: readonly T[]): T => values[Math.floor(random() * values.length)];
+    const alphabet = ['"', "\\", "\u0001", "\n", "\t", "\u{1f600}", "\u00e9", " ", " ", "a", "7", "~", "%", "|"];
+    const text = (length: number): string => Array.from({ length }, () => pick(alphabet)).join("");
+    const outcomes = { view: 0, cut: 0, refused: 0 };
+    for (let draw = 0; draw < 40; draw++) {
+      const evidence = structuredClone(base);
+      const labels = Object.fromEntries(["controller_id", "site", "location_id", "source_tool"]
+        .filter(() => random() < 0.5).map((field) => [field, text(pick([0, 128, 513, 30_000]))]));
+      const relabel = (item: any): void => {
+        for (const [field, value] of Object.entries(labels)) {
+          if (field === "source_tool") item.source_tool = value; else item.scope[field] = value;
+        }
+      };
+      evidence.sources.forEach(relabel);
+      evidence.records.forEach((record: any) => relabel(record.provenance));
+      const assertions = pick([0, 0, 8, 40]);
+      for (let index = 0; index < assertions; index++) evidence.mappings.push({
+        entity: { kind: "location", id_kind: "location_id", id: `fixture-${text(pick([1, 64, 3_000]))}`, role: null },
+        target: { kind: "location", id_kind: "location_id", id: "fixture-location", role: null }, source: "operator_input" });
+      const failed = evidence.sources[0];
+      expect(failed.outcome).toBe("unsupported");
+      const added = pick([0, 0, 20, 150]);
+      for (let index = 0; index < added; index++)
+        evidence.sources.push({ ...structuredClone(failed), source_id: `${failed.source_id}.${String(index).padStart(4, "0")}` });
+      evidence.sources.sort((a: any, b: any) => (a.source_id < b.source_id ? -1 : 1));
+      let view: any;
+      try { view = await incidentEvidenceView(evidence, pick([1, 25, 50])); }
+      catch (error) {
+        expect(error).toBeInstanceOf(EvidenceViewTooLargeError);
+        // Labels are cut, never refused: only sources and assertions can fill the budget.
+        expect(assertions + added).toBeGreaterThan(0);
+        expect((error as Error).message).not.toContain("fixture");
+        outcomes.refused += 1;
+        continue;
+      }
+      outcomes.view += 1;
+      expect(viewSchemaCheck(view)).toBe(true);
+      expect(estimatedTokens({ success: true, data: view })).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+      expect([view.overall, view.coverage_complete]).toEqual([evidence.overall, evidence.coverage_complete]);
+      view.sources.forEach((shown: any, index: number) => {
+        const source = evidence.sources[index];
+        expect([shown.outcome, shown.failure, shown.coverage]).toEqual([source.outcome, source.failure, source.coverage]);
+        for (const [field, full] of [["source_tool", source.source_tool], ...Object.entries(source.scope)] as Array<[string, any]>) {
+          const kept = field === "source_tool" ? shown.source_tool : shown.scope[field];
+          if (field in shown.truncated) {
+            expect(full.startsWith(kept) && kept !== full && shown.truncated[field] === Array.from(full).length).toBe(true);
+          } else expect(kept).toBe(full);
+        }
+      });
+      outcomes.cut += Number(view.sources.some((source: any) => Object.keys(source.truncated).length));
+    }
+    expect(Object.values(outcomes).every(Boolean)).toBe(true);
   });
   it("refuses a cursor that no view returned", async () => {
     await expect(incidentEvidenceView(fixtureEvidence("healthy_empty.json"), 2, "0|not-a-time|network.events|int|7"))
@@ -268,6 +337,30 @@ describe("location evidence collection", () => {
     const accepted = await collectIncidentEvidence({ ...request, location_id: "fixture-1",
       mappings: [assertion("fixture-location-\u00e9 #2")] }, targets, async () => null);
     expect(accepted.success).toBe(true);
+  });
+  it("cuts and marks a relay's oversized site, keeping its view within budget", async () => {
+    const network = productDocument("network");
+    network.sources[0].scope.site = "-".repeat(30_000);
+    const result: any = await collectIncidentEvidence({ ...request, detail: "view", products: ["network"] }, targets,
+      async () => ({ success: true, data: network }));
+    expect(result.success).toBe(true);
+    const [source] = result.data.sources;
+    expect(source.truncated).toEqual({ site: 30_000 });
+    expect(source.scope.site).toBe("-".repeat(128));
+    expect(source.outcome).toBe("empty");
+    expect(estimatedTokens(result)).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+  });
+  it("refuses a view its sources alone would overfill, and still returns detail=full", async () => {
+    const network = productDocument("network");
+    network.sources = Array.from({ length: 150 }, (_, index) => ({
+      ...structuredClone(network.sources[0]), source_id: `network.events.${String(index).padStart(4, "0")}` }));
+    const relay = async () => ({ success: true, data: network });
+    expect(await collectIncidentEvidence({ ...request, detail: "view", products: ["network"] }, targets, relay)).toEqual({
+      success: false, error: "Failed to collect location evidence: the evidence view would exceed its 20000-token output " +
+        "budget without any record (sources: 150, mapping assertions: 0); narrow the request to fewer sources (one " +
+        "location_id, fewer products or camera_ids) or fewer mapping assertions, or use detail=full for the whole document" });
+    const full: any = await collectIncidentEvidence({ ...request, products: ["network"] }, targets, relay);
+    expect(full.success && full.data.sources.length).toBe(150);
   });
   it("reads at most as many sources as one location produces", async () => {
     const many = Array.from({ length: 100 }, (_, index) => [
