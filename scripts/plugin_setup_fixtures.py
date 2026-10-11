@@ -2,6 +2,8 @@
 """Credential-free integration fixtures for the shell and PowerShell harnesses."""
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -11,7 +13,21 @@ import sys
 import tempfile
 import time
 import tomllib
+import traceback
 from pathlib import Path
+
+
+class FixtureAssertionError(AssertionError):
+    """An assertion with a fixture-authored label, never captured client output."""
+
+
+def report_failure(error):
+    # Exception messages, source lines and locals can contain captured credentials.
+    # Keep the traceback locations and only our own fixed assertion labels.
+    for frame in traceback.extract_tb(error.__traceback__):
+        print(f"Fixture diagnostic: {Path(frame.filename).name}:{frame.lineno} in {frame.name}", file=sys.stderr)
+    label = ": " + str(error) if isinstance(error, FixtureAssertionError) else ""
+    print(f"Fixture failure: {type(error).__name__}{label}", file=sys.stderr)
 
 
 def toml_literal(value):
@@ -208,7 +224,7 @@ class Fixtures:
 
     def check(self, condition, label):
         if not condition:
-            raise AssertionError(label)
+            raise FixtureAssertionError(label)
         self.passes += 1
 
     def check_script_parity(self):
@@ -230,11 +246,31 @@ class Fixtures:
 
     def run(self):
         self.check_script_parity()
+        self.check_failure_reporting()
         self.check_runtime_forwarding()
         for product in ("network", "protect", "access"):
             self.claude_scenario(product)
             for target in ("codex", "openclaw"):
                 self.scenario(product, target)
+
+    def check_failure_reporting(self):
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            try:
+                raise RuntimeError("FAKE-diagnostic-value")
+            except RuntimeError as error:
+                report_failure(error)
+            try:
+                self.check(False, 'comment # and quoted table "name"')
+            except FixtureAssertionError as error:
+                report_failure(error)
+        diagnostic = output.getvalue()
+        self.check("FAKE-diagnostic-value" not in diagnostic, "failure diagnostics omit exception text and source")
+        self.check("in check_failure_reporting" in diagnostic, "failure diagnostics retain traceback locations")
+        self.check(
+            'Fixture failure: FixtureAssertionError: comment # and quoted table "name"' in diagnostic,
+            "failure diagnostics retain assertion labels with punctuation",
+        )
 
     def check_runtime_forwarding(self):
         marker = b"FAKE-runtime-input\x00\xce\xa9\xf0\x9f\x98\x80\r\n"
@@ -344,8 +380,6 @@ class Fixtures:
                 capture_output=True,
                 timeout=60,
             )
-            if os.environ.get("FIXTURE_DEBUG") and (result.returncode == 0) != (expected == 0):
-                print(command, result.stdout, result.stderr.replace(sample_value.encode(), b"<secret>"))
             self.check(result.returncode == expected if expected == 0 else result.returncode != 0, "setup exit status")
             self.check(sample_value.encode() not in result.stdout + result.stderr, "no secret in stdout/stderr")
             argv_path = workspace / "argv.jsonl"
@@ -1024,20 +1058,52 @@ class Fixtures:
                 f'# note for the entry\n[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
                 'env = { KEEP = "old" }\n\n# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
             )
-            path.write_text(commented, encoding="utf-8")
-            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-            self.check(result.returncode == 0, "Codex refresh edits a commented configuration")
-            text = path.read_text(encoding="utf-8")
-            for comment in (
-                "# user note",
-                "# trailing",
-                "# my server",
-                "# keep",
-                "# inside",
-                "# note for the entry",
-                "# about the next server",
-            ):
-                self.check(comment in text, "Codex setup keeps the comment " + comment)
+            # Model Windows' default text-write translation even on POSIX. Seed
+            # explicit bytes so both LF and CRLF inputs run on every host.
+            newline_injection = workspace / "newline-injection"
+            newline_injection.mkdir()
+            (newline_injection / "sitecustomize.py").write_text(
+                "from pathlib import Path\n"
+                "real_write_text = Path.write_text\n"
+                "def write_text(self, data, encoding=None, errors=None, newline=None):\n"
+                " if self.name == 'config.toml' and newline is None: newline = '\\r\\n'\n"
+                " return real_write_text(self, data, encoding=encoding, errors=errors, newline=newline)\n"
+                "Path.write_text = write_text\n",
+                encoding="utf-8",
+            )
+            for eol in ("\r\n", "\n"):
+                path.write_bytes(commented.replace("\n", eol).encode("utf-8"))
+                result = subprocess.run(
+                    refresh,
+                    cwd=workspace,
+                    env=dict(environment, PYTHONPATH=str(newline_injection)),
+                    capture_output=True,
+                    timeout=30,
+                )
+                self.check(result.returncode == 0, "Codex refresh edits a commented configuration")
+                text = path.read_bytes().decode("utf-8")
+                for comment in (
+                    "# user note",
+                    "# trailing",
+                    "# my server",
+                    "# keep",
+                    "# inside",
+                    "# note for the entry",
+                    "# about the next server",
+                ):
+                    self.check(comment in text, "Codex setup keeps the comment " + comment)
+                self.check(b"dropped the comments" not in result.stdout, "newline style needs no Codex rewrite")
+                self.check("\r\r\n" not in text, "Codex setup never doubles carriage returns")
+                self.check(
+                    "\r" not in text.replace(eol, "") and "\n" not in text.replace(eol, ""),
+                    "Codex setup preserves the original newline style",
+                )
+                prefix = commented.split(f"# unifi-plugin-setup: {name} ")[0]
+                suffix = '# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+                self.check(
+                    text.startswith(prefix.replace("\n", eol)) and text.endswith(suffix.replace("\n", eol)),
+                    "Codex setup preserves unrelated text exactly",
+                )
             self.check("unifi-plugin-setup" not in text, "Codex setup drops its obsolete pin note")
             document = tomllib.loads(text)
             self.check(
@@ -1139,4 +1205,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--fake-client":
         fake_client(sys.argv[2])
     else:
-        main()
+        try:
+            main()
+        except Exception as error:
+            report_failure(error)
+            sys.exit(1)

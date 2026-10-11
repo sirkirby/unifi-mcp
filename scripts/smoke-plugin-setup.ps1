@@ -338,11 +338,11 @@ try {
         Write-Host '== Transactional client fixtures =='
         $fixtures = Invoke-PortableFixtures
         if ($fixtures.ExitCode -ne 0) {
-            # The fixture captures fake credential values. Report only its fixed
-            # assertion label, never raw traceback lines or client output.
-            $failureLine = @($fixtures.Output -split "`r?`n" | Where-Object { $_ -match '^AssertionError: [A-Za-z0-9 _./-]{1,120}$' } | Select-Object -Last 1)
+            # The fixture emits safe traceback locations and fixture-authored
+            # assertion labels without exception text, source lines or client output.
+            $failureLine = @($fixtures.Output -split "`r?`n" | Where-Object { $_ -match '^Fixture (diagnostic|failure): ' })
             if ($failureLine.Count -gt 0) {
-                Write-Host ('  Fixture failure: ' + $failureLine[0])
+                foreach ($line in $failureLine) { Write-Host ('  ' + $line) }
             } else {
                 Write-Host '  Fixture process failed; inspect the isolated test run.'
             }

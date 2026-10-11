@@ -752,13 +752,17 @@ def main():
                         return False
                     return final_servers.get(name) == entry and final_data == expected_data
 
-                staged.write_text(replace_codex_entry((original or b"").decode("utf-8"), name, entry), encoding="utf-8")
+                # The editor already chose the original newline style. Text-mode
+                # writes on Windows would translate CRLF into CRCRLF.
+                staged.write_bytes(replace_codex_entry((original or b"").decode("utf-8"), name, entry).encode("utf-8"))
                 if not staged_matches():
                     # An unusual layout (inline or dotted mcp_servers keys): let Codex rewrite the file.
                     staged.write_bytes(original or b"")
                     client(add, environment)
                     client(["codex", "mcp", "remove", name], environment)
-                    staged.write_text(replace_codex_entry(staged.read_text(encoding="utf-8"), name, entry), "utf-8")
+                    staged.write_bytes(
+                        replace_codex_entry(staged.read_bytes().decode("utf-8"), name, entry).encode("utf-8")
+                    )
                     rewritten = True
                     if not staged_matches():
                         refuse("Staged registry validation failed; existing configuration is unchanged.")
