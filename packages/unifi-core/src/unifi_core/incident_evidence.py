@@ -1361,11 +1361,12 @@ class Budgets(_ClosedModel):
             BudgetKind.CALLS: (self.usage.calls, self.limits.calls),
             BudgetKind.ELAPSED: (self.usage.elapsed_ms, self.limits.elapsed_ms),
         }
+        # Exhaustion reported below the limit is allowed: a combined set sums
+        # limits and usage, and keeps a kind that stopped any one collection.
+        # Over-reporting can only make evidence less complete, never an all-clear.
         for kind, (used, limit) in pairs.items():
             if used > limit and kind not in self.exhausted:
                 raise ValueError(f"{kind.value} budget overran its limit and must be reported exhausted")
-            if kind in self.exhausted and used < limit:
-                raise ValueError(f"{kind.value} budget is reported exhausted below its limit")
         return self
 
 

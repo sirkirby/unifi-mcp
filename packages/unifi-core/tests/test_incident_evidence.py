@@ -588,13 +588,15 @@ def test_window_longer_than_budget_must_report_window_exhaustion() -> None:
     assert evidence.overall is OverallStatus.PARTIAL
 
 
-def test_budget_overrun_must_be_reported_and_exhaustion_must_be_real() -> None:
+def test_budget_overrun_must_be_reported_and_reported_exhaustion_is_never_dropped() -> None:
     limits = BudgetLimits(window_seconds=7200, events=10, calls=2, elapsed_ms=1000)
     with pytest.raises(ValidationError):
         Budgets(limits=limits, usage=BudgetUsage(elapsed_ms=1500))
-    with pytest.raises(ValidationError):
-        Budgets(limits=limits, usage=BudgetUsage(calls=1), exhausted=(BudgetKind.CALLS,))
     Budgets(limits=limits, usage=BudgetUsage(elapsed_ms=1500), exhausted=(BudgetKind.ELAPSED,))
+    # A combined set can keep a kind one collection spent while the summed usage is below the summed limit.
+    combined = Budgets(limits=limits, usage=BudgetUsage(calls=1), exhausted=(BudgetKind.CALLS,))
+    evidence = assemble_incident_evidence(requested_window=WINDOW, budgets=combined, sources=[_collect([])])
+    assert evidence.overall is OverallStatus.PARTIAL and evidence.coverage_complete is False
 
 
 def test_budget_stop_marks_the_source_partial() -> None:
