@@ -12,7 +12,8 @@ Usage:
     python scripts/generate_skill_references.py [--check] [--root PATH]
 
 Flags:
-    --check   Dry-run mode: report drift without modifying files (exit 1 if drift found)
+    --check   Dry-run mode: report drift without modifying files (exit 1 if drift
+              is found or a tool category has no marker section)
 
 Markers in reference files:
     <!-- AUTO:tools:CATEGORY_NAME -->
@@ -255,6 +256,11 @@ def run(root: Path, check_mode: bool) -> int:
 
     if check_mode and has_drift:
         print("\nDrift detected! Run without --check to update.")
+        return 1
+
+    if check_mode and total_missing:
+        # Tools in a category without a marker section never reach the reference.
+        print("\nAdd a marker section for each category above, then run without --check.")
         return 1
 
     return 0
