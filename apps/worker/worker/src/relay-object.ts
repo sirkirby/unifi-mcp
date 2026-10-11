@@ -98,9 +98,10 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
   title: "UniFi Incident Evidence",
   description:
     "Collect validated, bounded incident evidence from Network and Protect across relay locations. " +
-    "Returns a unifi-incident-evidence-view by default (source outcomes, coverage and explicit location failures plus bounded " +
-    "record citations); detail=full returns the whole combined document. Check coverage_complete before treating an empty set as clear. " +
-    "Access collection is unsupported.",
+    "Returns a unifi-incident-evidence-view by default (source outcomes, coverage and explicit location failures plus record " +
+    "citations fitted to one tool result, resumable from record_selection.next_cursor); detail=full returns the whole combined " +
+    "document. A call reads at most 7 sources (locations × products, one Protect source per camera). " +
+    "Check coverage_complete before treating an empty set as clear. Access collection is unsupported.",
   inputSchema: {
     type: "object",
     properties: {
@@ -108,7 +109,8 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
       end: { type: "string", description: "Exclusive window end, ISO 8601 with UTC offset" },
       location_id: {
         type: "string",
-        description: "Filter to a specific location (omit to query all connected locations)",
+        maxLength: 128,
+        description: "Filter to a specific location (omit to query all connected locations, at most 7 sources in all)",
       },
       products: {
         type: "array",
@@ -117,7 +119,7 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
         uniqueItems: true,
         description: "Products to collect: network, protect, access (Access is explicitly unsupported)",
       },
-      device_macs: { type: "array", items: { type: "string" }, description: "Exact Network device MAC identifiers" },
+      device_macs: { type: "array", items: { type: "string" }, maxItems: 50, description: "Exact Network device MAC identifiers" },
       camera_ids: { type: "array", items: { type: "string" }, maxItems: 5, description: "Exact Protect camera identifiers" },
       mappings: { type: "array", items: { type: "object" }, maxItems: 20, description: "Explicit exact-identifier mapping assertions" },
       detail: {
@@ -127,6 +129,10 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
       max_records_returned: {
         type: "integer", minimum: 1, maximum: 50,
         description: "Most record citations in the view (default 25); omitted records stay in coverage. View only",
+      },
+      resume_after: {
+        type: "string", maxLength: 286,
+        description: "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
       },
       max_window_seconds: { type: "integer", minimum: 1, maximum: 2592000 },
       max_events: { type: "integer", minimum: 1, maximum: 10000 },

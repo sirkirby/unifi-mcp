@@ -627,7 +627,8 @@ RFC 5737 documentation IPs and `fixture-` names. A test enforces this.
 product tools: `{"success": true, "data": <view or IncidentEvidence>}`. It
 calls each product tool with `detail: "full"`, combines the full documents,
 and returns the combined set's [client view](#client-view) unless its own
-`detail` is `full`; `max_records_returned` applies to that view. A successful
+`detail` is `full`; `max_records_returned` and `resume_after` apply to that
+view, which fits the same output budget. A successful
 transport envelope does not establish complete collection: inspect `overall`,
 `coverage_complete`, each source outcome and `budgets.exhausted`. Total source
 failure returns `overall: "failed"`, never an empty all-clear.
@@ -635,10 +636,22 @@ failure returns `overall: "failed"`, never an empty all-clear.
 Both consumers forward `start` and `end` with explicit UTC offsets to
 `unifi_get_incident_evidence` and `protect_get_incident_evidence`. They accept
 `device_macs`, `camera_ids`, `mappings`, `location_id`, the four `max_*`
-budgets described above, `detail` and `max_records_returned`. `products` defaults to Network and Protect; requested
+budgets described above, `detail`, `max_records_returned` and `resume_after`,
+under the same bounds as the product tools: a count over its limit is refused
+as such ("at most 5", "at most 20"), apart from a malformed identifier.
+`products` defaults to Network and Protect; requested
 Access collection produces an explicit `unsupported` source. The legacy
 `start_time`/`end_time`, `area_hint` and `event_types` arguments are rejected.
 Use exact identifiers and explicit assertions to select evidence and mappings.
+
+Every source is returned in full, so a call reads at most 7 sources: as many as
+one location produces (Network, a Protect source per camera, at most 5, and
+Access). The relay serves one location, so it never reaches the limit. The
+worker counts selected locations × requested products, with Protect counted
+once per camera ID, and refuses a call over the limit before any read, naming
+the counts; select one `location_id`, or fewer products or cameras. A failed
+location still contributes its sources, so the limit keeps the view of every
+allowed call within budget.
 
 The Python relay calls through `ToolForwarder` and validates each returned
 document with Core before calling `combine_incident_evidence`. The worker sends

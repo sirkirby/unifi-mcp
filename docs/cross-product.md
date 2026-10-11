@@ -28,12 +28,12 @@ records counted. `detail: "full"` returns the whole combined document.
 Parameters:
 
 - `start` / `end` (required): a half-open ISO 8601 window with explicit UTC offsets.
-- `location_id`: select one relay location; omitted, the worker queries all registered locations.
+- `location_id`: select one relay location; omitted, the worker queries all registered locations. A call reads at most 7 sources (locations × products, with one Protect source per camera ID), and a larger selection is refused before any read.
 - `products`: Network and Protect by default; Access is explicitly unsupported if requested.
 - `device_macs` / `camera_ids`: exact identifiers, never inferred from names.
 - `mappings`: explicit exact-identifier assertions from the operator or product inventory.
 - `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`: limits passed to each product collection.
-- `detail`: `view` (default) or `full`; `max_records_returned`: citations in the view, 1 to 50, default 25.
+- `detail`: `view` (default) or `full`; `max_records_returned`: citations in the view, 1 to 50, default 25; `resume_after`: the view's `record_selection.next_cursor`, to read the records after it.
 
 For example, after obtaining the exact device and camera identifiers, call:
 

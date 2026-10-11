@@ -344,51 +344,184 @@ export async function combineIncidentEvidence(values: unknown[]): Promise<Eviden
 
 export const DEFAULT_MAX_RECORDS_RETURNED = 25;
 export const MAX_RECORDS_RETURNED = 50;
+/** Core's `VIEW_TOKEN_BUDGET`: most estimated tokens a view takes as an MCP tool result. */
+export const VIEW_TOKEN_BUDGET = 20_000;
+/** Core's `RECORD_TOKEN_LIMIT`: a citation over it is never returned, since identifiers are never cut. */
+export const RECORD_TOKEN_LIMIT = 2_500;
+const MAX_CITED_EVIDENCE_ID_LENGTH = 256;
+export const MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH;
+const textTokenLimits = { event_type: 40, original_value: 40, summary: 200 } as const;
+const evidenceIdPattern = new RegExp(String.raw`^[a-z0-9][a-z0-9_.:-]{0,127}\|(?:(?:int|str)\|[A-Za-z0-9%._~-]+` +
+  String.raw`(?:\|version\|[0-9a-f]{24})?|sha256\|[0-9a-f]{24})$`);
+const cursorPattern = /^(?:[02]\|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z|1\|)\|(.+)$/;
 const viewSourceFields = ["source_id", "product", "source_tool", "scope", "outcome", "failure", "partial_reasons", "coverage"];
+
+// Core's `estimated_tokens`, exactly: JSON indented by two spaces as an MCP server sends it.
+const textParts = /[A-Za-z]+|[0-9]+| +|[\s\S]/gu;
+function textTokens(text: string): number {
+  let total = 0;
+  for (const [part] of text.matchAll(textParts)) {
+    const first = part.codePointAt(0)!;
+    if ((first >= 65 && first <= 90) || (first >= 97 && first <= 122)) total += Math.ceil(part.length / 4);
+    else if (first >= 48 && first <= 57) total += Math.ceil(part.length / 3);
+    else if (part === '"' || part === "\\") total += 2;
+    else if (first < 0x20) total += 4;
+    else total += 1;
+  }
+  return total;
+}
+// A sign and a float's ".0" are allowed for.
+const integerTokens = (value: number): number => Math.ceil(BigInt(value < 0 ? -value : value).toString().length / 3) + 3;
+/** Upper bound on the tokens a JSON value takes as indented JSON (Core's `estimated_tokens`). */
+export function estimatedTokens(value: unknown): number {
+  if (value === null) return 1;
+  if (typeof value === "boolean") return 2;
+  if (typeof value === "number") return Number.isInteger(value) ? integerTokens(value) : 24;
+  if (typeof value === "string") return textTokens(value) + 2;
+  if (Array.isArray(value)) return 3 + value.reduce((sum: number, item) => sum + 2 + estimatedTokens(item), 0);
+  if (typeof value === "object") {
+    return 3 + Object.entries(value as Record<string, unknown>)
+      .reduce((sum, [key, item]) => sum + 6 + textTokens(key) + estimatedTokens(item), 0);
+  }
+  throw new Error("not a JSON value");
+}
+const envelopeTokens = estimatedTokens({ success: true, data: null }) - estimatedTokens(null);
+/** The longest prefix of `text`, in code points, whose estimated tokens are at most `limit`. */
+function cut(text: string, limit: number): string {
+  if (textTokens(text) <= limit) return text;
+  const points = Array.from(text);
+  // Every character costs at least a quarter token, so no longer prefix fits.
+  let low = 0, high = Math.min(points.length, 4 * limit + 4);
+  while (low < high) {
+    const middle = Math.floor((low + high + 1) / 2);
+    if (textTokens(points.slice(0, middle).join("")) <= limit) low = middle;
+    else high = middle - 1;
+  }
+  return points.slice(0, low).join("");
+}
+
+type SelectionKey = [number, string, string];
+const rank = (status: string): number => status === "in_window" ? 0 : status === "out_of_window" ? 2 : 1;
+const recordKey = (record: EvidenceDocument): SelectionKey => [rank(record.time.status), record.time.utc ?? "", record.evidence_id];
+const compareKeys = (a: SelectionKey, b: SelectionKey): number => a[0] - b[0] || compare(a[1], b[1]) || compare(a[2], b[2]);
+/** The selection key a view cursor names, or null for anything that is not one. */
+function cursorKey(cursor: unknown): SelectionKey | null {
+  if (typeof cursor !== "string" || cursor.length > MAX_CURSOR_LENGTH) return null;
+  const match = cursorPattern.exec(cursor);
+  if (!match || !evidenceIdPattern.test(match[1])) return null;
+  const [position, utc] = cursor.split("|", 2);
+  return [Number(position), utc, match[1]];
+}
 function tally(records: EvidenceDocument[]): EvidenceDocument {
   const inWindow = records.filter((record) => record.time.status === "in_window").length;
   const outOfWindow = records.filter((record) => record.time.status === "out_of_window").length;
   return { total: records.length, in_window: inWindow, out_of_window: outOfWindow, untimed: records.length - inWindow - outOfWindow };
 }
+/** A record's citation, or null when its identifiers cannot be cited within the record limit. */
+function citation(record: EvidenceDocument): EvidenceDocument | null {
+  if (record.evidence_id.length > MAX_CITED_EVIDENCE_ID_LENGTH) return null;
+  const identifiers = [...record.entities, ...record.mapping.targets].map((entity: EvidenceDocument) => entity.id as string);
+  if (identifiers.reduce((sum, identifier) => sum + Array.from(identifier).length, 0) > 4 * RECORD_TOKEN_LIMIT) return null;
+  const truncated: Record<string, number> = {};
+  const text = (field: keyof typeof textTokenLimits, value: unknown): unknown => {
+    if (typeof value !== "string") return value;
+    const kept = cut(value, textTokenLimits[field]);
+    if (kept !== value) truncated[field] = Array.from(value).length;
+    return kept;
+  };
+  const eventType = text("event_type", record.event_type);
+  const originalValue = text("original_value", record.time.original_value);
+  const summary = text("summary", record.summary);
+  const cited = {
+    evidence_id: record.evidence_id, product: record.provenance.product, source_tool: record.provenance.source_tool,
+    source_record_id: record.provenance.source_record_id,
+    time: { status: record.time.status, utc: record.time.utc, boundary_uncertain: record.time.boundary_uncertain,
+      original_field: record.time.original_field, original_type: record.time.original_type, original_value: originalValue },
+    event_type: eventType, summary,
+    entity_ids: record.entities.map((entity: EvidenceDocument) => entity.id),
+    mapping: { status: record.mapping.status, target_ids: record.mapping.targets.map((target: EvidenceDocument) => target.id),
+      sources: record.mapping.sources },
+    truncated,
+  };
+  return estimatedTokens(cited) <= RECORD_TOKEN_LIMIT ? cited : null;
+}
 /**
  * Core's bounded client view (`unifi_core.incident_evidence_view.client_view`) of a validated document:
- * coverage unchanged, at most `maxRecords` citations, in-window records first and earliest first.
+ * coverage unchanged, record citations fitted to `VIEW_TOKEN_BUDGET` and `maxRecords`, resumed after a cursor.
  */
-export async function incidentEvidenceView(value: unknown, maxRecords = DEFAULT_MAX_RECORDS_RETURNED): Promise<EvidenceDocument> {
+export async function incidentEvidenceView(
+  value: unknown, maxRecords = DEFAULT_MAX_RECORDS_RETURNED, resumeAfter: string | null = null,
+): Promise<EvidenceDocument> {
   const doc = await validateIncidentEvidence(value);
   const records: EvidenceDocument[] = doc.records;
-  const priority = (record: EvidenceDocument): number =>
-    record.time.status === "in_window" ? 0 : record.time.status === "out_of_window" ? 2 : 1;
-  const ranked = records.map((_, index) => index).sort((a, b) => priority(records[a]) - priority(records[b]) || a - b);
-  const kept = new Set(ranked.slice(0, maxRecords));
-  const returned = records.filter((_, index) => kept.has(index));
-  const omitted = records.filter((_, index) => !kept.has(index));
-  const omittedInWindow = omitted.filter((record) => record.time.status === "in_window").map((record) => record.time.utc).sort(compare);
+  const after = resumeAfter === null ? null : cursorKey(resumeAfter);
+  if (resumeAfter !== null && !after) fail("a cursor must be a next_cursor value returned by an evidence view");
+  const order = records.map((_, index) => index).sort((a, b) => compareKeys(recordKey(records[a]), recordKey(records[b])));
+  const pending = order.filter((index) => !after || compareKeys(recordKey(records[index]), after) > 0);
+  const sources = doc.sources.map((source: EvidenceDocument) => Object.fromEntries(viewSourceFields.map((field) => [field, source[field]])));
+  // The selection's numbers and cursor are not known until the end, so its largest possible form is reserved up front.
+  const count = Math.max(records.length, MAX_RECORDS_RETURNED);
+  const reservedTally = { total: count, in_window: count, out_of_window: count, untimed: count };
+  const skeleton = {
+    schema: "unifi-incident-evidence-view", schema_version: 1, evidence_schema_version: 1,
+    requested_window: doc.requested_window, overall: doc.overall, coverage_complete: doc.coverage_complete,
+    budgets: doc.budgets, mappings: doc.mappings, sources, records: [],
+    record_selection: { max_records_returned: count, omission: "presentation_limit", resume_after: resumeAfter,
+      collected: reservedTally, before_resume: reservedTally, returned: reservedTally, omitted: reservedTally,
+      too_large: count, limited_by: "max_records_returned", next_cursor: "-".repeat(MAX_CURSOR_LENGTH) },
+  };
+  let used = envelopeTokens + estimatedTokens(skeleton);
+  const kept = new Map<number, EvidenceDocument>();
+  // Records too large to cite are counted once they lie before a returned record, or when nothing after
+  // them is left; otherwise the next view, resuming after the last returned record, counts them.
+  let tooLarge = 0, skipped = 0;
+  let limitedBy: "max_records_returned" | "output_budget" | null = null;
+  for (const index of pending) {
+    const cited = citation(records[index]);
+    if (!cited) { skipped += 1; continue; }
+    if (kept.size === maxRecords) { limitedBy = "max_records_returned"; break; }
+    const cost = 2 + estimatedTokens(cited);
+    if (kept.size && used + cost > VIEW_TOKEN_BUDGET) { limitedBy = "output_budget"; break; }
+    kept.set(index, cited);
+    used += cost;
+    tooLarge += skipped; skipped = 0;
+  }
+  if (limitedBy === null) tooLarge += skipped;
+  const keptIndexes = [...kept.keys()].sort((a, b) => a - b);
+  const returned = keptIndexes.map((index) => records[index]);
+  const last = keptIndexes.map((index) => recordKey(records[index])).sort(compareKeys).at(-1);
   return {
     schema: "unifi-incident-evidence-view", schema_version: 1, evidence_schema_version: 1,
     requested_window: doc.requested_window, overall: doc.overall, coverage_complete: doc.coverage_complete,
-    budgets: doc.budgets, mappings: doc.mappings,
-    sources: doc.sources.map((source: EvidenceDocument) => Object.fromEntries(viewSourceFields.map((field) => [field, source[field]]))),
-    records: returned.map((record) => ({
-      evidence_id: record.evidence_id, product: record.provenance.product, source_tool: record.provenance.source_tool,
-      source_record_id: record.provenance.source_record_id,
-      time: { status: record.time.status, utc: record.time.utc, boundary_uncertain: record.time.boundary_uncertain,
-        original_field: record.time.original_field, original_type: record.time.original_type, original_value: record.time.original_value },
-      event_type: record.event_type, summary: record.summary,
-      entity_ids: record.entities.map((entity: EvidenceDocument) => entity.id),
-      mapping: { status: record.mapping.status, target_ids: record.mapping.targets.map((target: EvidenceDocument) => target.id),
-        sources: record.mapping.sources },
-    })),
-    record_selection: { max_records_returned: maxRecords, omission: "presentation_limit", collected: tally(records),
-      returned: tally(returned), omitted: tally(omitted), omitted_in_window_from_utc: omittedInWindow[0] ?? null },
+    budgets: doc.budgets, mappings: doc.mappings, sources,
+    records: keptIndexes.map((index) => kept.get(index)),
+    record_selection: {
+      max_records_returned: maxRecords, omission: "presentation_limit", resume_after: resumeAfter,
+      collected: tally(records),
+      before_resume: tally(order.filter((index) => after && compareKeys(recordKey(records[index]), after) <= 0).map((index) => records[index])),
+      returned: tally(returned),
+      omitted: tally(pending.filter((index) => !kept.has(index)).map((index) => records[index])),
+      too_large: tooLarge, limited_by: limitedBy,
+      // A limit stops the view only after it returned a record.
+      next_cursor: limitedBy && last ? last.join("|") : null,
+    },
   };
 }
 
 const evidenceTools = { network: "unifi_get_incident_evidence", protect: "protect_get_incident_evidence" } as const;
 const requestLimits = { max_window_seconds: 30 * 24 * 3600, max_events: 10_000, max_calls: 100, max_elapsed_ms: 120_000 };
 const requestFields = new Set(["start", "end", "location_id", "products", "device_macs", "camera_ids", "mappings",
-  "detail", "max_records_returned", ...Object.keys(requestLimits)]);
-const MAX_CAMERA_IDS = 5, MAX_MAPPINGS = 20;
+  "detail", "max_records_returned", "resume_after", ...Object.keys(requestLimits)]);
+const MAX_FILTER_IDS = 50, MAX_CAMERA_IDS = 5, MAX_MAPPINGS = 20, MAX_LABEL_LENGTH = 128, MAX_MAPPING_ID_LENGTH = 64;
+/**
+ * Every source is returned in full, so a call reads at most as many sources as one location's Network,
+ * Protect cameras and Access produce; the bounded view's size rests on it.
+ */
+export const MAX_TIMELINE_SOURCES = 1 + MAX_CAMERA_IDS + 1;
+const labelRule = "without control characters, quotes or backslashes";
+// Core's `is_label`: labels and mapping identifiers are repeated in the view, so JSON-escaped characters are refused.
+const isLabel = (value: unknown, maxLength: number): boolean => typeof value === "string" && value.length > 0 &&
+  Array.from(value).length <= maxLength && !/[\u0000-\u001f\u007f"\\]/.test(value);
 function normalizeBound(value: unknown): string | null {
   if (typeof value !== "string" || !isoPattern.test(value) || !isoPattern.exec(value)?.[6]) return null;
   const parsed = parsedTime({ original_type: "string", original_value: value, clock_uncertainty_ms: null },
@@ -402,9 +535,18 @@ function normalizeMac(value: string): string | null {
   if (/^(?:[a-f0-9]{2}-){5}[a-f0-9]{2}$/.test(trimmed)) return trimmed.replace(/-/g, ":");
   return null;
 }
-function normalizeMappings(value: unknown): EvidenceDocument[] | null | undefined {
+/** Validated mapping assertions, or the reason they are refused. */
+function normalizeMappings(value: unknown): EvidenceDocument[] | null | string {
   if (value === undefined || value === null) return null;
-  if (!Array.isArray(value) || value.length > MAX_MAPPINGS || value.some((assertion) => !validateMappingAssertion(assertion))) return undefined;
+  if (!Array.isArray(value)) return "mappings must be valid exact-identifier assertions";
+  if (value.length > MAX_MAPPINGS) return `mappings must list at most ${MAX_MAPPINGS} assertions`;
+  if (value.some((assertion) => !validateMappingAssertion(assertion))) return "mappings must be valid exact-identifier assertions";
+  const refs = value.flatMap((assertion) => [assertion.entity, assertion.target]);
+  if (refs.some((ref) => !isLabel(ref.id, MAX_MAPPING_ID_LENGTH)))
+    return `mapping identifiers must be 1-${MAX_MAPPING_ID_LENGTH} characters ${labelRule}`;
+  // Records are mapped by identity alone, so an assertion states no role.
+  if (refs.some((ref) => ref.role !== undefined && ref.role !== null))
+    return "mapping assertions identify entities by kind, id_kind and id only; omit role";
   return value.map((assertion) => ({
     entity: { role: null, ...assertion.entity }, target: { role: null, ...assertion.target }, source: assertion.source,
   }));
@@ -470,27 +612,40 @@ export async function collectIncidentEvidence(
   if (!Array.isArray(products) || !products.length || products.some((p) => !["network", "protect", "access"].includes(p)) ||
       new Set(products).size !== products.length)
     return { success: false, error: "Failed to collect location evidence: products must be a unique nonempty list" };
-  if (args.location_id !== undefined && args.location_id !== null && (typeof args.location_id !== "string" || !args.location_id || args.location_id.length > 128))
-    return { success: false, error: "Failed to collect location evidence: location_id must be a nonempty string" };
+  if (args.location_id !== undefined && args.location_id !== null && !isLabel(args.location_id, MAX_LABEL_LENGTH))
+    return { success: false, error: `Failed to collect location evidence: location_id must be 1-${MAX_LABEL_LENGTH} characters ${labelRule}` };
   const detail = args.detail ?? "view";
   if (detail !== "view" && detail !== "full")
     return { success: false, error: "Failed to collect location evidence: detail must be view or full" };
   const maxRecords = args.max_records_returned ?? null;
   if (maxRecords !== null && (!Number.isInteger(maxRecords) || (maxRecords as number) < 1 || (maxRecords as number) > MAX_RECORDS_RETURNED))
     return { success: false, error: `Failed to collect location evidence: max_records_returned must be an integer from 1 to ${MAX_RECORDS_RETURNED}` };
-  if (maxRecords !== null && detail === "full")
-    return { success: false, error: "Failed to collect location evidence: max_records_returned applies only to detail=view" };
+  const resumeAfter = args.resume_after ?? null;
+  if (resumeAfter !== null && !cursorKey(resumeAfter))
+    return { success: false, error: "Failed to collect location evidence: resume_after must be a next_cursor value returned by an evidence view" };
+  if ((maxRecords !== null || resumeAfter !== null) && detail === "full")
+    return { success: false, error: "Failed to collect location evidence: max_records_returned and resume_after apply only to detail=view" };
   const mappings = normalizeMappings(args.mappings);
-  if (mappings === undefined) return { success: false, error: "Failed to collect location evidence: mappings must be valid exact-identifier assertions" };
+  if (typeof mappings === "string") return { success: false, error: `Failed to collect location evidence: ${mappings}` };
   const rawMacs = args.device_macs ?? [], rawCameras = args.camera_ids ?? [];
-  if (!Array.isArray(rawMacs) || rawMacs.length > 50 || rawMacs.some((value) => typeof value !== "string" || !normalizeMac(value)))
+  // A count over its limit is reported as such, apart from identifiers that are malformed.
+  if (Array.isArray(rawMacs) && rawMacs.length > MAX_FILTER_IDS)
+    return { success: false, error: `Failed to collect location evidence: device_macs must list at most ${MAX_FILTER_IDS} MAC addresses` };
+  if (!Array.isArray(rawMacs) || rawMacs.some((value) => typeof value !== "string" || !normalizeMac(value)))
     return { success: false, error: "Failed to collect location evidence: device_macs must be MAC addresses (six hex pairs)" };
-  if (!Array.isArray(rawCameras) || rawCameras.length > MAX_CAMERA_IDS || rawCameras.some((value) => typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(value)))
+  if (Array.isArray(rawCameras) && rawCameras.length > MAX_CAMERA_IDS)
+    return { success: false, error: `Failed to collect location evidence: camera_ids must list at most ${MAX_CAMERA_IDS} camera IDs` };
+  if (!Array.isArray(rawCameras) || rawCameras.some((value) => typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(value)))
     return { success: false, error: "Failed to collect location evidence: camera_ids must be exact Protect camera IDs" };
   const deviceMacs = [...new Set(rawMacs.map((value: string) => normalizeMac(value)!))].sort(compare);
   const cameraIds = [...new Set(rawCameras as string[])].sort(compare);
   const selected = targets.filter((target) => !args.location_id || target.location_id === args.location_id);
   const locations = selected.length ? [...new Set(selected.map((target) => target.location_id))] : [String(args.location_id ?? "")];
+  const perLocation = (products as string[]).reduce((sum, product) => sum + (product === "protect" ? Math.max(1, cameraIds.length) : 1), 0);
+  if (locations.length * perLocation > MAX_TIMELINE_SOURCES)
+    return { success: false, error: `Failed to collect location evidence: a call reads at most ${MAX_TIMELINE_SOURCES} sources, ` +
+      `and ${locations.length} locations × ${perLocation} sources each is ${locations.length * perLocation}; ` +
+      "select one location_id, or fewer products or camera_ids" };
   const tasks: Array<{ product: "network" | "protect" | "access"; locationId: string | null; target?: EvidenceTarget }> = [];
   for (const location of locations) for (const product of products as Array<"network" | "protect" | "access">) {
     tasks.push({ product, locationId: location || null, target: selected.find((target) => target.location_id === location && target.product === product) });
@@ -525,5 +680,6 @@ export async function collectIncidentEvidence(
   let combined: EvidenceDocument;
   try { combined = await combineIncidentEvidence(documents); }
   catch { return { success: false, error: "Failed to combine location incident evidence: conflicting or invalid evidence" }; }
-  return { success: true, data: detail === "full" ? combined : await incidentEvidenceView(combined, (maxRecords as number | null) ?? undefined) };
+  return { success: true, data: detail === "full" ? combined :
+    await incidentEvidenceView(combined, (maxRecords as number | null) ?? undefined, resumeAfter as string | null) };
 }

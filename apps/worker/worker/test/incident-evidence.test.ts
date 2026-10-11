@@ -6,7 +6,8 @@ import Ajv from "ajv";
 import schema from "../../../../tests/fixtures/incident_evidence/incident-evidence.v1.schema.json";
 import viewSchema from "../../../../tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json";
 import {
-  canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, incidentEvidenceView, validateIncidentEvidence,
+  canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, estimatedTokens, incidentEvidenceView,
+  MAX_TIMELINE_SOURCES, validateIncidentEvidence, VIEW_TOKEN_BUDGET,
 } from "../src/incident-evidence";
 import { validateEvidenceSchema } from "../src/incident-evidence-schema.js";
 import type { EvidenceTarget } from "../src/types";
@@ -17,6 +18,7 @@ const cases = readdirSync(`${corpus}/cases`).filter((name) => name.endsWith(".js
 const invalid = readdirSync(`${corpus}/invalid`).filter((name) => name.endsWith(".json"));
 const combine = readdirSync(`${corpus}/combine`).filter((name) => name.endsWith(".json"));
 const views = readdirSync(`${corpus}/views`).filter((name) => name.endsWith(".json"));
+const bounded = readdirSync(`${corpus}/view-bounds`).filter((name) => name.endsWith(".json"));
 const schemaCheck = new Ajv({ strict: false }).compile(schema);
 const viewSchemaCheck = new Ajv({ strict: false }).compile(viewSchema);
 
@@ -59,12 +61,28 @@ describe("incident evidence corpus", () => {
   it.each(views)("projects %s exactly as Core's client view", async (name) => {
     const fixture = read("views", name);
     expect(fixture.views.length).toBeGreaterThan(0);
-    for (const { max_records_returned: limit, expected } of fixture.views) {
-      const actual = await incidentEvidenceView(fixtureEvidence(name), limit);
+    for (const { max_records_returned: limit, resume_after: cursor, expected } of fixture.views) {
+      const actual = await incidentEvidenceView(fixtureEvidence(name), limit, cursor);
       expect(actual).toEqual(expected);
       expect(expectedCanonical(actual)).toBe(expectedCanonical(expected));
       expect(viewSchemaCheck(actual)).toBe(true);
     }
+  });
+  it.each(bounded)("fits every page of %s to Core's output budget exactly", async (name) => {
+    const fixture = read("view-bounds", name);
+    const limits = new Set<string>();
+    for (const { max_records_returned: limit, resume_after: cursor, expected } of fixture.views) {
+      const actual = await incidentEvidenceView(fixture.evidence, limit, cursor);
+      expect(expectedCanonical(actual)).toBe(expectedCanonical(expected));
+      expect(viewSchemaCheck(actual)).toBe(true);
+      expect(estimatedTokens({ success: true, data: actual })).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+      limits.add(String(actual.record_selection.limited_by));
+    }
+    expect(limits.size).toBeGreaterThan(1);
+  });
+  it("refuses a cursor that no view returned", async () => {
+    await expect(incidentEvidenceView(fixtureEvidence("healthy_empty.json"), 2, "0|not-a-time|network.events|int|7"))
+      .rejects.toThrow("cursor");
   });
   it("accepts Python integral-float digests after JavaScript parses the wire numbers", async () => {
     const wire = readFileSync(`${corpus}/cases/canonical_numbers.json`, "utf8");
@@ -150,6 +168,12 @@ describe("location evidence collection", () => {
       expect((result.data as any).record_selection.max_records_returned).toBe(limit ?? 25);
     }
     expect(call.mock.calls.every((args) => args[2]?.detail === "full")).toBe(true);
+    const first = await collectIncidentEvidence({ ...viewRequest, max_records_returned: 2 }, targets, call);
+    const cursor = (first.data as any).record_selection.next_cursor;
+    const resumed = await collectIncidentEvidence({ ...viewRequest, max_records_returned: 2, resume_after: cursor }, targets, call);
+    expect(resumed.data).toEqual(await incidentEvidenceView(full.data, 2, cursor));
+    expect((resumed.data as any).record_selection.before_resume.total).toBe(2);
+    expect(call.mock.calls.every((args) => !("resume_after" in args[2]))).toBe(true);
   });
   it("carries failed products inside the document, including Access", async () => {
     const result = await collectIncidentEvidence({ ...request, products: ["network", "protect", "access"] },
@@ -203,6 +227,66 @@ describe("location evidence collection", () => {
         return { success: true, data: doc };
       });
     expect(result).toMatchObject({ success: false, error: "Failed to combine location incident evidence: conflicting or invalid evidence" });
+  });
+  it("reports a count over its limit as such, as every other surface does", async () => {
+    const call = vi.fn();
+    const assertion = { entity: { kind: "camera", id_kind: "protect_camera_id", id: "cam-fixture-000a" },
+      target: { kind: "network_device", id_kind: "mac", id: "02:00:00:00:00:01" }, source: "operator_input" };
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ camera_ids: ["c1", "c2", "c3", "c4", "c5", "c6"] }, "camera_ids must list at most 5 camera IDs"],
+      [{ camera_ids: ["front door"] }, "camera_ids must be exact Protect camera IDs"],
+      [{ mappings: Array.from({ length: 21 }, () => assertion) }, "mappings must list at most 20 assertions"],
+      [{ mappings: [{ ...assertion, source: "guessed" }] }, "mappings must be valid exact-identifier assertions"],
+      [{ device_macs: Array.from({ length: 51 }, () => "02:00:00:00:00:01") }, "device_macs must list at most 50 MAC addresses"],
+      [{ device_macs: ["fixture-ap"] }, "device_macs must be MAC addresses (six hex pairs)"],
+    ];
+    for (const [bad, message] of cases) {
+      const result = await collectIncidentEvidence({ ...request, ...bad }, targets, call);
+      expect(result).toEqual({ success: false, error: `Failed to collect location evidence: ${message}` });
+    }
+    expect(call).not.toHaveBeenCalled();
+  });
+  it("bounds labels and mapping identifiers as Core does, without echoing them", async () => {
+    const call = vi.fn();
+    const assertion = (id: string, extra: Record<string, unknown> = {}) => ({ entity: { kind: "network_device", id_kind: "mac",
+      id: "02:00:00:00:00:01", ...extra }, target: { kind: "location", id_kind: "location_id", id }, source: "operator_input" });
+    for (const [bad, message] of [
+      [{ location_id: 'fixture "a"' }, "location_id must be 1-128 characters without control characters, quotes or backslashes"],
+      [{ location_id: "x".repeat(129) }, "location_id must be 1-128 characters"],
+      [{ mappings: [assertion("fixture-" + "~".repeat(60))] }, "mapping identifiers must be 1-64 characters"],
+      [{ mappings: [assertion("fixture\\a")] }, "mapping identifiers must be 1-64 characters"],
+      [{ mappings: [assertion("fixture-a", { role: "uplink" })] }, "omit role"],
+      [{ resume_after: "fixture-cursor" }, "resume_after must be a next_cursor value"],
+      [{ detail: "full", resume_after: "1||network.events|int|7" }, "apply only to detail=view"],
+    ] as Array<[Record<string, unknown>, string]>) {
+      const result = await collectIncidentEvidence({ ...request, ...bad }, targets, call);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(message);
+      expect(result.error).not.toContain("fixture");
+    }
+    expect(call).not.toHaveBeenCalled();
+    const accepted = await collectIncidentEvidence({ ...request, location_id: "fixture-1",
+      mappings: [assertion("fixture-location-\u00e9 #2")] }, targets, async () => null);
+    expect(accepted.success).toBe(true);
+  });
+  it("reads at most as many sources as one location produces", async () => {
+    const many = Array.from({ length: 100 }, (_, index) => [
+      { location_id: `fixture-${index}`, product: "network" as const, available: true },
+      { location_id: `fixture-${index}`, product: "protect" as const, available: true },
+    ]).flat();
+    const call = vi.fn();
+    const refused = await collectIncidentEvidence(request, many, call);
+    expect(refused).toEqual({ success: false, error: `Failed to collect location evidence: a call reads at most ${MAX_TIMELINE_SOURCES} sources, ` +
+      "and 100 locations × 2 sources each is 200; select one location_id, or fewer products or camera_ids" });
+    expect(call).not.toHaveBeenCalled();
+    const cameras = ["cam-fixture-000a", "cam-fixture-000b", "cam-fixture-000c", "cam-fixture-000d", "cam-fixture-000e"];
+    expect((await collectIncidentEvidence({ ...request, camera_ids: cameras, products: ["network", "protect", "access"] },
+      many.slice(0, 2), async () => null)).success).toBe(true);
+    expect((await collectIncidentEvidence({ ...request, camera_ids: cameras }, many.slice(0, 4), call)).success).toBe(false);
+    const three = await collectIncidentEvidence({ ...request, detail: "view" }, many.slice(0, 6), async () => null);
+    expect(three.success).toBe(true);
+    expect(estimatedTokens(three)).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+    expect(call).not.toHaveBeenCalled();
   });
   it("rejects legacy filters, invalid exact IDs, and ambiguous time before reads", async () => {
     const call = vi.fn();

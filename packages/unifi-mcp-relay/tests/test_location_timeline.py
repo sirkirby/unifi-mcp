@@ -99,6 +99,7 @@ async def test_forwarded_arguments_match_actual_manifests():
         assert set(schema["required"]) <= set(arguments)
         assert arguments["start"].endswith("Z")
         assert arguments["detail"] == "full" and arguments["max_records_returned"] is None
+        assert arguments["resume_after"] is None
         assert "start_time" not in arguments and "end_time" not in arguments
         product = next(p for p, tool in PRODUCT_TOOLS.items() if tool == tool_name)
         return {"success": True, "data": documents[product]}
@@ -192,6 +193,18 @@ async def test_invalid_corpus_is_never_trusted(path):
         ("camera_ids", [f"cam-fixture-{index}" for index in range(6)]),
         ("detail", "summary"),
         ("max_records_returned", 51),
+        ("resume_after", "2026-08-08T12:00:00.000000Z"),
+        ("location_id", 'fixture "a"'),
+        (
+            "mappings",
+            [
+                {
+                    "entity": {"kind": "network_device", "id_kind": "mac", "id": "02:00:00:00:00:01"},
+                    "target": {"kind": "location", "id_kind": "location_id", "id": " ~".join(map(str, range(15_000)))},
+                    "source": "operator_input",
+                }
+            ],
+        ),
     ],
 )
 async def test_invalid_arguments_never_read(field, value):
@@ -236,8 +249,27 @@ async def test_null_presentation_arguments_take_their_defaults():
 async def test_full_detail_cannot_take_a_record_limit():
     forwarder = AsyncMock()
     result = await handle_location_timeline({**arguments(read()), "max_records_returned": 5}, forwarder)
-    assert result["success"] is False and "applies only to detail=view" in result["error"]
+    assert result["success"] is False and "apply only to detail=view" in result["error"]
     forwarder.forward.assert_not_awaited()
+
+
+async def test_the_view_resumes_after_its_cursor():
+    products = product_documents(read())
+
+    async def forward(tool_name, arguments):
+        product = next(p for p, tool in PRODUCT_TOOLS.items() if tool == tool_name)
+        return {"success": True, "data": products[product]}
+
+    request = {key: value for key, value in arguments(read()).items() if key != "detail"}
+    first = await handle_location_timeline({**request, "max_records_returned": 1}, AsyncMock(forward=forward))
+    cursor = first["data"]["record_selection"]["next_cursor"]
+    assert cursor is not None
+    resumed = await handle_location_timeline(
+        {**request, "max_records_returned": 1, "resume_after": cursor}, AsyncMock(forward=forward)
+    )
+    combined = combine_incident_evidence(products.values())
+    assert resumed["data"] == view_to_json(client_view(combined, max_records_returned=1, resume_after=cursor))
+    assert resumed["data"]["record_selection"]["before_resume"]["total"] == 1
 
 
 async def test_valid_but_unrelated_document_is_parse_failed():

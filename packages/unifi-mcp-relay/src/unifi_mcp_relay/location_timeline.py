@@ -35,7 +35,8 @@ TOOL_NAME = "unifi_location_timeline"
 TOOL_DESCRIPTION = (
     "Collect bounded, read-only Network and Protect incident evidence for one window. "
     "Returns a unifi-incident-evidence-view by default: per-source coverage, failures and budgets "
-    "plus bounded record citations; detail=full returns the whole combined evidence document. "
+    "plus record citations fitted to one tool result, resumable from record_selection.next_cursor; "
+    "detail=full returns the whole combined evidence document. "
     "Use exact device MACs, camera IDs and explicit mappings; names never establish mappings. "
     "Access, when requested, is explicitly unsupported. Inspect overall and coverage_complete."
 )
@@ -67,7 +68,7 @@ TOOL_ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentH
 PRODUCT_TOOLS = {"network": "unifi_get_incident_evidence", "protect": "protect_get_incident_evidence"}
 _PRESENTATION_FIELDS = frozenset(EvidencePresentation.model_fields)
 # Product documents are combined in full; the relay presents the combined set once.
-_FULL_DETAIL = {"detail": "full", "max_records_returned": None}
+_FULL_DETAIL = {"detail": "full", "max_records_returned": None, "resume_after": None}
 
 
 def _failure_document(request: NetworkIncidentRequest | ProtectIncidentRequest, product: str, failure: SourceFailure):
