@@ -158,6 +158,59 @@ def toml_value(value):
     refuse("Unsupported existing server value; use the client configuration editor and rerun.")
 
 
+KEY_PART = r"(?:\"(?:[^\"\\]|\\.)*\"|'[^']*'|[A-Za-z0-9_-]+)"
+
+
+def table_path(line):
+    """The key path of a TOML table header line, or None for any other line."""
+    match = re.fullmatch(r"\s*\[\s*(" + KEY_PART + r"(?:\s*\.\s*" + KEY_PART + r")*)\s*\]\s*(?:#.*)?", line)
+    if not match:
+        return None
+    return [
+        json.loads(part) if part[0] == '"' else part[1:-1] if part[0] == "'" else part
+        for part in re.findall(KEY_PART, match[1])
+    ]
+
+
+def replace_codex_entry(text, name, entry):
+    """Swap one server's tables in the config text; comments and layout elsewhere stay as written."""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    block = ["[mcp_servers." + json.dumps(name) + "]"]
+    block += [json.dumps(key) + " = " + toml_value(value) for key, value in entry.items()] + [""]
+    # Older setup versions left a pin note above the entry; the pin lives in its args.
+    note = "# unifi-plugin-setup: " + name + " "
+    lines, trailing, placed, skipping = [], [], False, False
+
+    def flush():
+        # Comments after the replaced tables belong to whatever follows them.
+        while trailing and not trailing[0].strip():
+            trailing.pop(0)
+        lines.extend(line for line in trailing if not line.startswith(note))
+        trailing.clear()
+
+    for line in text.splitlines():
+        path = table_path(line)
+        if path is not None or line.lstrip().startswith("[["):
+            flush()
+            skipping = path is not None and path[:2] == ["mcp_servers", name]
+            if skipping and not placed:
+                lines.extend(block)
+                placed = True
+        if not skipping:
+            if not line.startswith(note):
+                lines.append(line)
+        elif not line.strip() or line.lstrip().startswith("#"):
+            trailing.append(line)
+        else:
+            trailing.clear()
+    flush()
+    if not placed:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend(block)
+    return eol.join(lines).rstrip() + eol
+
+
 def read_config(path, target):
     raw = path.read_bytes() if path.exists() else None
     if target == "codex":
@@ -173,6 +226,14 @@ def read_config(path, target):
     if not isinstance(servers, dict):
         refuse("The MCP registry must be an object; repair it and rerun.")
     return raw, data, servers
+
+
+# A normalized PEP 440 release with optional pre-release, post, dev and local parts,
+# for example 0.37.0, 0.37.1.dev83 and 0.37.1.dev83+ge51932dd.
+PEP440_VERSION = (
+    r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)*(?:(?:a|b|rc)[0-9]+)?(?:\.post[0-9]+)?(?:\.dev[0-9]+)?"
+    r"(?:\+[a-z0-9]+(?:\.[a-z0-9]+)*)?"
+)
 
 
 def package_pin(root, name, *, codex=False):
@@ -293,6 +354,19 @@ def claude_values(variables, mapping, schema):
     return values
 
 
+def other_prefixes(product):
+    others = tuple(f"UNIFI_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
+    return others + tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
+
+
+def absorbed_shared(mapping, product):
+    """Shared variables that migration reads as fallbacks, so their values now live in the options."""
+    names = set(mapping) | {shared_name(variable, product) for variable in mapping}
+    for credential in ("PASSWORD", "API_KEY"):
+        names.update(f"UNIFI_{credential}{suffix}" for suffix in ("", "_FILE", "_COMMAND"))
+    return names
+
+
 def legacy_settings(product):
     """Project settings written by earlier plugin versions, split by ownership."""
     path = Path.cwd() / ".claude/settings.local.json"
@@ -305,8 +379,7 @@ def legacy_settings(product):
         env = env_map(data.get("env", {}))
     except (SetupError, OSError, ValueError):
         return path, False, {}, {}
-    others = tuple(f"UNIFI_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
-    others += tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
+    others = other_prefixes(product)
     owned = {k: v for k, v in env.items() if k.startswith((f"UNIFI_{product}_", f"UNIFI_POLICY_{product}_"))}
     shared = {k: v for k, v in env.items() if k.startswith("UNIFI_") and k not in owned and not k.startswith(others)}
     return path, data, owned, shared
@@ -456,6 +529,11 @@ def claude_main(args, root, name, product):
             refuse("Supply at least one environment setting or null deletion.")
     for key in patch:
         validate_key(key)
+    if "UNIFI_AUTO_CONFIRM" in patch:
+        refuse(
+            "UNIFI_AUTO_CONFIRM is deprecated and has no Claude Code option. Set "
+            f"UNIFI_{product}_TOOL_PERMISSION_MODE instead; no settings were changed."
+        )
     unsupported = sorted(key for key in patch if key not in mapping)
     if unsupported:
         refuse(
@@ -471,8 +549,14 @@ def claude_main(args, root, name, product):
         return
     remaining = None
     if args.migrate:
+        # Once no other UniFi plugin's settings remain, the shared values this plugin read are
+        # redundant: remove them with its own so none stay visible to every session in the project.
+        others_left = sorted(k for k in legacy_data["env"] if k.startswith(other_prefixes(product)))
+        removed = set(owned)
+        if not others_left:
+            removed |= shared.keys() & absorbed_shared(mapping, product)
         remaining = dict(legacy_data)
-        remaining["env"] = {k: v for k, v in legacy_data["env"].items() if k not in owned}
+        remaining["env"] = {k: v for k, v in legacy_data["env"].items() if k not in removed}
         original = legacy_path.read_bytes()
     if claude_saved(plugin_id, environment, mapping, schema) != saved:
         refuse("The plugin's options changed during setup; rerun against the latest options.")
@@ -501,16 +585,23 @@ def claude_main(args, root, name, product):
     if args.migrate:
         print(
             "Migrated " + ", ".join(sorted(k for k in owned if k in patch)) + " into the plugin's Claude Code options "
-            "and removed " + ", ".join(sorted(owned)) + " from .claude/settings.local.json. Values are omitted."
+            "and removed " + ", ".join(sorted(removed)) + " from .claude/settings.local.json. Values are omitted."
         )
         dropped = sorted(k for k in owned if k not in patch)
         if dropped:
             print("Not migrated (no Claude Code option): " + ", ".join(dropped) + ".")
-        if shared:
+        kept = sorted(set(shared) - removed)
+        if kept and others_left:
             print(
-                "Shared settings left in .claude/settings.local.json for other UniFi plugins: "
-                + ", ".join(sorted(shared))
-                + ". Remove them once every UniFi plugin is migrated."
+                "Shared settings kept in .claude/settings.local.json because settings for other UniFi plugins "
+                "remain there (" + ", ".join(others_left) + "): " + ", ".join(kept) + ". Migrating the last "
+                "UniFi plugin removes them."
+            )
+        elif kept:
+            print(
+                "Shared settings with no Claude Code option remain in .claude/settings.local.json: "
+                + ", ".join(kept)
+                + ". Remove any you no longer need."
             )
     elif notice:
         print(notice)
@@ -559,7 +650,7 @@ def main():
         if (
             not isinstance(plugin_version, str)
             or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", plugin_version)
-            or not re.fullmatch(re.escape(name) + r"-mcp==[0-9]+\.[0-9]+\.[0-9]+", pin or "")
+            or not re.fullmatch(re.escape(name) + "-mcp==" + PEP440_VERSION, pin or "")
         ):
             refuse("The installed plugin version or package pin is missing or malformed; reinstall the plugin.")
     if not shutil.which("uvx"):
@@ -619,6 +710,7 @@ def main():
         lock.mkdir(mode=0o700)
     except FileExistsError:
         refuse("Setup is locked. If no setup is running, remove the adjacent .setup-lock directory and rerun.")
+    rewritten = False
     try:
         if (destination.read_bytes() if destination.exists() else None) != original:
             refuse("Configuration changed during setup; rerun against the latest settings.")
@@ -637,49 +729,39 @@ def main():
                 OPENCLAW_CONFIG_PATH=str(staged),
             )
             if target == "codex":
-                # Exercise the supported operation only in a private CODEX_HOME.
-                client(
-                    [
-                        "codex",
-                        "mcp",
-                        "add",
-                        name,
-                        "--",
-                        "uvx",
-                        "--python-preference",
-                        "system",
-                        pin,
-                    ],
-                    environment,
-                )
-                client(["codex", "mcp", "remove", name], environment)
+                # Exercise the supported operation in an empty private CODEX_HOME. Codex rewrites
+                # every MCP server table it saves and drops their comments, so it never touches
+                # the user's file: setup swaps this server's tables in the original text instead.
+                probe = stage / "probe"
+                probe.mkdir(mode=0o700)
+                (probe / "config.toml").write_bytes(b"")
+                probe_environment = dict(environment, HOME=str(probe), USERPROFILE=str(probe), CODEX_HOME=str(probe))
+                add = ["codex", "mcp", "add", name, "--", "uvx", "--python-preference", "system", pin]
+                client(add, probe_environment)
                 entry = dict(prior)
                 for key in ("url", "bearer_token_env_var", "http_headers", "env_http_headers"):
                     entry.pop(key, None)
                 entry.update(command="uvx", args=["--python-preference", "system", pin], env=merged)
-                # Replace our previous annotation rather than accumulating stale versions.
-                annotation = "# unifi-plugin-setup: " + name + " "
-                staged.write_text(
-                    "\n".join(
-                        line
-                        for line in staged.read_text(encoding="utf-8").splitlines()
-                        if not line.startswith(annotation)
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
-                with staged.open("a", encoding="utf-8") as handle:
-                    handle.write("\n" + annotation + "plugin " + plugin_version + "; package " + pin + "\n")
-                    handle.write("[mcp_servers." + json.dumps(name) + "]\n")
-                    for key, value in entry.items():
-                        handle.write(json.dumps(key) + " = " + toml_value(value) + "\n")
-                _, final_data, final_servers = read_config(staged, target)
-                if final_servers.get(name) != entry:
-                    refuse("Staged registry validation failed; existing configuration is unchanged.")
                 expected_data = dict(data)
                 expected_data["mcp_servers"] = dict(servers, **{name: entry})
-                if final_data != expected_data:
-                    refuse("The client changed unrelated settings; existing configuration is unchanged.")
+
+                def staged_matches():
+                    try:
+                        _, final_data, final_servers = read_config(staged, target)
+                    except (SetupError, ValueError):
+                        return False
+                    return final_servers.get(name) == entry and final_data == expected_data
+
+                staged.write_text(replace_codex_entry((original or b"").decode("utf-8"), name, entry), encoding="utf-8")
+                if not staged_matches():
+                    # An unusual layout (inline or dotted mcp_servers keys): let Codex rewrite the file.
+                    staged.write_bytes(original or b"")
+                    client(add, environment)
+                    client(["codex", "mcp", "remove", name], environment)
+                    staged.write_text(replace_codex_entry(staged.read_text(encoding="utf-8"), name, entry), "utf-8")
+                    rewritten = True
+                    if not staged_matches():
+                        refuse("Staged registry validation failed; existing configuration is unchanged.")
                 checked = json_object(client(["codex", "mcp", "get", name, "--json"], environment).decode("utf-8"))
                 if checked.get("transport", {}).get("env") != merged:
                     refuse("The client did not retain the requested environment; existing configuration is unchanged.")
@@ -711,6 +793,11 @@ def main():
         lock.rmdir()
     if target == "codex":
         print("Codex pinned package: " + pin + " (plugin " + plugin_version + ").")
+        if rewritten:
+            print(
+                "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
+                "Codex rewrote it and dropped the comments inside MCP server tables."
+            )
         print(
             "After every plugin upgrade, rerun the new plugin's set-env.sh --target codex --refresh "
             "or set-env.ps1 -Target codex -Refresh, then restart Codex."

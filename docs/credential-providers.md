@@ -238,6 +238,11 @@ bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
 
 PowerShell: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
 No credential input is needed. The helper validates provider availability without
-reading secrets or contacting the controller, records the pinned plugin/package
-versions in a `config.toml` comment, and prints the package version on success.
-Restart Codex afterwards. If there is no saved environment, run ordinary setup.
+reading secrets or contacting the controller, pins the package in the server
+entry's `args`, and prints the package version on success. Restart Codex
+afterwards. If there is no saved environment, run ordinary setup.
+
+Setup edits only the UniFi server's tables in `config.toml`; your comments and
+other servers stay as written. `codex mcp add` and `codex mcp remove` rewrite
+the file and drop the comments inside every `[mcp_servers.*]` table, so avoid
+them on a file whose comments you want to keep.

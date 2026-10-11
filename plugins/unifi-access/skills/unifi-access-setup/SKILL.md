@@ -192,8 +192,10 @@ The script handles the client-specific write:
   with `claude plugin configure --values-stdin` (values on stdin): non-secret
   options in user `settings.json` (`pluginConfigs`), a raw password or API key
   in the system keychain. The options apply in every project
-- Codex: stages registration in a private `CODEX_HOME`, merges env without argv,
-  validates with the client, then atomically replaces `config.toml`
+- Codex: checks `codex mcp add` in an empty private `CODEX_HOME`, replaces only
+  this server's tables in a staged copy of `config.toml` (every other setting
+  and comment stays as written), validates the copy with `codex mcp get`, then
+  atomically replaces `config.toml`. Env never enters argv
 - OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
   then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
 
@@ -219,10 +221,17 @@ bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
 
 On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
 This command needs no credential input and preserves the saved environment and
-provider references. It validates providers, records the plugin and package
-versions in `config.toml`, and prints the pinned package on success. Confirm that
-version matches the new installed plugin. Use ordinary setup first if there is
+provider references. It validates providers, pins the package in the server
+entry's `args`, and prints the pinned package on success. Confirm that version
+matches the new installed plugin. Use ordinary setup first if there is
 no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+
+Tell the user that `codex mcp add` and `codex mcp remove` rewrite `config.toml`
+and drop the comments inside every `[mcp_servers.*]` table, for every server.
+Setup never calls them on the user's file, so it keeps their comments. If the
+file lays out its MCP servers in a form setup cannot edit in place (dotted or
+inline `mcp_servers` keys), setup lets Codex rewrite it and says so in its
+output.
 
 ### Claude Code projects set up by an earlier plugin version
 
@@ -237,10 +246,12 @@ bash <plugin-root>/scripts/set-env.sh --target claude --migrate
 
 On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target claude -Migrate`. It
 copies this plugin's settings into its options, then removes them from the
-project file. It prints only variable names: what it moved, what has no Claude
-Code option (per-category policy overrides) and the shared `UNIFI_*` settings it
-left for the other UniFi plugins. A missing provider file stops it with nothing
-changed. Then start a new session and check `/mcp`.
+project file. When no other UniFi plugin's settings remain there, it also
+removes the shared `UNIFI_*` settings it read, in the same atomic write, so none
+stay visible to every session in the project. It prints only variable names:
+what it moved, what has no Claude Code option (per-category policy overrides),
+and any shared setting it kept, with the reason. A missing provider file stops
+it with nothing changed. Then start a new session and check `/mcp`.
 
 ### Recovery
 

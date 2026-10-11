@@ -421,6 +421,7 @@ class Fixtures:
             {base: sample_value + "\nsecond line"},
             {f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true", base: sample_value},
             {"UNIFI_PASSWORD_FILE": str(workspace / "credential")},
+            {"UNIFI_AUTO_CONFIRM": "false"},
             {f"UNIFI_POLICY_{upper}_CREATE": "maybe"},
             {f"UNIFI_{upper}_PORT": "70000"},
             {f"UNIFI_{upper}_TOOL_PERMISSION_MODE": "always"},
@@ -428,8 +429,13 @@ class Fixtures:
             invoke(patch, 1)
             self.check(state() == before, "invalid key/provider/type/option preserved prior options")
         unsupported = invoke({f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true"}, 1)
+        deprecated = invoke({"UNIFI_AUTO_CONFIRM": "true"}, 1)
         if not self.powershell:
             self.check(b"per-category policy overrides" in unsupported.stderr, "per-category override names the limit")
+            self.check(
+                f"UNIFI_{upper}_TOOL_PERMISSION_MODE".encode() in deprecated.stderr,
+                "deprecated auto-confirm points at the permission mode",
+            )
         # Missing dependencies and a failing client leave Claude's options untouched.
         isolated = workspace / "isolated"
         isolated.mkdir()
@@ -575,6 +581,10 @@ class Fixtures:
             "migration output omits values",
         )
         self.check(f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE".encode() in result.stdout, "dropped override is reported")
+        self.check(
+            f"UNIFI_{other_product}_HOST".encode() in result.stdout and b"UNIFI_API_KEY" in result.stdout,
+            "kept shared settings are named with the other plugin settings that keep them",
+        )
         migrate(1)
         # Interrupt before and after publication, with other/shared credentials
         # retained in the project settings. Windows must clean up without finally.
@@ -648,6 +658,32 @@ class Fixtures:
             )
             self.check(remaining_env["UNIFI_API_KEY"] == sample_value, "retry preserves shared secret")
             self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "retry leaves no replacement artifacts")
+        # The last plugin to migrate also takes the shared values it read, atomically.
+        last = {
+            "permissions": legacy["permissions"],
+            "env": {
+                f"UNIFI_{upper}_HOST": "192.0.2.70",
+                f"UNIFI_{upper}_USERNAME": "legacy-user",
+                f"UNIFI_POLICY_{upper}_UPDATE": "true",
+                "UNIFI_TOOL_PERMISSION_MODE": "confirm",
+                "UNIFI_API_KEY": sample_value,
+                "UNIFI_CUSTOM_FIXTURE": "kept",
+                "KEEP": "unrelated",
+            },
+        }
+        legacy_path.write_text(json.dumps(last), encoding="utf-8")
+        result = migrate()
+        remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
+        self.check(
+            remaining_env == {"UNIFI_CUSTOM_FIXTURE": "kept", "KEEP": "unrelated"},
+            "the last migration removes the shared settings it moved and keeps the rest",
+        )
+        self.check(options()["api_key"] == sample_value, "the shared credential reached the options")
+        self.check(
+            b"UNIFI_API_KEY" in result.stdout and b"UNIFI_CUSTOM_FIXTURE" in result.stdout, "removed names are reported"
+        )
+        self.check(b"for other UniFi plugins" not in result.stdout, "the last migration claims no other plugin")
+        self.check(b"kept" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted")
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
     def scenario(self, product, target):
@@ -948,10 +984,7 @@ class Fixtures:
             entry = load()["mcp_servers"][f"unifi-{product}"]
             self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
             self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
-            self.check(
-                "plugin 1.2.3; package unifi-" + product + "-mcp==9.8.7" in path.read_text(),
-                "Codex records independent plugin and package versions",
-            )
+            self.check("unifi-plugin-setup" not in path.read_text(), "Codex setup keeps no pin note in config.toml")
             before_refresh = path.read_bytes()
             failed = subprocess.run(
                 refresh, cwd=workspace, env=dict(environment, FIXTURE_FAIL="validate"), capture_output=True, timeout=30
@@ -959,6 +992,81 @@ class Fixtures:
             self.check(
                 failed.returncode != 0 and path.read_bytes() == before_refresh,
                 "failed Codex refresh preserves complete registration",
+            )
+
+            def pinned(version):
+                mcp.write_text(
+                    json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp=={version}"]}}}),
+                    encoding="utf-8",
+                )
+                return subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+
+            for valid in ("9.8.7rc2", "9.8.7.post1", "9.8.8.dev83", "9.8.8.dev83+ge51932dd"):
+                result = pinned(valid)
+                self.check(result.returncode == 0, "Codex accepts PEP 440 pin " + valid)
+                self.check(
+                    load()["mcp_servers"][f"unifi-{product}"]["args"][-1] == f"unifi-{product}-mcp=={valid}",
+                    "Codex registers PEP 440 pin " + valid,
+                )
+            before_pins = path.read_bytes()
+            for malformed in ("9.8", "9.8.7-rc1", "9.8.8.dev", "9.8.8+G1", "9.8.8+ge519-32"):
+                result = pinned(malformed)
+                self.check(result.returncode != 0, "Codex refuses malformed pin " + malformed)
+                self.check(path.read_bytes() == before_pins, "malformed pin preserves configuration " + malformed)
+            pinned("9.8.7")
+
+            # Codex drops comments in the MCP tables it saves; setup edits only this server's tables.
+            name = f"unifi-{product}"
+            commented = (
+                '# user note\nmodel = "fixture"  # trailing\n\n# my server\n[mcp_servers.unrelated]  # keep\n'
+                'command = "keep"\n# inside\nenv = { KEEP = "yes" }\n\n'
+                f"# unifi-plugin-setup: {name} plugin 0.0.1; package {name}-mcp==0.0.1\n"
+                f'# note for the entry\n[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "old" }\n\n# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+            )
+            path.write_text(commented, encoding="utf-8")
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0, "Codex refresh edits a commented configuration")
+            text = path.read_text(encoding="utf-8")
+            for comment in (
+                "# user note",
+                "# trailing",
+                "# my server",
+                "# keep",
+                "# inside",
+                "# note for the entry",
+                "# about the next server",
+            ):
+                self.check(comment in text, "Codex setup keeps the comment " + comment)
+            self.check("unifi-plugin-setup" not in text, "Codex setup drops its obsolete pin note")
+            document = tomllib.loads(text)
+            self.check(
+                document["mcp_servers"]["unrelated"] == {"command": "keep", "env": {"KEEP": "yes"}}
+                and document["mcp_servers"]["after"] == {"command": "after"}
+                and document["model"] == "fixture",
+                "Codex setup leaves other settings and servers untouched",
+            )
+            self.check(
+                document["mcp_servers"][name]["env"] == {"KEEP": "old"}
+                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
+                "Codex setup replaces only this server's pin",
+            )
+            self.check(text.index("# note for the entry") < text.index(f'[mcp_servers."{name}"]'), "entry stays put")
+
+            # A layout setup cannot edit in place is rewritten by Codex, with a notice.
+            path.write_text(
+                f'# kept\n[mcp_servers]\nunrelated.command = "keep"\n"{name}".command = "old"\n'
+                f'"{name}".env.KEEP = "dotted"\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0 and b"dropped the comments" in result.stdout, "rewrite is announced")
+            document = tomllib.loads(path.read_text(encoding="utf-8"))
+            self.check(
+                document["mcp_servers"]["unrelated"] == {"command": "keep"}
+                and document["mcp_servers"][name]["env"] == {"KEEP": "dotted"}
+                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
+                "dotted layout is registered through Codex",
             )
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"

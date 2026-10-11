@@ -36,9 +36,14 @@ Contributors: the version, pin and release rules are in
 
 Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
 that takes precedence over the bundle. After every plugin upgrade, re-run setup
-from the newly installed plugin before restarting Codex.** Setup records the pin
-in a comment in `config.toml` and prints the package version on success. Preserve
-the saved environment with this non-secret command:
+from the newly installed plugin before restarting Codex.** Setup pins the
+package in the server entry's `args` and prints the package version on success.
+It edits only that server's tables in `config.toml`, so the file's comments and
+other servers stay as written; `codex mcp add` and `codex mcp remove` rewrite the
+file and drop the comments inside every `[mcp_servers.*]` table. A pin may be a
+PEP 440 development or local version, such as `0.37.1.dev83+g<sha>`, when a
+candidate is tested before release. Preserve the saved environment with this
+non-secret command:
 
 ```bash
 bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
@@ -66,16 +71,19 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
 - **Where they live:** non-secret options in user `settings.json`; a raw password
   or API key in the system keychain.
 - **What they cover:** connection settings, password and API-key providers, the
-  server-level create, update and delete gates, permission mode, auto-confirm
-  and registration mode. The gates default to off, permission mode to `confirm`
-  and registration to `lazy`.
+  server-level create, update and delete gates, permission mode and
+  registration mode. The gates default to off, permission mode to `confirm`
+  and registration to `lazy`. The deprecated auto-confirm switch has no option
+  and is never exported; use the permission mode.
 - **Dropped for Claude Code:** per-category policy overrides; setup refuses them.
   Allow the action server-wide and rely on confirm previews, or keep it off.
 - **Upgrades:** options survive plugin upgrades.
 - **Earlier plugin versions:** they wrote the project's
   `.claude/settings.local.json`, which this version no longer reads. A
   session-start notice names the leftover variables, and
-  `set-env.sh --target claude --migrate` moves them into the options.
+  `set-env.sh --target claude --migrate` moves them into the options. When no
+  other UniFi plugin's settings remain in the file, it also removes the shared
+  `UNIFI_*` settings it read, so none stay visible to the project's sessions.
 
 The `cross-product` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)), but their
