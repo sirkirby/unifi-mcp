@@ -35,13 +35,19 @@ How this script catches it
    consistently, so a released app version identifies one authentication stack.
 6. Preinstall the prior vulnerable workspace resolutions before every wheel,
    then prove its metadata upgrades them to safe versions.
-7. Attempt a smoke import of the downstream's runtime entrypoint. If the import
-   succeeds, the declared pin permits a working upstream version. If it fails
-   with ``ModuleNotFoundError`` (or pip itself fails with no matching version),
-   the pin is stale and a fresh PyPI install would crash.
-8. Install the Network and API wheels against exactly their declared published
-   ``unifi-core`` floors and validate their manager-call contracts. This catches
-   newly used Core methods that ordinary imports do not execute.
+7. Import the downstream's runtime entrypoint, then import every module the
+   installed wheel ships (read from the wheel's file list, so directories
+   without an ``__init__.py`` are included). Any ``ImportError`` fails: an
+   undeclared dependency, or a symbol the PyPI-resolved upstream does not
+   provide. Other import-time exceptions are ignored.
+8. Install each downstream wheel against exactly its declared published
+   ``unifi-core`` floor (and ``unifi-mcp-shared`` floor, where declared; Network
+   uses the branch-built shared candidate). Repeat the full module import, and
+   resolve every attribute the code reaches through an ``unifi_core`` /
+   ``unifi_mcp_shared`` import against that floor, so a newly used upstream
+   symbol without a floor bump fails even when the latest upstream has it.
+   Network and API additionally validate their manager-call contracts, which
+   catches newly used Core methods on instances the attribute scan cannot see.
 
 Exit code 0 on success, 1 on any failure. Diagnostic output is printed to
 stdout and is intended to be read directly from the CI log.
@@ -146,26 +152,181 @@ DOWNSTREAM_PACKAGES: list[Downstream] = [
     ),
 ]
 
-# Imports every submodule of a package and reports the ones that fail with a
-# missing module. Only ModuleNotFoundError is treated as a failure: that is the
-# signature of an undeclared dependency. Other exceptions at import time are a
-# different problem and are not this gate's business.
+# Imports every module an installed distribution ships and reports the ones that
+# fail with an ImportError. The module list comes from the distribution's own
+# file list (its RECORD), not from pkgutil.walk_packages: walk_packages only
+# descends into directories that contain an __init__.py, so a namespace
+# subpackage (a directory without one) and every module under it would never be
+# imported. An ImportError covers both an undeclared dependency
+# (ModuleNotFoundError) and a symbol the installed upstream does not provide
+# ("cannot import name"). Other import-time exceptions are not this gate's
+# business and are ignored.
 _WALK_IMPORTS = """
-import importlib, pkgutil, sys
-root = importlib.import_module("{root}")
-missing = []
-for mod in pkgutil.walk_packages(root.__path__, root.__name__ + "."):
+import importlib, sys
+from importlib.metadata import distribution
+
+root = __ROOT__
+names = set()
+for file in distribution(__DIST__).files or ():
+    parts = file.parts
+    if not parts or parts[0] != root or file.suffix != ".py":
+        continue
+    names.add(".".join(parts[:-1] if file.name == "__init__.py" else (*parts[:-1], file.stem)))
+if root not in names:
+    print("  no modules of {} found in the installed distribution".format(root))
+    sys.exit(1)
+broken = []
+for name in sorted(names):
     try:
-        importlib.import_module(mod.name)
+        importlib.import_module(name)
     except ModuleNotFoundError as exc:
-        missing.append((mod.name, exc.name))
+        broken.append("  {} -> missing dependency: {}".format(name, exc.name))
+    except ImportError as exc:
+        broken.append("  {} -> {}".format(name, exc))
     except Exception:
         pass
-if missing:
-    for mod_name, dep in missing:
-        print("  {{}} -> missing dependency: {{}}".format(mod_name, dep))
+if broken:
+    print("\\n".join(broken))
     sys.exit(1)
+print("imported {} modules of {}".format(len(names), root))
 """
+
+# Resolves every attribute reached through a name imported from an upstream
+# package (`import unifi_core.auth as auth; auth.new_helper`, or
+# `from unifi_core.x import Cls; Cls.new_method`) against the installed
+# upstream. Import statements already prove the imported names exist; this
+# covers the attribute accesses that only fail when the line runs. The scan is
+# conservative: a name that is rebound anywhere in the file (assignment,
+# parameter, loop target, a second import) is skipped, and resolution stops at
+# the first object that is neither a module nor a class.
+_UPSTREAM_API_SCAN = """
+import ast, importlib, inspect, sys
+from importlib.metadata import distribution
+
+UPSTREAM = ("unifi_core", "unifi_mcp_shared")
+root = __ROOT__
+dist = distribution(__DIST__)
+
+
+def upstream(module):
+    return module in UPSTREAM or module.startswith(tuple(name + "." for name in UPSTREAM))
+
+
+def load(module):
+    try:
+        return importlib.import_module(module)
+    except Exception:
+        return None
+
+
+def has(obj, attr):
+    if hasattr(obj, attr):
+        return True
+    return inspect.ismodule(obj) and load(obj.__name__ + "." + attr) is not None
+
+
+def collect(tree):
+    bound, ambiguous = {}, set()
+
+    def bind(name, target):
+        if name in bound and bound[name] != target:
+            ambiguous.add(name)
+        bound[name] = target
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if not upstream(alias.name):
+                    ambiguous.add((alias.asname or alias.name).split(".")[0])
+                elif alias.asname:
+                    bind(alias.asname, (alias.name, None))
+                else:
+                    # `import a.b.c` binds `a`; importing the full path is what
+                    # makes `a.b.c` reachable as an attribute chain.
+                    load(alias.name)
+                    bind(alias.name.split(".")[0], (alias.name.split(".")[0], None))
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if node.level == 0 and node.module and upstream(node.module):
+                    bind(alias.asname or alias.name, (node.module, alias.name))
+                else:
+                    ambiguous.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            ambiguous.add(node.id)
+        elif isinstance(node, ast.arg):
+            ambiguous.add(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            ambiguous.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            ambiguous.add(node.name)
+        elif isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
+            ambiguous.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            ambiguous.add(node.rest)
+    return {name: target for name, target in bound.items() if name not in ambiguous}
+
+
+def resolve(target):
+    module, attr = target
+    if attr is None:
+        return load(module)
+    owner = load(module)
+    if owner is None:
+        return None
+    if hasattr(owner, attr):
+        return getattr(owner, attr)
+    return load(module + "." + attr)
+
+
+def chains(tree):
+    inner = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and id(node) not in inner:
+            attrs, base = [], node
+            while isinstance(base, ast.Attribute):
+                attrs.append(base.attr)
+                base = base.value
+            if isinstance(base, ast.Name):
+                yield node.lineno, base.id, attrs[::-1]
+
+
+failures, checked = [], 0
+for file in dist.files or ():
+    if not file.parts or file.parts[0] != root or file.suffix != ".py":
+        continue
+    tree = ast.parse(dist.locate_file(file).read_text(), filename=str(file))
+    names = collect(tree)
+    resolved = {}
+    for lineno, name, attrs in chains(tree):
+        if name not in names:
+            continue
+        if name not in resolved:
+            resolved[name] = resolve(names[name])
+        obj = resolved[name]
+        path = name
+        for attr in attrs:
+            if not (inspect.ismodule(obj) or inspect.isclass(obj)):
+                break
+            checked += 1
+            path += "." + attr
+            if not has(obj, attr):
+                failures.append("  {}:{}: {} is not provided by the installed upstream".format(file, lineno, path))
+                break
+            obj = getattr(obj, attr) if hasattr(obj, attr) else load(obj.__name__ + "." + attr)
+if failures:
+    print("\\n".join(sorted(set(failures))))
+    sys.exit(1)
+print("resolved {} upstream attribute accesses in {}".format(checked, root))
+"""
+
+
+def walk_imports_script(dist_name: str, root_module: str) -> str:
+    return _WALK_IMPORTS.replace("__ROOT__", repr(root_module)).replace("__DIST__", repr(dist_name))
+
+
+def upstream_api_scan_script(dist_name: str, root_module: str) -> str:
+    return _UPSTREAM_API_SCAN.replace("__ROOT__", repr(root_module)).replace("__DIST__", repr(dist_name))
+
 
 _API_CATALOG_FLOOR_CONTRACT = """
 import dis, inspect
@@ -573,15 +734,16 @@ def check_downstream(
     # undeclared dependency used anywhere else in the package stays invisible:
     # unifi-api-server shipped for three releases importing unifi_mcp_shared
     # from services/manifest.py without declaring it, because `import unifi_api`
-    # alone succeeds. Walk every submodule so the whole surface is covered.
+    # alone succeeds. Import every module the wheel ships, including those under
+    # directories without an __init__.py, so the whole surface is covered.
     try:
-        run_capture([str(py), "-c", _WALK_IMPORTS.format(root=pkg.root_module)])
+        run_capture([str(py), "-c", walk_imports_script(pkg.dist_name, pkg.root_module)])
     except subprocess.CalledProcessError as exc:
         return False, (
-            f"Importing every submodule of `{pkg.root_module}` failed after install. "
+            f"Importing every module of `{pkg.root_module}` failed after install. "
             f"Some module imports a package that is not declared in this package's "
-            f"dependencies, so a fresh PyPI install crashes when that module is "
-            f"first imported.\n\n"
+            f"dependencies, or a symbol the resolved upstream does not provide, so a "
+            f"fresh PyPI install crashes when that module is first imported.\n\n"
             f"{(exc.stdout or '').strip()[-2000:]}\n{(exc.stderr or '').strip()[-1000:]}"
         )
 
@@ -615,19 +777,40 @@ def network_core_floor_from_wheel(wheel: Path) -> str:
     return core_floor_from_wheel(wheel, "Network")
 
 
+def shared_floor_from_wheel(wheel: Path) -> str | None:
+    """Extract a wheel's declared minimum unifi-mcp-shared version, if it declares one."""
+    for raw_requirement in wheel_requirements(wheel):
+        try:
+            requirement = Requirement(raw_requirement)
+        except InvalidRequirement:
+            continue
+        if _normalize_distribution_name(requirement.name) != "unifi-mcp-shared" or requirement.marker is not None:
+            continue
+        for specifier in requirement.specifier:
+            if specifier.operator == ">=":
+                return specifier.version
+    return None
+
+
 def check_core_floor_contract(
     wheel: Path,
     venv_dir: Path,
     *,
     package_label: str,
     core_extras: str,
-    contract: str,
+    contract: str | None = None,
     additional_targets: tuple[str, ...] = (),
+    pkg: Downstream | None = None,
 ) -> tuple[bool, str]:
-    """Install and contract-check a wheel against exactly its published Core floor."""
+    """Install a wheel against exactly its published Core floor and contract-check it.
+
+    When ``pkg`` is given, every module the wheel ships is also imported, and every
+    attribute it reaches through an upstream import is resolved, against that floor.
+    """
     floor = core_floor_from_wheel(wheel, package_label)
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
+    core_target = f"unifi-core[{core_extras}]=={floor}" if core_extras else f"unifi-core=={floor}"
     try:
         run_capture(
             [
@@ -639,20 +822,30 @@ def check_core_floor_contract(
                 "--disable-pip-version-check",
                 "--index-url",
                 "https://pypi.org/simple",
-                f"unifi-core[{core_extras}]=={floor}",
+                core_target,
                 str(wheel),
                 *additional_targets,
             ]
         )
         run_capture([str(py), "-m", "pip", "check"])
-        result = run_capture([str(py), "-c", contract])
+        scripts = [] if contract is None else [contract]
+        if pkg is not None:
+            scripts += [
+                walk_imports_script(pkg.dist_name, pkg.root_module),
+                upstream_api_scan_script(pkg.dist_name, pkg.root_module),
+            ]
+        results = [run_capture([str(py), "-c", script]).stdout.strip() for script in scripts]
     except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or "").strip()[-3000:]
+        detail = (exc.stdout or "").strip()[-2000:] + "\n" + (exc.stderr or "").strip()[-3000:]
         return (
             False,
-            f"Core floor {floor} is unpublished or contract-incompatible.\n{detail}",
+            f"Core floor {floor} is unpublished or contract-incompatible.\n{detail.strip()}",
         )
-    return True, f"Core floor {floor}: {(result.stdout or '').strip()}"
+    return True, f"Core floor {floor}: " + "; ".join(result for result in results if result)
+
+
+def _downstream(dist_name: str) -> Downstream:
+    return next(pkg for pkg in DOWNSTREAM_PACKAGES if pkg.dist_name == dist_name)
 
 
 def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
@@ -663,6 +856,7 @@ def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
         package_label="API",
         core_extras="network,protect,access",
         contract=_API_CATALOG_FLOOR_CONTRACT,
+        pkg=_downstream("unifi-api-server"),
     )
 
 
@@ -680,6 +874,30 @@ def check_network_core_floor(
         core_extras="network",
         contract=_NETWORK_CORE_FLOOR_CONTRACT,
         additional_targets=(() if shared_wheel is None else (str(shared_wheel),)),
+        pkg=_downstream("unifi-network-mcp"),
+    )
+
+
+# Downstream packages without a bespoke manager-call contract still get every
+# module imported and every upstream attribute access resolved against their
+# declared floors. Core extras mirror what each package declares.
+FLOOR_ONLY_CORE_EXTRAS: dict[str, str] = {
+    "unifi-protect-mcp": "protect",
+    "unifi-access-mcp": "access",
+    "unifi-mcp-relay": "",
+}
+
+
+def check_floor_only(pkg: Downstream, wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+    """Install a wheel against exactly its declared Core and Shared floors and check its upstream use."""
+    shared_floor = shared_floor_from_wheel(wheel)
+    return check_core_floor_contract(
+        wheel,
+        venv_dir,
+        package_label=pkg.dist_name,
+        core_extras=FLOOR_ONLY_CORE_EXTRAS[pkg.dist_name],
+        additional_targets=(() if shared_floor is None else (f"unifi-mcp-shared=={shared_floor}",)),
+        pkg=pkg,
     )
 
 
@@ -852,6 +1070,18 @@ def main() -> int:
         print(f"  {floor_message}")
         if not floor_ok:
             return 1
+
+        print()
+        for dist_name in FLOOR_ONLY_CORE_EXTRAS:
+            floor_pkg = _downstream(dist_name)
+            floor_ok, floor_message = check_floor_only(
+                floor_pkg, downstream_wheels[dist_name], tmp_path / "floor-venvs" / dist_name
+            )
+            print()
+            print(f"  [{'PASS' if floor_ok else 'FAIL'}] {dist_name} against published upstream floors")
+            print(f"  {floor_message}")
+            if not floor_ok:
+                return 1
 
         print()
         print("All wheels enforce security floors and runtime pins; downstream upgrades, installs, and imports pass.")
