@@ -217,3 +217,77 @@ async def test_collector_calls_nothing_but_read_methods() -> None:
 def test_window_bounds_are_parsed_as_given() -> None:
     request = NetworkIncidentRequest(start="2026-08-08T08:00:00-04:00", end="2026-08-08T13:00:00Z")
     assert parse_utc(request.window.start) == datetime.fromisoformat("2026-08-08T12:00:00+00:00")
+
+
+# --- absolute window bounds on the v2 path -------------------------------------------------
+
+
+def _ms(value: str) -> int:
+    return int(parse_utc(value).timestamp() * 1000)
+
+
+@pytest.mark.asyncio
+async def test_a_quiet_window_on_a_busy_controller_is_one_page_and_complete() -> None:
+    """5,000 events across the day, 12 of them in a quiet half hour: one request answers the whole window."""
+    day = _ms("2026-08-08T00:00:00.000000Z")
+    quiet_start, quiet_end = _ms("2026-08-08T09:00:00.000000Z"), _ms("2026-08-08T09:30:00.000000Z")
+    busy = [{"id": f"busy-{i}", "key": "K", "timestamp": day + i * 9_000} for i in range(5_000)]
+    rows = [row for row in busy if not quiet_start <= row["timestamp"] < quiet_end]
+    rows += [{"id": f"quiet-{i}", "key": "K", "timestamp": quiet_start + i * 120_000} for i in range(12)]
+    manager = paging_event_manager(rows)
+    evidence = await collect(manager, start="2026-08-08T09:00:00Z", end="2026-08-08T09:30:00Z")
+    contract_json(evidence)
+    (source,) = evidence.sources
+    assert len(manager.sent_requests) == evidence.budgets.usage.calls == 1
+    assert source.outcome is SourceOutcome.COMPLETE and evidence.coverage_complete is True
+    assert source.coverage.counts.in_window == source.coverage.population_total == 12
+    # The busy event at exactly 09:30:00.000 comes back at the widened end and is placed out-of-window.
+    assert source.coverage.counts.out_of_window == 1
+
+
+@pytest.mark.asyncio
+async def test_the_submitted_bounds_are_the_window_widened_by_one_boundary_millisecond() -> None:
+    manager = paging_event_manager(_rows(3))
+    window = {"start": "2026-08-08T12:00:00.000500Z", "end": "2026-08-08T12:59:59.999500Z"}
+    evidence = await collect(manager, **window)
+    sent = manager.sent_requests[0].data
+    # floor(start) - 1 ms and ceil(end): every inclusive/exclusive reading still covers [start, end).
+    assert (sent["timestampFrom"], sent["timestampTo"]) == (_ms(window["start"]) - 1, _ms(window["end"]) + 1)
+    (source,) = evidence.sources
+    assert source.coverage.queried_window.start == "2026-08-08T11:59:59.999000Z"
+    assert source.coverage.queried_window.end == "2026-08-08T13:00:00.000000Z"
+    assert source.coverage.window_coverage.value == "covered"
+    assert source.query["timestamp_from_ms"] == sent["timestampFrom"]
+    assert source.query["timestamp_to_ms"] == sent["timestampTo"]
+    assert "within_hours" not in source.query
+
+
+@pytest.mark.asyncio
+async def test_events_a_controller_returns_at_the_widened_edges_are_out_of_window() -> None:
+    start, end = _ms("2026-08-08T12:00:00.000000Z"), _ms("2026-08-08T13:00:00.000000Z")
+    rows = [
+        {"id": "before", "key": "K", "timestamp": start - 1},
+        {"id": "first", "key": "K", "timestamp": start},
+        {"id": "last", "key": "K", "timestamp": end - 1},
+        {"id": "at-end", "key": "K", "timestamp": end},
+    ]
+    evidence = await collect(paging_event_manager(rows))
+    contract_json(evidence)
+    placement = {r.provenance.source_record_id: r.time.status.value for r in evidence.records}
+    assert placement == {
+        "before": "out_of_window",
+        "first": "in_window",
+        "last": "in_window",
+        "at-end": "out_of_window",
+    }
+    assert evidence.sources[0].outcome is SourceOutcome.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_the_legacy_path_keeps_its_lookback() -> None:
+    manager = sdk_event_manager({"meta": {"rc": "ok"}, "data": []}, v2=False)
+    evidence = await collect(manager)
+    sent = manager.sent_requests[0].data
+    assert set(sent) == {"within", "_limit", "_start"} and sent["_limit"] == 100
+    (source,) = evidence.sources
+    assert source.query["within_hours"] == sent["within"] and "timestamp_from_ms" not in source.query

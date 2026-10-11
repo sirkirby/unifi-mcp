@@ -44,6 +44,8 @@ def paging_event_manager(population: Any, *, v2: bool | None = True) -> EventMan
     ``population`` is the row list, or a function of the 0-based index of the
     data request returning the rows at that moment (to move events between
     reads). The API-version probe (``v2=None``) is answered and recorded too.
+    Rows are filtered by the submitted ``timestampFrom``/``timestampTo``, both
+    treated as inclusive (the widest reading a controller could apply).
     """
     manager = sdk_event_manager({"data": []})
     manager._use_v2 = v2
@@ -57,6 +59,8 @@ def paging_event_manager(population: Any, *, v2: bool | None = True) -> EventMan
             return api_request.decode(json.dumps({"count": 0}).encode())
         rows = population(data_requests) if callable(population) else population
         data_requests += 1
+        low, high = api_request.data["timestampFrom"], api_request.data["timestampTo"]
+        rows = [row for row in rows if low <= row["timestamp"] <= high]
         size, number = api_request.data["pageSize"], api_request.data["pageNumber"]
         page = rows[number * size : (number + 1) * size]
         return api_request.decode(json.dumps({"data": page, "total_element_count": len(rows)}).encode())

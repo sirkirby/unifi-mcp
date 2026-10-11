@@ -5,9 +5,11 @@ Reads the Network event log for one requested window through
 request's budgets, and returns a validated evidence set with one
 ``network.events`` source.
 
-The event log takes a lookback relative to "now", so the lookback is chosen
-to reach the window start even if every read takes the whole elapsed
-budget. Rows newer than the window are read, counted against the events
+The v2 log is asked for the window itself, as absolute millisecond bounds
+(see :func:`submitted_bounds_ms`), so a quiet window on a busy controller can
+be read in one page. The legacy log only takes a lookback relative to "now",
+chosen to reach the window start even if every read takes the whole elapsed
+budget; its rows newer than the window are read, counted against the events
 budget and reported as out-of-window. Device filters are exact MACs applied
 to the rows after reading; rows that cannot be read stay in so they are
 counted as malformed.
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from unifi_core.incident_collection import (
@@ -32,6 +34,7 @@ from unifi_core.incident_evidence import (
     IdKind,
     IncidentEvidence,
     SourceEvidence,
+    TimeWindow,
     assemble_incident_evidence,
     parse_utc,
     source_failed,
@@ -51,18 +54,39 @@ EVENTS_PAGE_SIZE = 100
 # Slack for clock reads around a read cancelled at the elapsed deadline.
 _LOOKBACK_MARGIN = timedelta(minutes=1)
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
 #: The only manager methods the collector calls.
 READ_METHODS = frozenset({"read_events_page"})
 
 
 class NetworkEventPages(Protocol):
-    async def read_events_page(self, *, within: int, limit: int, offset: int = 0) -> SourcePage: ...
+    async def read_events_page(
+        self, *, within: int, limit: int, offset: int = 0, window_ms: tuple[int, int] | None = None
+    ) -> SourcePage: ...
 
 
 def lookback_hours(window_start: datetime, planned_at: datetime, elapsed_ms: int) -> int:
     """Whole hours that reach ``window_start`` from any read inside the elapsed budget."""
     span = planned_at - window_start + timedelta(milliseconds=elapsed_ms) + _LOOKBACK_MARGIN
     return max(1, math.ceil(span.total_seconds() / 3600))
+
+
+def submitted_bounds_ms(window: TimeWindow) -> tuple[int, int]:
+    """The epoch-millisecond ``timestampFrom``/``timestampTo`` sent for a v2 read of ``window``.
+
+    Whether the controller treats either bound as inclusive or exclusive is
+    unverified, so the bounds are widened rather than narrowed: one
+    millisecond before the window start (floored to milliseconds) and the
+    window end rounded up. Under every interpretation the controller then
+    returns all of ``[start, end)``; an event it returns at a widened edge
+    is placed by its own timestamp, so it is reported out-of-window, never
+    in it. Narrowing (``end - 1``) would instead lose the last millisecond
+    while still claiming the window was covered.
+    """
+    start_us = (parse_utc(window.start) - _EPOCH) // timedelta(microseconds=1)
+    end_us = (parse_utc(window.end) - _EPOCH) // timedelta(microseconds=1)
+    return start_us // 1000 - 1, -(-end_us // 1000)
 
 
 def _names_device(raw: Any, wanted: frozenset[str]) -> bool:
@@ -96,6 +120,7 @@ def _events_source(
     request: NetworkIncidentRequest,
     *,
     within: int,
+    window_ms: tuple[int, int],
     site: str | None,
     now: datetime,
 ) -> SourceEvidence:
@@ -114,6 +139,8 @@ def _events_source(
         categories=DEFAULT_EVENT_CATEGORIES if v2 else None,
         severities=DEFAULT_EVENT_SEVERITIES if v2 else None,
         device_macs=request.device_macs or None,
+        # v2 was sent the absolute bounds; legacy (and an unread source) the lookback.
+        window_ms=window_ms if v2 else None,
         page=page,
         source_id=NETWORK_EVENTS_SOURCE,
         site=site,
@@ -143,16 +170,19 @@ async def collect_network_incident_evidence(
     meter = BudgetMeter(request.limits, clock=clock)
     planned_at = now()
     within = lookback_hours(parse_utc(request.window.start), planned_at, request.max_elapsed_ms)
+    window_ms = submitted_bounds_ms(request.window)
     read = None
     if not request.window_exhausted:
 
         async def read_page(offset: int, limit: int) -> SourcePage:
-            return await (await get_events()).read_events_page(within=within, limit=limit, offset=offset)
+            return await (await get_events()).read_events_page(
+                within=within, limit=limit, offset=offset, window_ms=window_ms
+            )
 
         # v2 pages by number, so every offset stays a whole number of pages.
         read = await read_source_pages(read_page, meter, page_size=EVENTS_PAGE_SIZE, aligned=True, now=now)
     meter.stop()
-    source = _events_source(read, request, within=within, site=site, now=planned_at)
+    source = _events_source(read, request, within=within, window_ms=window_ms, site=site, now=planned_at)
     return assemble_incident_evidence(
         requested_window=request.window,
         budgets=meter.budgets(window_exhausted=request.window_exhausted),
