@@ -257,7 +257,7 @@ Lists and manages UniFi Protect Known Faces / named face recognition groups. Rea
 
 ### "Check NVR health"
 ```
-protect_batch(tools=[
+protect_batch(operations=[
     {"tool": "protect_get_system_info"},
     {"tool": "protect_get_health"},
     {"tool": "protect_get_firmware_status"},
@@ -268,7 +268,7 @@ protect_batch(tools=[
 ### "A camera seems offline"
 1. `protect_list_cameras` → check connection state
 2. `protect_get_camera(camera_id="...")` → detailed status including IP and MAC
-3. Cross-reference with Network: `unifi_lookup_by_ip(ip="<camera IP>")` → network-level status
+3. Cross-reference with Network: `unifi_lookup_by_ip(ip_address="<camera IP>")` → network-level status
 4. If needed: `protect_reboot_camera(camera_id="...", confirm=true)` → reboot (requires permission)
 
 ---

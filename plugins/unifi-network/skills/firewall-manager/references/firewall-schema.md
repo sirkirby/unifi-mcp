@@ -301,5 +301,5 @@ Before creating policies, use these tools to gather required IDs:
 | `unifi_list_networks` | Network IDs, names, VLANs |
 | `unifi_list_firewall_policies` | Existing policy IDs and structure |
 | `unifi_list_firewall_groups` | IP group and port group IDs |
-| `unifi_get_clients` | Connected client MACs and hostnames |
+| `unifi_list_clients` | Connected client MACs and hostnames |
 | `unifi_get_dpi_stats` | Available DPI categories on this controller |

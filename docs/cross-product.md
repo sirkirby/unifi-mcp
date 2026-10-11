@@ -1,6 +1,6 @@
 # Cross-Product Capabilities
 
-UniFi MCP is the only tool that lets AI agents query Network, Protect, and Access in a single session. This page explains how to use cross-product features.
+An MCP client connected to multiple UniFi product servers can query Network, Protect, and Access in a single session. This page explains how to use cross-product features.
 
 ## How It Works
 
@@ -54,12 +54,27 @@ longer supported.
 
 ## Hero Skills
 
-Three built-in skills showcase cross-product capabilities:
+Three repository skills describe cross-product workflows:
 
 | Skill | Use Case | Products |
 |-------|----------|----------|
 | **Security Patrol** | "What happened at the front entrance?" | Network + Protect + Access |
 | **Incident Investigation** | "A switch went offline — what happened?" | Network + Protect |
-| **Visitor Audit** | "Who visited today and what devices did they bring?" | Access + Network |
+| **Visitor Audit** | "Which access and network activity was observed today?" | Access + Network |
 
-These skills are installed with the `cross-product` plugin.
+These skills live in `plugins/cross-product/skills/`; they are not automatically
+installed by the individual product plugins. Availability depends on the client
+and its installed skill packages; verify discovery before invoking them. Each
+skill declares required and optional servers in its Dependencies section.
+
+All three merged-timeline workflows require the relay's `unifi_location_timeline`
+tool. Incident Investigation also requires Network; Visitor Audit requires Access
+and optionally Network; Security Patrol needs at least one product (two for a
+multi-product correlation). Without the relay, stop the merged workflow and offer
+separate local reads, explicitly stating that no merged timeline is available.
+
+Reports include Coverage and Limitations: requested interval, source availability,
+filters, returned counts, caps and failures. A sorted timeline does not establish
+complete coverage. Missing, partial or capped evidence cannot support an all-clear.
+Timing alone establishes neither a person's identity, device ownership nor cause;
+reports separate observations from hypotheses and source-backed account attribution.
