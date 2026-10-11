@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import jsonschema
@@ -406,6 +407,31 @@ async def test_unexpected_failures_do_not_leak_exception_text(tmp_path, monkeypa
     assert response.status_code == 502
     assert PRIVATE not in response.text
     assert "RuntimeError" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_evidence_too_broad_for_its_view_is_refused_alike_on_rest_and_graphql(
+    tmp_path, monkeypatch, clock, product
+) -> None:
+    """A document whose sources and assertions alone overfill the view is refused, never sent oversized."""
+    bounds = Path(__file__).resolve().parents[4] / "tests/fixtures/incident_evidence/view-bounds"
+    fixture = json.loads((bounds / "skeleton_refusal.json").read_text())
+    refused = validate_incident_evidence(fixture["evidence"])
+    harness = await make_harness(tmp_path, monkeypatch)
+    harness.build = lambda: network_scenario("events")
+    path = NETWORK_PATH if product == "network" else PROTECT_PATH
+    with patch(f"unifi_api.services.incident_evidence.collect_{product}_incident_evidence", return_value=refused):
+        response = await harness.rest(path, lambda: network_scenario("events"))
+        assert response.status_code == 422
+        assert response.json()["detail"] == fixture["refusal"]
+        full = await harness.rest(path, lambda: network_scenario("events"), detail="full")
+        assert full.status_code == 200 and full.json()["data"] == evidence_to_json(refused)
+        graphql = await harness.graphql(
+            f"{{ {product} {{ incidentEvidence({gql_args(harness.cid)}) {{ document }} }} }}"
+        )
+    error = graphql.json()["errors"][0]
+    assert error["extensions"]["code"] == "BAD_REQUEST" and error["message"] == fixture["refusal"]
 
 
 @pytest.mark.asyncio

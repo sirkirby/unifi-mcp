@@ -419,7 +419,12 @@ JSON `document` field, because the JSON Schema artifacts, not the GraphQL
 schema, are the contract. Invalid input is an MCP error response, REST 422 or
 GraphQL `BAD_REQUEST`, naming declared fields and list indexes only (an
 undeclared key is never echoed). The Network site, recorded in each source's
-scope, follows the `location_id` rule; framework argument coercion errors drop the
+scope, follows the `location_id` rule: the API checks its `site_id`, and the
+MCP tool refuses a configured site (`UNIFI_NETWORK_SITE`) that breaks the
+rule before any read, saying how to fix it. Evidence too broad for its view
+(see [Size](#client-view)) is refused the same way, as an MCP error response,
+REST 422 or GraphQL `BAD_REQUEST` stating the source and assertion counts;
+`detail=full` still returns it. Framework argument coercion errors drop the
 rejected value too, and expected client errors are logged as one fixed line,
 without a traceback or the query source. GraphQL classifies errors by
 exception type, never by message text. A controller that does not run the

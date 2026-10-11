@@ -16,11 +16,13 @@ from unifi_core.incident_collection import (
     DEFAULT_EVENTS,
     DEFAULT_WINDOW_SECONDS,
     describe_validation_error,
+    require_label,
 )
 from unifi_core.incident_evidence_view import (
     DEFAULT_MAX_RECORDS_RETURNED,
     MAX_RECORDS_RETURNED,
     EvidencePresentation,
+    EvidenceViewTooLarge,
 )
 from unifi_core.network.incident_collection import collect_network_incident_evidence
 from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
@@ -124,10 +126,18 @@ async def get_incident_evidence(
     try:
         from unifi_network_mcp.runtime import get_connection_manager, get_event_manager
 
-        evidence = await collect_network_incident_evidence(
-            get_event_manager(), request, site=get_connection_manager().site
-        )
+        # The configured site is recorded in each source's scope, so it is held to the label rule.
+        try:
+            site = require_label("configured site", get_connection_manager().site)
+        except ValueError as exc:
+            return {
+                "success": False,
+                "error": f"{_OPERATION}: {exc}; set UNIFI_NETWORK_SITE to the site's name, for example default",
+            }
+        evidence = await collect_network_incident_evidence(get_event_manager(), request, site=site)
         return {"success": True, "data": presentation.render(evidence)}
+    except EvidenceViewTooLarge as exc:
+        return {"success": False, "error": f"{_OPERATION}: {exc}"}
     except Exception as exc:
         logger.error("Error collecting Network incident evidence: %s", type(exc).__name__)
         return {"success": False, "error": f"{_OPERATION}: {type(exc).__name__}"}

@@ -140,3 +140,18 @@ async def test_unexpected_failures_return_the_operation_and_class_only(tool, mon
     monkeypatch.setattr(module, "collect_protect_incident_evidence", broken)
     result = await module.get_incident_evidence(**WINDOW)
     assert result == {"success": False, "error": "Failed to collect incident evidence: RuntimeError"}
+
+
+@pytest.mark.asyncio
+async def test_evidence_too_broad_for_its_view_is_refused_with_how_to_narrow_it(tool, monkeypatch):
+    module, _ = tool
+    fixture = json.loads((ROOT / "tests/fixtures/incident_evidence/view-bounds/skeleton_refusal.json").read_text())
+    refused = validate_incident_evidence(fixture["evidence"])
+
+    async def collect(*_, **__):
+        return refused
+
+    monkeypatch.setattr(module, "collect_protect_incident_evidence", collect)
+    result = await module.get_incident_evidence(**WINDOW)
+    assert result == {"success": False, "error": f"Failed to collect incident evidence: {fixture['refusal']}"}
+    assert (await module.get_incident_evidence(**WINDOW, detail="full"))["success"] is True

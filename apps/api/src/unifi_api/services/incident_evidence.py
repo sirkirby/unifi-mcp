@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import ValidationError
-from unifi_core.incident_collection import LABEL_RULE, MAX_LABEL_LENGTH, describe_validation_error, is_label
+from unifi_core.incident_collection import describe_validation_error, require_label
 from unifi_core.incident_evidence import IncidentEvidence
 from unifi_core.incident_evidence_view import EvidencePresentation
 from unifi_core.network.incident_collection import collect_network_incident_evidence
@@ -40,7 +40,7 @@ Acquire = Callable[[], Awaitable[Any]]
 
 
 class IncidentRequestError(ValueError):
-    """The incident request is malformed; the message never echoes the rejected input."""
+    """The incident request is malformed, or too broad for the bounded view; the message never echoes input."""
 
 
 class ControllerCapabilityError(ValueError):
@@ -100,9 +100,10 @@ def presentation(
 
 def network_site(site: Any) -> str:
     """Validate the Network site, recorded in each source's scope like a label; raises ``IncidentRequestError``."""
-    if not is_label(site, MAX_LABEL_LENGTH):
-        raise IncidentRequestError(f"site: must be 1-{MAX_LABEL_LENGTH} characters {LABEL_RULE}")
-    return site
+    try:
+        return require_label("site", site)
+    except ValueError as exc:
+        raise IncidentRequestError(str(exc)) from None
 
 
 async def collect_network_evidence(acquire: Acquire, request: NetworkIncidentRequest, *, site: str) -> IncidentEvidence:

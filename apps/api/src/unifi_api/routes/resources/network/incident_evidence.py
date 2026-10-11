@@ -129,5 +129,8 @@ async def get_network_incident_evidence(
             raise HTTPException(
                 status_code=502, detail=f"Failed to collect incident evidence ({type(exc).__name__})."
             ) from None
-    data = IncidentEvidence.from_manager_output(evidence, presentation=view).to_dict()
+    try:
+        data = IncidentEvidence.from_manager_output(evidence, presentation=view).to_dict()
+    except IncidentRequestError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return {"data": data, "render_hint": IncidentEvidence.render_hint("detail")}

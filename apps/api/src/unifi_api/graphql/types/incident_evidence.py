@@ -11,7 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 import strawberry
-from unifi_core.incident_evidence_view import EvidencePresentation
+from unifi_core.incident_evidence_view import EvidencePresentation, EvidenceViewTooLarge
+
+from unifi_api.services.incident_evidence import IncidentRequestError
 
 
 @strawberry.type(
@@ -37,7 +39,11 @@ class IncidentEvidence:
     def from_manager_output(
         cls, obj: Any, *, redact_sensitive: bool = True, presentation: EvidencePresentation | None = None
     ) -> "IncidentEvidence":
-        return cls(document=(presentation or EvidencePresentation()).render(obj))
+        """Raises ``IncidentRequestError`` when the evidence is too broad for its bounded view."""
+        try:
+            return cls(document=(presentation or EvidencePresentation()).render(obj))
+        except EvidenceViewTooLarge as exc:
+            raise IncidentRequestError(str(exc)) from None
 
     def to_dict(self) -> dict:
         return self.document

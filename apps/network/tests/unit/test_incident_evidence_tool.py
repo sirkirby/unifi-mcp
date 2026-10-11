@@ -181,6 +181,38 @@ async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("site", ["-" * 30_000, 'fixture-ap-1"', "fixture-ap-1\\", ""])
+async def test_a_configured_site_breaking_the_label_rule_is_refused_before_any_read(tool, monkeypatch, site):
+    """The configured site is recorded in every source's scope, so it is held to the label rule."""
+    from unifi_network_mcp import runtime
+
+    module, pages = tool
+    monkeypatch.setattr(runtime, "get_connection_manager", lambda: MagicMock(site=site))
+    result = await module.get_incident_evidence(**WINDOW)
+    assert result == {
+        "success": False,
+        "error": "Failed to collect incident evidence: configured site: must be 1-128 characters without control "
+        "characters, quotes or backslashes; set UNIFI_NETWORK_SITE to the site's name, for example default",
+    }
+    assert pages.calls == []
+
+
+@pytest.mark.asyncio
+async def test_evidence_too_broad_for_its_view_is_refused_with_how_to_narrow_it(tool, monkeypatch):
+    module, _ = tool
+    fixture = json.loads((ROOT / "tests/fixtures/incident_evidence/view-bounds/skeleton_refusal.json").read_text())
+    refused = validate_incident_evidence(fixture["evidence"])
+
+    async def collect(*_, **__):
+        return refused
+
+    monkeypatch.setattr(module, "collect_network_incident_evidence", collect)
+    result = await module.get_incident_evidence(**WINDOW)
+    assert result == {"success": False, "error": f"Failed to collect incident evidence: {fixture['refusal']}"}
+    assert (await module.get_incident_evidence(**WINDOW, detail="full"))["success"] is True
+
+
+@pytest.mark.asyncio
 async def test_unexpected_failures_return_the_operation_and_class_only(tool, monkeypatch):
     module, _ = tool
 

@@ -21,6 +21,7 @@ from unifi_core.incident_evidence_view import (
     DEFAULT_MAX_RECORDS_RETURNED,
     MAX_RECORDS_RETURNED,
     EvidencePresentation,
+    EvidenceViewTooLarge,
 )
 from unifi_core.protect.incident_collection import collect_protect_incident_evidence
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
@@ -123,6 +124,8 @@ async def get_incident_evidence(
     try:
         evidence = await collect_protect_incident_evidence(event_manager, request)
         return {"success": True, "data": presentation.render(evidence)}
+    except EvidenceViewTooLarge as exc:
+        return {"success": False, "error": f"{_OPERATION}: {exc}"}
     except Exception as exc:
         logger.error("Error collecting Protect incident evidence: %s", type(exc).__name__)
         return {"success": False, "error": f"{_OPERATION}: {type(exc).__name__}"}
