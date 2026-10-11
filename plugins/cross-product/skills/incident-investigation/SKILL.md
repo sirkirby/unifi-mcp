@@ -73,10 +73,13 @@ Claims are bounded by coverage:
   presentation limit, not a coverage gap: coverage and counts still describe
   every collected record. Make no claim about omitted records beyond their
   counts. Records counted in `too_large` have identifiers too long to cite in a
-  view; only `detail="full"` shows them.
+  view, or a citation too large to fit beside its sources; only
+  `detail="full"` shows them.
 - A record's `truncated` names free text the view cut to a prefix (`summary`,
-  `event_type`, `original_value`) with its full length. Quote only the prefix,
-  mark it as cut, and claim nothing about the text that was cut off.
+  `event_type`, `original_value`, `source_tool`) with its full length; a
+  source's `truncated` names its labels cut the same way (`source_tool`,
+  `controller_id`, `site`, `location_id`). Quote only the prefix, mark it as
+  cut, and claim nothing about the text that was cut off.
 - A failed source (`unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`) is missing
   evidence, never an empty result.
