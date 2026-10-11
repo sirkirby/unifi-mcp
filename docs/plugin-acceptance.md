@@ -155,9 +155,11 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       (PowerShell: `scripts/set-env.ps1 -Target claude -Migrate`). Record the
       variable names it reports as migrated, not migrated and kept as shared
       settings. Confirm the project file now holds only the shared settings
-      (until the last UniFi plugin has migrated, which removes them) and
-      unrelated keys, and that a second `--migrate` refuses with nothing to
-      migrate.
+      and unrelated keys, and that a second `--migrate` refuses with nothing to
+      migrate. Migrating every UniFi plugin still keeps the shared settings,
+      because setup cannot prove that no other consumer (an older plugin or a
+      standalone server) relies on them; confirm the notice says so, and remove
+      them by hand only after checking each consumer.
    4. Repeat steps 4 and 5 in fresh sessions. Confirm the notice no longer
       appears.
 7. **Failure recovery.** Run the candidate's setup with an invalid provider
