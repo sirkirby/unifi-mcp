@@ -67,7 +67,8 @@ class NetworkLog:
         self.report_total = report_total
         self.reads: list[tuple[int, int]] = []
 
-    async def get_events_page(self, within=24, limit=100, start=0, **_):
+    async def read_events_page(self, *, within, limit, offset=0):
+        start = offset
         self.reads.append((start, limit))
         rows = [
             {
@@ -175,13 +176,27 @@ async def _network(total=40, **budget):
 
 
 @pytest.mark.asyncio
-async def test_within_budget_every_page_is_read_and_the_end_is_proved() -> None:
+async def test_a_single_page_that_proves_its_end_is_complete() -> None:
+    log, evidence = await _network(total=40)
+    assert_contract_valid(evidence)
+    assert log.reads == [(0, 100)]
+    (source,) = evidence.sources
+    assert source.outcome is SourceOutcome.COMPLETE
+    assert source.coverage.truncation.value == "not_truncated"
+    assert evidence.budgets.exhausted == ()
+
+
+@pytest.mark.asyncio
+async def test_reading_several_offset_pages_never_claims_the_end() -> None:
+    """Offsets have no snapshot: an event moving between reads can be skipped while totals stay equal."""
     log, evidence = await _network(total=250)
     payload = assert_contract_valid(evidence)
     assert log.reads == [(0, 100), (100, 100), (200, 100)]
     (source,) = evidence.sources
-    assert source.outcome is SourceOutcome.COMPLETE
-    assert source.coverage.truncation.value == "not_truncated"
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert [reason.value for reason in source.partial_reasons] == ["truncation_unknown"]
+    assert source.coverage.pagination.total_reported is None and source.coverage.complete is False
+    assert len(evidence.records) == 250
     assert payload["budgets"]["usage"] == {
         "events": 250,
         "calls": 3,
@@ -199,7 +214,7 @@ async def test_event_budget_stops_reading_and_names_itself() -> None:
     assert evidence.budgets.exhausted == (BudgetKind.EVENTS,)
     assert evidence.budgets.usage.events == 150
     assert source.outcome is SourceOutcome.PARTIAL
-    assert [reason.value for reason in source.partial_reasons] == ["budget_exhausted", "truncated"]
+    assert [reason.value for reason in source.partial_reasons] == ["budget_exhausted", "truncation_unknown"]
     assert source.coverage.pagination.interrupted is True
     assert evidence.overall is OverallStatus.PARTIAL and evidence.coverage_complete is False
 
@@ -230,7 +245,7 @@ async def test_elapsed_budget_stops_reading_between_pages() -> None:
 @pytest.mark.asyncio
 async def test_elapsed_budget_cancels_a_read_still_running() -> None:
     class Hanging:
-        async def get_events_page(self, **_):
+        async def read_events_page(self, **_):
             await asyncio.sleep(30)
 
     request = NetworkIncidentRequest(**WINDOW, max_elapsed_ms=50)
@@ -295,14 +310,14 @@ async def test_moving_totals_between_reads_withdraw_the_end_claim() -> None:
 @pytest.mark.asyncio
 async def test_a_failed_later_read_keeps_earlier_rows_as_a_partial_response() -> None:
     log = NetworkLog(250)
-    original = log.get_events_page
+    original = log.read_events_page
 
-    async def flaky(within=24, limit=100, start=0, **kw):
-        if start:
+    async def flaky(*, within, limit, offset=0):
+        if offset:
             raise TimeoutError("controller text that must not travel")
-        return await original(within=within, limit=limit, start=start)
+        return await original(within=within, limit=limit, offset=offset)
 
-    log.get_events_page = flaky
+    log.read_events_page = flaky
     evidence = await collect_network_incident_evidence(log, NetworkIncidentRequest(**WINDOW), now=_fixed_now)
     payload = assert_contract_valid(evidence)
     (source,) = evidence.sources
