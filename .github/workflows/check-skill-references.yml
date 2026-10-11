@@ -35,6 +35,9 @@ jobs:
     - name: Check generated files and harness contracts
       run: make catalog-test check-generated
 
+    - name: Check plugin tool references against pinned releases
+      run: make check-plugin-tool-refs
+
     - name: Check independent plugin versions
       if: github.event_name == 'pull_request'
       env:

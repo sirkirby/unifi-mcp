@@ -3,7 +3,7 @@
        support-skills check-support-skills pre-commit ci core-test shared-test catalog-test protocol-smoke \
        protocol-smoke-no-sync docs-test relay-test network-test protect-test access-test test-parallel \
        worker-install worker-test worker-typecheck worker-build worker-check docker-relay docker-build \
-       docker-up docker-down docker-logs check-plugin-versions
+       docker-up docker-down docker-logs check-plugin-versions check-plugin-tool-refs
 
 help:
 	@echo "UniFi MCP Ecosystem — Top-Level Commands"
@@ -129,6 +129,9 @@ PLUGIN_VERSION_BASE ?= origin/main
 check-plugin-versions:
 	python3 scripts/plugin_versions.py check --base "$(PLUGIN_VERSION_BASE)"
 
+check-plugin-tool-refs:
+	python3 scripts/plugin_tool_refs.py
+
 check-generated: check-skill-references check-api-action-catalog check-support-skills
 
 relay-test:
@@ -160,6 +163,7 @@ docker-relay:
 
 pre-commit:
 	$(MAKE) check-plugin-versions
+	$(MAKE) check-plugin-tool-refs
 	$(MAKE) format
 	$(MAKE) generate
 	$(MAKE) lint
