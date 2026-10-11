@@ -100,7 +100,10 @@ configuration, then saves the plugin's Claude Code options with
 `claude plugin configure`. Options apply in every project; a raw password or
 API key entered as an option is stored in the system keychain. Earlier plugin
 versions wrote the project's `.claude/settings.local.json` instead; the setup
-skill's migration moves those settings into the options.
+skill's migration moves those settings into the options. Because options apply
+in every project, a second project's migration refuses to replace a different
+saved host, username, port or site unless the user chooses `--replace`; see the
+[plugin upgrade guide](plugin-upgrade.md#claude-code).
 
 Rollback: use Claude Code's `/plugin` interface to uninstall only the UniFi
 plugin that was added. Remove leftover `UNIFI_*` values from an older project's
@@ -122,8 +125,9 @@ Use the unifi-network-setup skill to configure this for Codex.
 
 Setup saves a version-pinned MCP entry for the server in Codex's
 `config.toml`, editing only that server's tables. Restart Codex after
-configuration. After every plugin upgrade, re-run setup with `--refresh` (see
-the [plugin upgrade guide](plugin-upgrade.md#codex)). Roll back by uninstalling
+configuration. Codex installs plugin upgrades itself at the start of a session,
+but the saved entry keeps its server version: after every plugin upgrade, re-run
+setup with `--refresh` (see the [plugin upgrade guide](plugin-upgrade.md#codex)). Roll back by uninstalling
 the selected plugin and removing only its matching MCP entry with the current
 `codex mcp` command; `codex mcp remove` drops the comments inside every
 `[mcp_servers.*]` table.
@@ -150,8 +154,10 @@ openclaw plugins install unifi-network \
 openclaw gateway restart
 ```
 
-Run the matching setup skill after restart. Repeat only for other UniFi
-products the user selected.
+Without a terminal, as when an agent runs it, OpenClaw refuses the install
+until it gets `--force` (confirming a source outside ClawHub) and
+`--accept-capabilities`; ask the user before adding them. Run the matching setup
+skill after restart. Repeat only for other UniFi products the user selected.
 
 ## Standalone skills through npm
 

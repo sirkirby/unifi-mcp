@@ -119,7 +119,9 @@ itself register the MCP server.
 - **Claude Code keeps settings as plugin options.** The plugins no longer read
   the project's `.claude/settings.local.json`; passwords and API keys entered
   as options go to the system keychain. Existing users run the setup migration
-  once per plugin (`set-env.sh --target claude --migrate`).
+  once per plugin (`set-env.sh --target claude --migrate`). Options apply in
+  every project, so a project's own settings stop being used once another
+  project is migrated; the upgrade guide covers several projects.
 - **No secrets in chat or command arguments.** Setup uses a password or API-key
   file or command provider, and every configuration write is validated and
   atomic.
@@ -147,7 +149,7 @@ Repeat for Protect or Access if needed:
 /plugin install unifi-access@unifi-plugins
 ```
 
-Each plugin's setup command walks you through connecting to your controller and configuring permissions, and saves the result as the plugin's Claude Code options. Claude Code does not auto-update this marketplace; see the [plugin upgrade guide](docs/plugin-upgrade.md) for update steps.
+`/plugin install` opens the plugin's options dialog straight away; fill it in there, or close it and run the setup command. Each plugin's setup command walks you through connecting to your controller and configuring permissions, and saves the result as the plugin's Claude Code options. Auto-update is off by default for this marketplace; see the [plugin upgrade guide](docs/plugin-upgrade.md) for update steps.
 
 Prerequisites, version boundaries and verification status for each client are in the [plugin support matrix](docs/plugin-support.md).
 
@@ -163,7 +165,7 @@ Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `uni
 
 > Use the `unifi-network-setup` skill to configure this for Codex.
 
-The setup skill saves a version-pinned MCP server entry in Codex's `config.toml` with your controller settings and credential provider references, and keeps the same preview-before-confirm safety model as Claude Code. After each plugin upgrade, re-run setup with `--refresh`; see the [plugin upgrade guide](docs/plugin-upgrade.md#codex).
+The setup skill saves a version-pinned MCP server entry in Codex's `config.toml` with your controller settings and credential provider references, and keeps the same preview-before-confirm safety model as Claude Code. Codex installs plugin upgrades itself at the start of a session, but that entry keeps its server version: after each plugin upgrade, re-run setup with `--refresh`; see the [plugin upgrade guide](docs/plugin-upgrade.md#codex).
 
 ### UniFi account requirements
 
@@ -177,6 +179,8 @@ OpenClaw can install the same UniFi plugin bundles from the marketplace and map 
 openclaw plugins install unifi-network --marketplace https://github.com/sirkirby/unifi-mcp
 openclaw gateway restart
 ```
+
+In a terminal OpenClaw asks you to confirm the source and the plugin's capabilities. Without a terminal, for example in a script, add `--force --accept-capabilities`; otherwise it refuses.
 
 Then run the matching setup skill from OpenClaw (`unifi-network-setup`, `unifi-protect-setup`, or `unifi-access-setup`), or configure the server directly. Point the password at a [credential provider](docs/credential-providers.md) so the secret never appears in the command line:
 
