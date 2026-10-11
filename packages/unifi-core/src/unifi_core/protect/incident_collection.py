@@ -11,7 +11,6 @@ NVR, and a camera the budget never reached is ``not_attempted``.
 from __future__ import annotations
 
 import math
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
@@ -97,7 +96,7 @@ async def collect_protect_incident_evidence(
     events: ProtectEventPages,
     request: ProtectIncidentRequest,
     *,
-    clock: Callable[[], float] = time.monotonic,
+    clock: Callable[[], float] | None = None,
     now: Callable[[], datetime] = utc_now,
 ) -> IncidentEvidence:
     """Collect bounded Protect event evidence for ``request``'s window.

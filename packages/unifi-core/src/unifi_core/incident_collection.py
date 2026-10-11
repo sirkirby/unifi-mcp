@@ -169,10 +169,10 @@ def describe_validation_error(error: ValidationError) -> str:
 class BudgetMeter:
     """Usage of one collection's call, event and elapsed budgets."""
 
-    def __init__(self, limits: BudgetLimits, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, limits: BudgetLimits, *, clock: Callable[[], float] | None = None) -> None:
         self.limits = limits
-        self._clock = clock
-        self._started = clock()
+        self._clock = clock or time.monotonic
+        self._started = self._clock()
         self._stopped_ms: int | None = None
         self.events = 0
         self.calls = 0
