@@ -70,15 +70,16 @@ The safety options always carry a value:
 |---|---|
 | Create, update and delete gates (`UNIFI_POLICY_<SERVER>_<ACTION>`) | `false` |
 | Permission mode | `confirm` |
-| Auto-confirm | `false` |
 | Tool registration | `lazy` |
 
-Per-category policy overrides have no Claude Code option.
+Per-category policy overrides and the deprecated auto-confirm switch have no
+Claude Code option; setup refuses both.
 
-Plugin versions before this change stored Claude Code settings in the project's
+Plugin versions before 1.0.0 stored Claude Code settings in the project's
 `.claude/settings.local.json`, which plugin servers received only after a startup
 race. `set-env.sh --target claude --migrate` (or `set-env.ps1 -Target claude
--Migrate`) moves them into the options.
+-Migrate`) moves them into the options; the
+[plugin upgrade guide](plugin-upgrade.md#claude-code) walks through it.
 
 ## Startup failures
 

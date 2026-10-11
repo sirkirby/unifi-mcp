@@ -41,7 +41,9 @@ Three repository skills describe cross-product workflows:
 | **Visitor Audit** | "Which access and network activity was observed today?" | Access + Network |
 
 These skills live in `plugins/cross-product/skills/`; they are not automatically
-installed by the individual product plugins. Availability depends on the client
+installed by the individual product plugins, and the bundle is not listed in the
+Claude Code or Codex marketplace. Install them as standalone skills (see the
+[install guide](agent-install.md#standalone-skills-through-npm)). Availability depends on the client
 and its installed skill packages; verify discovery before invoking them. Each
 skill declares required and optional servers in its Dependencies section.
 

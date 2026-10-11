@@ -31,10 +31,12 @@ The plugin installs the MCP server, an agent skill for tool discovery, and a gui
 Then run the interactive setup to configure your controller connection:
 
 ```
-/unifi-network:setup
+/unifi-network:unifi-network-setup
 ```
 
-This walks you through entering your controller host, credentials, and permission preferences — then writes everything to `.claude/settings.local.json` so it persists across sessions. Restart Claude Code after setup to connect.
+This walks you through entering your controller host, credentials, and permission preferences. Credentials are given as a file or command provider, never typed into chat. Setup saves the result as the plugin's Claude Code options, which apply in every project; a password or API key entered as an option is stored in the system keychain. Start a new Claude Code session after setup to connect.
+
+Upgrading from a plugin version before 1.0.0, which kept settings in the project's `.claude/settings.local.json`? Follow the [plugin upgrade guide](../../docs/plugin-upgrade.md).
 
 ### Codex
 
@@ -44,7 +46,7 @@ Register the marketplace, then install `unifi-network` from Codex's `/plugins` U
 codex plugin marketplace add sirkirby/unifi-mcp
 ```
 
-After installing, ask Codex to use the UniFi Network setup skill. The setup flow registers the MCP server with `codex mcp add`, stores your controller environment values in Codex's MCP configuration, and prompts you to restart Codex.
+After installing, ask Codex to use the UniFi Network setup skill. Setup saves a version-pinned MCP server entry with your controller settings in Codex's `config.toml` and prompts you to restart Codex. After each plugin upgrade, re-run setup with `--refresh`.
 
 ### PyPI / Docker
 
@@ -116,7 +118,7 @@ For an approved packet test, use the [IPv4 DNS redirect recipe](../../plugins/un
 
 ## Configure
 
-Set these variables in the server's process environment. If you used `/unifi-network:setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+Set these variables in the server's process environment. The plugin setup skill already does this for Codex and OpenClaw; in Claude Code the plugin maps its options onto these variables. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
 
 ```bash
 # Server-specific variables (recommended)

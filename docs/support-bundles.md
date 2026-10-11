@@ -129,7 +129,7 @@ Automated triage publishes fixed trusted text for label suggestions and relation
 
 If the support tool is missing:
 
-1. Update the matching plugin or MCP package.
+1. Update the matching plugin ([plugin upgrade guide](plugin-upgrade.md)) or MCP package.
 2. Restart the MCP client so its tool catalog refreshes.
 3. Use `$unifi-network-setup`, `$unifi-protect-setup`, or `$unifi-access-setup` for product setup help.
 

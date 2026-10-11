@@ -122,7 +122,7 @@ Ask whether to use defaults or customize:
 Ask whether to enable write permissions. The guided setup explicitly disables all
 Access mutations unless the user opts in.
 
-Options:
+For Codex and OpenClaw, offer:
 - Read-only for now
 - Enable visitor and credential management
 - Enable door operations
@@ -150,8 +150,8 @@ category/action overrides the user selected.
 
 For read-only setup, explicitly configure `UNIFI_POLICY_ACCESS_CREATE=false`,
 `UNIFI_POLICY_ACCESS_UPDATE=false`, and `UNIFI_POLICY_ACCESS_DELETE=false`. For
-requested writes, keep those server-level defaults and add only selected
-category/action overrides using the existing
+requested writes on Codex or OpenClaw, keep those server-level defaults and add
+only selected category/action overrides using the existing
 `UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>=true` format.
 
 ## Step 5: Write Configuration

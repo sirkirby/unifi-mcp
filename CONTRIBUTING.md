@@ -259,6 +259,11 @@ scripts, needs a version bump of that plugin in the same PR. Run
 plugin file names a tool missing from the server release the plugin pins. Bump
 sizes, client update steps and release rules are in the `monorepo-release-pipeline`
 skill (Procedure E); user-facing support is in [plugin support](docs/plugin-support.md).
+When a release changes what existing users must do (a setting moves, a command
+changes, a migration is needed), add its notes to the
+[plugin upgrade guide](docs/plugin-upgrade.md). Real-client evidence for the
+support matrix comes from the [plugin acceptance procedure](docs/plugin-acceptance.md),
+run from `main` after the release merge.
 
 To try a Claude Code plugin change locally, run
 `claude --plugin-dir plugins/<name>`. That loads your working copy for the session

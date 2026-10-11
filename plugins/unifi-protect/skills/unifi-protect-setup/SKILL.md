@@ -116,7 +116,7 @@ If yes, configure `UNIFI_PROTECT_API_KEY_FILE` or
 Ask whether to enable write permissions. The guided setup explicitly disables all
 Protect mutations unless the user opts in.
 
-Options:
+For Codex and OpenClaw, offer:
 - Read-only for now
 - Enable camera management
 - Enable all device management
@@ -143,8 +143,9 @@ category/action overrides the user selected.
 
 For read-only setup, explicitly configure
 `UNIFI_POLICY_PROTECT_CREATE=false`, `UNIFI_POLICY_PROTECT_UPDATE=false`, and
-`UNIFI_POLICY_PROTECT_DELETE=false`. For requested writes, keep those server-level
-defaults and add only selected category/action overrides using the existing
+`UNIFI_POLICY_PROTECT_DELETE=false`. For requested writes on Codex or OpenClaw,
+keep those server-level defaults and add only selected category/action overrides
+using the existing
 `UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>=true` format.
 
 ## Step 4: Write Configuration
