@@ -220,6 +220,19 @@ async def test_the_combined_document_is_presented_as_the_client_view_by_default(
     assert view.record_selection.collected.total == len(combined.records)
 
 
+async def test_null_presentation_arguments_take_their_defaults():
+    products = product_documents(read())
+
+    async def forward(tool_name, arguments):
+        product = next(p for p, tool in PRODUCT_TOOLS.items() if tool == tool_name)
+        return {"success": True, "data": products[product]}
+
+    request = {**arguments(read()), "detail": None, "max_records_returned": None}
+    result = await handle_location_timeline(request, AsyncMock(forward=forward))
+    assert result["data"]["schema"] == "unifi-incident-evidence-view"
+    assert result["data"]["record_selection"]["max_records_returned"] == 25
+
+
 async def test_full_detail_cannot_take_a_record_limit():
     forwarder = AsyncMock()
     result = await handle_location_timeline({**arguments(read()), "max_records_returned": 5}, forwarder)

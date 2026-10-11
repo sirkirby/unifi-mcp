@@ -136,7 +136,10 @@ async def handle_location_timeline(
             raise ValueError("products must be a nonempty unique list of network, protect or access")
         if not is_relay_mode and arguments.get("location_id") is not None:
             raise ValueError("location_id requires relay mode")
-        presentation = EvidencePresentation(**{k: v for k, v in arguments.items() if k in _PRESENTATION_FIELDS})
+        # A null presentation argument takes its default, as in the worker.
+        presentation = EvidencePresentation(
+            **{k: v for k, v in arguments.items() if k in _PRESENTATION_FIELDS and v is not None}
+        )
         common = {
             key: value
             for key, value in arguments.items()
