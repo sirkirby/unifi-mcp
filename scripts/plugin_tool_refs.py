@@ -24,8 +24,8 @@ PREFIXES = {"unifi": "network", "protect": "protect", "access": "access"}
 TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access)_[a-z0-9_]*[a-z0-9](?![\w-])")
 # Every server registers these meta-tools, whatever its manifest lists.
 META_TOOLS = ("tool_index", "execute", "batch", "batch_status", "load_tools")
-# Prefixed identifiers that are not tools: Access event types and a visitor field alias.
-NOT_TOOLS = frozenset({"access_granted", "access_denied", "access_end"})
+# Prefixed identifiers that are not tools: Access event types and topics, and field names.
+NOT_TOOLS = frozenset({"access_granted", "access_denied", "access_denial", "access_end", "protect_camera_id"})
 RELAY_SOURCE = "packages/unifi-mcp-relay/src/"
 RELAY_TOOL = re.compile(r'^TOOL_NAME = "([a-z0-9_]+)"$', re.MULTILINE)
 

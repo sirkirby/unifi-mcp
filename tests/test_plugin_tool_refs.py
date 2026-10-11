@@ -103,7 +103,8 @@ def test_meta_tools_and_non_tool_identifiers_are_recognised(repo: Path) -> None:
         repo,
         SKILL,
         "`unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_batch_status`, `unifi_load_tools`.\n"
-        "Import unifi_network_mcp; ignore `access_granted`, x_unifi_secret and unifi_list_clients-like words.\n",
+        "Import unifi_network_mcp; ignore `access_granted`, `access_denial` and `protect_camera_id`.\n"
+        "Also x_unifi_secret and unifi_list_clients-like words.\n",
     )
     write(repo, "apps/network/src/unifi_network_mcp/__init__.py", "")
     assert refs.check(repo) == 5
