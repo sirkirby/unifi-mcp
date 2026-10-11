@@ -17,11 +17,11 @@ async def test_incident_evidence_resolver_returns_the_document(tmp_path, monkeyp
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
 
-    async def get_domain_manager(session, controller_id, product, attr, *, site=None):
-        assert (product, attr, site) == ("network", "event_manager", "default")
+    async def get_event_reader(session, controller_id, product, *, site=None):
+        assert (product, site) == ("network", "default")
         return network_scenario("healthy_empty")
 
-    app.state.manager_factory.get_domain_manager = get_domain_manager
+    app.state.manager_factory.get_event_reader = get_event_reader
     with (
         patch("unifi_core.incident_collection.datetime", FrozenDatetime),
         patch("unifi_core.network.managers.event_manager.time.time", return_value=NOW.timestamp()),

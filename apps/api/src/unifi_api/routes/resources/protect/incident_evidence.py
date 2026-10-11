@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from unifi_core.incident_collection import (
+    DEFAULT_CALLS,
+    DEFAULT_ELAPSED_MS,
+    DEFAULT_EVENTS,
+    DEFAULT_WINDOW_SECONDS,
+)
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.routes.resources._common import require_capability, resolve_controller
-from unifi_api.services.incident_evidence import (
-    DEFAULT_CALLS,
-    DEFAULT_ELAPSED_MS,
-    DEFAULT_EVENTS,
-    DEFAULT_WINDOW_SECONDS,
-    IncidentRequestError,
-    collect_protect_evidence,
-)
+from unifi_api.services.incident_evidence import IncidentRequestError, collect_protect_evidence, protect_request
 from unifi_api.services.pydantic_models import Detail
 
 logger = logging.getLogger(__name__)
@@ -52,9 +52,12 @@ async def get_protect_incident_evidence(
         DEFAULT_WINDOW_SECONDS, description="Longest window to read; a longer window is not read (1-2592000)"
     ),
     max_events: int = Query(DEFAULT_EVENTS, description="Most event rows to read across cameras (1-10000)"),
-    max_calls: int = Query(DEFAULT_CALLS, description="Most NVR page reads across cameras (1-100)"),
+    max_calls: int = Query(
+        DEFAULT_CALLS, description="Most HTTP requests to the NVR across cameras, retries included (1-100)"
+    ),
     max_elapsed_ms: int = Query(
-        DEFAULT_ELAPSED_MS, description="Most wall time for reads; a read still running is cancelled (1-120000)"
+        DEFAULT_ELAPSED_MS,
+        description="Most wall time, connecting included; a read still running is cancelled (1-120000)",
     ),
     mappings: str | None = Query(
         None,
@@ -66,25 +69,30 @@ async def get_protect_incident_evidence(
     controller=Depends(resolve_controller),
 ) -> dict:
     require_capability(controller, "protect")
-    async with request.app.state.sessionmaker() as session:
-        events = await request.app.state.manager_factory.get_domain_manager(
-            session, controller.id, "protect", "event_manager"
+    try:
+        # Validated before any controller I/O: invalid input never acquires a manager.
+        incident = protect_request(
+            start=start,
+            end=end,
+            camera_ids=camera_ids,
+            location_id=location_id,
+            max_window_seconds=max_window_seconds,
+            max_events=max_events,
+            max_calls=max_calls,
+            max_elapsed_ms=max_elapsed_ms,
+            mappings=mappings,
         )
+    except IncidentRequestError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    factory = request.app.state.manager_factory
+    async with request.app.state.sessionmaker() as session:
+
+        async def acquire() -> Any:
+            return await factory.get_event_reader(session, controller.id, "protect")
+
         try:
-            evidence = await collect_protect_evidence(
-                events,
-                start=start,
-                end=end,
-                camera_ids=camera_ids,
-                location_id=location_id,
-                max_window_seconds=max_window_seconds,
-                max_events=max_events,
-                max_calls=max_calls,
-                max_elapsed_ms=max_elapsed_ms,
-                mappings=mappings,
-            )
-        except IncidentRequestError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from None
+            # Acquisition happens inside the first bounded read; its failures are source failures.
+            evidence = await collect_protect_evidence(acquire, incident)
         except Exception as exc:
             logger.error("Failed to collect Protect incident evidence: %s", type(exc).__name__)
             raise HTTPException(

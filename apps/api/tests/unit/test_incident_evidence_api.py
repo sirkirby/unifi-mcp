@@ -42,11 +42,11 @@ class Harness:
         self.build = None
         self.calls: list[dict] = []
 
-        async def get_domain_manager(session, controller_id, product, attr, *, site=None):
-            self.calls.append({"product": product, "attr": attr, "site": site})
+        async def get_event_reader(session, controller_id, product, *, site=None):
+            self.calls.append({"product": product, "attr": "event_manager", "site": site})
             return self.build()
 
-        app.state.manager_factory.get_domain_manager = get_domain_manager
+        app.state.manager_factory.get_event_reader = get_event_reader
 
     def client(self) -> AsyncClient:
         return AsyncClient(transport=ASGITransport(app=self.app), base_url="http://test")
@@ -321,3 +321,159 @@ async def test_graphql_unexpected_failures_do_not_leak_exception_text(tmp_path, 
         )
     assert response.json()["errors"][0]["extensions"]["code"] == "INTERNAL"
     assert PRIVATE not in response.text
+
+
+# --- acquisition: after validation, inside the budget, never a listener -------------------
+
+
+class _ColdFactory:
+    """The real get_event_reader over a cache miss: connecting is slow, and every action is recorded."""
+
+    def __init__(self, harness: Harness, *, connect=None) -> None:
+        import asyncio
+        import types
+
+        from unifi_api.services.managers import ManagerFactory
+
+        self.actions: list[str] = []
+        factory = harness.app.state.manager_factory
+        factory.get_event_reader = types.MethodType(ManagerFactory.get_event_reader, factory)
+        factory._domain_cache.clear()
+
+        async def connection(*_args, **_kwargs):
+            self.actions.append("connection_initialize")
+            if connect is not None:
+                connect()
+            await asyncio.sleep(0.05)
+            return object()
+
+        actions = self.actions
+        build = harness.build
+
+        class Events:
+            def __init__(self, inner) -> None:
+                self._inner = inner
+
+            async def start_listening(self) -> None:
+                actions.append("background_listener_started")
+
+            def __getattr__(self, name):
+                actions.append("event_read")
+                return getattr(self._inner, name)
+
+        factory.get_connection_manager = connection
+        factory._builders_for = lambda product: {"event_manager": lambda cm: Events(build())}
+        self.factory = factory
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [NETWORK_PATH, PROTECT_PATH])
+async def test_invalid_input_and_an_exhausted_window_never_acquire_a_manager(tmp_path, monkeypatch, clock, path):
+    harness = await make_harness(tmp_path, monkeypatch)
+    harness.build = lambda: (
+        network_scenario("healthy_empty") if path == NETWORK_PATH else protect_scenario("healthy_empty")
+    )
+    cold = _ColdFactory(harness)
+    response = await harness.rest(path, harness.build, start="bad-time")
+    assert response.status_code == 422 and cold.actions == []
+    response = await harness.rest(path, harness.build, max_window_seconds=1)
+    assert response.status_code == 200
+    document = response.json()["data"]
+    assert document["budgets"]["exhausted"] == ["window"] and document["overall"] == "failed"
+    assert cold.actions == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [NETWORK_PATH, PROTECT_PATH])
+async def test_acquisition_is_charged_to_the_elapsed_budget_and_starts_no_listener(tmp_path, monkeypatch, path):
+    harness = await make_harness(tmp_path, monkeypatch)
+    harness.build = lambda: (
+        network_scenario("healthy_empty") if path == NETWORK_PATH else protect_scenario("healthy_empty")
+    )
+    cold = _ColdFactory(harness)
+    response = await harness.rest(path, harness.build, max_elapsed_ms=10)
+    document = response.json()["data"]
+    check_document(document)
+    assert document["budgets"]["exhausted"] == ["elapsed"]
+    assert document["budgets"]["usage"]["elapsed_ms"] >= 10
+    assert document["overall"] == "failed" and document["coverage_complete"] is False
+    assert cold.actions == ["connection_initialize"]
+    assert cold.factory._listener_tasks == {} and cold.factory._domain_cache == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [NETWORK_PATH, PROTECT_PATH])
+async def test_a_cold_read_within_budget_uses_an_uncached_manager_without_a_listener(
+    tmp_path, monkeypatch, clock, path
+):
+    harness = await make_harness(tmp_path, monkeypatch)
+    harness.build = lambda: (
+        network_scenario("healthy_empty") if path == NETWORK_PATH else protect_scenario("healthy_empty")
+    )
+    cold = _ColdFactory(harness)
+    response = await harness.rest(path, harness.build)
+    assert response.json()["data"]["overall"] == "empty"
+    assert "background_listener_started" not in cold.actions
+    assert cold.factory._listener_tasks == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_acquisition_failures_are_classified_source_failures_without_controller_text(
+    tmp_path, monkeypatch, caplog, product
+):
+    harness = await make_harness(tmp_path, monkeypatch)
+
+    def fail():
+        raise RuntimeError(PRIVATE)
+
+    harness.build = lambda: None
+    _ColdFactory(harness, connect=fail)
+    path = NETWORK_PATH if product == "network" else PROTECT_PATH
+    with caplog.at_level("DEBUG"):
+        response = await harness.rest(path, harness.build)
+        gql = await harness.graphql(f"{{ {product} {{ incidentEvidence({gql_args(harness.cid)}) {{ document }} }} }}")
+    assert response.status_code == 200
+    document = response.json()["data"]
+    check_document(document)
+    assert document["overall"] == "failed"
+    assert document["sources"][0]["outcome"] == "unavailable"
+    assert gql.json()["data"][product]["incidentEvidence"]["document"]["sources"][0]["outcome"] == "unavailable"
+    assert PRIVATE not in response.text and PRIVATE not in gql.text
+    assert PRIVATE not in caplog.text
+
+
+# --- framework argument coercion never echoes the rejected value ---------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("path", "product"), [(NETWORK_PATH, "network"), (PROTECT_PATH, "protect")])
+async def test_argument_coercion_errors_drop_the_rejected_value(tmp_path, monkeypatch, caplog, path, product):
+    harness = await make_harness(tmp_path, monkeypatch)
+    with caplog.at_level("DEBUG"):
+        response = await harness.rest(path, lambda: None, max_calls=SENTINEL)
+        query = (
+            "query Q($c: ID!, $s: String!, $e: String!, $m: Int) "
+            f"{{ {product} {{ incidentEvidence(controller: $c, start: $s, end: $e, maxCalls: $m) {{ document }} }} }}"
+        )
+        async with harness.client() as client:
+            gql = await client.post(
+                "/v1/graphql",
+                headers=harness.headers,
+                json={
+                    "query": query,
+                    "variables": {"c": harness.cid, "s": REQUEST["start"], "e": REQUEST["end"], "m": SENTINEL},
+                },
+            )
+        arguments = gql_args(harness.cid, maxCalls=json.dumps(SENTINEL))
+        literal = await harness.graphql(f"{{ {product} {{ incidentEvidence({arguments}) {{ document }} }} }}")
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["query", "max_calls"]
+    for body in (response.text, gql.text, literal.text):
+        assert SENTINEL not in body
+    for error in (gql.json()["errors"][0], literal.json()["errors"][0]):
+        assert error["extensions"]["code"] == "BAD_REQUEST"
+    assert gql.json()["errors"][0]["message"] == "Variable '$m' has an invalid value."
+    # The test client logs the URL it sent; nothing the server logged may carry the value.
+    assert all(SENTINEL not in record.getMessage() for record in caplog.records if record.name != "httpx")
+    assert harness.calls == []

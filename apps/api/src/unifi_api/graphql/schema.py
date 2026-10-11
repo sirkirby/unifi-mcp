@@ -6,11 +6,15 @@ NetworkQuery / ProtectQuery / AccessQuery roots.
 
 from __future__ import annotations
 
+import logging
 import sys
 
 import strawberry
+from graphql import GraphQLError
+from strawberry.types import ExecutionContext
 
 from unifi_api._version import __version__ as _api_version
+from unifi_api.graphql.errors import is_request_error, safe_message
 from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.resolvers.access import AccessQuery
 from unifi_api.graphql.resolvers.network import NetworkQuery
@@ -50,4 +54,17 @@ class Query:
         return AccessQuery()
 
 
-schema = strawberry.Schema(query=Query)
+_logger = logging.getLogger("strawberry.execution")
+
+
+class _Schema(strawberry.Schema):
+    """Logs request errors (parse, validation, argument coercion) without the rejected values they quote."""
+
+    def process_errors(self, errors: list[GraphQLError], execution_context: ExecutionContext | None = None) -> None:
+        request_errors = [error for error in errors if is_request_error(error)]
+        for error in request_errors:
+            _logger.info("GraphQL request rejected: %s", safe_message(error))
+        super().process_errors([error for error in errors if not is_request_error(error)], execution_context)
+
+
+schema = _Schema(query=Query)

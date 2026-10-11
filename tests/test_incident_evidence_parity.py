@@ -210,8 +210,7 @@ def _query(arguments: dict[str, Any]) -> list[tuple[str, Any]]:
 async def via_api(product: str, manager: Any, tmp_path: Path, monkeypatch) -> dict[str, Any]:
     app, key = await _api_app(tmp_path, product, monkeypatch)
     factory = app.state.manager_factory
-    factory.get_domain_manager = AsyncMock(return_value=manager)
-    factory.get_connection_manager = AsyncMock(return_value=SimpleNamespace(site="default"))
+    factory.get_event_reader = AsyncMock(return_value=manager)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             f"/v1/sites/default/incident-evidence/{product}",

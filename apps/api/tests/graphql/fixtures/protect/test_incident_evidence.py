@@ -16,11 +16,11 @@ async def test_incident_evidence_resolver_returns_the_document(tmp_path, monkeyp
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="protect")
 
-    async def get_domain_manager(session, controller_id, product, attr, *, site=None):
-        assert (product, attr, site) == ("protect", "event_manager", None)
+    async def get_event_reader(session, controller_id, product, *, site=None):
+        assert (product, site) == ("protect", None)
         return protect_scenario("healthy_empty")
 
-    app.state.manager_factory.get_domain_manager = get_domain_manager
+    app.state.manager_factory.get_event_reader = get_event_reader
     with patch("unifi_core.incident_collection.datetime", FrozenDatetime):
         body = await graphql_query(
             app,
