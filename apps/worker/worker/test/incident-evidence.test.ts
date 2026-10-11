@@ -289,11 +289,28 @@ describe("location evidence collection", () => {
       async (target) => target.product === "network" ? { success: true, data: productDocument("network") } : null);
     expect(result).toMatchObject({ success: true, data: { overall: "partial", coverage_complete: false } });
   });
-  it("represents no matching relays with explicit unavailable sources", async () => {
+  it("refuses an unknown location before any read and says the id is the location UUID", async () => {
     const call = vi.fn();
     const result = await collectIncidentEvidence({ ...request, location_id: "fixture-missing" }, targets, call);
     expect(call).not.toHaveBeenCalled();
-    expect((result.data as any).sources.map((source: any) => source.outcome)).toEqual(["unavailable", "unavailable"]);
+    expect(result).toEqual({ success: false, error: expect.stringContaining('unknown location_id "fixture-missing"') });
+    expect((result as any).error).toContain("UUID");
+    expect((result as any).error).toContain("not its name");
+  });
+  it("echoes an unknown location_id only in a bounded, sanitized form", async () => {
+    const call = vi.fn();
+    const long = await collectIncidentEvidence({ ...request, location_id: `fixture-${"a".repeat(100)}` }, targets, call);
+    expect((long as any).error).toContain(`"fixture-${"a".repeat(32)}…"`);
+    expect((long as any).error).not.toContain("a".repeat(33));
+    const odd = await collectIncidentEvidence({ ...request, location_id: "Home <b>Lab</b>\u00e9" }, targets, call);
+    expect((odd as any).error).toContain('"Home ?b?Lab??b??"');
+    expect(call).not.toHaveBeenCalled();
+  });
+  it("still reads a known location_id", async () => {
+    const call = vi.fn(async () => null);
+    const result = await collectIncidentEvidence({ ...request, location_id: "fixture-1" }, targets, call);
+    expect(result).toMatchObject({ success: true });
+    expect(call).toHaveBeenCalledTimes(2);
   });
   it("keeps failures from two locations as distinct sources", async () => {
     const result = await collectIncidentEvidence({ ...request, products: ["network"] },

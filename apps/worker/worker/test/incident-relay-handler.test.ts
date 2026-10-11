@@ -21,6 +21,18 @@ describe("RelayObject location evidence meta-tool", () => {
     expect((result as any).data.sources.map((source: any) => source.outcome)).toEqual(["unsupported", "unsupported"]);
     expect(relay.sendToolCall).not.toHaveBeenCalled();
   });
+  it("refuses an unknown location_id through the real dispatch path before any read", async () => {
+    const relay = fakeRelay(["fixture-1"], new Map([["fixture-1", ["unifi_get_incident_evidence", "protect_get_incident_evidence"]]]), null);
+    const result = await relay.handleToolCall("unifi_location_timeline", { ...windowArgs, location_id: "Home Lab" });
+    expect(result).toEqual({ success: false, error: expect.stringContaining('unknown location_id "Home Lab"') });
+    expect((result as any).error).toContain("UUID");
+    expect(relay.sendToolCall).not.toHaveBeenCalled();
+  });
+  it("describes location_id as the location UUID in the tool input schema", async () => {
+    const relay = fakeRelay([], new Map(), null);
+    const tool = (await relay.getToolList("lazy")).find((entry: any) => entry.name === "unifi_location_timeline");
+    expect(tool.inputSchema.properties.location_id.description).toContain("UUID");
+  });
   it("forwards to the named evidence tools only and keeps controller errors out of the document", async () => {
     const relay = fakeRelay(["fixture-1"], new Map([["fixture-1", ["unifi_get_incident_evidence", "protect_get_incident_evidence"]]]),
       { success: false, error: "private controller text" });

@@ -110,7 +110,9 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
       location_id: {
         type: "string",
         maxLength: 128,
-        description: "Filter to a specific location (omit to query all connected locations, at most 7 sources in all)",
+        description:
+          "The location's UUID (location_id from the location list, not its name) to filter to one location; " +
+          "omit to query all connected locations, at most 7 sources in all",
       },
       products: {
         type: "array",

@@ -366,3 +366,15 @@ def test_combine_corpus(path):
             combine_incident_evidence(fixture["inputs"])
     else:
         assert canonical_json(combine_incident_evidence(fixture["inputs"])) == canonical_json(fixture["expected"])
+
+
+async def test_location_id_other_than_the_relay_location_is_refused_before_any_read():
+    forward = AsyncMock()
+    result = await handle_location_timeline(
+        {**arguments(read()), "location_id": "fixture-other"}, AsyncMock(forward=forward), location_id="fixture-here"
+    )
+    assert result == {
+        "success": False,
+        "error": "Failed to collect location evidence: location_id must match the relay location",
+    }
+    forward.assert_not_called()

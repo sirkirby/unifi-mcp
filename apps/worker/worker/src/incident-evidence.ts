@@ -599,6 +599,11 @@ const labelRule = "without control characters, quotes or backslashes";
 // Core's `is_label`: labels and mapping identifiers are repeated in the view, so JSON-escaped characters are refused.
 const isLabel = (value: unknown, maxLength: number): boolean => typeof value === "string" && value.length > 0 &&
   Array.from(value).length <= maxLength && !/[\u0000-\u001f\u007f"\\]/.test(value);
+/** A refused identifier is echoed only in a short, quoted form restricted to harmless characters. */
+const boundedLabel = (value: string): string => {
+  const characters = Array.from(value);
+  return `"${characters.slice(0, 40).join("").replace(/[^A-Za-z0-9._:\- ]/g, "?")}${characters.length > 40 ? "…" : ""}"`;
+};
 function normalizeBound(value: unknown): string | null {
   if (typeof value !== "string" || !isoPattern.test(value) || !isoPattern.exec(value)?.[6]) return null;
   const parsed = parsedTime({ original_type: "string", original_value: value, clock_uncertainty_ms: null },
@@ -717,6 +722,9 @@ export async function collectIncidentEvidence(
   const deviceMacs = [...new Set(rawMacs.map((value: string) => normalizeMac(value)!))].sort(compare);
   const cameraIds = [...new Set(rawCameras as string[])].sort(compare);
   const selected = targets.filter((target) => !args.location_id || target.location_id === args.location_id);
+  if (args.location_id && !selected.length)
+    return { success: false, error: `Failed to collect location evidence: unknown location_id ${boundedLabel(args.location_id as string)}; ` +
+      "location_id is the location's UUID from the location list, not its name" };
   const locations = selected.length ? [...new Set(selected.map((target) => target.location_id))] : [String(args.location_id ?? "")];
   const perLocation = (products as string[]).reduce((sum, product) => sum + (product === "protect" ? Math.max(1, cameraIds.length) : 1), 0);
   if (locations.length * perLocation > MAX_TIMELINE_SOURCES)

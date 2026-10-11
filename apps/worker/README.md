@@ -135,7 +135,8 @@ The relay always exposes these meta-tools regardless of registration mode:
 The timeline tool accepts `start`/`end` with UTC offsets, exact `device_macs`
 and `camera_ids`, explicit `mappings`, and `max_window_seconds`, `max_events`,
 `max_calls`, `max_elapsed_ms`. `products` defaults to Network and Protect;
-requested Access collection is unsupported. `location_id` selects one location;
+requested Access collection is unsupported. `location_id` selects one location by
+its UUID (from the location list, not its name) and an unknown one is refused before any read;
 a call reads at most 7 sources (locations × products, one Protect source per
 camera ID) and refuses a larger selection before any read.
 It returns `data` as the [client view](../../docs/incident-evidence.md#client-view) of one combined
