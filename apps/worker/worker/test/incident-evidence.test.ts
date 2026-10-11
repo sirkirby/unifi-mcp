@@ -51,6 +51,15 @@ describe("incident evidence corpus", () => {
       expect(await canonicalIncidentEvidence(actual)).toBe(expectedCanonical(fixture.expected));
     }
   });
+  it("accepts Python integral-float digests after JavaScript parses the wire numbers", async () => {
+    const wire = readFileSync(`${corpus}/cases/canonical_numbers.json`, "utf8");
+    expect(wire).toContain('"score": 1.0');
+    const document = JSON.parse(wire).expected;
+    expect(document.records[0].attributes.score).toBe(1);
+    await expect(validateIncidentEvidence(document)).resolves.toEqual(document);
+    const integerWire = wire.replaceAll('"score": 1.0', '"score": 1');
+    await expect(validateIncidentEvidence(JSON.parse(integerWire).expected)).resolves.toEqual(document);
+  });
   it("requires source proof after post-filtering even when the reported total is exhausted", async () => {
     const altered = structuredClone(fixtureEvidence("healthy_empty.json"));
     const source = altered.sources[0];
@@ -82,6 +91,16 @@ describe("location evidence collection", () => {
     evidence.sources[0].scope.location_id = "fixture-1";
     return evidence;
   }
+  it("collects numeric evidence without replacing it with a parse failure", async () => {
+    const document = structuredClone(fixtureEvidence("canonical_numbers.json"));
+    for (const source of document.sources) source.scope.location_id = "fixture-1";
+    for (const record of document.records) record.provenance.scope.location_id = "fixture-1";
+    const call = vi.fn(async () => ({ success: true, data: document }));
+    const result = await collectIncidentEvidence({ ...request, products: ["protect"] }, targets, call);
+    expect(result.success).toBe(true);
+    expect((result.data as any).sources[0].failure).toBeNull();
+    expect((result.data as any).records).toEqual(document.records);
+  });
   it("sends exact windows and budgets and returns one combined contract document", async () => {
     const call = vi.fn(async (target: EvidenceTarget, _tool: string, _parameters: Record<string, unknown>) =>
       ({ success: true, data: productDocument(target.product) }));

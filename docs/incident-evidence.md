@@ -497,12 +497,13 @@ npm --prefix apps/worker/worker test
 ```
 
 Regenerate after an intentional change by omitting `--check`; Python remains the
-reference. One portability limitation remains in Core's digest encoding:
-Python hashes integral floats such as an attribute `1.0` differently from `1`,
-while JavaScript JSON parsing loses that distinction. If that changes a record's
-content digest, the worker reports the product document as `parse_failed`;
-it never substitutes a new evidence ID. The golden corpus does not currently
-exercise that numeric ambiguity.
+reference. Evidence digests serialize numbers using RFC 8785's ECMAScript
+binary64 form: `1.0` and `1` hash identically, and negative zero becomes `0`.
+Core's existing ASCII string escapes, key order and identity type tags are
+preserved. JavaScript uses `JSON.stringify` for these numbers. The numeric
+golden case and combine fixtures cover integral floats, exponent thresholds,
+signed zero and large integers; integers needing exact precision beyond
+binary64 should be represented as strings.
 
 `unifi_core.event_timeline` still provides the legacy projection for other callers. The relay and worker timeline no longer return that projection,
 which cannot carry coverage or failure state.

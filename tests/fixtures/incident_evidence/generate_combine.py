@@ -122,6 +122,8 @@ def fixtures():
     changed = validate_incident_evidence(changed)
     mapped = load("mapping_outcomes")
     scenarios = {
+        "canonical_numbers": [load("canonical_numbers"), network],
+        "canonical_numbers_reversed": [network, load("canonical_numbers")],
         "encoding_and_precision": [edge_document(network), protect],
         "products": [network, protect],
         "products_reversed": [protect, network],

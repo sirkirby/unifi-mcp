@@ -16,13 +16,19 @@ const compare = (a: string, b: string): number => {
 const equal = (a: unknown, b: unknown): boolean => canonical(a) === canonical(b);
 const fail = (message: string): never => { throw new Error(`Invalid incident evidence: ${message}`); };
 
-/** Python's ensure_ascii=True, sort_keys=True canonical form. */
+/** Core's ASCII strings/code-point key order, with RFC 8785 numbers. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.keys(value).sort(compare).map((key) => `${asciiString(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
   }
   if (typeof value === "string") return asciiString(value);
+  // JSON.stringify supplies ECMAScript's shortest-round-trip binary64 form,
+  // including integral floats, exponent thresholds and negative zero.
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) fail("nonfinite canonical number");
+    return JSON.stringify(value);
+  }
   return JSON.stringify(value);
 }
 function asciiString(value: string): string {
