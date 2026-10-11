@@ -112,7 +112,7 @@ from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
 from unifi_api.services.controllers import get_controller
-from unifi_api.services.incident_evidence import collect_network_evidence, network_request
+from unifi_api.services.incident_evidence import collect_network_evidence, network_request, require_product
 
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
@@ -3678,7 +3678,8 @@ class NetworkQuery:
             mappings=mappings,
         )
         async with ctx.sessionmaker() as session:
-            await get_controller(session, controller)  # NOT_FOUND before collecting, from the database only
+            # From the database only, before collecting: NOT_FOUND, then CAPABILITY_MISMATCH (REST: 404, 409).
+            require_product(await get_controller(session, controller), "network")
 
             async def acquire() -> Any:
                 return await ctx.manager_factory.get_event_reader(session, controller, "network", site=site)

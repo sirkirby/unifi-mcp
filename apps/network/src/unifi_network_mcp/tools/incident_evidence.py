@@ -83,7 +83,7 @@ async def get_incident_evidence(
             mappings=mappings,
         )
     except ValidationError as exc:
-        return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc)}"}
+        return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, NetworkIncidentRequest)}"}
     try:
         from unifi_network_mcp.runtime import get_connection_manager, get_event_manager
 

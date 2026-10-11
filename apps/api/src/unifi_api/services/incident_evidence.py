@@ -24,11 +24,13 @@ from unifi_core.protect.incident_collection import collect_protect_incident_evid
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 
 __all__ = [
+    "ControllerCapabilityError",
     "IncidentRequestError",
     "collect_network_evidence",
     "collect_protect_evidence",
     "network_request",
     "protect_request",
+    "require_product",
 ]
 
 Acquire = Callable[[], Awaitable[Any]]
@@ -36,6 +38,20 @@ Acquire = Callable[[], Awaitable[Any]]
 
 class IncidentRequestError(ValueError):
     """The incident request is malformed; the message never echoes the rejected input."""
+
+
+class ControllerCapabilityError(ValueError):
+    """The controller does not run the product; REST answers 409 capability_mismatch."""
+
+    def __init__(self, product: str) -> None:
+        super().__init__(f"controller does not support {product}")
+        self.product = product
+
+
+def require_product(controller: Any, product: str) -> None:
+    """Raise ``ControllerCapabilityError`` unless ``controller`` runs ``product`` (no controller I/O)."""
+    if product not in [kind for kind in controller.product_kinds.split(",") if kind]:
+        raise ControllerCapabilityError(product)
 
 
 def _parse_mappings(mappings: Any) -> Any:
@@ -55,7 +71,7 @@ def _build_request(model: type, arguments: dict[str, Any]) -> Any:
     try:
         return model(**values)
     except ValidationError as exc:
-        raise IncidentRequestError(describe_validation_error(exc)) from None
+        raise IncidentRequestError(describe_validation_error(exc, model)) from None
 
 
 def network_request(**arguments: Any) -> NetworkIncidentRequest:

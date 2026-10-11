@@ -12,10 +12,23 @@ from typing import Any
 
 from graphql import GraphQLError
 
+from unifi_api.graphql.permissions import ScopeDenied
 from unifi_api.services.access_event_key import InvalidAccessEventCursor, InvalidAccessEventTopic
 from unifi_api.services.controllers import ControllerNotFound
-from unifi_api.services.incident_evidence import IncidentRequestError
+from unifi_api.services.incident_evidence import ControllerCapabilityError, IncidentRequestError
 from unifi_api.services.pagination import InvalidCursor
+
+# Client errors a resolver raises on purpose; their messages are fixed or
+# already sanitized, so they are logged without traceback or query source.
+EXPECTED_ERRORS = (
+    ControllerNotFound,
+    ControllerCapabilityError,
+    IncidentRequestError,
+    InvalidAccessEventCursor,
+    InvalidAccessEventTopic,
+    InvalidCursor,
+    ScopeDenied,
+)
 
 # graphql-core quotes a rejected argument or variable value in these messages.
 _VALUE_ECHO = re.compile(
@@ -42,25 +55,25 @@ def safe_message(error: GraphQLError) -> str:
     return "An argument has an invalid value."
 
 
+def is_expected_error(error: GraphQLError) -> bool:
+    """A request error, or a client error a resolver raised on purpose."""
+    return is_request_error(error) or isinstance(error.original_error, EXPECTED_ERRORS)
+
+
 def _classify(error: GraphQLError) -> str:
+    # By exception type only: messages can carry rejected input.
     orig = error.original_error
     if isinstance(orig, ControllerNotFound):
         return "NOT_FOUND"
+    if isinstance(orig, ControllerCapabilityError):
+        return "CAPABILITY_MISMATCH"
     if isinstance(orig, (InvalidAccessEventCursor, InvalidAccessEventTopic, InvalidCursor, IncidentRequestError)):
         return "BAD_REQUEST"
+    if isinstance(orig, ScopeDenied):
+        return "FORBIDDEN"
     if isinstance(orig, PermissionError):
-        msg = str(orig)
-        if msg.startswith("UNAUTHENTICATED:"):
-            return "UNAUTHENTICATED"
-        if msg.startswith("FORBIDDEN:"):
-            return "FORBIDDEN"
-        return "FORBIDDEN"
-    # Strawberry permission denials surface as either a bare GraphQLError with
-    # original_error=None, or a StrawberryGraphQLError wrapped as the original.
-    # In both cases the message mirrors the permission class's `message` attr,
-    # so we classify as FORBIDDEN whenever the message mentions "scope".
-    if "scope" in error.message.lower():
-        return "FORBIDDEN"
+        # Raised by server code with a fixed prefix, never from caller input.
+        return "UNAUTHENTICATED" if str(orig).startswith("UNAUTHENTICATED:") else "FORBIDDEN"
     if is_request_error(error):
         return "BAD_REQUEST"
     return "INTERNAL"

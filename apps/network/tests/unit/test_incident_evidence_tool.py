@@ -110,6 +110,19 @@ async def test_source_failures_stay_inside_a_successful_response(tool):
         ({**WINDOW, "device_macs": ["fixture-ap-1"]}, "device_macs"),
         ({**WINDOW, "max_events": 0}, "max_events"),
         ({**WINDOW, "mappings": [{"entity": "fixture-ap-1"}]}, "mappings"),
+        (
+            {
+                **WINDOW,
+                "mappings": [
+                    {
+                        "entity": {"kind": "network_device", "id_kind": "mac", "id": DEVICE, "fixture-ap-1": "x"},
+                        "target": {"kind": "camera", "id_kind": "protect_camera_id", "id": "cam-fixture-000a"},
+                        "source": "operator_input",
+                    }
+                ],
+            },
+            "mappings.0.entity: Extra inputs are not permitted",
+        ),
     ],
 )
 async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool, arguments, message):

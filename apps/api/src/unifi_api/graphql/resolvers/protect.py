@@ -79,7 +79,7 @@ from unifi_api.graphql.types.protect.system import (
     ViewerList,
 )
 from unifi_api.services.controllers import get_controller
-from unifi_api.services.incident_evidence import collect_protect_evidence, protect_request
+from unifi_api.services.incident_evidence import collect_protect_evidence, protect_request, require_product
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -1001,7 +1001,8 @@ class ProtectQuery:
             mappings=mappings,
         )
         async with ctx.sessionmaker() as session:
-            await get_controller(session, controller)  # NOT_FOUND before collecting, from the database only
+            # From the database only, before collecting: NOT_FOUND, then CAPABILITY_MISMATCH (REST: 404, 409).
+            require_product(await get_controller(session, controller), "protect")
 
             async def acquire() -> Any:
                 return await ctx.manager_factory.get_event_reader(session, controller, "protect")
