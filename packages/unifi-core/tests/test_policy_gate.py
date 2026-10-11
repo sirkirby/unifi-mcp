@@ -148,3 +148,77 @@ def test_reporting_is_capped_with_a_summary_line(monkeypatch, caplog):
     assert _run("protect", PROTECT_GATES, caplog) == names
     assert caplog.text.count("Unrecognized env var") == 20
     assert "3 more unrecognized UNIFI_POLICY_* variables not listed" in caplog.text
+
+
+def _deprecation_messages(caplog, server_prefix="network"):
+    from unifi_core.policy_gate import check_deprecated_env_vars
+
+    with caplog.at_level(logging.WARNING, logger="unifi_core.policy_gate"):
+        check_deprecated_env_vars(server_prefix, LOGGER)
+    return [r.getMessage() for r in caplog.records if "UNIFI_AUTO_CONFIRM" in r.getMessage()]
+
+
+@pytest.mark.parametrize("value", ["false", "0", "no", "off", "FALSE", "garbage"])
+def test_auto_confirm_without_bypass_says_it_has_no_effect(monkeypatch, caplog, value):
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", value)
+
+    (message,) = _deprecation_messages(caplog)
+
+    assert "no effect" in message
+    assert "removed" in message
+    assert "bypass" in message  # only to say the value does not enable it
+    assert "Use UNIFI_TOOL_PERMISSION_MODE=bypass" not in message
+
+
+@pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE"])
+@pytest.mark.parametrize("server", ["network", "protect", "access"])
+def test_auto_confirm_truthy_keeps_bypass_and_names_product_scoped_mode(monkeypatch, caplog, value, server):
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", value)
+
+    (message,) = _deprecation_messages(caplog, server)
+
+    assert "UNIFI_TOOL_PERMISSION_MODE=bypass" in message
+    assert f"UNIFI_{server.upper()}_TOOL_PERMISSION_MODE=bypass" in message
+    assert "no effect" not in message
+
+
+def test_auto_confirm_unset_or_blank_logs_nothing(monkeypatch, caplog):
+    monkeypatch.delenv("UNIFI_AUTO_CONFIRM", raising=False)
+    assert _deprecation_messages(caplog) == []
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", "  ")
+    assert _deprecation_messages(caplog) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "mode"),
+    [("true", "bypass"), ("false", "confirm"), ("garbage", "confirm")],
+)
+def test_auto_confirm_behaviour_is_unchanged(monkeypatch, value, mode):
+    from unifi_core.policy_gate import resolve_permission_mode
+
+    for key in ("UNIFI_TOOL_PERMISSION_MODE", "UNIFI_NETWORK_TOOL_PERMISSION_MODE"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", value)
+
+    assert resolve_permission_mode("network") == mode
+
+
+def test_resolve_truthy_auto_confirm_warning_names_product_scoped_mode(monkeypatch, caplog):
+    from unifi_core.policy_gate import resolve_permission_mode
+
+    for key in ("UNIFI_TOOL_PERMISSION_MODE", "UNIFI_PROTECT_TOOL_PERMISSION_MODE"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", "true")
+
+    with caplog.at_level(logging.WARNING, logger="unifi_core.policy_gate"):
+        assert resolve_permission_mode("protect") == "bypass"
+
+    assert any("UNIFI_PROTECT_TOOL_PERMISSION_MODE=bypass" in r.getMessage() for r in caplog.records)
+
+
+def test_auto_confirm_value_is_never_logged(monkeypatch, caplog):
+    monkeypatch.setenv("UNIFI_AUTO_CONFIRM", "distinctive-marker-value")
+
+    (message,) = _deprecation_messages(caplog)
+
+    assert "distinctive-marker-value" not in message
