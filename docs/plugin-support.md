@@ -36,9 +36,14 @@ Contributors: the version, pin and release rules are in
 
 Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
 that takes precedence over the bundle. After every plugin upgrade, re-run setup
-from the newly installed plugin before restarting Codex.** Setup records the pin
-in a comment in `config.toml` and prints the package version on success. Preserve
-the saved environment with this non-secret command:
+from the newly installed plugin before restarting Codex.** Setup pins the
+package in the server entry's `args` and prints the package version on success.
+It edits only that server's tables in `config.toml`, so the file's comments and
+other servers stay as written; `codex mcp add` and `codex mcp remove` rewrite the
+file and drop the comments inside every `[mcp_servers.*]` table. A pin may be a
+PEP 440 development or local version, such as `0.37.1.dev83+g<sha>`, when a
+candidate is tested before release. Preserve the saved environment with this
+non-secret command:
 
 ```bash
 bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
@@ -56,10 +61,32 @@ credential settings unset until setup supplies them. Published servers still
 refuse startup until a controller host is configured; run setup before expecting
 an MCP handshake. Optional `env_vars` forwarding carries
 registration and safety controls from the launcher; application defaults apply
-otherwise. Claude continues using `.mcp.json` and its existing interpolation.
-Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
+otherwise. Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
 `[mcp_servers]` entry requires its own transport rather than merging the bundle's
 command. Plugin-scoped settings can control tool policy, not supply setup env.
+
+Claude Code reads the bundle's `.mcp.json`, which maps each server variable to a
+plugin option (`${user_config.KEY}`). Claude Code prompts for these options when
+the plugin is enabled, and setup saves them with `claude plugin configure`.
+- **Where they live:** non-secret options in user `settings.json`; a raw password
+  or API key in the system keychain.
+- **What they cover:** connection settings, password and API-key providers, the
+  server-level create, update and delete gates, permission mode and
+  registration mode. The gates default to off, permission mode to `confirm`
+  and registration to `lazy`. The deprecated auto-confirm switch has no option
+  and is never exported; use the permission mode.
+- **Dropped for Claude Code:** per-category policy overrides; setup refuses them.
+  Allow the action server-wide and rely on confirm previews, or keep it off.
+- **Upgrades:** options survive plugin upgrades.
+- **Earlier plugin versions:** they wrote the project's
+  `.claude/settings.local.json`, which this version no longer reads. A
+  session-start notice names the leftover variables, and
+  `set-env.sh --target claude --migrate` moves this plugin's settings into its
+  options and atomically removes only its keys from the project file. Shared
+  `UNIFI_*` keys are kept unless every possible consumer is proven migrated.
+  Setup currently verifies only this plugin's options, so it keeps shared keys
+  and names them with the reason: other consumers have not been verified as
+  migrated. Values are omitted.
 
 The `cross-product` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)), but their
@@ -110,6 +137,9 @@ No minimum client version has been established for any client.
 - A reachable UniFi controller for the product, with the credentials described
   in each plugin's setup skill (`unifi-network-setup`, `unifi-protect-setup`,
   `unifi-access-setup`).
+- Claude Code: setup saves the plugin's options with `claude plugin configure`,
+  so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
+  (Git Bash on Windows).
 - Codex and OpenClaw: the setup skill registers the server with the client's
   own MCP command (`codex mcp add`, `openclaw mcp set`), so that client's CLI
   must be on `PATH`.
