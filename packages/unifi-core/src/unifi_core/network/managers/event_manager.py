@@ -26,7 +26,7 @@ from unifi_core.exceptions import (
 )
 from unifi_core.mac import mac_equal
 from unifi_core.network.managers.connection_manager import ConnectionManager, response_status
-from unifi_core.request_budget import RequestBudgetSpent
+from unifi_core.request_budget import RequestBudgetSpent, create_uncharged_task
 from unifi_core.source_page import SourcePage
 from unifi_core.support_bundle import ErrorCategory, classify_error
 
@@ -358,7 +358,8 @@ class EventManager:
             return
         self._stopping = False
         self._subscribe(self._cm.controller)
-        self._ws_task = asyncio.create_task(self._run_websocket(), name="network-event-websocket")
+        # Uncharged: a websocket started while a bounded read runs must never draw on its budget.
+        self._ws_task = create_uncharged_task(self._run_websocket(), name="network-event-websocket")
         self._ws_task.add_done_callback(self._on_task_done)
         logger.info("[network-event-mgr] websocket listener started")
 

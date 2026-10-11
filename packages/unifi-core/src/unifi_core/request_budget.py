@@ -18,21 +18,35 @@ charge first, which may refuse the attempt by raising
   retries are charged once each.
 
 With no charge installed every hook is a no-op, so ordinary tool calls are
-unaffected.
+unaffected. A charge applies only in the task that installed it: a task
+started during a read (a bootstrap refresh, a websocket, an SDK's own
+helper) inherits the context but is never charged or refused. Persistent
+background tasks are also started with :func:`create_uncharged_task`, which
+clears the charge outright.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+import asyncio
+import contextvars
+from collections.abc import Callable, Coroutine, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any, TypeVar
 
 import aiohttp
 
-_charge: ContextVar[Callable[[], None] | None] = ContextVar("unifi_request_charge", default=None)
+# The charge, and the task that installed it.
+_charge: ContextVar[tuple[Callable[[], None], asyncio.Task[Any] | None] | None] = ContextVar(
+    "unifi_request_charge", default=None
+)
 # Attempts already charged by their caller (ConnectionManager.request), which
-# the session middleware must not charge again.
-_prepaid: ContextVar[list[int] | None] = ContextVar("unifi_request_prepaid", default=None)
+# the session middleware must not charge again, and the task they belong to.
+_prepaid: ContextVar[tuple[list[int], asyncio.Task[Any] | None] | None] = ContextVar(
+    "unifi_request_prepaid", default=None
+)
+
+T = TypeVar("T")
 
 # Login endpoints (UniFi OS and standalone): sessions are established, not charged.
 LOGIN_PATHS = ("/api/auth/login", "/api/login")
@@ -45,28 +59,48 @@ class RequestBudgetSpent(Exception):
 @contextmanager
 def charging_requests(charge: Callable[[], None]) -> Iterator[None]:
     """Charge each request attempt made inside the block (in this task) to ``charge``."""
-    token = _charge.set(charge)
+    token = _charge.set((charge, _current_task()))
     try:
         yield
     finally:
         _charge.reset(token)
 
 
+def _current_task() -> asyncio.Task[Any] | None:
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
 def charge_request() -> None:
-    """Charge one request attempt, or refuse it; a no-op outside a bounded read."""
-    charge = _charge.get()
-    if charge is not None:
-        charge()
+    """Charge one request attempt, or refuse it; a no-op outside a bounded read's own task."""
+    installed = _charge.get()
+    if installed is not None and installed[1] is _current_task():
+        installed[0]()
 
 
 @contextmanager
 def prepaid_attempt() -> Iterator[None]:
     """The next request sent inside the block was already charged by its caller."""
-    token = _prepaid.set([1])
+    token = _prepaid.set(([1], _current_task()))
     try:
         yield
     finally:
         _prepaid.reset(token)
+
+
+def uncharged_context() -> contextvars.Context:
+    """A copy of the current context with no request charge and nothing prepaid."""
+    context = contextvars.copy_context()
+    context.run(_charge.set, None)
+    context.run(_prepaid.set, None)
+    return context
+
+
+def create_uncharged_task(coro: Coroutine[Any, Any, T], *, name: str | None = None) -> asyncio.Task[T]:
+    """Start a persistent background task that no bounded read can charge or refuse."""
+    return asyncio.get_running_loop().create_task(coro, name=name, context=uncharged_context())
 
 
 async def charged_request_middleware(
@@ -83,8 +117,8 @@ async def charged_session_middleware(
     """Session-wide aiohttp middleware: charge each non-login attempt not already prepaid."""
     if not request.url.path.endswith(LOGIN_PATHS):
         prepaid = _prepaid.get()
-        if prepaid and prepaid[0] > 0:
-            prepaid[0] -= 1
+        if prepaid is not None and prepaid[1] is _current_task() and prepaid[0][0] > 0:
+            prepaid[0][0] -= 1
         else:
             charge_request()
     return await handler(request)

@@ -18,19 +18,27 @@ from unifi_core.support_bundle import ErrorCategory, classify_error
 class ControllerConnectionFailed(ConnectionError):
     """Connecting to the controller failed; ``status`` is the HTTP status, when known."""
 
+    #: Normalized failure category, safe to log.
+    category = "connection"
     status: int | None = None
 
 
 class ControllerAuthFailed(ControllerConnectionFailed, UniFiAuthError):
     """The controller rejected the credentials."""
 
+    category = "authentication"
+
 
 class ControllerPermissionDenied(ControllerConnectionFailed, UniFiPermissionError):
     """The credentials lack permission for what the connection needs."""
 
+    category = "permission"
+
 
 class ControllerConnectTimeout(ControllerConnectionFailed, TimeoutError):
     """Connecting to the controller timed out."""
+
+    category = "timeout"
 
 
 def _valid(status: object) -> int | None:

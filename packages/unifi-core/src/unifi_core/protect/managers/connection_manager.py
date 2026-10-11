@@ -22,7 +22,7 @@ from unifi_core.connection_failure import ControllerConnectionFailed, connection
 from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
-from unifi_core.request_budget import RequestBudgetSpent, charged_session_middleware
+from unifi_core.request_budget import RequestBudgetSpent, charged_session_middleware, create_uncharged_task
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
     ConnectivityProbe,
@@ -174,11 +174,14 @@ class ProtectConnectionManager:
             self._initialization_failure = connection_failure(
                 "Connecting to UniFi Protect failed.", exc, status=nvr_status(exc)
             )
+            failure = self._initialization_failure
             logger.error(
-                "[protect-cm] Failed to connect to UniFi Protect at %s:%s (%s)",
+                "[protect-cm] Failed to connect to UniFi Protect at %s:%s (%s; category=%s; HTTP %s)",
                 self.host,
                 self.port,
                 type(exc).__name__,
+                failure.category,
+                failure.status if failure.status is not None else "unknown",
             )
             self._initialized = False
             return False
@@ -199,7 +202,8 @@ class ProtectConnectionManager:
     def _start_bootstrap_refresh(self) -> None:
         if self._bootstrap_refresh_seconds <= 0 or self._refresh_task is not None:
             return
-        self._refresh_task = asyncio.get_running_loop().create_task(self._refresh_bootstrap_forever())
+        # Uncharged: a bounded read that initialized this connection must not throttle its refresh.
+        self._refresh_task = create_uncharged_task(self._refresh_bootstrap_forever(), name="protect-bootstrap-refresh")
 
     async def refresh_bootstrap(self) -> bool:
         """Fetch the bootstrap again. Returns ``True`` on success.
