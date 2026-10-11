@@ -26,6 +26,7 @@ from unifi_core.exceptions import (
 )
 from unifi_core.mac import mac_equal
 from unifi_core.network.managers.connection_manager import ConnectionManager, response_status
+from unifi_core.request_budget import RequestBudgetSpent
 from unifi_core.source_page import SourcePage
 from unifi_core.support_bundle import ErrorCategory, classify_error
 
@@ -654,7 +655,8 @@ class EventManager:
             self._v2_probe_error = None
             self._v2_probe_failures = 0
             return True
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, RequestBudgetSpent):
+            # A refused probe says nothing about the controller's API version.
             raise
         except Exception as probe_error:
             # Log why, not just that: a legacy fallback that modern controllers
@@ -875,6 +877,70 @@ class EventManager:
         except Exception as e:
             logger.error("Error getting events (legacy): %s", _describe_failure(e))
             raise self._legacy_failure("/stat/event", e) from None
+
+    async def read_events_page(self, *, within: int, limit: int, offset: int = 0) -> SourcePage:
+        """Exactly one request for one page of the event log, for bounded evidence.
+
+        Unlike :meth:`get_events_page`, which loops over pages and slices them,
+        this sends one request and returns every row it answered with, so the
+        rows a caller counts are the rows fetched. On the v2 path ``offset``
+        must be a multiple of ``limit`` (at most 100), because the controller
+        pages by number. Choosing the API version may first send the probe,
+        which is a request of its own.
+        """
+        offset = max(offset, 0)
+        if limit <= 0:
+            return SourcePage(rows=[], offset=offset, cap=0)
+        use_v2 = await self._ensure_api_version()
+        endpoint = "/system-log/all" if use_v2 else "/stat/event"
+        if use_v2 and (limit > _V2_PAGE_CAP or offset % limit):
+            raise ValueError("v2 event pages need a limit of at most 100 and an offset that is a multiple of it")
+        try:
+            if use_v2:
+                now_ms = int(time.time() * 1000)
+                from_ms = now_ms - (within * 3600 * 1000)
+                payload: Dict[str, Any] = {
+                    "timestampFrom": from_ms,
+                    "timestampTo": now_ms,
+                    "severities": _DEFAULT_SEVERITIES,
+                    "categories": _DEFAULT_CATEGORIES,
+                    "type": "GENERAL",
+                    "pageNumber": offset // limit,
+                    "pageSize": limit,
+                    "searchText": "",
+                }
+                response = await self._connection.request(ApiRequestV2(method="post", path=endpoint, data=payload))
+                page = _v2_page(response, endpoint)
+                return SourcePage(
+                    rows=page.rows,
+                    has_more=False if len(page.rows) < limit and page.total_elements is None else None,
+                    total_reported=page.total_elements,
+                    offset=offset,
+                    cap=limit,
+                    api_path="v2",
+                    submitted_window_ms=(from_ms, now_ms),
+                )
+            sent_limit = min(limit, _LEGACY_EVENTS_CAP)
+            payload = {"within": within, "_limit": sent_limit, "_start": offset}
+            response = await self._connection.request(ApiRequest(method="post", path=endpoint, data=payload))
+            rows = _legacy_rows(response, endpoint)
+            return SourcePage(
+                rows=rows,
+                has_more=False if len(rows) < sent_limit else None,
+                offset=offset,
+                cap=sent_limit,
+                api_path="legacy",
+            )
+        except RequestBudgetSpent:
+            raise
+        except UniFiMalformedResponseError:
+            logger.error("Error reading an event page: malformed response")
+            raise
+        except Exception as e:
+            logger.error("Error reading an event page: %s", _describe_failure(e))
+            if use_v2:
+                raise safe_request_error(endpoint, e) from None
+            raise self._legacy_failure(endpoint, e) from None
 
     async def get_alarms(
         self,

@@ -26,6 +26,7 @@ from unifi_core.auth import AuthenticationStatus, UniFiAuth
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
 from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
+from unifi_core.request_budget import charge_request
 from unifi_core.support_bundle import (
     ConnectivityProbe,
     SafeConnectionAttempt,
@@ -1274,6 +1275,8 @@ class ConnectionManager:
         """Make a request to the controller API, handling raw responses."""
         if not await self.ensure_connected() or not self.controller:
             raise self._not_connected_error()
+        # A bounded read charges (or refuses) each attempt before it is sent.
+        charge_request()
 
         # Apply override if we have better detection (FR-003: use cached detection)
         original_controller = self.controller
@@ -1327,6 +1330,7 @@ class ConnectionManager:
                     raise ConnectionError("Re-authentication failed, controller not available.")
                 logger.info("Re-authentication successful, retrying original request...")
                 request_method = self.controller.connectivity._request if return_raw else self.controller.request
+                charge_request()
                 try:
                     start_ts = _time.perf_counter()
                     retry_response = await request_method(api_request)

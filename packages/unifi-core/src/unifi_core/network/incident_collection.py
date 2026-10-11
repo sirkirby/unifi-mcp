@@ -1,7 +1,7 @@
 """Bounded, read-only Network incident evidence collection.
 
 Reads the Network event log for one requested window through
-``EventManager.get_events_page`` only, a page at a time within the
+``EventManager.read_events_page`` only, one request per page within the
 request's budgets, and returns a validated evidence set with one
 ``network.events`` source.
 
@@ -16,11 +16,18 @@ counted as malformed.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
-from unifi_core.incident_collection import BUDGET_EXHAUSTED, BudgetMeter, SourceRead, read_source_pages, utc_now
+from unifi_core.incident_collection import (
+    BUDGET_EXHAUSTED,
+    BudgetMeter,
+    SourceRead,
+    acquire_once,
+    read_source_pages,
+    utc_now,
+)
 from unifi_core.incident_evidence import (
     IdKind,
     IncidentEvidence,
@@ -45,19 +52,11 @@ EVENTS_PAGE_SIZE = 100
 _LOOKBACK_MARGIN = timedelta(minutes=1)
 
 #: The only manager methods the collector calls.
-READ_METHODS = frozenset({"get_events_page"})
+READ_METHODS = frozenset({"read_events_page"})
 
 
 class NetworkEventPages(Protocol):
-    async def get_events_page(
-        self,
-        within: int = 24,
-        limit: int = 100,
-        start: int = 0,
-        event_type: str | None = None,
-        categories: list[str] | None = None,
-        severities: list[str] | None = None,
-    ) -> SourcePage: ...
+    async def read_events_page(self, *, within: int, limit: int, offset: int = 0) -> SourcePage: ...
 
 
 def lookback_hours(window_start: datetime, planned_at: datetime, elapsed_ms: int) -> int:
@@ -126,7 +125,7 @@ def _events_source(
 
 
 async def collect_network_incident_evidence(
-    events: NetworkEventPages,
+    events: NetworkEventPages | Callable[[], Awaitable[NetworkEventPages]],
     request: NetworkIncidentRequest,
     *,
     site: str | None = None,
@@ -136,10 +135,11 @@ async def collect_network_incident_evidence(
     """Collect bounded Network event evidence for ``request``'s window.
 
     ``events`` is the Network ``EventManager`` (or anything with its
-    ``get_events_page``); no other method is called. Source failures,
-    budget exhaustion and truncation are reported in the evidence, never
-    raised.
+    ``read_events_page``), or an awaitable factory for one, acquired inside
+    the first read; no other method is called. Source failures, budget
+    exhaustion and truncation are reported in the evidence, never raised.
     """
+    get_events = acquire_once(events, "read_events_page")
     meter = BudgetMeter(request.limits, clock=clock)
     planned_at = now()
     within = lookback_hours(parse_utc(request.window.start), planned_at, request.max_elapsed_ms)
@@ -147,9 +147,10 @@ async def collect_network_incident_evidence(
     if not request.window_exhausted:
 
         async def read_page(offset: int, limit: int) -> SourcePage:
-            return await events.get_events_page(within=within, limit=limit, start=offset)
+            return await (await get_events()).read_events_page(within=within, limit=limit, offset=offset)
 
-        read = await read_source_pages(read_page, meter, page_size=EVENTS_PAGE_SIZE, now=now)
+        # v2 pages by number, so every offset stays a whole number of pages.
+        read = await read_source_pages(read_page, meter, page_size=EVENTS_PAGE_SIZE, aligned=True, now=now)
     meter.stop()
     source = _events_source(read, request, within=within, site=site, now=planned_at)
     return assemble_incident_evidence(

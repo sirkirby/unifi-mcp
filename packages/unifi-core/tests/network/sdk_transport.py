@@ -36,3 +36,30 @@ def sdk_event_manager(*bodies: Any, v2: bool = True) -> EventManager:
     manager._use_v2 = v2
     manager.sent_requests = sent  # type: ignore[attr-defined]
     return manager
+
+
+def paging_event_manager(population: Any, *, v2: bool | None = True) -> EventManager:
+    """A v2 log that answers each request by its ``pageNumber``/``pageSize``.
+
+    ``population`` is the row list, or a function of the 0-based index of the
+    data request returning the rows at that moment (to move events between
+    reads). The API-version probe (``v2=None``) is answered and recorded too.
+    """
+    manager = sdk_event_manager({"data": []})
+    manager._use_v2 = v2
+    sent: list[Any] = manager.sent_requests  # type: ignore[attr-defined]
+    data_requests = 0
+
+    async def transport(api_request: Any) -> Any:
+        nonlocal data_requests
+        sent.append(api_request)
+        if api_request.path == "/system-log/count":
+            return api_request.decode(json.dumps({"count": 0}).encode())
+        rows = population(data_requests) if callable(population) else population
+        data_requests += 1
+        size, number = api_request.data["pageSize"], api_request.data["pageNumber"]
+        page = rows[number * size : (number + 1) * size]
+        return api_request.decode(json.dumps({"data": page, "total_element_count": len(rows)}).encode())
+
+    manager._connection.controller.request = transport
+    return manager

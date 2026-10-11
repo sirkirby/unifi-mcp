@@ -10,12 +10,14 @@ Nothing here performs controller I/O: collectors pass page readers bound to
 manager read methods. Budgets (see ``docs/incident-evidence.md``):
 
 - ``window``: a requested window longer than ``window_seconds`` is not read.
-- ``events``: every row a source returns counts, including rows outside the
+- ``events``: every row a request returns counts, including rows outside the
   window or later removed by an exact-identifier filter. A read never asks
   for more rows than remain.
-- ``calls``: one manager page read is one call.
-- ``elapsed``: wall time across reads; a read still running when the budget
-  runs out is cancelled.
+- ``calls``: every HTTP request a read sends, including the API-version
+  probe and retries (see ``unifi_core.request_budget``); a request the
+  budget cannot pay for is refused before it is sent.
+- ``elapsed``: wall time across reads, including acquiring the manager; a
+  read still running when the budget runs out is cancelled.
 
 A budget that stops collection is reported exhausted, the source it stopped
 is ``partial`` (or ``not_attempted`` if it returned nothing), and every
@@ -30,7 +32,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -53,6 +55,7 @@ from unifi_core.incident_evidence import (
     failure_from_exception,
     validate_incident_evidence,
 )
+from unifi_core.request_budget import RequestBudgetSpent, charging_requests
 from unifi_core.source_page import SourcePage
 
 MAX_WINDOW_SECONDS = 30 * 24 * 3600
@@ -203,6 +206,28 @@ class BudgetMeter:
     def exhaust(self, kind: BudgetKind) -> None:
         self._exhausted.add(kind)
 
+    def read_charge(self) -> Callable[[], None]:
+        """Charge one read: one call now, and one more for each request after its first.
+
+        A read is charged its first call even if it sends nothing (a fake
+        reader, or an acquisition that failed), so a read can never be free.
+        Later requests are refused with ``RequestBudgetSpent`` once the call
+        budget is spent.
+        """
+        self.calls += 1
+        attempts = 0
+
+        def charge() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return
+            if self.calls >= self.limits.calls:
+                raise RequestBudgetSpent("call budget spent")
+            self.calls += 1
+
+        return charge
+
     def stop(self) -> None:
         """Freeze elapsed usage at the end of reading."""
         if self._stopped_ms is None:
@@ -237,6 +262,38 @@ class BudgetMeter:
 PageReader = Callable[[int, int], Awaitable[SourcePage]]
 """``(offset, limit) -> SourcePage``: one manager page read."""
 
+T = TypeVar("T")
+
+
+def acquire_once(source: T | Callable[[], Awaitable[T]], read_method: str) -> Callable[[], Awaitable[T]]:
+    """A getter for a manager, or for one acquired on first use and then reused.
+
+    Adapters may pass how to acquire the manager instead of the manager, so
+    acquisition (connecting, logging in) happens inside the first read: it is
+    bounded by the elapsed budget, and a failure becomes that source's
+    classified failure. A failed acquisition is not retried.
+    """
+    if hasattr(source, read_method):
+
+        async def ready() -> T:
+            return source  # type: ignore[return-value]
+
+        return ready
+    acquire: Callable[[], Awaitable[T]] = source  # type: ignore[assignment]
+    outcome: list[Any] = []
+
+    async def acquired() -> T:
+        if not outcome:
+            try:
+                outcome.append(await acquire())
+            except Exception as exc:  # noqa: BLE001 - classified by the read that awaited it
+                outcome.append(exc)
+        if isinstance(outcome[0], Exception):
+            raise outcome[0]
+        return outcome[0]
+
+    return acquired
+
 
 @dataclass(frozen=True)
 class SourceRead:
@@ -268,6 +325,11 @@ def _source_ended(page: SourcePage, seen: int) -> bool:
     return page.total_reported is not None and not page.post_filtered and seen >= page.total_reported
 
 
+def _aligned_limit(offset: int, limit: int) -> int:
+    """The largest page size up to ``limit`` that ``offset`` is a whole number of pages of."""
+    return next(size for size in range(limit, 0, -1) if offset % size == 0)
+
+
 def _intersect(windows: list[tuple[int, int] | None]) -> tuple[int, int] | None:
     if not windows or any(window is None for window in windows):
         return None
@@ -277,22 +339,24 @@ def _intersect(windows: list[tuple[int, int] | None]) -> tuple[int, int] | None:
 def _merge_pages(pages: list[SourcePage], *, ended: bool) -> SourcePage:
     """One page describing consecutive reads of one source.
 
-    The queried window is the part every read covered. The end is claimed
-    only when the last read proved it and the source's population did not
-    visibly move between reads (a changed total or API path), because
-    offsets then no longer line up.
+    A single read keeps what its source proved. Across several offset reads
+    nothing proves the population held still: an event inserted or removed
+    between reads shifts every later offset, so a row can be skipped while
+    totals stay equal (and Protect reports none). Neither product offers a
+    snapshot or cursor, so a multi-read source never claims its end; its
+    truncation is ``unknown``. This is decided before any exact-identifier
+    filter, which could hide the duplicates that betray movement. The queried
+    window is the part every read covered.
     """
-    totals = {page.total_reported for page in pages}
-    paths = {page.api_path for page in pages}
-    stable = len(totals) == 1 and len(paths) == 1
     last = pages[-1]
-    if not stable:
-        has_more, total = None, None
+    if len(pages) > 1:
+        has_more, total = (True if last.has_more is True else None), None
     elif ended:
         has_more, total = False, last.total_reported
     else:
         has_more, total = last.has_more, last.total_reported
     caps = [page.cap for page in pages]
+    paths = {page.api_path for page in pages}
     return SourcePage(
         rows=[row for page in pages for row in page.rows],
         has_more=has_more,
@@ -311,13 +375,17 @@ async def read_source_pages(
     *,
     page_size: int,
     paged: bool = True,
+    aligned: bool = False,
     now: Callable[[], datetime] = utc_now,
 ) -> SourceRead:
-    """Read one source page by page while every budget allows another read.
+    """Read one source page by page while every budget allows another request.
 
-    Reading stops when the source proves its end (``has_more`` false, or its
-    remote total reached), when a read fails, or when a budget is spent.
-    ``paged=False`` reads a source that has no offset exactly once.
+    Each read is charged one call up front; any further request it sends
+    (an API-version probe, a retry) is charged as it is attempted and refused
+    once the call budget is spent. Reading stops when the source proves its
+    end, when a read fails, or when a budget is spent. ``paged=False`` reads a
+    source that has no offset exactly once; ``aligned`` keeps every offset a
+    whole number of pages, for sources that page by number.
     """
     started_at = now()
     pages: list[SourcePage] = []
@@ -329,12 +397,18 @@ async def read_source_pages(
             stopped = True
             break
         limit = min(page_size, meter.remaining_events())
-        meter.calls += 1
+        if aligned:
+            limit = _aligned_limit(offset, limit)
         requested += limit
         deadline = asyncio.timeout(meter.remaining_seconds())
         try:
-            async with deadline:
-                page = await read(offset, limit)
+            with charging_requests(meter.read_charge()):
+                async with deadline:
+                    page = await read(offset, limit)
+        except RequestBudgetSpent:
+            meter.exhaust(BudgetKind.CALLS)
+            stopped = True
+            break
         except TimeoutError as exc:
             if deadline.expired():
                 meter.exhaust(BudgetKind.ELAPSED)
@@ -345,6 +419,7 @@ async def read_source_pages(
         except Exception as exc:  # noqa: BLE001 - classified into evidence, never re-raised
             failure = failure_from_exception(exc)
             break
+        # Every row the request returned is charged, whatever the caller keeps.
         meter.events += len(page.rows)
         pages.append(page)
         seen = offset + len(page.rows)

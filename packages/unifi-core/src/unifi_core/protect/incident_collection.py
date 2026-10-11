@@ -11,11 +11,18 @@ NVR, and a camera the budget never reached is ``not_attempted``.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from unifi_core.incident_collection import BUDGET_EXHAUSTED, BudgetMeter, SourceRead, read_source_pages, utc_now
+from unifi_core.incident_collection import (
+    BUDGET_EXHAUSTED,
+    BudgetMeter,
+    SourceRead,
+    acquire_once,
+    read_source_pages,
+    utc_now,
+)
 from unifi_core.incident_evidence import (
     IncidentEvidence,
     SourceEvidence,
@@ -93,7 +100,7 @@ def _source(
 
 
 async def collect_protect_incident_evidence(
-    events: ProtectEventPages,
+    events: ProtectEventPages | Callable[[], Awaitable[ProtectEventPages]],
     request: ProtectIncidentRequest,
     *,
     clock: Callable[[], float] | None = None,
@@ -102,10 +109,12 @@ async def collect_protect_incident_evidence(
     """Collect bounded Protect event evidence for ``request``'s window.
 
     ``events`` is the Protect ``EventManager`` (or anything with its
-    ``list_events_raw_page``); no other method is called. Source failures,
+    ``list_events_raw_page``), or an awaitable factory for one, acquired
+    inside the first read; no other method is called. Source failures,
     budget exhaustion and truncation are reported in the evidence, never
     raised.
     """
+    get_events = acquire_once(events, "list_events_raw_page")
     meter = BudgetMeter(request.limits, clock=clock)
     planned_at = now()
     bounds = _millisecond_bounds(request)
@@ -121,7 +130,7 @@ async def collect_protect_incident_evidence(
             continue
 
         async def read_page(offset: int, limit: int, camera_id: str | None = camera_id) -> SourcePage:
-            return await events.list_events_raw_page(
+            return await (await get_events()).list_events_raw_page(
                 start=bounds[0], end=bounds[1], limit=limit, offset=offset, camera_id=camera_id
             )
 

@@ -106,14 +106,26 @@ async def test_cameras_are_read_as_separate_sources_with_exact_filters() -> None
 
 
 @pytest.mark.asyncio
-async def test_offsets_page_through_a_full_window_until_a_short_page() -> None:
+async def test_offsets_page_through_a_full_window_but_never_claim_its_end() -> None:
     start = int(parse_utc(REQUEST["start"].replace("Z", ".000000Z")).timestamp() * 1000)
     rows = [{"id": f"evt-{i}", "type": "motion", "camera": "cam-fixture-000a", "start": start + i} for i in range(130)]
     manager = sdk_protect_event_manager(rows[:100], rows[100:])
     evidence = await collect(manager)
     contract_json(evidence)
     assert [request["params"]["offset"] for request in manager.sent_requests] == [0, 100]
-    assert evidence.sources[0].outcome is SourceOutcome.COMPLETE
+    assert evidence.sources[0].outcome is SourceOutcome.PARTIAL
+    assert [r.value for r in evidence.sources[0].partial_reasons] == ["truncation_unknown"]
+
+
+@pytest.mark.asyncio
+async def test_an_event_lost_when_an_earlier_one_disappears_is_no_all_clear() -> None:
+    """Protect reports no totals: one row vanishing between reads shifts the next offset past an existing event."""
+    start = int(parse_utc("2026-08-08T12:00:00.000000Z").timestamp() * 1000)
+    rows = [{"id": f"p-{i}", "type": "motion", "camera": "cam-fixture-000a", "start": start + i} for i in range(130)]
+    evidence = await collect(sdk_protect_event_manager(rows[:100], rows[101:]), camera_ids=["cam-fixture-000a"])
+    contract_json(evidence)
+    assert "p-100" not in {record.provenance.source_record_id for record in evidence.records}
+    assert evidence.overall is OverallStatus.PARTIAL and evidence.coverage_complete is False
 
 
 @pytest.mark.asyncio

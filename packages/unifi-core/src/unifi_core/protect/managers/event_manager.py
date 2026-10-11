@@ -28,7 +28,9 @@ from unifi_core.exceptions import (
 )
 from unifi_core.protect.models.detection_search import from_controller as detection_search_from_controller
 from unifi_core.protect.models.events import smart_detection_from_controller
+from unifi_core.request_budget import RequestBudgetSpent, charged_request_middleware
 from unifi_core.source_page import SourcePage
+from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger(__name__)
 
@@ -835,8 +837,9 @@ class EventManager:
     ) -> SourcePage:
         """One bounded read of raw NVR event rows, for incident evidence.
 
-        Always a single GET to the private ``events`` endpoint with explicit
-        bounds, limit and offset, newest first. Unlike :meth:`list_events_page`
+        One GET to the private ``events`` endpoint with explicit bounds, limit
+        and offset, newest first. Every attempt uiprotect makes for it (status
+        retries, the retry after a re-login) passes the request-local charge. Unlike :meth:`list_events_page`
         it never uses the SDK's ``get_events``, which pages through every event
         after ``start`` when no type filter is given and drops event types it
         does not know. Rows are returned exactly as the NVR sent them, with no
@@ -859,7 +862,17 @@ class EventManager:
         if camera_id:
             params["cameras"] = [camera_id]
         try:
-            rows = await self._cm.client.api_request("events", method="get", params=params)
+            # Request-local: each attempt (uiprotect's status and reconnect retries
+            # included) is charged to a bounded read, and aiohttp's own idempotent
+            # retry is suppressed, so no attempt goes uncounted.
+            rows = await self._cm.client.api_request(
+                "events",
+                method="get",
+                params=params,
+                middlewares=(charged_request_middleware, no_retry_support_request),
+            )
+        except RequestBudgetSpent:
+            raise
         except Exception as exc:
             logger.error("[event-mgr] Raw events read failed: %s", type(exc).__name__)
             raise _safe_events_error(exc) from None
