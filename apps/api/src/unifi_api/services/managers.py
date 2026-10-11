@@ -30,6 +30,7 @@ from typing import Any, Callable, Coroutine
 from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from unifi_core.request_budget import create_uncharged_task
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
@@ -534,7 +535,8 @@ class ManagerFactory:
             instance = builder(cm)
         self._domain_cache[key] = instance
         if attr_name == "event_manager" and callable(getattr(instance, "start_listening", None)):
-            self._listener_tasks[id(instance)] = asyncio.create_task(
+            # Uncharged: a listener started while a bounded read runs must never draw on its budget.
+            self._listener_tasks[id(instance)] = create_uncharged_task(
                 self._start_listener(instance), name="api-event-listener"
             )
         return instance
