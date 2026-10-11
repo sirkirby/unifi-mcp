@@ -18,7 +18,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.mcp.codex.json",
   "interface": {
     "displayName": "UniFi Protect",
     "shortDescription": "Manage UniFi Protect cameras, events, recordings, and detections",

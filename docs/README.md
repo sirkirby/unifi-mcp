@@ -8,6 +8,7 @@ Complete documentation for the UniFi MCP ecosystem.
 
 - **[Main README](../README.md)** - Project overview and installation
 - **[Quick Start](../QUICKSTART.md)** - Get started in 5 minutes
+- **[Plugin Support Matrix](plugin-support.md)** - Plugin prerequisites, versions and client verification status
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI

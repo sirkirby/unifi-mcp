@@ -424,7 +424,7 @@ def test_support_plugin_launcher_includes_skill_and_matching_pins(product):
     assert arguments[-1] == f"unifi-{product}-mcp=={version}"
 
 
-@pytest.mark.parametrize("defect", ["missing_skill", "modified_skill", "version", "launcher"])
+@pytest.mark.parametrize("defect", ["missing_skill", "modified_skill", "version", "launcher", "codex_launcher"])
 def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
     import shutil
 
@@ -444,7 +444,7 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
         data["version"] = "999.0.0"
         path.write_text(json.dumps(data))
     else:
-        path = target / ".mcp.json"
+        path = target / (".mcp.codex.json" if defect == "codex_launcher" else ".mcp.json")
         data = json.loads(path.read_text())
         data["mcpServers"]["unifi-network"]["command"] = "arbitrary-command"
         path.write_text(json.dumps(data))
@@ -453,7 +453,7 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
 
 
 @pytest.mark.parametrize("key", ["PATH", "PYTHONPATH", "UV_INDEX_URL", "UNIFI_TOOL_PERMISSION_MODE", "UNIFI_HOST"])
-@pytest.mark.parametrize("manifest", [".mcp.json", ".claude-plugin/plugin.json", "both"])
+@pytest.mark.parametrize("manifest", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json", "both"])
 def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_path, key, manifest):
     import shutil
 
@@ -464,7 +464,7 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
     for filename in [".mcp.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
         path = target / filename
         data = json.loads(path.read_text())
-        data["mcpServers"]["unifi-network"]["env"][key] = "${ATTACKER_CONTROLLED:-evil}"
+        data["mcpServers"]["unifi-network"].setdefault("env", {})[key] = "${ATTACKER_CONTROLLED:-evil}"
         path.write_text(json.dumps(data))
     env = {"UNIFI_TOOL_PERMISSION_MODE": "confirm", "UNIFI_TOOL_REGISTRATION_MODE": "eager"}
     before = dict(env)
@@ -473,7 +473,7 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
     assert env == before
 
 
-@pytest.mark.parametrize("manifest", [".mcp.json", ".claude-plugin/plugin.json"])
+@pytest.mark.parametrize("manifest", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
 @pytest.mark.parametrize("defect", ["extra_server", "transport", "url", "cwd", "hooks"])
 def test_support_plugin_rejects_additional_host_behavior(tmp_path, manifest, defect):
     import shutil

@@ -17,7 +17,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.mcp.codex.json",
   "interface": {
     "displayName": "UniFi Access",
     "shortDescription": "Manage UniFi Access doors, credentials, visitors, and policies",

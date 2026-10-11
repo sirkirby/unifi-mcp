@@ -132,6 +132,8 @@ Repeat for Protect or Access if needed:
 
 Each plugin's setup command walks you through connecting to your controller and configuring permissions.
 
+Prerequisites, version boundaries and verification status for each client are in the [plugin support matrix](docs/plugin-support.md).
+
 ### Codex
 
 Register the UniFi MCP marketplace, then install the plugins from Codex's `/plugins` UI:
