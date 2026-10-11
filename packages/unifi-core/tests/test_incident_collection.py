@@ -67,7 +67,7 @@ class NetworkLog:
         self.report_total = report_total
         self.reads: list[tuple[int, int]] = []
 
-    async def read_events_page(self, *, within, limit, offset=0):
+    async def read_events_page(self, *, within, limit, offset=0, window_ms=None):
         start = offset
         self.reads.append((start, limit))
         rows = [
@@ -87,7 +87,7 @@ class NetworkLog:
             offset=start,
             cap=limit,
             api_path="v2",
-            submitted_window_ms=(_ms(NOW) - within * 3_600_000, _ms(NOW)),
+            submitted_window_ms=window_ms or (_ms(NOW) - within * 3_600_000, _ms(NOW)),
         )
 
 
@@ -312,10 +312,10 @@ async def test_a_failed_later_read_keeps_earlier_rows_as_a_partial_response() ->
     log = NetworkLog(250)
     original = log.read_events_page
 
-    async def flaky(*, within, limit, offset=0):
+    async def flaky(*, within, limit, offset=0, window_ms=None):
         if offset:
             raise TimeoutError("controller text that must not travel")
-        return await original(within=within, limit=limit, offset=offset)
+        return await original(within=within, limit=limit, offset=offset, window_ms=window_ms)
 
     log.read_events_page = flaky
     evidence = await collect_network_incident_evidence(log, NetworkIncidentRequest(**WINDOW), now=_fixed_now)

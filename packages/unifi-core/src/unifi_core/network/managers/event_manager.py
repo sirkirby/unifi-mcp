@@ -878,7 +878,14 @@ class EventManager:
             logger.error("Error getting events (legacy): %s", _describe_failure(e))
             raise self._legacy_failure("/stat/event", e) from None
 
-    async def read_events_page(self, *, within: int, limit: int, offset: int = 0) -> SourcePage:
+    async def read_events_page(
+        self,
+        *,
+        within: int,
+        limit: int,
+        offset: int = 0,
+        window_ms: tuple[int, int] | None = None,
+    ) -> SourcePage:
         """Exactly one request for one page of the event log, for bounded evidence.
 
         Unlike :meth:`get_events_page`, which loops over pages and slices them,
@@ -887,6 +894,11 @@ class EventManager:
         must be a multiple of ``limit`` (at most 100), because the controller
         pages by number. Choosing the API version may first send the probe,
         which is a request of its own.
+
+        ``window_ms`` gives the v2 path absolute ``timestampFrom``/``timestampTo``
+        bounds instead of a ``within``-hour lookback from now; the page records
+        exactly what was sent. The legacy path only takes a lookback, so it
+        always uses ``within``.
         """
         offset = max(offset, 0)
         if limit <= 0:
@@ -897,11 +909,14 @@ class EventManager:
             raise ValueError("v2 event pages need a limit of at most 100 and an offset that is a multiple of it")
         try:
             if use_v2:
-                now_ms = int(time.time() * 1000)
-                from_ms = now_ms - (within * 3600 * 1000)
+                if window_ms is not None:
+                    from_ms, to_ms = window_ms
+                else:
+                    to_ms = int(time.time() * 1000)
+                    from_ms = to_ms - (within * 3600 * 1000)
                 payload: Dict[str, Any] = {
                     "timestampFrom": from_ms,
-                    "timestampTo": now_ms,
+                    "timestampTo": to_ms,
                     "severities": _DEFAULT_SEVERITIES,
                     "categories": _DEFAULT_CATEGORIES,
                     "type": "GENERAL",
@@ -918,7 +933,7 @@ class EventManager:
                     offset=offset,
                     cap=limit,
                     api_path="v2",
-                    submitted_window_ms=(from_ms, now_ms),
+                    submitted_window_ms=(from_ms, to_ms),
                 )
             sent_limit = min(limit, _LEGACY_EVENTS_CAP)
             payload = {"within": within, "_limit": sent_limit, "_start": offset}
