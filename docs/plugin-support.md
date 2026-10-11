@@ -12,10 +12,29 @@ verified. For install steps, see the [agent install guide](agent-install.md).
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
 | `cross-product` | Not listed | Not listed | None (skills only) |
 
-Each listed plugin's version equals the exact PyPI package version it launches,
-for example plugin `0.37.0` runs `uvx unifi-network-mcp==0.37.0`. Release updates
-must keep manifests and both client MCP configuration pins together. Claude loads its bundled
-server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
+Each plugin has its own semantic version for everything it ships. For example,
+plugin `1.0.0` can launch `unifi-network-mcp==0.37.0`; the plugin version and
+server package pin are independent. The advertised plugins and unlisted
+cross-product bundle start at `1.0.0` with this scheme.
+
+A plugin release is a plugin version bump merged to `main`; there is no
+separate publish step, and server packages keep their own tagged releases. Each
+client reads the default branch unless you pinned a ref when adding the
+marketplace:
+
+- **Claude Code** installs a release when the plugin version changes and you
+  update. Auto-update is off for this marketplace, so run
+  `claude plugin marketplace update unifi-plugins`, then
+  `claude plugin update <plugin>@unifi-plugins`, then `/reload-plugins`.
+- **Codex** reinstalls only on a version change: run
+  `codex plugin marketplace upgrade`, then re-run setup with `--refresh` (below).
+- **OpenClaw** follows commits: run `openclaw plugins update <id>`.
+
+Contributors: the version, pin and release rules are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#plugin-changes) and the
+`monorepo-release-pipeline` skill (Procedure E).
+
+Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
 that takes precedence over the bundle. After every plugin upgrade, re-run setup
 from the newly installed plugin before restarting Codex.** Setup records the pin
 in a comment in `config.toml` and prints the package version on success. Preserve
@@ -56,8 +75,9 @@ Each cell is labelled:
 - `not tested`: expected from the packaging, but no real-client install evidence yet.
 
 The repository checks manifests, paths, version pins and skill metadata
-automatically (`tests/test_plugin_packaging.py`). Those checks do not count as
-`tested`.
+automatically (`tests/test_plugin_packaging.py`), and that every tool a plugin
+names exists in the server release it pins (`scripts/plugin_tool_refs.py`).
+Those checks do not count as `tested`.
 
 | | Claude Code | Codex | OpenClaw |
 |---|---|---|---|

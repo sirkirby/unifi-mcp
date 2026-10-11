@@ -4,13 +4,15 @@ description: >-
   Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by
   analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent
   sibling-tag contamination, batching independent release tags while preserving real dependency
-  edges, coordinating consolidated plugin-manifest writebacks, configuring
+  edges, releasing plugins (independent versions, client update paths, writebacks), configuring
   scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows
   for OIDC trusted publishing,
   coordinating cross-package version bumps in pyproject.toml, understanding app vs. library
   versioning and writeback behavior, validating releases post-tag, and verifying shared package
   architecture constraints (DI-only rule, scope gate, relay sync) before releasing shared packages.
-  Apply when cutting any release, bumping unifi-core, or debugging a versioning failure.
+  The single authoritative procedure for releasing anything in this repo, plugins included.
+  Apply when cutting any release, changing shipped plugin files, bumping unifi-core, or
+  debugging a versioning failure.
   CRITICAL: All PRs require pin-alignment CI gate before merge (automated, cannot be skipped).
 managed_by: myco
 user-invocable: true
@@ -99,7 +101,7 @@ can lag or overstate changes.
 | `packages/unifi-core/` only | Scope includes `core/v*` and affected downstream packages, including `api/v*`; Procedure F decides batch boundaries |
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
 | Multiple apps | One tag per changed app; put independent tags in the same release batch |
-| Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
+| Plugin-only changes (any shipped file) | Independent plugin manifest bump; no package tag (Procedure E) |
 | Worker (`apps/worker/`) | `worker/v*` |
 
 **Negative corollary (skip-unchanged rule):** Do NOT tag a package simply because an upstream dependency was bumped, if the package's own code did not change AND its existing `pyproject.toml` bounds already accommodate the new upstream version. Check the declared version range in `pyproject.toml` first — if the new upstream version already satisfies the existing bounds and the app code is unchanged, no new tag is required.
@@ -114,9 +116,9 @@ can lag or overstate changes.
 
 **Decision rule:** Default to Minimal. Escalate to Standard when a shared library change requires every dependent to ship a new wheel. Use Full when recovering from a release failure.
 
-### Plugin-only Release and Cache Invalidation
+### Plugin releases
 
-When only the plugin manifest changes with no code changes, a patch release must still be cut to invalidate the marketplace cache. Existing deployed users remain pinned to their cached version until a new tagged release appears.
+Plugins release by merge, not by tag. Follow Procedure E.
 
 ### Shared package rule
 
@@ -163,8 +165,9 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
+- Corresponding `.codex-plugin/plugin.json`, `.mcp.json`, and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
-- `apps/*/server.json`
+- `apps/*/server.json` (server package version)
 
 **Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access).
 
@@ -249,11 +252,93 @@ done
 
 ---
 
-## Procedure E: Manifest Bumper — args[2] vs args[0] Correction
+## Procedure E: Plugin Releases
 
-The manifest bumper workflow (`bump-plugin-versions.yml`) must target `args[2]` (the version pin value), not `args[0]` (the flag name). The bumper must atomically update version fields in ALL plugin manifest copies — `plugin.json`, `server.json`, `.mcp.json` — in a single commit. Verify after a release that all manifest files show the updated version string.
+A plugin release is a plugin version bump landing on `main`. There is no publish
+step: every client reads the default branch unless the user pins a ref. Python
+packages and the Worker still release only by tag.
 
----
+### Triggers
+
+- **Plugin-only release:** a PR that bumps the plugin version merges to `main`.
+- **Server release:** a Network, Protect or Access tag runs `bump-plugin-versions.yml`,
+  which moves the server pin and bumps the plugin in one writeback commit.
+
+### Clients
+
+| Client | Reads | Detects an update by | Users update with |
+|---|---|---|---|
+| Claude Code | Marketplace on the default branch unless added as `owner/repo#ref` | Manifest `version`; the cache is keyed by it | `claude plugin marketplace update unifi-plugins`, then `claude plugin update <plugin>@unifi-plugins` (or `/plugin` → Installed → Update now), then `/reload-plugins`. Auto-update is off for our marketplace. |
+| Codex | `.agents/plugins/marketplace.json` on remote HEAD unless added as `owner/repo@ref` | Manifest `version`: `codex plugin marketplace upgrade` re-clones on a new commit but reinstalls only on a version change | `codex plugin marketplace upgrade`, then setup with `--refresh` to re-pin the saved MCP entry |
+| OpenClaw | `git:owner/repo[@ref]` or our Claude-format marketplace; reads the `.claude-plugin`/`.codex-plugin` bundle and its `.mcp.json` | Commits, not `version` | `openclaw plugins update <id>` or `openclaw plugins update --all` |
+| Hermes Agent | Cannot load the current layout (needs a root `plugin.json`, `skills/` and `mcp.json`) | Commits | Not supported |
+
+Sources: [Claude Code host a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace.md),
+[loading](https://code.claude.com/docs/en/plugins/loading.md),
+[install](https://code.claude.com/docs/en/plugins/install.md),
+[marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md);
+[Codex plugins](https://developers.openai.com/plugins/build/plugins) and openai/codex
+`core-plugins/src/marketplace_upgrade.rs`, `loader.rs`;
+[OpenClaw install](https://docs.openclaw.ai/cli/plugins/install),
+[update](https://docs.openclaw.ai/cli/plugins/uninstall-and-update),
+[bundles](https://docs.openclaw.ai/plugins/bundles);
+Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
+
+### Rules
+
+- **One release, one merge.** Land every plugin change that makes up one release on
+  `main` together, never as a string of separate merges. Commit-tracking clients
+  (OpenClaw, Hermes) deliver every commit to their users.
+- **Never ahead of the server.** Land plugin content (skills, references, setup, MCP
+  config) that depends on a server feature only when, or after, that server version is
+  tagged and the pin moves; usually in or after the writeback.
+- **Enforcement.** `make check-plugin-versions` admits version bumps and pins;
+  `make check-plugin-tool-refs` fails when a shipped plugin file names a tool absent
+  from the release tag its product's plugin pins (cross-product: the product pins plus
+  the latest released relay). Both run in `make pre-commit` and in the generated-artifacts
+  CI job. Never weaken either check to pass a PR; fix the plugin text or move the pin.
+
+### Versioning
+
+- Each plugin has an independent SemVer describing everything it ships, separate from
+  the server pin. Set the same `version` in every existing Claude and Codex manifest
+  (at least one). The unlisted `cross-product` bundle uses its Claude manifest only.
+  Keep `version` out of marketplace entries.
+- Bump every affected plugin in the same PR whenever any file under `plugins/<name>/`
+  changes, including skills, references, setup scripts, MCP configs and docs. Version-only
+  bumps are allowed.
+- Patch: plugin-only fixes or docs, and patch server pin moves. Minor: new
+  skills/capabilities, and minor server pin moves. Major: breaking setup/configuration,
+  and major server pin moves. Before 1.0, breaking changes advance minor and additive
+  changes advance patch (SemVer 0.x).
+- Keep the server pin identical in `.mcp.json`, `.mcp.codex.json` and any inline Claude
+  `mcpServers`; it must name a release tag.
+- Writeback: `bump-plugin-versions.yml` runs
+  `python3 scripts/plugin_versions.py sync --releasing <package-tag>`. It moves both
+  client pins and any inline Claude pin, bumps the plugin by the size of the server move,
+  and regenerates `apps/<product>/server.json` with the **server** version. Retrying an
+  already-synced pin does not bump again. Core, Shared and Relay triggers only coalesce
+  outstanding product tags, otherwise they write nothing.
+- `make check-plugin-versions` runs `scripts/plugin_versions.py check --base origin/main`;
+  PR CI uses the PR base SHA. Fetch base history and tags first; a missing base fails.
+  Changed plugin versions must be valid SemVer, agree across manifests and exceed the
+  merge-base version. Pins must agree and name release tags; only the workflow's exact
+  `--releasing` tag may stand in for a tag not yet discovered locally.
+
+### Release checklist
+
+1. Bump the version by the rules above and write the user-visible changes in the PR
+   description; the squash commit carries them as the release notes.
+2. Run `make pre-commit` (both plugin checks included).
+3. Merge as one squash merge.
+4. Tell users how to update, per the client table: Claude Code users must update the
+   marketplace and plugin themselves; Codex users run `codex plugin marketplace upgrade`
+   then setup with `--refresh`; OpenClaw users run `openclaw plugins update`.
+5. From `main`, after the merge, run the real-client acceptance procedure in
+   `docs/plugin-acceptance.md`.
+6. Roll back by reverting the merge, then bumping the version again above the bad
+   release; the version guard requires the higher version and clients keyed by version
+   need the change to reinstall.
 
 ## Procedure F: Dependency-Aware Release Batching
 
@@ -303,7 +388,7 @@ failure.
 ### Consolidated plugin-manifest writebacks
 
 `bump-plugin-versions.yml` reads the current release tags and synchronizes all Network, Protect, and
-Access manifest copies. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
+Access server pins and independently bumps each changed plugin. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
 cancelled, and the last run writes one commit containing every app version visible at that point.
 Cancelled superseded runs are expected; the final run must succeed.
 
@@ -312,8 +397,9 @@ After a batch containing at least one namespace configured under
 
 1. Wait for the last `bump-plugin-versions.yml` run to complete.
 2. For a batch with Network, Protect, or Access tags, fetch `origin/main`, inspect the consolidated
-   writeback commit, and verify `apps/<app>/server.json` plus all three plugin manifest copies contain
-   each released app version.
+   writeback commit, and verify `apps/<app>/server.json` and both MCP configs contain
+   each released server version; existing plugin manifests must agree on the independently bumped
+   plugin version. Run `make check-plugin-versions` against the parent of the writeback commit.
 3. For a library-only trigger batch containing Core, Shared, or Relay, require the sync run to
    succeed but allow `No version changes to commit`. Inspect a commit only if the run found an
    outstanding app-version change.
@@ -468,7 +554,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **Missing tag causes broken downstream install.** If `unifi-core` code is merged but the tag is never pushed, downstream packages requesting that version fail to install. Check PyPI before debugging code.
 
-**Main-only merges are invisible to existing users.** Cache invalidation requires a tagged release. If a manifest change is urgent, cut a patch release immediately.
+**Plugin updates need a version change.** Claude Code and Codex install a merged plugin change only when its manifest version changes. Keep the bump in the same PR as the shipped-file change (Procedure E).
 
 **Malformed git tag — missing 'v' prefix.** A tag like `protect/0.4.2` (no 'v') is syntactically wrong and ignored by hatch-vcs. Validate before pushing: `git tag -l | grep -E 'network|protect|access|relay|core|shared|api' | sort -V` — every line must contain `/v`.
 
