@@ -1216,6 +1216,26 @@ class Fixtures:
             )
             self.check(load() == expected, "scanner exception fallback preserves all settings")
 
+            # Control characters (DEL included) in an existing env are written back escaped; other Unicode stays raw.
+            escaped_env = (
+                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "synthetic", "\\u007f" = "synthetic", '
+                '"k\\u0001\\u001f\\u00e9" = "v\\u007f\\t\\u00e9\\u4e2d\\"\\\\" }\n'
+            )
+            escaped_expected = tomllib.loads(escaped_env)
+            escaped_expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+            for eol in ("\n", "\r\n"):
+                path.write_bytes(escaped_env.replace("\n", eol).encode("utf-8"))
+                result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+                self.check(result.returncode == 0, "Codex refresh accepts escaped control characters")
+                self.check(load() == escaped_expected, "Codex preserves escaped control characters")
+                written = path.read_bytes()
+                self.check(
+                    not any(byte < 0x20 and byte not in b"\r\n" or byte == 0x7F for byte in written),
+                    "Codex output has no raw control characters",
+                )
+                self.check("\u00e9\u4e2d".encode() in written, "Codex output keeps non-ASCII text raw")
+
             # A layout setup cannot edit in place is rewritten by Codex, with a notice.
             path.write_text(
                 f'# kept\n[mcp_servers]\nunrelated.command = "keep"\n"{name}".command = "old"\n'

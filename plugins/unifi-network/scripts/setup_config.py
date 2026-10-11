@@ -142,10 +142,22 @@ def client(command, environment, data=None):
     return completed.stdout
 
 
+TOML_ESCAPES = {"\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f", "\r": "\\r", '"': '\\"', "\\": "\\\\"}
+
+
+def toml_string(value):
+    """Encode a TOML basic string: escape controls (including DEL), quotes and backslashes; keep other Unicode raw."""
+    return (
+        '"'
+        + re.sub(r'[\x00-\x1f\x7f"\\]', lambda match: TOML_ESCAPES.get(match[0]) or f"\\u{ord(match[0]):04X}", value)
+        + '"'
+    )
+
+
 def toml_value(value):
     # Only the server entry is serialized; client tooling preserves other tables.
     if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)
+        return toml_string(value)
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, (int, float)):
@@ -155,9 +167,7 @@ def toml_value(value):
     if isinstance(value, list):
         return "[" + ", ".join(toml_value(v) for v in value) + "]"
     if isinstance(value, dict):
-        return (
-            "{ " + ", ".join(json.dumps(k, ensure_ascii=False) + " = " + toml_value(v) for k, v in value.items()) + " }"
-        )
+        return "{ " + ", ".join(toml_string(k) + " = " + toml_value(v) for k, v in value.items()) + " }"
     refuse("Unsupported existing server value; use the client configuration editor and rerun.")
 
 
@@ -216,7 +226,7 @@ def toml_lines(text):
 def codex_entry_lines(name, entry):
     return (
         ["[mcp_servers." + json.dumps(name) + "]"]
-        + [json.dumps(key, ensure_ascii=False) + " = " + toml_value(value) for key, value in entry.items()]
+        + [toml_string(key) + " = " + toml_value(value) for key, value in entry.items()]
         + [""]
     )
 
