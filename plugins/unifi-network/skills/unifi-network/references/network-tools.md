@@ -602,30 +602,30 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 ### "Who's eating all the bandwidth?"
 1. `unifi_get_top_clients` → find the top bandwidth consumers
-2. `unifi_get_client_details(mac="...")` → identify the device
+2. `unifi_get_client_details(mac_address="...")` → identify the device
 3. `unifi_get_dpi_stats` → see what application categories are using bandwidth
 
 ### "Client can't connect to WiFi"
 1. `unifi_list_clients` → see if client appears at all
-2. `unifi_lookup_by_ip(ip="...")` → quick lookup if IP is known
+2. `unifi_lookup_by_ip(ip_address="...")` → quick lookup if IP is known
 3. `unifi_list_blocked_clients` → check if it's been blocked
 4. `unifi_list_wlans` → verify SSID is active
 5. `unifi_list_events` → look for connection failure events
 
 ### "Set up a guest network"
 1. `unifi_list_networks` → see existing networks
-2. `unifi_create_network(name="Guest", vlan_id=100, ...)` → create VLAN
-3. `unifi_create_wlan(name="Guest WiFi", network_id="...", security="wpa2", ...)` → create SSID
+2. `unifi_create_network(network_data={"name": "Guest", "purpose": "vlan-only", "vlan": 100})` → create VLAN
+3. `unifi_create_wlan(wlan_data={"name": "Guest WiFi", "networkconf_id": "...", "security": "open"})` → create SSID
 4. `unifi_create_voucher(...)` → create access codes
 
 ### "Open a port for a game server"
-1. `unifi_lookup_by_ip(ip="192.168.1.50")` → confirm the server is on the network
-2. `unifi_create_simple_port_forward(name="Game Server", dst_port=25565, fwd_ip="192.168.1.50", ...)` → create rule
+1. `unifi_lookup_by_ip(ip_address="192.168.1.50")` → confirm the server is on the network
+2. `unifi_create_simple_port_forward(rule={"name": "Game Server", "ext_port": "25565", "to_ip": "192.168.1.50"})` → create rule
 3. `unifi_list_firewall_policies` → verify no firewall rule blocks it
 
 ### "Network health check"
 ```
-unifi_batch(tools=[
+unifi_batch(operations=[
     {"tool": "unifi_get_system_info"},
     {"tool": "unifi_get_network_health"},
     {"tool": "unifi_list_devices"},
@@ -635,6 +635,6 @@ unifi_batch(tools=[
 ```
 
 ### "What happened in the last hour?"
-1. `unifi_list_events(start="<1 hour ago ISO>")` → recent events
+1. `unifi_list_events(within_hours=1, start=0)` → recent events
 2. `unifi_list_alarms` → any active alarms
 3. `unifi_get_alerts` → system alerts

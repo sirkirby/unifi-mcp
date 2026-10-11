@@ -5,6 +5,15 @@ frequency, and cross-product correlation context.
 
 ---
 
+## Evidence Limits
+
+Severity is a review priority for an observed event or explicitly labelled hypothesis,
+not certainty of identity, wrongdoing or cause. Use verified site timezone, business
+hours and mappings; when unknown, state the assumption and withhold modifiers that
+need it. Missing/capped evidence cannot lower severity to an all-clear or support
+absence-based correlations. Counts and frequency thresholds apply to retrieved
+records unless full interval coverage is established.
+
 ## Severity Levels
 
 | Level | Label | Meaning | Digest Behavior |
