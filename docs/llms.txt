@@ -11,6 +11,9 @@ UniFi uses separate API families whose authentication, field schemas, and IDs ar
 
 - [Quick start](https://github.com/sirkirby/unifi-mcp/blob/main/QUICKSTART.md): Install and configure a local MCP server.
 - [Repository overview](https://github.com/sirkirby/unifi-mcp/blob/main/README.md): Product map, install paths, configuration, and examples.
+- [Agent install guide](https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md): Plugin, skills, and manual MCP install paths for each agent client.
+- [Plugin support matrix](https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-support.md): Plugin prerequisites, versions, client update steps, and verification status.
+- [Plugin upgrade guide](https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md): Updating existing plugin installs, including the 1.0.0 Claude Code settings migration.
 
 ## MCP Servers
 
@@ -32,6 +35,7 @@ UniFi uses separate API families whose authentication, field schemas, and IDs ar
 ## Safety
 
 - [Permissions and policy gates](https://github.com/sirkirby/unifi-mcp/blob/main/docs/permissions.md): Confirmation mode, bypass mode, and create, update, and delete policy controls.
+- [Credential providers](https://github.com/sirkirby/unifi-mcp/blob/main/docs/credential-providers.md): File and command providers that keep passwords and API keys out of the client environment.
 - [Security policy](https://github.com/sirkirby/unifi-mcp/blob/main/SECURITY.md): Supported reporting and security guidance.
 
 ## Architecture

@@ -1,7 +1,8 @@
 # Plugin support matrix
 
 This page states what the UniFi MCP plugin bundles need and what has been
-verified. For install steps, see the [agent install guide](agent-install.md).
+verified. For install steps, see the [agent install guide](agent-install.md);
+to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md).
 
 ## Bundles
 
@@ -29,6 +30,9 @@ marketplace:
 - **Codex** reinstalls only on a version change: run
   `codex plugin marketplace upgrade`, then re-run setup with `--refresh` (below).
 - **OpenClaw** follows commits: run `openclaw plugins update <id>`.
+
+Upgrade notes for each release, including the 1.0.0 Claude Code settings
+migration, are in the [plugin upgrade guide](plugin-upgrade.md).
 
 Contributors: the version, pin and release rules are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#plugin-changes) and the
@@ -140,6 +144,7 @@ No minimum client version has been established for any client.
 - Claude Code: setup saves the plugin's options with `claude plugin configure`,
   so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
   (Git Bash on Windows).
-- Codex and OpenClaw: the setup skill registers the server with the client's
-  own MCP command (`codex mcp add`, `openclaw mcp set`), so that client's CLI
-  must be on `PATH`.
+- Codex and OpenClaw: setup validates the server entry with the client's own
+  CLI (`codex mcp add` and `codex mcp get` against a private staging home,
+  `openclaw mcp set` and `openclaw config validate`), so that client's CLI must
+  be on `PATH`.
