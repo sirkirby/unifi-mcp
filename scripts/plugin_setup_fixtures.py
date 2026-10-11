@@ -392,8 +392,11 @@ class Fixtures:
         def invoke(patch, expected=0, extra=None):
             return run(wrapper("set-env", "-InputJson" if self.powershell else "--input-json"), patch, expected, extra)
 
-        def migrate(expected=0, extra=None):
-            return run(wrapper("set-env", "-Migrate" if self.powershell else "--migrate"), None, expected, extra)
+        def migrate(expected=0, extra=None, replace=False):
+            flags = ["-Migrate" if self.powershell else "--migrate"]
+            if replace:
+                flags.append("-Replace" if self.powershell else "--replace")
+            return run(wrapper("set-env", *flags), None, expected, extra)
 
         seed()
         # Model Claude's UTF-8 wire format independently of Python's text streams.
@@ -568,6 +571,12 @@ class Fixtures:
         self.check(legacy_path.read_bytes() == legacy_bytes, "ordinary setup leaves legacy project settings")
         checked = run(wrapper("check-prereqs"))
         self.check(b"--migrate" in checked.stdout, "prerequisite check names the migration")
+        self.check(
+            b"--replace" in checked.stdout and f"UNIFI_{upper}_HOST".encode() in checked.stdout,
+            "prerequisite check names settings that differ from the saved options",
+        )
+        self.check(b"192.0.2.50" not in checked.stdout and b"192.0.2.1" not in checked.stdout, "check omits values")
+        self.check(b"no UniFi plugin settings remain" not in checked.stdout, "no shared-key notice while keys remain")
         hook = scripts / "claude-session-check.sh"
         if os.name != "nt":
             notice = subprocess.run(
@@ -610,12 +619,42 @@ class Fixtures:
                 b"192.0.2.80" not in shared_notice.stdout and b"shared-user" not in shared_notice.stdout,
                 "shared-key notice omits values",
             )
-            quiet = subprocess.run(
+            elsewhere = subprocess.run(
                 ["sh", str(hook), product],
                 env=dict(environment, CLAUDE_PROJECT_DIR=str(project), CLAUDE_PLUGIN_OPTION_HOST="x"),
                 capture_output=True,
             )
-            self.check(quiet.stdout == b"" and quiet.returncode == 0, "configured plugin prints no notice")
+            other_message = json.loads(elsewhere.stdout)
+            for text in (other_message["systemMessage"], other_message["hookSpecificOutput"]["additionalContext"]):
+                self.check(
+                    "another project" in text and "--replace" in text and "every project" in text,
+                    "configured plugin still notices this project's own legacy settings",
+                )
+            self.check("remove the leftover" in other_message["systemMessage"], "notice names the removal choice")
+            self.check(
+                "/reload-plugins" in other_message["systemMessage"] and "/mcp reconnect" in message["systemMessage"],
+                "notices name the verified recovery steps",
+            )
+            self.check(b"192.0.2.50" not in elsewhere.stdout, "other-project notice omits values")
+            for quiet_env in (
+                dict(
+                    environment, CLAUDE_PROJECT_DIR=str(shared_project.parent / "absent"), CLAUDE_PLUGIN_OPTION_HOST="x"
+                ),
+                dict(environment, CLAUDE_PROJECT_DIR=str(workspace / "no-project")),
+            ):
+                quiet = subprocess.run(["sh", str(hook), product], env=quiet_env, capture_output=True)
+                self.check(quiet.stdout == b"" and quiet.returncode == 0, "no legacy settings print no notice")
+            only_shared = workspace / "only-shared"
+            (only_shared / ".claude").mkdir(parents=True)
+            (only_shared / ".claude/settings.local.json").write_text(
+                json.dumps({"env": {"UNIFI_HOST": "192.0.2.80"}}), encoding="utf-8"
+            )
+            quiet = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(only_shared), CLAUDE_PLUGIN_OPTION_HOST="x"),
+                capture_output=True,
+            )
+            self.check(quiet.stdout == b"" and quiet.returncode == 0, "configured plugin ignores shared-only settings")
         snapshot = state()
         migrate(1, {"FIXTURE_FAIL": "register"})
         self.check(state() == snapshot, "failed migration preserves options and project settings")
@@ -623,7 +662,29 @@ class Fixtures:
         migrate(1)
         self.check(state() == snapshot, "migration validates legacy providers before writing")
         (workspace / "moved-provider").rename(provider)
-        result = migrate()
+        run(
+            wrapper(
+                "set-env",
+                "-Replace" if self.powershell else "--replace",
+                *(["-InputJson"] if self.powershell else ["--input-json"]),
+            ),
+            {f"UNIFI_{upper}_PORT": "8443"},
+            1,
+        )
+        self.check(state() == snapshot, "replace without migrate changes nothing")
+        refused = migrate(1)
+        self.check(state() == snapshot, "migration over differing saved options changes nothing")
+        self.check(
+            f"UNIFI_{upper}_HOST".encode() in refused.stderr and b"--replace" in refused.stderr,
+            "differing saved options are named with the replace choice",
+        )
+        self.check(
+            f"UNIFI_{upper}_USERNAME".encode() not in refused.stderr,
+            "an option unset elsewhere is not reported as differing",
+        )
+        self.check(b"192.0.2.50" not in refused.stderr and b"192.0.2.1" not in refused.stderr, "refusal omits values")
+        result = migrate(replace=True)
+        self.check(b"Replaced the plugin options" in result.stdout, "replacement is reported")
         saved = options()
         self.check(
             saved["host"] == "192.0.2.50"
@@ -736,9 +797,18 @@ class Fixtures:
             "UNIFI_PASSWORD_FILE": str(provider),
         }
         legacy_path.write_text(
-            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.70", **shared_fallbacks}}), encoding="utf-8"
+            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.50", f"UNIFI_{upper}_USERNAME": "legacy-user"}}),
+            encoding="utf-8",
         )
         result = migrate()
+        self.check(
+            b"Replaced" not in result.stdout and json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == {},
+            "identical saved options migrate without --replace",
+        )
+        legacy_path.write_text(
+            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.70", **shared_fallbacks}}), encoding="utf-8"
+        )
+        result = migrate(replace=True)
         self.check(
             json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == shared_fallbacks,
             "migration preserves credentials for shared-fallback-only consumers",
@@ -754,6 +824,18 @@ class Fixtures:
             and b"other consumers have not been verified" in result.stdout,
             "retained shared keys name the missing consumer evidence",
         )
+        leftover = run(wrapper("check-prereqs"))
+        self.check(
+            all(key.encode() in leftover.stdout for key in shared_fallbacks)
+            and b"exports them into every process" in leftover.stdout,
+            "prerequisite check names shared keys left after every plugin migrated",
+        )
+        self.check(
+            b"192.0.2.80" not in leftover.stdout
+            and b"legacy-shared-user" not in leftover.stdout
+            and str(provider).encode() not in leftover.stdout,
+            "shared-key notice omits values",
+        )
         # An apparent last migration still cannot prove shared consumers migrated.
         last = {
             "permissions": legacy["permissions"],
@@ -768,7 +850,7 @@ class Fixtures:
             },
         }
         legacy_path.write_text(json.dumps(last), encoding="utf-8")
-        result = migrate()
+        result = migrate(replace=True)
         remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
         self.check(
             remaining_env
@@ -785,6 +867,16 @@ class Fixtures:
             b"UNIFI_API_KEY" in result.stdout and b"UNIFI_CUSTOM_FIXTURE" in result.stdout, "removed names are reported"
         )
         self.check(b"other consumers have not been verified" in result.stdout, "consumer uncertainty is reported")
+        leftover = run(wrapper("check-prereqs"))
+        self.check(
+            all(
+                k.encode() in leftover.stdout
+                for k in ("UNIFI_TOOL_PERMISSION_MODE", "UNIFI_API_KEY", "UNIFI_CUSTOM_FIXTURE")
+            )
+            and b"KEEP" not in leftover.stdout
+            and sample_value.encode() not in leftover.stdout,
+            "shared-key notice names only UNIFI_ keys, never values",
+        )
         self.check(
             b"legacy-user" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted"
         )
@@ -792,7 +884,7 @@ class Fixtures:
         for value, effect in (("on", b"turns on bypass"), ("garbage-marker", b"no effect")):
             leftover = json.dumps({"env": {f"UNIFI_{upper}_PORT": "8443", "UNIFI_AUTO_CONFIRM": value}})
             for label, action in (
-                ("setup", lambda: invoke({f"UNIFI_{upper}_PORT": "8444"})),
+                ("setup", lambda: invoke({f"UNIFI_{upper}_PORT": "8443"})),
                 ("check", lambda: run(wrapper("check-prereqs"))),
                 ("migration", migrate),
             ):

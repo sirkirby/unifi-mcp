@@ -144,8 +144,8 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    **Claude Code, from project settings to plugin options.** When the prior ref
    configured Claude Code through `.claude/settings.local.json` and the
    candidate declares `userConfig`:
-   1. Start the first session after the update. Record the plugin's
-      session-start notice: a `hook_response` event whose `systemMessage` names
+   1. Start the first session after the update; `/reload-plugins` does not
+      run the notice. Record the plugin's session-start notice: a `hook_response` event whose `systemMessage` names
       `set-env.sh --target claude --migrate`. Also record that the server
       says what the server will do. With no shared `UNIFI_HOST` in the project
       file it says the server starts unconfigured: record that `ps -E -ww`
@@ -164,10 +164,19 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       and unrelated keys, and that a second `--migrate` refuses with nothing to
       migrate. Migrating every UniFi plugin still keeps the shared settings,
       because setup cannot prove that no other consumer (an older plugin or a
-      standalone server) relies on them; confirm the notice says so, and remove
-      them by hand only after checking each consumer.
-   4. Repeat steps 4 and 5 in fresh sessions. Confirm the notice no longer
-      appears.
+      standalone server) relies on them; confirm the output says so, that
+      `check-prereqs` names the remaining shared keys once no plugin keys are
+      left, and remove them by hand only after checking each consumer.
+   4. In an interactive session that was open before the migration, record that
+      `/reload-plugins` brings the servers up (then `/mcp reconnect` if `/mcp`
+      still shows one failed). Repeat steps 4 and 5 in fresh sessions. Confirm
+      the notice no longer appears.
+   5. **Second project.** Configure another scratch project the prior way, with
+      a different host for one product (an unroutable loopback port), after the
+      first project is migrated. Record that its first session shows the
+      other-project notice (the server is using options saved from another
+      project), that `--migrate` refuses and names the differing variables, and
+      that `--migrate --replace` replaces the options for every project.
 7. **Failure recovery.** Run the candidate's setup with an invalid provider
    path, a missing provider command and an invalid key. Each must exit non-zero
    with a fixed message, leave the configuration byte-identical and leave no
@@ -193,9 +202,12 @@ was given.
   are named `mcp__plugin_<plugin>_<server>__<tool>`. A failed server start is
   cached for about 15 minutes, keyed by the server name and its expanded
   configuration, so a later session with the same configuration skips the
-  server ("recent failure cached"). Users recover with an interactive
-  `/mcp reconnect plugin:<plugin>:<server>`; `/reload-plugins` does not retry,
-  and `-p` sessions cannot reconnect. In the isolated profile only, remove that
+  server ("recent failure cached"). With the configuration unchanged, neither a
+  new session nor `/reload-plugins` retries it; users recover with an
+  interactive `/mcp reconnect plugin:<plugin>:<server>`, and `-p` sessions
+  cannot reconnect. A session that was open when plugin options changed keeps
+  its old copy: there `/mcp reconnect` fails until `/reload-plugins` loads the
+  new options. In the isolated profile only, remove that
   server's entry from `$ACC/claude-home/.claude/mcp-needs-auth-cache.json`
   before retrying, and record that you did. Saving plugin options changes the
   expanded configuration, so a session after setup is not skipped by a failure
@@ -216,8 +228,10 @@ was given.
 - Space sessions that log in to a controller about 20 seconds apart;
   back-to-back logins can hit the controller's authentication rate limit, and
   such a run does not count as a pass or a failure of the plugin.
-- Codex `codex plugin marketplace upgrade` refreshes a marketplace at the same
-  ref; a different ref still needs remove and re-add.
+- Codex upgrades configured Git marketplaces at the start of every session, and
+  `codex plugin marketplace upgrade` does the same on demand at the same ref; a
+  different ref still needs remove and re-add. Record plugin versions before
+  starting a Codex session if the step needs the prior version installed.
 - Read results from the transcript, not the model's summary. Reduce each tool
   result to its top-level keys and counts before recording it.
 

@@ -254,7 +254,8 @@
           </div>
           <div role="tabpanel" id="panel-openclaw" aria-labelledby="tab-openclaw" class="install-panel" data-install-panel="openclaw" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>
-<pre><code>openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
+<pre><code><span class="comment"># Confirms the source and capabilities; without a terminal add --force --accept-capabilities</span>
+openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
 openclaw gateway restart
 
 <span class="comment"># Use the setup skill, or register the MCP server directly</span>

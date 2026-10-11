@@ -24,12 +24,17 @@ client reads the default branch unless you pinned a ref when adding the
 marketplace:
 
 - **Claude Code** installs a release when the plugin version changes and you
-  update. Auto-update is off for this marketplace, so run
+  update. Auto-update is off by default for this marketplace (you can turn it
+  on under `/plugin`, then **Marketplaces**), so run
   `claude plugin marketplace update unifi-plugins`, then
-  `claude plugin update <plugin>@unifi-plugins`, then `/reload-plugins`.
-- **Codex** reinstalls only on a version change: run
-  `codex plugin marketplace upgrade`, then re-run setup with `--refresh` (below).
-- **OpenClaw** follows commits: run `openclaw plugins update <id>`.
+  `claude plugin update <plugin>@unifi-plugins`, then start a new session.
+- **Codex** upgrades its marketplaces at the start of every session and
+  reinstalls a plugin when its version changes (`codex plugin marketplace
+  upgrade` does the same on demand). Setup's pinned server entry keeps its
+  server version until you re-run setup with `--refresh` (below).
+- **OpenClaw** follows commits and changes nothing until you run
+  `openclaw plugins update <id>`, which asks you to accept the plugin's
+  capabilities (`--accept-capabilities` in scripts).
 
 Upgrade notes for each release, including the 1.0.0 Claude Code settings
 migration, are in the [plugin upgrade guide](plugin-upgrade.md).
@@ -86,7 +91,11 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
   `.claude/settings.local.json`, which this version no longer reads. A
   session-start notice names the leftover variables, and
   `set-env.sh --target claude --migrate` moves this plugin's settings into its
-  options and atomically removes only its keys from the project file. Shared
+  options and atomically removes only its keys from the project file. Options
+  apply in every project: the notice also fires in a project whose own keys are
+  unused because options from another project are set, and `--migrate` refuses
+  to replace a different saved host, username, port or site unless you add
+  `--replace`. Shared
   `UNIFI_*` keys are kept unless every possible consumer is proven migrated.
   Setup currently verifies only this plugin's options, so it keeps shared keys
   and names them with the reason: other consumers have not been verified as
