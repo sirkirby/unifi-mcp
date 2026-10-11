@@ -1,6 +1,6 @@
 # Install UniFi MCP with an agent
 
-Last reviewed: 2026-09-19
+Last reviewed: 2026-10-11
 
 This guide is written for both people and coding agents. It separates three
 things that are easy to confuse:
@@ -43,7 +43,9 @@ During setup:
   because those take precedence over server-level gates. Unless the user
   separately requests write access, set the server's `CREATE`, `UPDATE`, and
   `DELETE` gates to `false`; then add back only the category/action overrides
-  the user selected.
+  the user selected. Claude Code plugin options hold only the server-level
+  gates: per-category overrides are not available there, and setup refuses
+  them.
 - Do not disable TLS verification without explaining the tradeoff. Many local
   UniFi consoles use a self-signed certificate, but a trusted certificate is
   preferred.
@@ -79,7 +81,8 @@ configuration paths remain during migration.
 ## Native plugin marketplaces
 
 See the [plugin support matrix](plugin-support.md) for prerequisites, version
-boundaries and which client combinations have real install evidence.
+boundaries and which client combinations have real install evidence. To update
+an existing plugin install, follow the [plugin upgrade guide](plugin-upgrade.md).
 
 ### Claude Code
 
@@ -93,11 +96,15 @@ In Claude Code:
 
 Replace `unifi-network` with `unifi-protect` or `unifi-access` as needed.
 The setup skill checks prerequisites and guides credential and permission
-configuration.
+configuration, then saves the plugin's Claude Code options with
+`claude plugin configure`. Options apply in every project; a raw password or
+API key entered as an option is stored in the system keychain. Earlier plugin
+versions wrote the project's `.claude/settings.local.json` instead; the setup
+skill's migration moves those settings into the options.
 
 Rollback: use Claude Code's `/plugin` interface to uninstall only the UniFi
-plugin that was added, then remove the matching UniFi values from the project
-configuration if the user no longer needs them.
+plugin that was added. Remove leftover `UNIFI_*` values from an older project's
+`.claude/settings.local.json` if no other consumer needs them.
 
 ### Codex
 
@@ -113,9 +120,13 @@ Open Codex, run `/plugins`, install the chosen UniFi product, then ask:
 Use the unifi-network-setup skill to configure this for Codex.
 ```
 
-The setup skill registers the server through `codex mcp add`. Restart Codex
-after configuration. Roll back by uninstalling the selected plugin and removing
-only its matching MCP entry with the current `codex mcp` command.
+Setup saves a version-pinned MCP entry for the server in Codex's
+`config.toml`, editing only that server's tables. Restart Codex after
+configuration. After every plugin upgrade, re-run setup with `--refresh` (see
+the [plugin upgrade guide](plugin-upgrade.md#codex)). Roll back by uninstalling
+the selected plugin and removing only its matching MCP entry with the current
+`codex mcp` command; `codex mcp remove` drops the comments inside every
+`[mcp_servers.*]` table.
 
 ### GitHub Copilot CLI
 
