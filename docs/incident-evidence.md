@@ -15,9 +15,13 @@ none of them define their own evidence semantics.
 | Golden corpus | `tests/fixtures/incident_evidence/cases/*.json` |
 | Invalid corpus | `tests/fixtures/incident_evidence/invalid/*.json` |
 | Legacy timeline projection | `unifi_core.event_timeline.normalized_event_from_record` |
+| Bounded collection and combining | `packages/unifi-core/src/unifi_core/incident_collection.py` |
+| Network and Protect collectors | `unifi_core/network/incident_collection.py`, `unifi_core/protect/incident_collection.py` |
+| Collection request models | `unifi_core/network/models/incident_evidence.py`, `unifi_core/protect/models/incident_evidence.py` |
+| Mocked controller answers for collection | `tests/fixtures/incident_evidence/collection/controller_responses.json` |
 
-Normalizers are pure: no controller I/O, no app imports. Collection (calling
-managers, enforcing budgets) belongs to the caller.
+Normalizers are pure: no controller I/O, no app imports. The collectors call
+manager page reads and enforce budgets (see [Collecting evidence](#collecting-evidence)).
 
 ## Shape
 
@@ -105,6 +109,7 @@ evidence = normalize_network_page(page, context)
 | Network `get_alarms_page` (legacy) | the full alarm list is the total | caller-supplied, else unknown |
 | Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals) | submitted `start`/`end`, unknown if either is omitted |
 | Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering | as above |
+| Protect `list_events_raw_page` | fewer raw rows than `limit` | submitted `start`/`end` |
 
 The list methods (`get_events`, `get_alarms`, `list_events`,
 `list_smart_detections`) return the same rows for tools and raise
@@ -113,8 +118,133 @@ row. Network manager failures carry fixed operation, exception class and HTTP
 status text only; controller text never leaves the manager.
 
 Tool responses (`normalize_*_tool_response`) carry no continuation state, so
-their sources are never complete. The relay and worker can report what tools
-returned but cannot present an all-clear until tools expose page state.
+their sources are never complete. The list tools' responses cannot support an
+all-clear; the incident evidence tools return complete evidence documents.
+
+## Collecting evidence
+
+`collect_network_incident_evidence(event_manager, request, site=...)` and
+`collect_protect_incident_evidence(event_manager, request)` take one window,
+optional exact identifiers and budgets, and return a validated
+`IncidentEvidence`. They never raise for a source failure; failures, budget
+exhaustion and truncation are in the document. MCP tools and API routes are
+thin adapters over them.
+
+### Inputs
+
+`NetworkIncidentRequest` and `ProtectIncidentRequest` validate every input
+before any read:
+
+| Field | Meaning |
+|-------|---------|
+| `start`, `end` | ISO 8601 with an explicit UTC offset; a bound without one is rejected as ambiguous. `start < end`. |
+| `device_macs` (Network) | Exact MACs, compared in canonical form. Names are rejected, never resolved. |
+| `camera_ids` (Protect) | Exact camera IDs (letters, digits, `.`, `_`, `:`, `-`), never trimmed or case-folded. |
+| `location_id` | The caller's label for the investigated location, recorded in each source's `scope`. |
+| `max_window_seconds` | Default 86400, at most 2592000. |
+| `max_events` | Default 1000, at most 10000. |
+| `max_calls` | Default 20, at most 100. |
+| `max_elapsed_ms` | Default 30000, at most 120000. |
+| `mappings` | Optional explicit `MappingAssertion`s; records are resolved against them by exact identifier. |
+
+Validation messages name the field and reason, never the rejected value.
+
+### Budgets
+
+Budgets are checked before every read; a read never asks for more rows than
+the events budget has left, and a read still running when the elapsed budget
+runs out is cancelled. The first spent budget stops collection.
+
+| Budget | Counts | When spent |
+|--------|--------|------------|
+| `window` | the requested window's duration | nothing is read; every source is `not_attempted` with failure `budget_exhausted` |
+| `events` | every row a source returned, including out-of-window rows and rows an exact-identifier filter later removed | reading stops |
+| `calls` | manager page reads; each is one HTTP request, except the Network API-version probe and a last Network read shorter than a page, which can take two | reading stops |
+| `elapsed` | wall time across reads | the running read is cancelled; usage is reported at the limit |
+
+A spent budget appears three ways: its kind in `budgets.exhausted`; the source
+it stopped is `partial` with `budget_exhausted` among its `partial_reasons`
+and `pagination.interrupted: true` (or `not_attempted` if it returned
+nothing); every later source is `not_attempted`. Truncation the stop caused
+stays visible as `truncated` or `truncation_unknown`. Overall is then
+`partial` or `failed`, never `complete` or `empty`.
+
+### Sources
+
+| Product | Sources | Read | Window | Filters recorded |
+|---------|---------|------|--------|------------------|
+| Network | `network.events` | `EventManager.get_events_page`, 100 rows per read by offset | relative lookback long enough to reach `start` from any read within the elapsed budget; queried window is the part every read covered | v2: the categories and severities the controller applied; `device_macs` |
+| Protect | `protect.events`, or `protect.events.camera.NN` per camera in ID order | `EventManager.list_events_raw_page`, 100 rows per read by offset, newest first | the exact window in whole milliseconds | `camera_id` |
+
+Reading a source stops when the source proves its end (`has_more: false`, a
+short page, or its remote total reached). If the total or API path changes
+between reads, offsets no longer line up, so the end is not claimed.
+
+Network events take a lookback relative to now, so rows newer than the window
+are read, counted against the events budget and reported out-of-window.
+`device_macs` keeps rows naming one of the MACs in any role; rows the filter
+cannot read stay in and count as malformed. The filtered page says
+`post_filtered`, so only the source's own end proof can make it complete.
+Network alarms are not collected in this slice.
+
+`list_events_raw_page` is one GET to the NVR `events` endpoint with explicit
+bounds, limit and offset. It does not use the SDK's `get_events`, which pages
+without bound when given a start time and drops event types it does not know,
+and it does no camera-name or Known Face lookups. NVR failures become
+fixed-text errors that keep the class and HTTP status, so `401` is
+`auth_failed` and `403` is `permission_denied`.
+
+### Read-only by construction
+
+Collectors receive the product `EventManager` and call only the methods in
+each collector module's `READ_METHODS` (`get_events_page`,
+`list_events_raw_page`). Tests run collection through a view that exposes only
+those methods, and through the real SDK decoders with the HTTP exchange
+replaced, asserting every request: Protect sends only GET; Network sends only
+the read-query POSTs its event API requires (`/system-log/count`,
+`/system-log/all`, `/stat/event`).
+
+### Combining evidence sets
+
+`combine_incident_evidence(documents)` merges evidence sets for the same
+requested window, for example one per product, into one validated set. It is
+pure and order-independent, and the same set passed twice counts once. Every
+source keeps its own outcome, failure, reasons and coverage; a source ID that
+two sets describe differently is an error. Mapping assertions are the union of
+every set's assertions and every record is resolved again against them.
+Budget limits and usage are summed, except `window_seconds`, which is the
+smallest limit; a kind stays exhausted when the combined usage reached the
+combined limit, and whatever a budget stopped stays visible on its source.
+
+### Surfaces
+
+| Surface | Network | Protect |
+|---------|---------|---------|
+| MCP tool (`readOnlyHint: true`) | `unifi_get_incident_evidence` | `protect_get_incident_evidence` |
+| REST (`GET`, read scope) | `/v1/sites/{site_id}/incident-evidence/network` | `/v1/sites/{site_id}/incident-evidence/protect` |
+| GraphQL (read permission) | `network { incidentEvidence(...) { document } }` | `protect { incidentEvidence(...) { document } }` |
+
+Tool arguments, REST query parameters and GraphQL arguments are the request
+fields above (`mappings` is a JSON-encoded string in REST and a JSON value in
+GraphQL). MCP returns `{"success": true, "data": <evidence>}`; REST returns
+`{"data": <evidence>, "render_hint": ...}`; GraphQL returns the evidence as
+the JSON `document` field, because the JSON Schema artifact, not the GraphQL
+schema, is the contract. Invalid input is an MCP error response, REST 422 or
+GraphQL `BAD_REQUEST`, naming fields without echoing values. The evidence is identical for the
+same input and controller answers: the contract's key rules exclude every
+secret-like name, so egress redaction has nothing to remove. A source failure
+is still a successful response; check `overall` and `coverage_complete`.
+
+### Read-only clients in lazy mode
+
+The default lazy registration mode lists only meta-tools, and its route to a
+domain tool, `*_execute`, is not read-only, so a client that permits only
+`readOnlyHint: true` tools could reach no controller read. Each app's
+`LAZY_DIRECT_TOOLS` (in `categories.py`) names read-only tools that lazy mode
+registers directly at startup, so they are listed with their own annotations.
+Loading a module registers every tool in it, so startup fails unless every
+tool the module registers is named and read-only. `meta_only` mode still lists
+only meta-tools, and eager mode lists every tool.
 
 ## Current product contracts
 
@@ -285,8 +415,9 @@ importing Python, and must reject every case under `invalid/`.
 projects timed evidence onto that legacy shape and returns `None` for untimed
 records. A projected list drops coverage and failure state, so callers that
 return it must also return the evidence set's source outcomes. The relay
-location timeline and the worker timeline still use the legacy path; moving
-them onto this contract means calling the current tool names and arguments
-above, reading each tool's record path, reporting per-source outcomes instead
-of skipping failed sources, and exposing page state before claiming
-completeness.
+location timeline and the worker timeline still use the legacy path. Moving
+them onto this contract means calling `unifi_get_incident_evidence` and
+`protect_get_incident_evidence` for one window, combining the documents with
+`combine_incident_evidence` (or, in TypeScript, the rules under
+[Combining evidence sets](#combining-evidence-sets)), and reporting per-source
+outcomes instead of skipping failed sources.
