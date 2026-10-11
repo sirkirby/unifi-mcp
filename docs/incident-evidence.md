@@ -161,15 +161,21 @@ before any read:
 |-------|---------|
 | `start`, `end` | ISO 8601 with an explicit UTC offset; a bound without one is rejected as ambiguous. `start < end`. |
 | `device_macs` (Network) | Exact MACs, compared in canonical form. Names are rejected, never resolved. |
-| `camera_ids` (Protect) | Exact camera IDs (letters, digits, `.`, `_`, `:`, `-`), never trimmed or case-folded. |
-| `location_id` | The caller's label for the investigated location, recorded in each source's `scope`. |
+| `camera_ids` (Protect) | Exact camera IDs (letters, digits, `.`, `_`, `:`, `-`), never trimmed or case-folded. At most 5: each camera is its own source, and every source is returned in full. |
+| `location_id` | The caller's label for the investigated location, recorded in each source's `scope`: 1 to 128 characters, none of them a control character, quote or backslash. |
 | `max_window_seconds` | Default 86400, at most 2592000. |
 | `max_events` | Default 1000, at most 10000. |
 | `max_calls` | Default 20, at most 100. |
 | `max_elapsed_ms` | Default 30000, at most 120000. |
-| `mappings` | Optional explicit `MappingAssertion`s; records are resolved against them by exact identifier. |
+| `mappings` | Optional explicit `MappingAssertion`s, at most 20; records are resolved against them by exact identifier. Each `id` is 1 to 64 characters with no control character, quote or backslash, and an assertion states no `role`. |
 
 Validation messages name the field and reason, never the rejected value.
+The Network `site`, which comes from server configuration or the API route
+rather than the request, follows the `location_id` rule:
+`collect_network_incident_evidence` refuses one that breaks it before any read.
+Every label and assertion is repeated in the [client view](#client-view), so
+these bounds, with the camera and assertion counts, keep every valid
+request's view within its size budget; identifiers are refused, never cut.
 
 ### Budgets
 
@@ -263,60 +269,7 @@ smallest limit. `exhausted` is the union of every set's exhausted kinds, so
 combining never hides exhaustion, even when the summed usage stays below the
 summed limit.
 
-### Surfaces
-
-| Surface | Network | Protect |
-|---------|---------|---------|
-| MCP tool (`readOnlyHint: true`) | `unifi_get_incident_evidence` | `protect_get_incident_evidence` |
-| REST (`GET`, read scope) | `/v1/sites/{site_id}/incident-evidence/network` | `/v1/sites/{site_id}/incident-evidence/protect` |
-| GraphQL (read permission) | `network { incidentEvidence(...) { document } }` | `protect { incidentEvidence(...) { document } }` |
-
-Tool arguments, REST query parameters and GraphQL arguments are the request
-fields above (`mappings` is a JSON-encoded string in REST and a JSON value in
-GraphQL), plus two presentation arguments, validated with the request before
-any read:
-
-| Argument | Meaning |
-|----------|---------|
-| `detail` | `view` (default) returns the [client view](#client-view); `full` returns the whole evidence document, for programmatic consumers. |
-| `max_records_returned` | Record citations in the view, 1 to 50, default 25. Rejected with `detail=full`. |
-
-Every surface renders through `EvidencePresentation.render`, so the same input
-and controller answers give the same payload. MCP returns
-`{"success": true, "data": <view or evidence>}`; REST returns
-`{"data": <view or evidence>, "render_hint": ...}`; GraphQL returns it as the
-JSON `document` field, because the JSON Schema artifacts, not the GraphQL
-schema, are the contract. Invalid input is an MCP error response, REST 422 or
-GraphQL `BAD_REQUEST`, naming declared fields and list indexes only (an
-undeclared key is never echoed); framework argument coercion errors drop the
-rejected value too, and expected client errors are logged as one fixed line,
-without a traceback or the query source. GraphQL classifies errors by
-exception type, never by message text. A controller that does not run the
-product is refused before collection on both surfaces: REST 409
-`capability_mismatch`, GraphQL `CAPABILITY_MISMATCH`. The API validates input
-and checks the window budget before acquiring a manager, acquires it inside
-the first read so it is charged to the elapsed and call budgets, reports an
-acquisition failure as a classified source failure (a refused login or
-bootstrap is `auth_failed` or `permission_denied` with its status; connection
-managers log only the operation and exception class), and never starts a background event
-listener for collection: it reuses an existing event manager or builds an
-uncached one. The evidence is identical for the
-same input and controller answers: the contract's key rules exclude every
-secret-like name, so egress redaction has nothing to remove. A source failure
-is still a successful response; check `overall` and `coverage_complete`.
-
-### Read-only clients in lazy mode
-
-The default lazy registration mode lists only meta-tools, and its route to a
-domain tool, `*_execute`, is not read-only, so a client that permits only
-`readOnlyHint: true` tools could reach no controller read. Each app's
-`LAZY_DIRECT_TOOLS` (in `categories.py`) names read-only tools that lazy mode
-registers directly at startup, so they are listed with their own annotations.
-Loading a module registers every tool in it, so startup fails unless every
-tool the module registers is named and read-only. `meta_only` mode still lists
-only meta-tools, and eager mode lists every tool.
-
-## Client view
+### Client view
 
 A full document carries every record with its raw attributes and repeated
 provenance; at default budgets it can exceed 2 MB, more than MCP clients accept
@@ -369,7 +322,7 @@ valid document, not only for what valid requests collect:
   (a label of 128 emoji to its first 32), and a document from elsewhere, such
   as an older relay's, can carry a longer one.
 - Request validation bounds the rest (at most 5 cameras, 20 assertions, and
-  a bounded label and identifier length and character set), so only
+  the label and identifier rules under [Inputs](#inputs)), so only
   records are fitted to what remains.
 - A document whose sources and assertions alone, labels cut, would exceed the
   budget has no honest view: every surface refuses it with an error that
@@ -385,7 +338,7 @@ field with its full length in characters; it is `{}` when nothing was cut.
 Identifiers (`evidence_id`, `source_record_id`, `entity_ids`, `target_ids`)
 are never cut. A record whose citation would take more than 2,500 estimated
 tokens, or whose evidence ID is longer than 256 characters, is never returned:
-it is counted in `too_large`, and only the full document shows it.
+it is counted in `too_large`, and only `detail=full` shows it.
 
 **Conflict groups.** A record that is one of several differing versions of
 one identity (a `|version|<digest>` evidence ID) carries its `conflict_group`
@@ -438,6 +391,59 @@ and sources beyond request validation added, or it is refused
 `test_incident_evidence_view_bounds.py`). `tests/fixtures/incident_evidence/view-bounds/`
 holds such documents with every page of their views, or the refusal, for
 other consumers.
+
+### Surfaces
+
+| Surface | Network | Protect |
+|---------|---------|---------|
+| MCP tool (`readOnlyHint: true`) | `unifi_get_incident_evidence` | `protect_get_incident_evidence` |
+| REST (`GET`, read scope) | `/v1/sites/{site_id}/incident-evidence/network` | `/v1/sites/{site_id}/incident-evidence/protect` |
+| GraphQL (read permission) | `network { incidentEvidence(...) { document } }` | `protect { incidentEvidence(...) { document } }` |
+
+Tool arguments, REST query parameters and GraphQL arguments are the request
+fields above (`mappings` is a JSON-encoded string in REST and a JSON value in
+GraphQL), plus two presentation arguments, validated with the request before
+any read:
+
+| Argument | Meaning |
+|----------|---------|
+| `detail` | `view` (default) returns the [client view](#client-view); `full` returns the whole evidence document, for programmatic consumers. |
+| `max_records_returned` | Record citations in the view, 1 to 50, default 25. Rejected with `detail=full`. |
+
+Every surface renders through `EvidencePresentation.render`, so the same input
+and controller answers give the same payload. MCP returns
+`{"success": true, "data": <view or evidence>}`; REST returns
+`{"data": <view or evidence>, "render_hint": ...}`; GraphQL returns it as the
+JSON `document` field, because the JSON Schema artifacts, not the GraphQL
+schema, are the contract. Invalid input is an MCP error response, REST 422 or
+GraphQL `BAD_REQUEST`, naming declared fields and list indexes only (an
+undeclared key is never echoed); framework argument coercion errors drop the
+rejected value too, and expected client errors are logged as one fixed line,
+without a traceback or the query source. GraphQL classifies errors by
+exception type, never by message text. A controller that does not run the
+product is refused before collection on both surfaces: REST 409
+`capability_mismatch`, GraphQL `CAPABILITY_MISMATCH`. The API validates input
+and checks the window budget before acquiring a manager, acquires it inside
+the first read so it is charged to the elapsed and call budgets, reports an
+acquisition failure as a classified source failure (a refused login or
+bootstrap is `auth_failed` or `permission_denied` with its status; connection
+managers log only the operation and exception class), and never starts a background event
+listener for collection: it reuses an existing event manager or builds an
+uncached one. The evidence is identical for the
+same input and controller answers: the contract's key rules exclude every
+secret-like name, so egress redaction has nothing to remove. A source failure
+is still a successful response; check `overall` and `coverage_complete`.
+
+### Read-only clients in lazy mode
+
+The default lazy registration mode lists only meta-tools, and its route to a
+domain tool, `*_execute`, is not read-only, so a client that permits only
+`readOnlyHint: true` tools could reach no controller read. Each app's
+`LAZY_DIRECT_TOOLS` (in `categories.py`) names read-only tools that lazy mode
+registers directly at startup, so they are listed with their own annotations.
+Loading a module registers every tool in it, so startup fails unless every
+tool the module registers is named and read-only. `meta_only` mode still lists
+only meta-tools, and eager mode lists every tool.
 
 ## Current product contracts
 
