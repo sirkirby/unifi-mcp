@@ -196,15 +196,16 @@ def estimated_tokens(value: Any) -> int:
 def serialized_bytes(value: Any, depth: int = 0) -> int:
     """UTF-8 bytes of a JSON-ready value as an MCP server sends it, at ``depth`` levels of indentation.
 
-    Exact, except that a float is counted at its longest form: 24 bytes, or
-    an integral float's digits, sign and ".0".
+    Exact, except that a number is counted at its longest form: an integral
+    one's digits, a sign and a float's ".0", any other 24 bytes. The worker,
+    whose numbers do not say whether they are floats, counts them alike.
     """
     if value is None:
         return 4
     if isinstance(value, bool):
         return 4 if value else 5
     if isinstance(value, int):
-        return len(str(value))
+        return _integer_tokens(value)
     if isinstance(value, float):
         return _integer_tokens(int(value)) if value.is_integer() else 24
     if isinstance(value, str):
