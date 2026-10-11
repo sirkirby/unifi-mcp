@@ -6,13 +6,19 @@ charge first, which may refuse the attempt by raising
 :class:`RequestBudgetSpent` before anything is sent:
 
 - Network ``ConnectionManager.request`` charges each attempt it sends,
-  including the API-version probe and the retry after a re-login.
-- Protect evidence reads pass :func:`charged_request_middleware` to aiohttp
-  for their one request, so uiprotect's status retries and reconnect retries
-  are charged too.
+  including the API-version probe and the retry after a re-login, and marks
+  it prepaid for the session.
+- Connection sessions (Network's aiohttp session, Protect's private and
+  public sessions) carry :func:`charged_session_middleware`, so every other
+  request a cold connection sends while acquiring the manager (controller
+  detection, sites checks, the Protect bootstrap, their retries) is charged
+  too. Logins are not charged.
+- Protect evidence reads pass :func:`charged_request_middleware` for their
+  one request, replacing the session's, so uiprotect's status and reconnect
+  retries are charged once each.
 
-Logins that establish or renew a session are not charged. With no charge
-installed every hook is a no-op, so ordinary tool calls are unaffected.
+With no charge installed every hook is a no-op, so ordinary tool calls are
+unaffected.
 """
 
 from __future__ import annotations
@@ -24,6 +30,12 @@ from contextvars import ContextVar
 import aiohttp
 
 _charge: ContextVar[Callable[[], None] | None] = ContextVar("unifi_request_charge", default=None)
+# Attempts already charged by their caller (ConnectionManager.request), which
+# the session middleware must not charge again.
+_prepaid: ContextVar[list[int] | None] = ContextVar("unifi_request_prepaid", default=None)
+
+# Login endpoints (UniFi OS and standalone): sessions are established, not charged.
+LOGIN_PATHS = ("/api/auth/login", "/api/login")
 
 
 class RequestBudgetSpent(Exception):
@@ -47,9 +59,32 @@ def charge_request() -> None:
         charge()
 
 
+@contextmanager
+def prepaid_attempt() -> Iterator[None]:
+    """The next request sent inside the block was already charged by its caller."""
+    token = _prepaid.set([1])
+    try:
+        yield
+    finally:
+        _prepaid.reset(token)
+
+
 async def charged_request_middleware(
     request: aiohttp.ClientRequest, handler: aiohttp.ClientHandlerType
 ) -> aiohttp.ClientResponse:
     """Per-request aiohttp middleware: runs once per attempt, so every retry is charged."""
     charge_request()
+    return await handler(request)
+
+
+async def charged_session_middleware(
+    request: aiohttp.ClientRequest, handler: aiohttp.ClientHandlerType
+) -> aiohttp.ClientResponse:
+    """Session-wide aiohttp middleware: charge each non-login attempt not already prepaid."""
+    if not request.url.path.endswith(LOGIN_PATHS):
+        prepaid = _prepaid.get()
+        if prepaid and prepaid[0] > 0:
+            prepaid[0] -= 1
+        else:
+            charge_request()
     return await handler(request)

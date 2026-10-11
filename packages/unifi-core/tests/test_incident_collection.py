@@ -469,3 +469,32 @@ def test_egress_redaction_has_nothing_to_remove_from_evidence(path) -> None:
 
     expected = json.loads(path.read_text())["expected"]
     assert redact_sensitive_fields(expected, redact_sensitive=True) == expected
+
+
+# --- shared retry: never retries a budget refusal, never logs exception text -----------------
+
+
+@pytest.mark.asyncio
+async def test_retry_logs_only_the_class_and_never_retries_a_budget_refusal(caplog) -> None:
+    from unifi_core.request_budget import RequestBudgetSpent
+    from unifi_core.retry import RetryPolicy, retry_with_backoff
+
+    attempts: list[str] = []
+
+    async def failing() -> None:
+        attempts.append("x")
+        raise RuntimeError("fixture-private-controller-text")
+
+    policy = RetryPolicy(max_retries=2, base_delay=0, retryable_exceptions=(Exception,))
+    with caplog.at_level("DEBUG"), pytest.raises(RuntimeError):
+        await retry_with_backoff(failing, policy=policy)
+    assert len(attempts) == 3
+    assert "fixture-private-controller-text" not in caplog.text and "RuntimeError" in caplog.text
+
+    async def refused() -> None:
+        attempts.append("refused")
+        raise RequestBudgetSpent("call budget spent")
+
+    with pytest.raises(RequestBudgetSpent):
+        await retry_with_backoff(refused, policy=policy)
+    assert attempts.count("refused") == 1

@@ -21,7 +21,9 @@ from uiprotect.exceptions import NotAuthorized, NvrError
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.connect_attempt import ConnectAttempt
+from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
@@ -119,6 +121,7 @@ class ProtectConnectionManager:
         self._client: ProtectApiClient | None = None
         self._ws_unsub: Callable[[], None] | None = None
         self._initialized = False
+        self._initialization_failure: ControllerConnectionFailed | None = None
         self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
         self._bootstrap_refresh_seconds = bootstrap_refresh_seconds
         self._refresh_task: asyncio.Task[None] | None = None
@@ -297,6 +300,7 @@ class ProtectConnectionManager:
 
     async def _connection_succeeded(self) -> None:
         self._initialized = True
+        self._initialization_failure = None
         self._support_attempt = connection_attempt_succeeded()
         self._last_failure_class = None
         self._clear_reconnect_block()
@@ -311,6 +315,10 @@ class ProtectConnectionManager:
         self._initialized = False
         self._support_attempt = connection_attempt_failed(error)
         self._last_failure_class = type(error).__name__
+        # The exception can quote NVR responses: keep its category and status only.
+        self._initialization_failure = connection_failure(
+            "Connecting to UniFi Protect failed.", error, status=nvr_status(error)
+        )
         self._last_connect_attempt_at = self._clock()
         if _is_terminal_auth_error(error):
             self._block_automatic_reconnect(error)
@@ -375,6 +383,11 @@ class ProtectConnectionManager:
                 "a later call tries to connect again."
             )
         return "ProtectConnectionManager is not initialized. Call initialize() first."
+
+    @property
+    def initialization_failure(self) -> ControllerConnectionFailed | None:
+        """Why the last connection attempt failed, as a fixed-text error keeping its category and status."""
+        return self._initialization_failure
 
     @staticmethod
     async def _dispose_client(client: ProtectApiClient) -> None:
@@ -552,7 +565,13 @@ class ProtectConnectionManager:
         Raises :class:`UniFiConnectionError` if not yet initialized.
         """
         if self._client is None or not self._initialized:
-            raise UniFiConnectionError(self._not_connected_message())
+            failure = self._initialization_failure
+            if failure is None or self._closed or self._attempt.in_progress:
+                raise UniFiConnectionError(self._not_connected_message())
+            # The same guidance, typed by the failure's category (auth, permission, timeout) and status.
+            error = type(failure)(self._not_connected_message())
+            error.status = failure.status
+            raise error from None
         return self._client
 
     @property
