@@ -246,13 +246,14 @@ bash <plugin-root>/scripts/set-env.sh --target claude --migrate
 ```
 
 On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target claude -Migrate`. It
-copies this plugin's settings into its options, then removes them from the
-project file. When no other UniFi plugin's settings remain there, it also
-removes the shared `UNIFI_*` settings it read, in the same atomic write, so none
-stay visible to every session in the project. It prints only variable names:
-what it moved, what has no Claude Code option (per-category policy overrides),
-and any shared setting it kept, with the reason. A missing provider file stops
-it with nothing changed. Then start a new session and check `/mcp`.
+copies this plugin's settings into its options, then removes only this plugin's
+keys from the project file atomically. Shared `UNIFI_*` keys are kept unless
+every possible consumer is proven migrated; setup currently verifies only this
+plugin's options. It names the retained shared keys and explains that other
+consumers have not been verified as migrated. Output includes only variable
+names, including what it moved and what has no Claude Code option (per-category
+policy overrides). A missing provider file stops it with nothing changed. Then
+start a new session and check `/mcp`.
 
 ### Recovery
 

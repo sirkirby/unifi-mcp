@@ -81,9 +81,12 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
 - **Earlier plugin versions:** they wrote the project's
   `.claude/settings.local.json`, which this version no longer reads. A
   session-start notice names the leftover variables, and
-  `set-env.sh --target claude --migrate` moves them into the options. When no
-  other UniFi plugin's settings remain in the file, it also removes the shared
-  `UNIFI_*` settings it read, so none stay visible to the project's sessions.
+  `set-env.sh --target claude --migrate` moves this plugin's settings into its
+  options and atomically removes only its keys from the project file. Shared
+  `UNIFI_*` keys are kept unless every possible consumer is proven migrated.
+  Setup currently verifies only this plugin's options, so it keeps shared keys
+  and names them with the reason: other consumers have not been verified as
+  migrated. Values are omitted.
 
 The `cross-product` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)), but their
