@@ -53,9 +53,11 @@ async def get_incident_evidence(
     max_events: Annotated[
         int, Field(description="Most event rows to read, including rows outside the window (1-10000)")
     ] = DEFAULT_EVENTS,
-    max_calls: Annotated[int, Field(description="Most controller page reads (1-100)")] = DEFAULT_CALLS,
+    max_calls: Annotated[
+        int, Field(description="Most HTTP requests to the controller, retries and the API probe included (1-100)")
+    ] = DEFAULT_CALLS,
     max_elapsed_ms: Annotated[
-        int, Field(description="Most wall time for reads; a read still running is cancelled (1-120000)")
+        int, Field(description="Most wall time, connecting included; a read still running is cancelled (1-120000)")
     ] = DEFAULT_ELAPSED_MS,
     mappings: Annotated[
         Optional[List[Dict[str, Any]]],
