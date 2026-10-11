@@ -17,27 +17,22 @@ plugin `1.0.0` can launch `unifi-network-mcp==0.37.0`; the plugin version and
 server package pin are independent. The advertised plugins and unlisted
 cross-product bundle start at `1.0.0` with this scheme.
 
-Contributors must bump each affected plugin whenever anything under its
-`plugins/<name>/` directory changes, including docs, skills, setup scripts and
-MCP config. Patch covers plugin-only fixes/docs and patch server moves; minor
-covers new skills/capabilities or minor server moves; major covers breaking
-setup/configuration or major server moves. Before 1.0, breaking changes advance
-minor and additive changes advance patch (SemVer 0.x).
+A plugin release is a plugin version bump merged to `main`; there is no
+separate publish step, and server packages keep their own tagged releases. Each
+client reads the default branch unless you pinned a ref when adding the
+marketplace:
 
-Set `version` only in existing plugin manifests, identical across Claude and
-Codex when both exist, with at least one manifest per plugin. Cross-product keeps
-only its Claude manifest and stays unlisted. Marketplace entries carry no
-`version`. The server stays separately pinned in `.mcp.json` and
-`.mcp.codex.json` (and inline Claude config when present), identically for both
-clients. Each pin must have a package release tag.
+- **Claude Code** installs a release when the plugin version changes and you
+  update. Auto-update is off for this marketplace, so run
+  `claude plugin marketplace update unifi-plugins`, then
+  `claude plugin update <plugin>@unifi-plugins`, then `/reload-plugins`.
+- **Codex** reinstalls only on a version change: run
+  `codex plugin marketplace upgrade`, then re-run setup with `--refresh` (below).
+- **OpenClaw** follows commits: run `openclaw plugins update <id>`.
 
-The release workflow automatically moves pins and bumps the plugin by the size
-of the server change, using the same tested module as the PR guard. Plugin-only
-changes ship through a manifest bump and merge without a Python package release.
-`make check-plugin-versions`, also run by `make pre-commit`, checks against the
-merge base with `origin/main`; PR CI uses the PR base SHA. Fetch history and tags
-first: a missing base fails. Changed plugins must have valid matching SemVer
-strictly greater than at that merge base. Version-only bumps are allowed.
+Contributors: the version, pin and release rules are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#plugin-changes) and the
+`monorepo-release-pipeline` skill (Procedure E).
 
 Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
 that takes precedence over the bundle. After every plugin upgrade, re-run setup
@@ -80,8 +75,9 @@ Each cell is labelled:
 - `not tested`: expected from the packaging, but no real-client install evidence yet.
 
 The repository checks manifests, paths, version pins and skill metadata
-automatically (`tests/test_plugin_packaging.py`). Those checks do not count as
-`tested`.
+automatically (`tests/test_plugin_packaging.py`), and that every tool a plugin
+names exists in the server release it pins (`scripts/plugin_tool_refs.py`).
+Those checks do not count as `tested`.
 
 | | Claude Code | Codex | OpenClaw |
 |---|---|---|---|
