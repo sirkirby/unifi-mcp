@@ -477,3 +477,135 @@ async def test_argument_coercion_errors_drop_the_rejected_value(tmp_path, monkey
     # The test client logs the URL it sent; nothing the server logged may carry the value.
     assert all(SENTINEL not in record.getMessage() for record in caplog.records if record.name != "httpx")
     assert harness.calls == []
+
+
+# --- second review: classified cold failures, declared locations, type-only categories -----
+
+
+@pytest.mark.asyncio
+async def test_a_refused_cold_protect_connection_is_permission_denied_without_nvr_text(tmp_path, monkeypatch, caplog):
+    """The real factory and ProtectConnectionManager; the SDK's bootstrap raises NotAuthorized (403)."""
+    import types
+
+    from uiprotect.exceptions import NotAuthorized
+    from unifi_api.services.managers import ManagerFactory
+    from unifi_core.protect.managers import connection_manager as pcm
+
+    class RefusingClient:
+        def __init__(self, **kwargs) -> None:
+            self.session = kwargs.get("session")
+            self.public_session = kwargs.get("public_api_session")
+
+        async def update(self) -> None:
+            raise NotAuthorized(
+                f"Request failed: https://controller.invalid/bootstrap - Status: 403 - Reason: {PRIVATE}"
+            )
+
+        async def async_disconnect_ws(self) -> None:
+            pass
+
+        async def close_session(self) -> None:
+            await self.session.close()
+            await self.public_session.close()
+
+    async def once(operation, **_):
+        return await operation()
+
+    monkeypatch.setattr(pcm, "ProtectApiClient", RefusingClient)
+    monkeypatch.setattr(pcm, "retry_with_backoff", once)
+    harness = await make_harness(tmp_path, monkeypatch)
+    factory = harness.app.state.manager_factory
+    factory.get_event_reader = types.MethodType(ManagerFactory.get_event_reader, factory)
+    with caplog.at_level("DEBUG"):
+        response = await harness.rest(PROTECT_PATH, lambda: None)
+        gql = await harness.graphql(f"{{ protect {{ incidentEvidence({gql_args(harness.cid)}) {{ document }} }} }}")
+    for document in (response.json()["data"], gql.json()["data"]["protect"]["incidentEvidence"]["document"]):
+        check_document(document)
+        assert document["sources"][0]["outcome"] == "permission_denied"
+        assert document["sources"][0]["failure"] == {"kind": "permission_denied", "http_status": 403}
+    assert PRIVATE not in response.text and PRIVATE not in gql.text
+    assert all(PRIVATE not in record.getMessage() and not record.exc_info for record in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_undeclared_mapping_keys_are_never_echoed(tmp_path, monkeypatch, caplog, product):
+    harness = await make_harness(tmp_path, monkeypatch)
+    mapping = {
+        "entity": {"kind": "network_device", "id_kind": "mac", "id": "aa:bb:cc:00:10:01", SENTINEL: "x"},
+        "target": {"kind": "camera", "id_kind": "protect_camera_id", "id": "cam-fixture-000a"},
+        "source": "operator_input",
+    }
+    path = NETWORK_PATH if product == "network" else PROTECT_PATH
+    with caplog.at_level("DEBUG"):
+        response = await harness.rest(path, lambda: None, mappings=json.dumps([mapping]))
+        query = (
+            "query Q($c: ID!, $s: String!, $e: String!, $m: JSON) "
+            f"{{ {product} {{ incidentEvidence(controller: $c, start: $s, end: $e, mappings: $m) {{ document }} }} }}"
+        )
+        async with harness.client() as client:
+            gql = await client.post(
+                "/v1/graphql",
+                headers=harness.headers,
+                json={
+                    "query": query,
+                    "variables": {"c": harness.cid, "s": REQUEST["start"], "e": REQUEST["end"], "m": [mapping]},
+                },
+            )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "mappings.0.entity: Extra inputs are not permitted"
+    assert gql.json()["errors"][0]["message"] == "mappings.0.entity: Extra inputs are not permitted"
+    assert gql.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert SENTINEL not in response.text and SENTINEL not in gql.text
+    assert all(SENTINEL not in record.getMessage() for record in caplog.records if record.name != "httpx")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_rejected_inline_values_stay_out_of_graphql_logs(tmp_path, monkeypatch, caplog, product):
+    harness = await make_harness(tmp_path, monkeypatch)
+    arguments = f'start: "{SENTINEL}", end: "{REQUEST["end"]}", controller: "{harness.cid}"'
+    query = f"{{ {product} {{ incidentEvidence({arguments}) {{ document }} }} }}"
+    with caplog.at_level("DEBUG"):
+        response = await harness.graphql(query)
+    assert response.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert SENTINEL not in response.text
+    assert all(SENTINEL not in record.getMessage() and not record.exc_info for record in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_input_mentioning_scope_never_becomes_forbidden(tmp_path, monkeypatch, product):
+    harness = await make_harness(tmp_path, monkeypatch)
+    query = (
+        "query Q($c: ID!, $s: String!, $e: String!, $m: Int) "
+        f"{{ {product} {{ incidentEvidence(controller: $c, start: $s, end: $e, maxCalls: $m) {{ document }} }} }}"
+    )
+    async with harness.client() as client:
+        gql = await client.post(
+            "/v1/graphql",
+            headers=harness.headers,
+            json={
+                "query": query,
+                "variables": {
+                    "c": harness.cid,
+                    "s": REQUEST["start"],
+                    "e": REQUEST["end"],
+                    "m": "private-scope-sentinel",
+                },
+            },
+        )
+    assert gql.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert "private-scope-sentinel" not in gql.text
+
+
+@pytest.mark.asyncio
+async def test_a_controller_without_the_product_is_refused_alike_on_rest_and_graphql(tmp_path, monkeypatch):
+    harness = await make_harness(tmp_path, monkeypatch, products="network")
+    response = await harness.rest(PROTECT_PATH, lambda: None)
+    gql = await harness.graphql(f"{{ protect {{ incidentEvidence({gql_args(harness.cid)}) {{ document }} }} }}")
+    assert response.status_code == 409 and response.json()["detail"]["kind"] == "capability_mismatch"
+    error = gql.json()["errors"][0]
+    assert error["extensions"]["code"] == "CAPABILITY_MISMATCH"
+    assert error["message"] == "controller does not support protect"
+    assert harness.calls == []

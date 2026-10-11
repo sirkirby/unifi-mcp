@@ -81,7 +81,7 @@ async def get_incident_evidence(
             mappings=mappings,
         )
     except ValidationError as exc:
-        return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc)}"}
+        return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, ProtectIncidentRequest)}"}
     try:
         evidence = await collect_protect_incident_evidence(event_manager, request)
         return {"success": True, "data": evidence_to_json(evidence)}
