@@ -10,7 +10,7 @@ description: >-
   check-prereqs.sh before plugin setup; writing Bash 3.2-compatible shell
   scripts for plugins/; multi-target plugin support for Claude, Codex, and
   OpenClaw targets; atomic version sync across plugin manifests; and issuing
-  no-op patch releases when only plugin config or scripts change. Apply even
+  independent plugin bumps when shipped config, skills or scripts change. Apply even
   if the user doesn't explicitly mention transport races — activate whenever
   plugin behavior, MCP tool availability, or plugin-scoped shell scripts are
   being modified.
@@ -44,7 +44,7 @@ Before modifying any plugin configuration or transport code:
 2. **Know all three app directories.** Transport and HTTP config changes almost always need to be reflected in `apps/network/`, `apps/protect/`, and `apps/access/` in parallel. Partial application leaves inconsistent behavior.
 3. **Know all three plugin directories.** Script and setup changes apply to `plugins/unifi-network/`, `plugins/unifi-protect/`, and `plugins/unifi-access/`. Applying to only one or two creates inconsistent behavior that is nearly impossible for users to diagnose.
 4. **Know the multi-target plugin registry and all three runtimes.** As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports three plugin targets: Claude, Codex, and OpenClaw. Plugin configuration, version sync, and release procedures must account for target-specific manifests and initialization paths.
-5. **Hold the current MCP shared package version.** Plugin versions are slaved to MCP package tags; know the current tag before planning a release (see Procedure F).
+5. **Distinguish plugin versions from server pins.** Bump the plugin for every shipped-file change; product tags move pins automatically (see Procedure F).
 6. **Run `check-prereqs.sh` first** (see Procedure D) before activating any plugin setup change in a live environment.
 
 ---
@@ -84,7 +84,7 @@ This was the root cause of Issue #200, fixed in PR #202. The fix required change
 - [ ] Change applied in all three: `apps/network/`, `apps/protect/`, `apps/access/` config.yaml files
 - [ ] `UNIFI_MCP_HTTP_FORCE` value is `false` (or the env var is unset) for all uvx-launched contexts
 - [ ] No environment variable injection is setting it to `true` in the plugin setup path
-- [ ] A no-op patch release is planned if config is the only change (see Procedure F)
+- [ ] An independent plugin bump accompanies any shipped-file change (see Procedure F)
 
 ---
 
@@ -268,49 +268,37 @@ If CI runs on Linux, add a macOS job or test locally — Linux bash is almost al
 
 ---
 
-## Procedure F: Plugin Version Sync — No-Op Patch Releases and Multi-Target Registry
+## Procedure F: Independent Plugin Versions and Pin Writebacks
 
-### The versioning contract
+Each plugin has an independent semantic version describing everything it ships,
+separate from the server package pin. Set the same `version` in every existing
+Claude and Codex manifest; require at least one manifest. The unlisted
+`cross-product` bundle follows these rules with its Claude manifest only.
+Keep `version` out of marketplace entries.
 
-Plugin versions are **strictly slaved** to MCP package release tags. The version referenced in plugin config must match a tagged MCP package version published to PyPI. There is no independent plugin version number.
+Bump every affected plugin in the same PR whenever any file under
+`plugins/<name>/` changes, including skills, setup scripts, MCP configs and docs.
+Use patch for plugin-only fixes or docs; minor for new skills/capabilities or a
+minor server pin move; major for breaking setup/configuration or a major server
+pin move. Patch server moves use patch. Before 1.0, breaking changes advance the
+minor and additive changes advance the patch (SemVer 0.x). All four plugins start
+at 1.0.0 when independent versioning is introduced.
 
-### Multi-target plugin registry (PR #246, PR #248)
+`bump-plugin-versions.yml` automatically moves both client pins and bumps the
+plugin by the size of a released server change, preserving the independent
+plugin version line. It also updates an inline Claude pin when present and
+regenerates `apps/<product>/server.json` with the **server** version. Core, Shared
+and Relay triggers keep their existing behavior: coalesce any outstanding product
+tags, otherwise produce no writeback. Plugin-only changes need a manifest bump
+and merge; no Python package release is needed.
 
-As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports **three plugin targets: Claude, Codex, and OpenClaw**. The multi-target registry lives in `.agents/plugins/marketplace.json`. When a version bump is released, **all target registries** in `.agents/plugins/marketplace.json` must be updated in the same commit. Codex-specific manifests are in `.codex-plugin/` and OpenClaw-specific manifests are in `.agents/plugins/openclaw/` — these must be synchronized with the main app configs and the root marketplace.json entry.
-
-### When only plugin config or scripts change
-
-If a PR modifies only plugin manifests or scripts (no Python code changes in `shared/`), the correct release mechanism is a **no-op patch release**:
-
-1. Bump the patch version in `packages/unifi-mcp-shared/pyproject.toml`.
-2. Commit, tag, and push the new tag.
-3. Wait for the release pipeline to publish the wheel to PyPI.
-4. **Atomically update version fields** in all target registries and manifests:
-   - `.agents/plugins/marketplace.json` — all three target sections (claude, codex, openclaw) for all three plugins (network, protect, access)
-   - `.codex-plugin/plugin.json` — version field in the Codex-specific manifest
-   - `.agents/plugins/openclaw/plugin.json` — version field in the OpenClaw-specific manifest
-   - `apps/network/src/unifi_network_mcp/config/config.yaml` — version string
-   - `apps/protect/src/unifi_protect_mcp/config/config.yaml` — version string
-   - `apps/access/src/unifi_access_mcp/config/config.yaml` — version string
-
-5. **Workflow automation:** The `bump-plugin-versions.yml` CI workflow should atomically cover all three locations in a single workflow commit — do not bump them separately.
-6. Do **not** update the plugin version before the PyPI step completes (PyPI ordering gate — see `monorepo-release-pipeline` skill).
-
-**Never skip the release for plugin-only changes.** Without a new tag, the plugin version field cannot advance, the config change has no anchored release identity, and existing users stay pinned to the cached old config until a tagged release forces cache invalidation.
-
-### Change-type reference
-
-| Change type | Release needed? | Release type |
-|---|---|---|
-| Python code change in `shared/` | Yes | Functional patch / minor / major |
-| HTTP transport config change only | Yes | No-op patch |
-| `check-prereqs.sh` or `set-env.sh` change | Yes | No-op patch |
-| PowerShell plugin script (`.ps1`) change | Yes | No-op patch |
-| Plugin skill SKILL.md change | Yes | No-op patch |
-| Codex manifest or `.codex-plugin/` change | Yes | No-op patch |
-| OpenClaw manifest or `.agents/plugins/openclaw/` change | Yes | No-op patch |
-| Multi-target registry (.agents/plugins/marketplace.json) change | Yes | No-op patch |
-| README / docs only | No | — |
+Run `make check-plugin-versions` before committing. It uses
+`scripts/plugin_versions.py check --base origin/main`, also run by
+`make pre-commit`; PR CI uses the PR base SHA's merge base. Fetch base history and
+tags first. A missing base fails. Changed plugin versions must be valid SemVer,
+agree across existing manifests and exceed the merge-base version. Client pins
+must agree and name release tags; only the workflow's exact `--releasing` tag may
+stand in for a tag not yet discovered locally. Version-only bumps are allowed.
 
 ---
 
@@ -340,9 +328,13 @@ A passing local test with `--plugin-dir` does not guarantee the marketplace-inst
 
 The three plugin targets (Claude, Codex, and OpenClaw) have identical transport initialization patterns. Changes to `transport.py` apply to all three; transport-specific gotchas that were previously labeled as Codex-only (PR #246) now apply equally to OpenClaw (PR #248). When debugging transport issues, test against all three runtime targets if possible — a transport bug may surface in one target before appearing in others due to timing or initialization order differences.
 
-### Version sync atomicity — Marketplace registry must stay consistent
+### Version and pin atomicity
 
-The `.agents/plugins/marketplace.json` root registry, `.codex-plugin/plugin.json`, and `.agents/plugins/openclaw/plugin.json` must have matching version strings. If a release bumps only `.agents/plugins/marketplace.json` but forgets the target-specific manifests, the Codex and OpenClaw plugins will keep referencing the old version while the marketplace registry has advanced. This creates version skew that manifests as "tool unavailability for OpenClaw users while Codex works fine" — a confusing symptom that points to version mismatch, not transport issues. Always update all three registry locations atomically.
+Update existing Claude and Codex manifest versions together. The package pin in
+`.mcp.json`, `.mcp.codex.json` and any inline Claude `mcpServers` stays identical
+across clients, independent of the plugin version. Marketplace entries carry no
+`version`. Re-run Codex setup with `--refresh` after a plugin upgrade to update
+its separate saved MCP entry.
 
 ### Skill-dir naming collision — Manifest registration gotcha
 

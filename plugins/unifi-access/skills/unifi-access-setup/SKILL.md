@@ -31,7 +31,13 @@ On macOS and Linux, resolve setup scripts relative to this skill file:
 
 When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
 
-On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, prefer the native PowerShell prereq script and call `codex mcp add` directly with the same env variables if Bash is unavailable. On Windows with OpenClaw, call `openclaw mcp set` directly with a JSON object containing `command`, `args`, and `env` if Bash is unavailable. Do not run the Bash prereq script on Windows unless the user explicitly asks to use a Bash environment.
+On Windows, use `../../scripts/set-env.ps1 -Target <claude|codex|openclaw>`
+for every target. Use the matching PowerShell prerequisite checker. Both helpers
+require uv/uvx and the selected client's CLI (`claude`, `codex` or `openclaw`). A working
+Python 3.11+ on PATH is used first; otherwise uv supplies managed Python
+(with a possible first-run download). No separate Python installation is needed.
+Do not substitute direct client registration commands, which can expose env
+values in process arguments.
 
 ## Step 0: Check Prerequisites
 
@@ -55,7 +61,7 @@ If the script exits non-zero, stop and report the error. Do not proceed to crede
 
 Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
-If another UniFi MCP server is already configured, ask whether Access is on the same controller. For Claude, existing values may be in `.claude/settings.local.json`. For Codex, existing values may be visible through `codex mcp list` and `codex mcp get <server>`. For OpenClaw, existing values may be visible through `openclaw mcp list` and `openclaw mcp show <server>`.
+If another UniFi MCP server is already configured, ask whether Access is on the same controller. Inspect a sanitized summary of the existing host and variable names only. Do not print full settings or raw `mcp list/get/show` output: these can contain stored credentials.
 
 ## Step 2: Authentication
 
@@ -77,17 +83,31 @@ command argument. Ask for exactly one indirect provider per selected secret:
 `UNIFI_ACCESS_API_KEY_COMMAND=<absolute argv>`. A command provider can call a
 Keychain, `pass`, or 1Password helper; it is not run through a shell and must not
 prompt. If no indirect provider already exists, explain how to create one outside
-the chat transcript or use a client-native masked secret UI, then wait.
+the chat transcript or use a client-native masked secret UI, then wait. In Claude
+Code that UI is the plugin's options dialog (`/plugin`, then `unifi-access`, then
+Configure options): its password and API key fields are masked and stored in
+the system keychain.
 
-Set exactly one spelling per secret; the server refuses to start if two are set.
-On the Claude target `set-env.sh` only adds keys. Before changing or deselecting
-an authentication path, remove all of that path's existing product-scoped
-spellings: `UNIFI_ACCESS_PASSWORD`, `UNIFI_ACCESS_PASSWORD_FILE`, and
-`UNIFI_ACCESS_PASSWORD_COMMAND` for session authentication; and
+All three servers apply the same precedence: non-empty `UNIFI_<PRODUCT>_*`
+values override shared `UNIFI_*` values; empty values count as unset. This applies
+to host, username and credentials even where bundled YAML defaults name different
+variables. Shared providers are fallback only. Multiple non-empty spellings
+(plain, `_FILE`, `_COMMAND`) at the selected level refuse startup.
+
+The setup helper switches providers atomically: selecting one spelling removes
+its saved siblings at the same level while preserving unrelated settings. To
+remove an authentication path, pipe a JSON patch setting all three saved
+spellings to `null` (for example `UNIFI_ACCESS_PASSWORD`,
+`UNIFI_ACCESS_PASSWORD_FILE`, `UNIFI_ACCESS_PASSWORD_COMMAND`). Remove or
+override shared fallback settings deliberately too; deleting product settings
+alone can reactivate shared credentials. Inherited environment providers must
+also be corrected in the launcher. Never delete a working provider in a separate
+preparatory write.
+
+Before changing or skipping API-key setup, remove obsolete
 `UNIFI_ACCESS_API_KEY`, `UNIFI_ACCESS_API_KEY_FILE`, and
-`UNIFI_ACCESS_API_KEY_COMMAND` for API-key authentication. Then add only the
-provider the user selected. The Codex and OpenClaw targets replace the whole
-server entry.
+`UNIFI_ACCESS_API_KEY_COMMAND` spellings with null deletions in the same patch;
+keep only the selected replacement, or delete all three when deselecting it.
 
 At least one auth path is required.
 
@@ -109,10 +129,22 @@ Options:
 - Enable all Access write permissions except delete operations
 - Custom categories
 
-Before writing policy values, inspect the selected client's existing
-`unifi-access` MCP environment. Remove every existing category-specific
-`UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>` entry, because those entries take
-precedence over server-level defaults. Do not remove unrelated variables. Set
+For Claude Code, the plugin's options hold only the server-level gates. Offer:
+read-only (the default), allow updates, allow creates and updates, or allow
+creates, updates and deletes. Set `UNIFI_POLICY_ACCESS_CREATE`,
+`UNIFI_POLICY_ACCESS_UPDATE` and `UNIFI_POLICY_ACCESS_DELETE` to `true` or `false`,
+and keep `UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm` so every mutation is previewed
+first. Per-category overrides (`UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>`) are not
+available for Claude Code and setup refuses them. A user who wants only some
+categories writable can allow the action server-wide and decline the previews
+they do not want, or keep the action off.
+
+For Codex and OpenClaw, before writing policy values, inspect a sanitized list of the selected client's
+existing `unifi-access` MCP environment variable names.
+Remove every existing category-specific
+`UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>` entry by including null deletions
+in the same JSON patch, because those entries take precedence over server-level
+defaults. Preserve unrelated variables. Set
 `UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm`, then add back only the
 category/action overrides the user selected.
 
@@ -138,10 +170,11 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_POLICY_ACCESS_DELETE=false
 ```
 
-Add optional values and policy variables to the same command, for example:
+Add optional values and policy variables to the same command. Per-category
+overrides apply to Codex and OpenClaw only, for example:
 
 ```bash
-bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
+bash <path-to-plugin>/scripts/set-env.sh --target <codex|openclaw> \
   UNIFI_ACCESS_HOST=<host> \
   'UNIFI_ACCESS_API_KEY_COMMAND=<absolute-argv>' \
   UNIFI_ACCESS_USERNAME=<username> \
@@ -155,19 +188,82 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
 ```
 
 The script handles the client-specific write:
-- Claude target: merges env vars into `.claude/settings.local.json`
-- Codex target: replaces the `unifi-access` MCP server via `codex mcp add --env ... -- uvx ...`
-- OpenClaw target: replaces the `unifi-access` MCP server via `openclaw mcp set ...`
+- Claude: validates every value, then saves the plugin's Claude Code options
+  with `claude plugin configure --values-stdin` (values on stdin): non-secret
+  options in user `settings.json` (`pluginConfigs`), a raw password or API key
+  in the system keychain. The options apply in every project
+- Codex: stages registration in a private `CODEX_HOME`, merges env without argv,
+  validates with the client, then atomically replaces `config.toml`
+- OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
+  then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
+
+For raw values or null deletions, use JSON stdin: `set-env.sh --target <target>
+--input-json` or `set-env.ps1 -Target <target> -InputJson`. Have the user supply
+this JSON locally from a private file or a masked input UI; never put raw secrets
+in chat, a tool call, command arguments, or a shell history entry. Provider
+references in the examples are non-secret paths or helper argv, never embedded
+passwords or API keys. Setup checks that provider files are readable and non-empty
+and provider executables exist; it does not read secrets, execute providers, or
+contact the controller. Provider output and controller authentication are checked
+only when the server starts.
+
+### Codex upgrades
+
+Codex setup pins a separate MCP entry that takes precedence over the plugin's
+bundled server. After **every plugin upgrade**, resolve this newly installed
+skill's plugin root and refresh the pin before restarting Codex:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+This command needs no credential input and preserves the saved environment and
+provider references. It validates providers, records the plugin and package
+versions in `config.toml`, and prints the pinned package on success. Confirm that
+version matches the new installed plugin. Use ordinary setup first if there is
+no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+
+### Claude Code projects set up by an earlier plugin version
+
+Earlier versions saved Claude Code settings in the project's
+`.claude/settings.local.json`. This version no longer reads them; setup, the
+prerequisite check and a session-start notice name the leftover variables. From
+that project, run:
+
+```bash
+bash <plugin-root>/scripts/set-env.sh --target claude --migrate
+```
+
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target claude -Migrate`. It
+copies this plugin's settings into its options, then removes them from the
+project file. It prints only variable names: what it moved, what has no Claude
+Code option (per-category policy overrides) and the shared `UNIFI_*` settings it
+left for the other UniFi plugins. A missing provider file stops it with nothing
+changed. Then start a new session and check `/mcp`.
+
+### Recovery
+
+On validation, dependency, registration, or write failure the previous file and
+registration remain in place. Repair malformed configuration without discarding
+unrelated settings, install the reported dependency, or correct the provider,
+then rerun. `--dry-run` / `-DryRun` validates the patch without changing files and
+omits values. Automatic OpenClaw setup requires strict JSON; JSON5 configurations
+are refused unchanged and need the client editor. After a forced termination,
+remove adjacent `.setup-lock` and `.unifi-setup-*` staging directories only after
+confirming no setup process is running. Staging files are private and may contain
+credentials; delete them without displaying their contents. An interruption at
+publication leaves either the old configuration or the complete new one.
 
 ## Step 6: Final Message
 
 For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code or run `/reload-plugins`, then confirm the plugin is enabled with `/plugin`."
+"Saved as the unifi-access plugin's Claude Code options (a raw password or API key goes to the system keychain). Exit Claude Code and start a new session, then run `/mcp` and check that `plugin:unifi-access:unifi-access` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-access:unifi-access`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. Review or change the options with `/plugin`, then `unifi-access`, then Configure options."
 
 For Codex, tell the user:
 
-"Codex MCP server `unifi-access` configured. Restart Codex so the updated MCP server is loaded."
+"Codex MCP server `unifi-access` configured at the package version printed by setup. Restart Codex so the updated MCP server is loaded. After every plugin upgrade, re-run the new plugin’s setup with --target codex --refresh (PowerShell: -Target codex -Refresh)."
 
 For OpenClaw, tell the user:
 

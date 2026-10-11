@@ -2,7 +2,10 @@
   "name": "cross-product",
   "displayName": "UniFi Cross-Product Intelligence",
   "description": "Skills that correlate events across UniFi Network, Protect, and Access for unified security and operational insights.",
-  "version": "0.1.0",
-  "author": "sirkirby",
+  "version": "1.0.0",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
   "license": "MIT"
 }
