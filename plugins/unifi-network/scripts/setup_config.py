@@ -457,6 +457,30 @@ def shared_name(variable, product):
     return variable
 
 
+def option_conflicts(saved, patch, mapping, schema, product):
+    """Name connection variables whose saved options (from any project) differ from *patch*."""
+    if not saved.get(f"UNIFI_{product}_HOST"):
+        return []
+    conflicts = []
+    for field in ("HOST", "USERNAME", "PORT", "SITE"):
+        variable = f"UNIFI_{product}_{field}"
+        # An empty saved option is filled, not replaced; defaults such as port 443 are held values.
+        current = saved.get(variable, "")
+        if variable in mapping and variable in patch and current:
+            if option_text(schema[mapping[variable]], patch[variable]) != current:
+                conflicts.append(variable)
+    return conflicts
+
+
+def recovery(name):
+    # A session started before the options changed keeps its old copy until
+    # /reload-plugins; a failure cached with unchanged options needs a reconnect.
+    return (
+        "run /reload-plugins, then /mcp reconnect plugin:" + name + ":" + name + " if /mcp still shows the server "
+        "as failed"
+    )
+
+
 def legacy_patch(owned, shared, mapping, product):
     """Translate legacy project variables into this plugin's option variables."""
     legacy = dict(shared, **owned)
@@ -558,11 +582,29 @@ def claude_main(args, root, name, product):
             "no longer reads (" + ", ".join(sorted(owned)) + "). Move them into the plugin's options with "
             "set-env.sh --target claude --migrate (PowerShell: set-env.ps1 -Target claude -Migrate)."
         )
+        try:
+            conflicts = option_conflicts(saved, legacy_patch(owned, shared, mapping, product), mapping, schema, product)
+        except SetupError:
+            conflicts = []  # The migration itself reports a malformed legacy value.
+        if conflicts:
+            notice += (
+                " They differ from the plugin options saved from another project (" + ", ".join(conflicts) + "), "
+                "which this project now uses. Add --replace (PowerShell: -Replace) to make this project's settings "
+                "the options for every project, or remove the leftover keys to keep the saved options."
+            )
     auto_notice = auto_confirm_notice(shared, product, deprecated_client=True) if legacy_data else None
     if args.check:
         merge_env(saved, {}, product, inherited)
         if notice:
             print(notice)
+        others_left = [k for k in legacy_data["env"] if k.startswith(other_prefixes(product))] if legacy_data else []
+        if shared and not owned and not others_left:
+            print(
+                "Notice: no UniFi plugin settings remain in .claude/settings.local.json, but it still holds shared "
+                "settings (" + ", ".join(sorted(shared)) + "). Claude Code still exports them into every process "
+                "it starts in this project, including shell commands and MCP servers. Remove them once no "
+                "standalone server or older plugin relies on them. Values are omitted."
+            )
         if auto_notice:
             print(auto_notice)
         print("Prerequisites passed: uvx, setup runtime, Claude Code plugin options and configuration checked.")
@@ -575,6 +617,15 @@ def claude_main(args, root, name, product):
         patch = legacy_patch(owned, shared, mapping, product)
         if not patch:
             refuse("The legacy settings hold no value this plugin's Claude Code options can use; run setup instead.")
+        replaced = option_conflicts(saved, patch, mapping, schema, product)
+        if replaced and not args.replace:
+            refuse(
+                "This project's legacy settings differ from the plugin options already saved from another project: "
+                + ", ".join(replaced)
+                + ". Plugin options apply in every project. Rerun with --replace (PowerShell: -Replace) to make "
+                "this project's settings the options for every project, or remove this plugin's keys from "
+                ".claude/settings.local.json to keep the saved options. No settings were changed."
+            )
     else:
         raw_input = sys.stdin.buffer.read().decode("utf-8-sig")
         if args.pairs:
@@ -656,6 +707,11 @@ def claude_main(args, root, name, product):
             "Migrated " + ", ".join(sorted(k for k in owned if k in patch)) + " into the plugin's Claude Code options "
             "and removed " + ", ".join(sorted(removed)) + " from .claude/settings.local.json. Values are omitted."
         )
+        if replaced:
+            print(
+                "Replaced the plugin options saved from another project (" + ", ".join(replaced) + "); they now "
+                "apply in every project."
+            )
         dropped = sorted(k for k in owned if k not in patch)
         if dropped:
             print("Not migrated (no Claude Code option): " + ", ".join(dropped) + ".")
@@ -674,8 +730,11 @@ def claude_main(args, root, name, product):
     if auto_notice:
         print(auto_notice)
     print(
-        "Claude Code plugin options saved for " + plugin_id + ". Start a new Claude Code session; if the server "
-        "is not connected, run /mcp reconnect plugin:" + name + ":" + name + ". Values are omitted."
+        "Claude Code plugin options saved for "
+        + plugin_id
+        + ". In an open Claude Code session, "
+        + recovery(name)
+        + ". A new session also loads them. Values are omitted."
     )
 
 
@@ -693,6 +752,9 @@ def main():
     parser.add_argument(
         "--migrate", action="store_true", help="Move legacy Claude project settings into plugin options"
     )
+    parser.add_argument(
+        "--replace", action="store_true", help="Let a migration replace differing options saved from another project"
+    )
     args = parser.parse_args()
     if sys.version_info < (3, 11):
         refuse("No usable setup interpreter; install uv (which supplies Python) and rerun.")
@@ -706,6 +768,8 @@ def main():
         refuse("Refresh is only supported for an existing Codex registration, without environment arguments.")
     if args.migrate and (target != "claude" or args.pairs or args.check):
         refuse("Migration is only supported for Claude Code, without environment arguments.")
+    if args.replace and not args.migrate:
+        refuse("--replace is only supported together with --migrate.")
     pin = package_pin(root, name, codex=True) if target == "codex" else None
     plugin_version = None
     if target == "codex" and not args.check:

@@ -8,6 +8,7 @@ param(
     [switch]$DryRun,
     [switch]$Refresh,
     [switch]$Migrate,
+    [switch]$Replace,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$KeyValuePairs,
     [Parameter(ValueFromPipeline = $true)]
@@ -75,6 +76,7 @@ function Invoke-SetupHelper {
     $start.Arguments = $runtime.Prefix + '"' + $helper + '" --target ' + $Target
     if ($Refresh) { $start.Arguments += ' --refresh' }
     if ($Migrate) { $start.Arguments += ' --migrate' }
+    if ($Replace) { $start.Arguments += ' --replace' }
     if ($DryRun) { $start.Arguments += ' --dry-run' }
     Set-BatchLauncher $start
     $start.UseShellExecute = $false
@@ -95,6 +97,9 @@ function Invoke-SetupHelper {
         $process.WaitForExit()
         if ($process.ExitCode -ne 0) {
             # Child diagnostics can contain controller values or submitted secrets.
+            # Show only the helper's own fixed, value-free refusal line.
+            $diagnostic = $stderrTask.Result
+            if ($diagnostic -cmatch '\A(ERROR: [^\r\n]+)\r?\n?\z') { [Console]::Error.WriteLine($Matches[1]) }
             throw 'Plugin setup failed; configuration was not applied.'
         }
         if ($stdoutTask.Result) { [Console]::Out.Write($stdoutTask.Result) }
@@ -111,6 +116,9 @@ try {
         }
         Invoke-SetupHelper -Json '{}'
         exit 0
+    }
+    if ($Replace -and -not $Migrate) {
+        throw 'Replace requires Migrate.'
     }
     if ($Migrate) {
         if ($Target -ne 'claude' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
