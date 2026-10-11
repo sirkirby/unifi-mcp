@@ -828,6 +828,7 @@
             "interrupted": false
           },
           "truncation": "truncated",
+          "retention_coverage": "unknown",
           "counts": {
             "received": 100,
             "accepted": 100,

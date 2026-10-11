@@ -71,6 +71,15 @@ are derived and validated, never trusted from the producer.
   continuation flag (`has_more: false`) or remote total proves the tail was
   read; a cap never does, and neither does a total below the rows already
   read. `population_total` is set only when coverage is complete.
+- **Retention.** Each source's `retention_coverage` says whether the
+  controller still held every event of the queried window. It is always
+  `unknown`: neither product reports its oldest retained event, so an `empty`
+  source means the controller returned no event for the window, not that none
+  occurred before the controller discarded it. Network's `/stat/sysinfo`
+  `data_retention_*` settings describe statistics scales, and Protect's
+  `recordingRetentionDurationMs` and per-camera `recordingStart` describe
+  video; how either bounds the event log is not verified, so neither is used
+  to place a window inside or outside retention. Any all-clear must say so.
 - **Failure.** Sources end `complete`, `empty`, `partial` (with sorted
   reasons), or one of `unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`. A response that

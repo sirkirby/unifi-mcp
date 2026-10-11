@@ -81,6 +81,7 @@
             "interrupted": false
           },
           "truncation": "not_truncated",
+          "retention_coverage": "unknown",
           "counts": {
             "received": 0,
             "accepted": 0,
@@ -146,6 +147,7 @@
             "interrupted": false
           },
           "truncation": "not_truncated",
+          "retention_coverage": "unknown",
           "counts": {
             "received": 0,
             "accepted": 0,

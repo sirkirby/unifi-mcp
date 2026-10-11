@@ -442,6 +442,9 @@
         "requested_window": {
           "$ref": "#/$defs/TimeWindow"
         },
+        "retention_coverage": {
+          "$ref": "#/$defs/RetentionCoverage"
+        },
         "truncation": {
           "$ref": "#/$defs/Truncation"
         },
@@ -458,6 +461,7 @@
         "filters",
         "pagination",
         "truncation",
+        "retention_coverage",
         "counts",
         "complete",
         "population_total"
@@ -1364,6 +1368,14 @@
       ],
       "title": "RecordCounts",
       "type": "object"
+    },
+    "RetentionCoverage": {
+      "description": "Whether the controller still held every event of the queried window.\n\nNeither product reports its oldest retained event, so this is always\n``unknown``: an empty source means no event was returned, not that none\noccurred before the controller discarded it.",
+      "enum": [
+        "unknown"
+      ],
+      "title": "RetentionCoverage",
+      "type": "string"
     },
     "Scope": {
       "additionalProperties": false,

@@ -18,6 +18,9 @@ Contract rules encoded here (see ``docs/incident-evidence.md``):
 - A source's retrieved count is a population total only when its coverage is
   complete. Total failure is ``failed``, never ``empty``; incomplete evidence
   is never ``coverage_complete``.
+- Retention is never claimed: neither product reports its oldest retained
+  event, so every source's ``retention_coverage`` is ``unknown`` and an empty
+  result is no proof that nothing happened before the controller discarded it.
 - Records are ordered by UTC time, then product, source, source record ID and
   evidence ID; records without a usable time sort last.
 """
@@ -233,6 +236,17 @@ class Truncation(str, Enum):
 class WindowCoverage(str, Enum):
     COVERED = "covered"
     NOT_COVERED = "not_covered"
+    UNKNOWN = "unknown"
+
+
+class RetentionCoverage(str, Enum):
+    """Whether the controller still held every event of the queried window.
+
+    Neither product reports its oldest retained event, so this is always
+    ``unknown``: an empty source means no event was returned, not that none
+    occurred before the controller discarded it.
+    """
+
     UNKNOWN = "unknown"
 
 
@@ -1275,6 +1289,7 @@ class Coverage(_ClosedModel):
     filters: dict[str, QueryValue] = Field(json_schema_extra=_KEY_NAMES_SCHEMA)
     pagination: Pagination
     truncation: Truncation
+    retention_coverage: RetentionCoverage
     counts: RecordCounts
     complete: bool
     population_total: int | None = Field(ge=0)
@@ -1863,6 +1878,7 @@ def _coverage(
         filters=context.filters,
         pagination=pagination,
         truncation=truncation,
+        retention_coverage=RetentionCoverage.UNKNOWN,
         counts=counts,
         complete=complete,
         population_total=counts.in_window if complete else None,

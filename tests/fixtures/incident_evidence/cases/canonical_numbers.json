@@ -180,6 +180,7 @@
             "interrupted": false
           },
           "truncation": "not_truncated",
+          "retention_coverage": "unknown",
           "counts": {
             "received": 12,
             "accepted": 12,
