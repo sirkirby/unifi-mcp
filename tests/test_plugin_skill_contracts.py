@@ -16,8 +16,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = r"(?:unifi|protect|access)_[a-z][a-z0-9_]+"
-# These are event/response field names, not tools (including in generated prose).
-DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial"}
+# These are event/response field names and contract values, not tools (including in generated prose).
+DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
 SERVERS = {"network", "protect", "access", "relay"}
 
 
