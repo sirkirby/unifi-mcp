@@ -91,6 +91,21 @@ The relay + worker architecture supports multiple locations. Each location runs 
 - **Write tools** require an explicit `__location` argument to target a specific location
 - **Tool discovery** is deduplicated across locations in the worker's tool index
 
+## Incident evidence
+
+`unifi_location_timeline` consumes the product tools
+`unifi_get_incident_evidence` and `protect_get_incident_evidence`. Pass `start`
+and `end` with UTC offsets, optional exact `device_macs`/`camera_ids`, explicit
+`mappings` and `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`.
+Network and Protect are selected by default; Access is reported unsupported.
+
+The response's `data` is one validated incident evidence document, including
+failed sources. Inspect `overall`, `coverage_complete` and `budgets.exhausted`;
+an empty record list alone says nothing about source availability. The worker
+owns cloud-facing discovery and can select one location using `location_id`.
+Contradictory source IDs across locations fail combination. See the
+[contract and combine rules](../../docs/incident-evidence.md#relay-and-worker-consumers).
+
 ## Architecture
 
 The relay is a standalone Python package with no dependency on the MCP server packages. It communicates with local servers purely via the MCP HTTP transport protocol.
@@ -103,6 +118,7 @@ The relay is a standalone Python package with no dependency on the MCP server pa
 | `forwarder.py` | Tool call routing to the correct local server |
 | `client.py` | WebSocket client with reconnection and auth |
 | `main.py` | Orchestrator wiring discovery, forwarding, and the client |
+| `location_timeline.py` | Validated evidence-tool consumer using Core combination |
 
 ## Development
 

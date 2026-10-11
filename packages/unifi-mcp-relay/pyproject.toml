@@ -18,11 +18,10 @@ dependencies = [
     "multidict>=6.9.1",
     "aiohttp>=3.14.3",
     "python-dotenv>=1.2.2",
-    "unifi-mcp-shared>=0.6.18,<0.7",
-    # location_timeline.py imports unifi_core.event_timeline directly. This resolves
-    # today only as a transitive of unifi-mcp-shared; declare it so it does not.
-    # Controller credential redaction requires Core 0.4.51.
-    "unifi-core>=0.4.51,<0.5",
+    "unifi-mcp-shared>=0.6.28,<0.7",
+    # Incident contract validation, combination and the client view are direct
+    # Core imports and require Core 0.4.71.
+    "unifi-core>=0.4.71,<0.5",
 ]
 
 [project.scripts]

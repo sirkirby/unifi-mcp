@@ -1,269 +1,177 @@
-"""Cross-product location timeline tool for the relay sidecar.
-
-Fans out event queries to all connected servers via the ToolForwarder,
-merges results into a single time-sorted timeline, and returns a unified
-response. This tool is only available in relay mode — local/stdio mode
-uses the single-product event timeline from unifi-mcp-shared.
-"""
+"""Transport-only consumer of Core's incident evidence contract."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
-from unifi_core.event_timeline import NormalizedEvent, filter_by_area, merge_timelines
+from pydantic import ValidationError
+from unifi_core.incident_collection import combine_incident_evidence, describe_validation_error
+from unifi_core.incident_evidence import (
+    BudgetKind,
+    Budgets,
+    BudgetUsage,
+    FailureKind,
+    IncidentEvidence,
+    Product,
+    Scope,
+    SourceContext,
+    SourceFailure,
+    assemble_incident_evidence,
+    evidence_to_json,
+    failure_from_exception,
+    format_utc,
+    source_failed,
+    validate_incident_evidence,
+)
+from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
+from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 
 logger = logging.getLogger("unifi-mcp-relay")
 
-
-def validate_timeline_input(
-    *,
-    start_time: str,
-    end_time: str,
-    location_id: str | None = None,
-    is_relay_mode: bool = True,
-) -> list[str]:
-    """Validate timeline tool input parameters.
-
-    Returns list of error messages (empty if valid).
-    """
-    errors: list[str] = []
-
-    if not start_time:
-        errors.append("start_time is required")
-    if not end_time:
-        errors.append("end_time is required")
-
-    parsed_start = None
-    parsed_end = None
-
-    if start_time:
-        try:
-            parsed_start = datetime.fromisoformat(start_time)
-        except ValueError:
-            errors.append(f"start_time is not valid ISO 8601: '{start_time}'")
-
-    if end_time:
-        try:
-            parsed_end = datetime.fromisoformat(end_time)
-        except ValueError:
-            errors.append(f"end_time is not valid ISO 8601: '{end_time}'")
-
-    if parsed_start and parsed_end and parsed_end <= parsed_start:
-        errors.append("end_time must be after start_time")
-
-    if location_id and not is_relay_mode:
-        errors.append("location_id is only meaningful in relay mode. Omit this parameter for local connections.")
-
-    return errors
-
-
-def build_timeline_summary(events: list[NormalizedEvent]) -> dict[str, Any]:
-    """Build summary statistics from a list of events."""
-    if not events:
-        return {
-            "total_events": 0,
-            "by_product": {},
-            "by_type": {},
-            "by_location": {},
-        }
-
-    by_product = Counter(e.product for e in events)
-    by_type = Counter(e.event_type for e in events)
-    by_location = Counter(e.location_id for e in events if e.location_id is not None)
-
-    summary: dict[str, Any] = {
-        "total_events": len(events),
-        "by_product": dict(by_product),
-        "by_type": dict(by_type),
-        "by_location": dict(by_location),
-        "time_range": {
-            "start": events[0].timestamp.isoformat(),
-            "end": events[-1].timestamp.isoformat(),
-        },
-    }
-
-    return summary
-
-
-def build_timeline_response(
-    events: list[NormalizedEvent],
-) -> dict[str, Any]:
-    """Build the final tool response from merged events."""
-    return {
-        "success": True,
-        "data": {
-            "timeline": [e.to_dict() for e in events],
-            "summary": build_timeline_summary(events),
-        },
-    }
-
-
-# ---------------------------------------------------------------------------
-# Tool definition for relay-native registration
-# ---------------------------------------------------------------------------
-
-#: Tool name used for registration and routing.
 TOOL_NAME = "unifi_location_timeline"
-
-#: Tool metadata used by the relay to register the tool in its catalog.
 TOOL_DESCRIPTION = (
-    "Query a unified, cross-product event timeline for this location. "
-    "Fans out to Network, Protect, and Access servers and merges results "
-    "into a single time-sorted view."
+    "Collect bounded, read-only Network and Protect incident evidence for one window. "
+    "Returns a versioned evidence document with per-source coverage, failures and budgets. "
+    "Use exact device MACs, camera IDs and explicit mappings; names never establish mappings. "
+    "Access, when requested, is explicitly unsupported. Inspect overall and coverage_complete."
 )
 
+# Reuse Core's argument models, including the closed mapping assertion schema.
+_network_schema = NetworkIncidentRequest.model_json_schema()
+_protect_schema = ProtectIncidentRequest.model_json_schema()
 TOOL_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
+    "additionalProperties": False,
+    "$defs": {**_network_schema["$defs"], **_protect_schema["$defs"]},
     "properties": {
-        "start_time": {
-            "type": "string",
-            "description": "ISO 8601 start of time range (required).",
-        },
-        "end_time": {
-            "type": "string",
-            "description": "ISO 8601 end of time range (required).",
-        },
+        **_network_schema["properties"],
+        "camera_ids": _protect_schema["properties"]["camera_ids"],
         "products": {
             "type": "array",
             "items": {"type": "string", "enum": ["network", "protect", "access"]},
-            "description": "Limit query to specific products (default: all).",
-        },
-        "area_hint": {
-            "type": "string",
-            "description": "Case-insensitive substring to filter events by area name.",
-        },
-        "event_types": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Only include events with these event_type values.",
-        },
-        "location_id": {
-            "type": "string",
-            "description": "Location ID filter (relay mode only).",
+            "minItems": 1,
+            "uniqueItems": True,
+            "default": ["network", "protect"],
+            "description": "Products to collect. Access is reported unsupported.",
         },
     },
-    "required": ["start_time", "end_time"],
+    "required": ["start", "end"],
 }
-
-TOOL_ANNOTATIONS: dict[str, Any] = {
-    "readOnlyHint": True,
-    "destructiveHint": False,
-    "idempotentHint": True,
-    "openWorldHint": False,
-}
+TOOL_ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+PRODUCT_TOOLS = {"network": "unifi_get_incident_evidence", "protect": "protect_get_incident_evidence"}
 
 
-# ---------------------------------------------------------------------------
-# Async handler
-# ---------------------------------------------------------------------------
+def _failure_document(request: NetworkIncidentRequest | ProtectIncidentRequest, product: str, failure: SourceFailure):
+    """An unanswered product call makes no window or pagination claim."""
+    context = SourceContext(
+        source_id=f"{product}.incident_evidence",
+        product=Product(product),
+        api_family=None,
+        source_tool=PRODUCT_TOOLS.get(product),
+        scope=Scope(location_id=request.location_id),
+        query={"start": request.start, "end": request.end},
+        collected_at=format_utc(datetime.now(timezone.utc)),
+        requested_window=request.window,
+    )
+    return assemble_incident_evidence(
+        requested_window=request.window,
+        budgets=Budgets(
+            limits=request.limits,
+            usage=BudgetUsage(),
+            exhausted=(BudgetKind.WINDOW,) if request.window_exhausted else (),
+        ),
+        mappings=request.mappings,
+        sources=[source_failed(context, failure)],
+    )
+
+
+def _validate_product_document(value: Any, request: Any, product: str) -> IncidentEvidence:
+    document = validate_incident_evidence(value)
+    if (
+        document.requested_window != request.window
+        or document.budgets.limits != request.limits
+        or document.mappings != request.mappings
+        or any(source.product.value != product for source in document.sources)
+        or (
+            request.location_id is not None
+            and any(source.scope.location_id != request.location_id for source in document.sources)
+        )
+    ):
+        raise ValueError("product evidence does not describe the requested collection")
+    return document
 
 
 async def handle_location_timeline(
     arguments: dict[str, Any],
-    forwarder: Any,  # ToolForwarder instance
+    forwarder: Any,
     location_id: str | None = None,
     location_name: str | None = None,
     is_relay_mode: bool = True,
 ) -> dict[str, Any]:
-    """Handle the unifi_location_timeline tool call.
+    """Forward real product requests, validate their documents and combine in Core.
 
-    Fans out event queries to connected product servers, merges results,
-    applies filters, and returns a unified timeline.
+    Error envelopes have no structured failure category, so they are unavailable;
+    raw error text is neither copied nor used to guess a category. Exceptions are
+    classified by Core. Display names are intentionally not evidence inputs.
     """
-    start_time = arguments.get("start_time", "")
-    end_time = arguments.get("end_time", "")
-    req_location_id = arguments.get("location_id")
-    products = arguments.get("products")
-    area_hint = arguments.get("area_hint")
-    event_types = arguments.get("event_types")
+    try:
+        if not isinstance(arguments, dict) or set(arguments) - TOOL_INPUT_SCHEMA["properties"].keys():
+            raise ValueError("unsupported arguments; use start/end and exact identifiers")
+        products = arguments.get("products", ["network", "protect"])
+        if (
+            not isinstance(products, list)
+            or not products
+            or any(not isinstance(product, str) or product not in (*PRODUCT_TOOLS, "access") for product in products)
+            or len(products) != len(set(products))
+        ):
+            raise ValueError("products must be a nonempty unique list of network, protect or access")
+        if not is_relay_mode and arguments.get("location_id") is not None:
+            raise ValueError("location_id requires relay mode")
+        common = {
+            key: value for key, value in arguments.items() if key not in ("products", "device_macs", "camera_ids")
+        }
+        if location_id is not None:
+            if common.get("location_id") not in (None, location_id):
+                raise ValueError("location_id must match the relay location")
+            common["location_id"] = location_id
+        network = NetworkIncidentRequest(**common, device_macs=arguments.get("device_macs"))
+        protect = ProtectIncidentRequest(**common, camera_ids=arguments.get("camera_ids"))
+    except ValidationError as exc:
+        return {"success": False, "error": f"Failed to collect location evidence: {describe_validation_error(exc)}"}
+    except ValueError as exc:
+        return {"success": False, "error": f"Failed to collect location evidence: {exc}"}
 
-    errors = validate_timeline_input(
-        start_time=start_time,
-        end_time=end_time,
-        location_id=req_location_id,
-        is_relay_mode=is_relay_mode,
-    )
-    if errors:
-        return {"success": False, "error": "; ".join(errors)}
-
-    # Event-listing tool names per product
-    event_tool_map = {
-        "network": "unifi_list_events",
-        "protect": "unifi_protect_list_events",
-        "access": "unifi_access_list_events",
-    }
-
-    target_products = products or list(event_tool_map.keys())
-    all_event_lists: list[list[NormalizedEvent]] = []
-
-    for product in target_products:
-        tool_name = event_tool_map.get(product)
-        if not tool_name:
-            continue
+    async def collect(product: str) -> IncidentEvidence:
+        request = protect if product == "protect" else network
+        tool_name = PRODUCT_TOOLS.get(product)
+        if tool_name is None:
+            return _failure_document(request, product, SourceFailure(kind=FailureKind.UNSUPPORTED))
         try:
-            result = await forwarder.forward(
-                tool_name=tool_name,
-                arguments={"start_time": start_time, "end_time": end_time},
-            )
-            if result and result.get("success"):
-                events = _normalize_product_events(
-                    product,
-                    result.get("data", []),
-                    location_id=location_id,
-                    location_name=location_name,
-                )
-                all_event_lists.append(events)
-        except Exception as e:
-            logger.warning("[timeline] Failed to query %s events: %s", product, e)
-
-    merged = merge_timelines(all_event_lists)
-
-    if area_hint:
-        merged = filter_by_area(merged, area_hint=area_hint)
-
-    if event_types:
-        merged = [e for e in merged if e.event_type in event_types]
-
-    return build_timeline_response(merged)
-
-
-def _normalize_product_events(
-    product: str,
-    raw_events: list[dict[str, Any]],
-    location_id: str | None = None,
-    location_name: str | None = None,
-) -> list[NormalizedEvent]:
-    """Normalize raw product events to NormalizedEvent instances.
-
-    Placeholder normalization -- maps common fields. Each product's event
-    schema is different; full normalization will be refined per product.
-    """
-    events: list[NormalizedEvent] = []
-    for raw in raw_events:
+            async with asyncio.timeout(request.max_elapsed_ms / 1000):
+                response = await forwarder.forward(tool_name=tool_name, arguments=request.model_dump(mode="json"))
+        except Exception as exc:
+            logger.warning("Incident evidence transport failed for %s: %s", product, type(exc).__name__)
+            return _failure_document(request, product, failure_from_exception(exc))
+        if response is None:
+            return _failure_document(request, product, SourceFailure(kind=FailureKind.UNSUPPORTED))
+        if isinstance(response, dict) and response.get("success") is False:
+            return _failure_document(request, product, SourceFailure(kind=FailureKind.UNAVAILABLE))
         try:
-            ts_raw = raw.get("timestamp") or raw.get("datetime") or raw.get("time", "")
-            if isinstance(ts_raw, (int, float)):
-                ts = datetime.fromtimestamp(ts_raw / 1000, tz=timezone.utc)
-            else:
-                ts = datetime.fromisoformat(str(ts_raw))
+            if not isinstance(response, dict) or response.get("success") is not True:
+                raise ValueError("invalid evidence envelope")
+            return _validate_product_document(response.get("data"), request, product)
+        except Exception:
+            return _failure_document(request, product, SourceFailure(kind=FailureKind.PARSE_FAILED))
 
-            events.append(
-                NormalizedEvent(
-                    timestamp=ts,
-                    product=product,
-                    event_type=raw.get("type", raw.get("event_type", "unknown")),
-                    summary=raw.get("msg", raw.get("description", raw.get("type", "event"))),
-                    normalized_fields={},
-                    raw=raw,
-                    location_id=location_id,
-                    location_name=location_name,
-                    area_names=[],
-                )
-            )
-        except Exception as e:
-            logger.debug("[timeline] Skipping unparseable event: %s", e)
-
-    return events
+    try:
+        documents = await asyncio.gather(*(collect(product) for product in products))
+        return {"success": True, "data": evidence_to_json(combine_incident_evidence(documents))}
+    except Exception as exc:
+        logger.error("Combining location incident evidence failed: %s", type(exc).__name__)
+        return {
+            "success": False,
+            "error": "Failed to combine location incident evidence: conflicting or invalid evidence",
+        }

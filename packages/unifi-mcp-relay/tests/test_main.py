@@ -340,3 +340,18 @@ async def test_refresh_loop_retries_catalog_update_after_disconnect(config):
 
     assert sidecar._client.send_catalog_update.await_count == 2
     assert sidecar._advertised_catalog == _catalog_snapshot(updated_catalog)
+
+
+@pytest.mark.asyncio
+async def test_sidecar_dispatches_native_evidence_consumer(config):
+    sidecar = RelaySidecar(config)
+    sidecar._forwarder = AsyncMock()
+    sidecar._forwarder.forward.return_value = None
+    result, error = await sidecar._handle_tool_call(
+        "unifi_location_timeline",
+        {"start": "2026-08-08T12:00:00Z", "end": "2026-08-08T13:00:00Z"},
+    )
+    assert error is None
+    assert result["data"]["overall"] == "failed"
+    assert [source["outcome"] for source in result["data"]["sources"]] == ["unsupported", "unsupported"]
+    sidecar._forwarder.forward_with_error.assert_not_awaited()

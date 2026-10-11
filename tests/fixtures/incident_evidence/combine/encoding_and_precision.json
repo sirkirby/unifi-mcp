@@ -1,0 +1,971 @@
+{
+  "expected": {
+    "budgets": {
+      "exhausted": [],
+      "limits": {
+        "calls": 20,
+        "elapsed_ms": 120000,
+        "events": 1000,
+        "window_seconds": 7200
+      },
+      "usage": {
+        "calls": 4,
+        "elapsed_ms": 1700,
+        "events": 0
+      }
+    },
+    "coverage_complete": true,
+    "mappings": null,
+    "overall": "complete",
+    "records": [
+      {
+        "attributes": {
+          "fraction": 0.125
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "fixture-event",
+        "evidence_id": "fixture.encoding|str|fixture-%21%27%28%29%2A%2F%C3%A9",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": null,
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "fixture-!'()*/\u00e9",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_get_incident_evidence"
+        },
+        "source_id": "fixture.encoding",
+        "summary": "fixture caf\u00e9 \ud83d\ude00",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "time",
+          "original_format": "epoch_seconds",
+          "original_type": "string",
+          "original_value": "1786191000.000",
+          "precision": "second",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:10:00.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "fraction": 0.125
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "fixture-event",
+        "evidence_id": "fixture.encoding|str|fixture-precise",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": null,
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "fixture-precise",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_get_incident_evidence"
+        },
+        "source_id": "fixture.encoding",
+        "summary": "fixture caf\u00e9 \ud83d\ude00",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "time",
+          "original_format": "epoch_seconds",
+          "original_type": "string",
+          "original_value": "1786191000.1234565",
+          "precision": "microsecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:10:00.123456Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "end": "2026-08-08T12:10:19.000000+00:00",
+          "score": 91,
+          "smart_detect_types": [
+            "person"
+          ]
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "cam-fixture-000a",
+            "id_kind": "protect_camera_id",
+            "kind": "camera",
+            "role": "camera"
+          }
+        ],
+        "event_type": "smartDetectZone",
+        "evidence_id": "protect.events|str|evt-protect-0001",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "evt-protect-0001",
+          "source_record_id_field": "id",
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "smartDetectZone: person",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:10:07.500000+00:00",
+          "precision": "microsecond",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:10:07.500000Z",
+          "utc_offset": "+00:00"
+        }
+      },
+      {
+        "attributes": {
+          "fraction": 0.125
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "fixture-event",
+        "evidence_id": "fixture.encoding|str|fixture-negative-zero",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": null,
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "fixture-negative-zero",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_get_incident_evidence"
+        },
+        "source_id": "fixture.encoding",
+        "summary": "fixture caf\u00e9 \ud83d\ude00",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "time",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:12:00-00:00",
+          "precision": "second",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:12:00.000000Z",
+          "utc_offset": "-00:00"
+        }
+      },
+      {
+        "attributes": {
+          "fraction": 0.125
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "fixture-event",
+        "evidence_id": "fixture.encoding|sha256|cbb4320866e4d80c3010732a",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": null,
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "unifi_get_incident_evidence"
+        },
+        "source_id": "fixture.encoding",
+        "summary": "fixture caf\u00e9 \ud83d\ude00",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "time",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:15:00Z",
+          "precision": "second",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:15:00.000000Z",
+          "utc_offset": "+00:00"
+        }
+      },
+      {
+        "attributes": {
+          "score": 0,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "cam-fixture-000b",
+            "id_kind": "protect_camera_id",
+            "kind": "camera",
+            "role": "camera"
+          }
+        ],
+        "event_type": "motion",
+        "evidence_id": "protect.events|str|evt-protect-0002",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "evt-protect-0002",
+          "source_record_id_field": "id",
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:40:00+00:00",
+          "precision": "second",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:40:00.000000Z",
+          "utc_offset": "+00:00"
+        }
+      }
+    ],
+    "requested_window": {
+      "end": "2026-08-08T13:00:00.000000Z",
+      "end_inclusive": false,
+      "start": "2026-08-08T12:00:00.000000Z",
+      "start_inclusive": true
+    },
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "sources": [
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": true,
+          "counts": {
+            "accepted": 4,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 4,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 4,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": "2026-08-08T12:10:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:15:00.000000Z",
+          "pagination": {
+            "cap": null,
+            "has_more": false,
+            "interrupted": false,
+            "offset": 0,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 4,
+            "total_reported": null
+          },
+          "population_total": 4,
+          "queried_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "not_truncated",
+          "window_coverage": "covered"
+        },
+        "endpoint": null,
+        "failure": null,
+        "outcome": "complete",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.encoding",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": "protect_private",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": true,
+          "counts": {
+            "accepted": 2,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 2,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 2,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": "2026-08-08T12:10:07.500000Z",
+          "observed_last_utc": "2026-08-08T12:40:00.000000Z",
+          "pagination": {
+            "cap": 100,
+            "has_more": false,
+            "interrupted": false,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": 100,
+            "returned": 2,
+            "total_reported": null
+          },
+          "population_total": 2,
+          "queried_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "not_truncated",
+          "window_coverage": "covered"
+        },
+        "endpoint": "/proxy/protect/api/events",
+        "failure": null,
+        "outcome": "complete",
+        "partial_reasons": [],
+        "product": "protect",
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "protect.events",
+        "source_tool": "protect_list_events"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 2,
+          "elapsed_ms": 850,
+          "events": 0
+        }
+      },
+      "coverage_complete": true,
+      "mappings": null,
+      "overall": "complete",
+      "records": [
+        {
+          "attributes": {
+            "fraction": 0.125
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "fixture-event",
+          "evidence_id": "fixture.encoding|str|fixture-%21%27%28%29%2A%2F%C3%A9",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": null,
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": null,
+            "product": "network",
+            "query": {},
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "fixture-!'()*/\u00e9",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_get_incident_evidence"
+          },
+          "source_id": "fixture.encoding",
+          "summary": "fixture caf\u00e9 \ud83d\ude00",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "time",
+            "original_format": "epoch_seconds",
+            "original_type": "string",
+            "original_value": "1786191000.000",
+            "precision": "second",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:10:00.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "fraction": 0.125
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "fixture-event",
+          "evidence_id": "fixture.encoding|str|fixture-precise",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": null,
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": null,
+            "product": "network",
+            "query": {},
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "fixture-precise",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_get_incident_evidence"
+          },
+          "source_id": "fixture.encoding",
+          "summary": "fixture caf\u00e9 \ud83d\ude00",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "time",
+            "original_format": "epoch_seconds",
+            "original_type": "string",
+            "original_value": "1786191000.1234565",
+            "precision": "microsecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:10:00.123456Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "fraction": 0.125
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "fixture-event",
+          "evidence_id": "fixture.encoding|str|fixture-negative-zero",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": null,
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": null,
+            "product": "network",
+            "query": {},
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "fixture-negative-zero",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_get_incident_evidence"
+          },
+          "source_id": "fixture.encoding",
+          "summary": "fixture caf\u00e9 \ud83d\ude00",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "time",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:12:00-00:00",
+            "precision": "second",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:12:00.000000Z",
+            "utc_offset": "-00:00"
+          }
+        },
+        {
+          "attributes": {
+            "fraction": 0.125
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "fixture-event",
+          "evidence_id": "fixture.encoding|sha256|cbb4320866e4d80c3010732a",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": null,
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": null,
+            "product": "network",
+            "query": {},
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "unifi_get_incident_evidence"
+          },
+          "source_id": "fixture.encoding",
+          "summary": "fixture caf\u00e9 \ud83d\ude00",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "time",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:15:00Z",
+            "precision": "second",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:15:00.000000Z",
+            "utc_offset": "+00:00"
+          }
+        }
+      ],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": true,
+            "counts": {
+              "accepted": 4,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 4,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 4,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": "2026-08-08T12:10:00.000000Z",
+            "observed_last_utc": "2026-08-08T12:15:00.000000Z",
+            "pagination": {
+              "cap": null,
+              "has_more": false,
+              "interrupted": false,
+              "offset": 0,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 4,
+              "total_reported": null
+            },
+            "population_total": 4,
+            "queried_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "not_truncated",
+            "window_coverage": "covered"
+          },
+          "endpoint": null,
+          "failure": null,
+          "outcome": "complete",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.encoding",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 2,
+          "elapsed_ms": 850,
+          "events": 0
+        }
+      },
+      "coverage_complete": true,
+      "mappings": null,
+      "overall": "complete",
+      "records": [
+        {
+          "attributes": {
+            "end": "2026-08-08T12:10:19.000000+00:00",
+            "score": 91,
+            "smart_detect_types": [
+              "person"
+            ]
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "cam-fixture-000a",
+              "id_kind": "protect_camera_id",
+              "kind": "camera",
+              "role": "camera"
+            }
+          ],
+          "event_type": "smartDetectZone",
+          "evidence_id": "protect.events|str|evt-protect-0001",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "evt-protect-0001",
+            "source_record_id_field": "id",
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "smartDetectZone: person",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:10:07.500000+00:00",
+            "precision": "microsecond",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:10:07.500000Z",
+            "utc_offset": "+00:00"
+          }
+        },
+        {
+          "attributes": {
+            "score": 0,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "cam-fixture-000b",
+              "id_kind": "protect_camera_id",
+              "kind": "camera",
+              "role": "camera"
+            }
+          ],
+          "event_type": "motion",
+          "evidence_id": "protect.events|str|evt-protect-0002",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "evt-protect-0002",
+            "source_record_id_field": "id",
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:40:00+00:00",
+            "precision": "second",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:40:00.000000Z",
+            "utc_offset": "+00:00"
+          }
+        }
+      ],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": true,
+            "counts": {
+              "accepted": 2,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 2,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 2,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": "2026-08-08T12:10:07.500000Z",
+            "observed_last_utc": "2026-08-08T12:40:00.000000Z",
+            "pagination": {
+              "cap": 100,
+              "has_more": false,
+              "interrupted": false,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": 100,
+              "returned": 2,
+              "total_reported": null
+            },
+            "population_total": 2,
+            "queried_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "not_truncated",
+            "window_coverage": "covered"
+          },
+          "endpoint": "/proxy/protect/api/events",
+          "failure": null,
+          "outcome": "complete",
+          "partial_reasons": [],
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "protect.events",
+          "source_tool": "protect_list_events"
+        }
+      ]
+    }
+  ]
+}

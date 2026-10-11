@@ -185,3 +185,11 @@ export interface AggregatedResponse {
   locations_total: number;
   locations_responded: number;
 }
+
+export interface EvidenceTarget {
+  location_id: string;
+  product: "network" | "protect";
+  available: boolean;
+}
+
+export type EvidenceDocument = Record<string, any>;

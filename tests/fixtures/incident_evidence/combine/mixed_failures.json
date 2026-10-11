@@ -1,0 +1,1310 @@
+{
+  "expected": {
+    "budgets": {
+      "exhausted": [],
+      "limits": {
+        "calls": 70,
+        "elapsed_ms": 420000,
+        "events": 3500,
+        "window_seconds": 7200
+      },
+      "usage": {
+        "calls": 2,
+        "elapsed_ms": 850,
+        "events": 0
+      }
+    },
+    "coverage_complete": false,
+    "mappings": null,
+    "overall": "partial",
+    "records": [
+      {
+        "attributes": {
+          "end": "2026-08-08T12:10:19.000000+00:00",
+          "score": 91,
+          "smart_detect_types": [
+            "person"
+          ]
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "cam-fixture-000a",
+            "id_kind": "protect_camera_id",
+            "kind": "camera",
+            "role": "camera"
+          }
+        ],
+        "event_type": "smartDetectZone",
+        "evidence_id": "protect.events|str|evt-protect-0001",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "evt-protect-0001",
+          "source_record_id_field": "id",
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "smartDetectZone: person",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:10:07.500000+00:00",
+          "precision": "microsecond",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:10:07.500000Z",
+          "utc_offset": "+00:00"
+        }
+      },
+      {
+        "attributes": {
+          "score": 0,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "cam-fixture-000b",
+            "id_kind": "protect_camera_id",
+            "kind": "camera",
+            "role": "camera"
+          }
+        ],
+        "event_type": "motion",
+        "evidence_id": "protect.events|str|evt-protect-0002",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": "evt-protect-0002",
+          "source_record_id_field": "id",
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "iso8601",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:40:00+00:00",
+          "precision": "second",
+          "status": "in_window",
+          "timezone_basis": "explicit_offset",
+          "utc": "2026-08-08T12:40:00.000000Z",
+          "utc_offset": "+00:00"
+        }
+      }
+    ],
+    "requested_window": {
+      "end": "2026-08-08T13:00:00.000000Z",
+      "end_inclusive": false,
+      "start": "2026-08-08T12:00:00.000000Z",
+      "start_inclusive": true
+    },
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "sources": [
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "auth_failed"
+        },
+        "outcome": "auth_failed",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.auth_failed",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "parse_failed"
+        },
+        "outcome": "parse_failed",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.parse_failed",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "permission_denied"
+        },
+        "outcome": "permission_denied",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.permission_denied",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "timeout"
+        },
+        "outcome": "timeout",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.timeout",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "unavailable"
+        },
+        "outcome": "unavailable",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.unavailable",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": null,
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": false,
+          "counts": {
+            "accepted": 0,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 0,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 0,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "pagination": {
+            "cap": null,
+            "has_more": null,
+            "interrupted": true,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": null,
+            "returned": 0,
+            "total_reported": null
+          },
+          "population_total": null,
+          "queried_window": null,
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "unknown",
+          "window_coverage": "unknown"
+        },
+        "endpoint": null,
+        "failure": {
+          "http_status": null,
+          "kind": "unsupported"
+        },
+        "outcome": "unsupported",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {},
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "fixture.failure.unsupported",
+        "source_tool": "unifi_get_incident_evidence"
+      },
+      {
+        "api_family": "protect_private",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": true,
+          "counts": {
+            "accepted": 2,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 2,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 2,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": "2026-08-08T12:10:07.500000Z",
+          "observed_last_utc": "2026-08-08T12:40:00.000000Z",
+          "pagination": {
+            "cap": 100,
+            "has_more": false,
+            "interrupted": false,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": 100,
+            "returned": 2,
+            "total_reported": null
+          },
+          "population_total": 2,
+          "queried_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "not_truncated",
+          "window_coverage": "covered"
+        },
+        "endpoint": "/proxy/protect/api/events",
+        "failure": null,
+        "outcome": "complete",
+        "partial_reasons": [],
+        "product": "protect",
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "protect.events",
+        "source_tool": "protect_list_events"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 2,
+          "elapsed_ms": 850,
+          "events": 0
+        }
+      },
+      "coverage_complete": true,
+      "mappings": null,
+      "overall": "complete",
+      "records": [
+        {
+          "attributes": {
+            "end": "2026-08-08T12:10:19.000000+00:00",
+            "score": 91,
+            "smart_detect_types": [
+              "person"
+            ]
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "cam-fixture-000a",
+              "id_kind": "protect_camera_id",
+              "kind": "camera",
+              "role": "camera"
+            }
+          ],
+          "event_type": "smartDetectZone",
+          "evidence_id": "protect.events|str|evt-protect-0001",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "evt-protect-0001",
+            "source_record_id_field": "id",
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "smartDetectZone: person",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:10:07.500000+00:00",
+            "precision": "microsecond",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:10:07.500000Z",
+            "utc_offset": "+00:00"
+          }
+        },
+        {
+          "attributes": {
+            "score": 0,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "cam-fixture-000b",
+              "id_kind": "protect_camera_id",
+              "kind": "camera",
+              "role": "camera"
+            }
+          ],
+          "event_type": "motion",
+          "evidence_id": "protect.events|str|evt-protect-0002",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": "evt-protect-0002",
+            "source_record_id_field": "id",
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "iso8601",
+            "original_type": "string",
+            "original_value": "2026-08-08T12:40:00+00:00",
+            "precision": "second",
+            "status": "in_window",
+            "timezone_basis": "explicit_offset",
+            "utc": "2026-08-08T12:40:00.000000Z",
+            "utc_offset": "+00:00"
+          }
+        }
+      ],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": true,
+            "counts": {
+              "accepted": 2,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 2,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 2,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": "2026-08-08T12:10:07.500000Z",
+            "observed_last_utc": "2026-08-08T12:40:00.000000Z",
+            "pagination": {
+              "cap": 100,
+              "has_more": false,
+              "interrupted": false,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": 100,
+              "returned": 2,
+              "total_reported": null
+            },
+            "population_total": 2,
+            "queried_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "not_truncated",
+            "window_coverage": "covered"
+          },
+          "endpoint": "/proxy/protect/api/events",
+          "failure": null,
+          "outcome": "complete",
+          "partial_reasons": [],
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "protect.events",
+          "source_tool": "protect_list_events"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "auth_failed"
+          },
+          "outcome": "auth_failed",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.auth_failed",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "permission_denied"
+          },
+          "outcome": "permission_denied",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.permission_denied",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "timeout"
+          },
+          "outcome": "timeout",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.timeout",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "unsupported"
+          },
+          "outcome": "unsupported",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.unsupported",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "parse_failed"
+          },
+          "outcome": "parse_failed",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.parse_failed",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "unavailable"
+          },
+          "outcome": "unavailable",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.unavailable",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    }
+  ]
+}

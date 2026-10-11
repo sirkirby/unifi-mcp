@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { RelayStub } from "./mcp-handler";
 import { handleMcpRequest } from "./mcp-handler";
 import { hashToken, generateToken, extractBearerToken } from "./auth";
+import { collectIncidentEvidence } from "./incident-evidence";
 import { buildToolIndexResponse, TOOL_INDEX_META_TOOL, toolInputSchema, toolServerOrigin } from "./tool-info";
 import type {
   Env,
@@ -19,6 +20,7 @@ import type {
   PendingRequest,
   FanOutResult,
   AggregatedResponse,
+  EvidenceTarget,
 } from "./types";
 import { PROTOCOL_VERSION, TOOL_CALL_TIMEOUT_MS } from "./types";
 
@@ -93,16 +95,16 @@ const META_TOOL_BATCH: ToolInfo = {
 
 const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
   name: "unifi_location_timeline",
-  title: "UniFi Location Timeline",
+  title: "UniFi Incident Evidence",
   description:
-    "Query events across all connected UniFi products (Network, Protect, Access) " +
-    "and return a unified, time-sorted timeline. Correlates network events, camera " +
-    "motion, and door access in a single view.",
+    "Collect validated, bounded incident evidence from Network and Protect across relay locations. " +
+    "Returns source outcomes and explicit location failures; check coverage_complete before treating an empty set as clear. " +
+    "Access collection is unsupported.",
   inputSchema: {
     type: "object",
     properties: {
-      start_time: { type: "string", description: "Start of time window (ISO 8601)" },
-      end_time: { type: "string", description: "End of time window (ISO 8601)" },
+      start: { type: "string", description: "Inclusive window start, ISO 8601 with UTC offset" },
+      end: { type: "string", description: "Exclusive window end, ISO 8601 with UTC offset" },
       location_id: {
         type: "string",
         description: "Filter to a specific location (omit to query all connected locations)",
@@ -110,19 +112,20 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
       products: {
         type: "array",
         items: { type: "string" },
-        description: "Filter to specific products: ['network', 'protect', 'access']",
+        minItems: 1,
+        uniqueItems: true,
+        description: "Products to collect: network, protect, access (Access is explicitly unsupported)",
       },
-      area_hint: {
-        type: "string",
-        description: "Filter by area name (e.g., 'front door' matches AP, camera, and door names)",
-      },
-      event_types: {
-        type: "array",
-        items: { type: "string" },
-        description: "Filter by event type (e.g., 'motion', 'client_connect', 'badge_scan')",
-      },
+      device_macs: { type: "array", items: { type: "string" }, description: "Exact Network device MAC identifiers" },
+      camera_ids: { type: "array", items: { type: "string" }, description: "Exact Protect camera identifiers" },
+      mappings: { type: "array", items: { type: "object" }, description: "Explicit exact-identifier mapping assertions" },
+      max_window_seconds: { type: "integer", minimum: 1, maximum: 2592000 },
+      max_events: { type: "integer", minimum: 1, maximum: 10000 },
+      max_calls: { type: "integer", minimum: 1, maximum: 100 },
+      max_elapsed_ms: { type: "integer", minimum: 1, maximum: 120000 },
     },
-    required: ["start_time", "end_time"],
+    required: ["start", "end"],
+    additionalProperties: false,
   },
   annotations: {
     readOnlyHint: true,
@@ -785,175 +788,23 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
   }
 
   private async handleLocationTimeline(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const startTime = args.start_time as string | undefined;
-    const endTime = args.end_time as string | undefined;
-
-    if (!startTime || !endTime) {
-      return { success: false, error: "start_time and end_time are required" };
-    }
-
-    // Validate ISO 8601
-    if (isNaN(Date.parse(startTime)) || isNaN(Date.parse(endTime))) {
-      return { success: false, error: "start_time and end_time must be valid ISO 8601 timestamps" };
-    }
-    if (new Date(endTime) <= new Date(startTime)) {
-      return { success: false, error: "end_time must be after start_time" };
-    }
-
-    const locationId = args.location_id as string | undefined;
-    const products = args.products as string[] | undefined;
-    const areaHint = args.area_hint as string | undefined;
-    const eventTypes = args.event_types as string[] | undefined;
-
-    // Event-listing tool names per product
-    const eventToolMap: Record<string, string> = {
-      network: "unifi_list_events",
-      protect: "unifi_protect_list_events",
-      access: "unifi_access_list_events",
-    };
-
-    // Convert time range to within_hours for Network events (which use a lookback window)
-    const startDate = new Date(startTime);
-    const endDate = new Date(endTime);
-    const withinHours = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60)));
-    // Hours from now to the start of the window (for Network's "within" param)
-    const hoursAgo = Math.max(1, Math.ceil((Date.now() - startDate.getTime()) / (1000 * 60 * 60)));
-
-    const targetProducts = products || Object.keys(eventToolMap);
-    const allEvents: Array<Record<string, unknown>> = [];
-
-    // Fan out event queries to each product's event tool
-    for (const product of targetProducts) {
-      const toolName = eventToolMap[product];
-      if (!toolName) continue;
-
-      // Check if any location has this tool
-      const locations = this.toolToLocations.get(toolName);
-      if (!locations || locations.length === 0) continue;
-
-      // Filter to specific location if requested
-      const targetLocations = locationId ? locations.filter((l) => l === locationId) : locations;
-      if (targetLocations.length === 0) continue;
-
-      // Build product-specific arguments
-      // Network uses within_hours lookback; Protect/Access may use start_time/end_time
-      const toolArgs: Record<string, unknown> = product === "network"
-        ? { within_hours: hoursAgo, limit: 3000 }
-        : { start_time: startTime, end_time: endTime };
-
-      try {
-        const result = await this.routeToolCall(toolName, toolArgs);
-
-        // Extract events from the result (handles both single and fan-out responses)
-        const events = this.extractEvents(result, product);
-        allEvents.push(...events);
-      } catch (err) {
-        // Log but continue — partial results are better than failure
+    const products = ["network", "protect"] as const;
+    const targets: EvidenceTarget[] = [];
+    const locations = this.ctx.storage.sql.exec(`SELECT location_id FROM locations`).toArray();
+    for (const row of locations) {
+      const locationId = row.location_id as string;
+      const tools = this.locationTools.get(locationId) ?? [];
+      for (const product of products) {
+        const toolName = product === "network" ? "unifi_get_incident_evidence" : "protect_get_incident_evidence";
+        targets.push({ location_id: locationId, product, available: tools.some((tool) => tool.name === toolName) });
       }
     }
-
-    // Sort by timestamp
-    allEvents.sort((a, b) => {
-      const tsA = String(a.timestamp || a.datetime || a.time || "");
-      const tsB = String(b.timestamp || b.datetime || b.time || "");
-      return tsA.localeCompare(tsB);
+    return collectIncidentEvidence(args, targets, async (target, tool, parameters) => {
+      const response = await this.sendToolCall(
+        target.location_id, tool, parameters, parameters.max_elapsed_ms as number,
+      );
+      return response.success === true && response.data === null ? null : response;
     });
-
-    // Apply area_hint filter (case-insensitive substring match on area names)
-    let filtered = allEvents;
-    if (areaHint) {
-      const hint = areaHint.toLowerCase();
-      filtered = allEvents.filter((e) => {
-        const areaFields = [e.ap_name, e.camera_name, e.door_name, e.device_name, e.name].filter(Boolean);
-        return areaFields.some((f) => String(f).toLowerCase().includes(hint));
-      });
-    }
-
-    // Apply event_types filter
-    if (eventTypes && eventTypes.length > 0) {
-      const types = new Set(eventTypes);
-      filtered = filtered.filter((e) => types.has(String(e.type || e.event_type || "")));
-    }
-
-    // Build summary
-    const byProduct: Record<string, number> = {};
-    const byType: Record<string, number> = {};
-    const byLocation: Record<string, number> = {};
-    for (const e of filtered) {
-      const p = String(e._product || "unknown");
-      byProduct[p] = (byProduct[p] || 0) + 1;
-      const t = String(e.type || e.event_type || "unknown");
-      byType[t] = (byType[t] || 0) + 1;
-      if (e._location_id) {
-        const l = String(e._location_id);
-        byLocation[l] = (byLocation[l] || 0) + 1;
-      }
-    }
-
-    return {
-      success: true,
-      data: {
-        timeline: filtered,
-        summary: {
-          total_events: filtered.length,
-          by_product: byProduct,
-          by_type: byType,
-          by_location: byLocation,
-          time_range: { start: startTime, end: endTime },
-        },
-      },
-    };
-  }
-
-  /** Extract events from a tool call result, tagging each with product and location metadata. */
-  private extractEvents(
-    result: Record<string, unknown> | AggregatedResponse,
-    product: string,
-  ): Array<Record<string, unknown>> {
-    // Fan-out response (multi-location)
-    if ("results" in result && Array.isArray((result as AggregatedResponse).results)) {
-      const agg = result as AggregatedResponse;
-      const events: Array<Record<string, unknown>> = [];
-      for (const locResult of agg.results) {
-        if (locResult.error) continue;
-        const locEvents = this.extractEventsFromData(locResult.data);
-        for (const e of locEvents) {
-          e._product = product;
-          e._location_id = locResult.location_id;
-          e._location_name = locResult.location_name;
-        }
-        events.push(...locEvents);
-      }
-      return events;
-    }
-
-    // Single-location response
-    const data = (result as Record<string, unknown>).data ?? result;
-    const events = this.extractEventsFromData(data);
-    for (const e of events) {
-      e._product = product;
-    }
-    return events;
-  }
-
-  /** Pull the events array out of a tool result's data payload. */
-  private extractEventsFromData(data: unknown): Array<Record<string, unknown>> {
-    if (!data || typeof data !== "object") return [];
-
-    // Handle {success: true, data: {events: [...]}} pattern
-    const d = data as Record<string, unknown>;
-    if (d.success && d.data && typeof d.data === "object") {
-      const inner = d.data as Record<string, unknown>;
-      if (Array.isArray(inner.events)) return inner.events as Array<Record<string, unknown>>;
-    }
-
-    // Handle {events: [...]} directly
-    if (Array.isArray(d.events)) return d.events as Array<Record<string, unknown>>;
-
-    // Handle raw array
-    if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
-
-    return [];
   }
 
   // -------------------------------------------------------------------------
@@ -1010,6 +861,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     locationId: string,
     toolName: string,
     args: Record<string, unknown>,
+    timeoutMs: number = TOOL_CALL_TIMEOUT_MS,
   ): Promise<Record<string, unknown>> {
     const ws = this.findWebSocketForLocation(locationId);
     if (!ws) {
@@ -1021,8 +873,8 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     const result = await new Promise<unknown>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(callId);
-        reject(new Error(`Tool call timed out after ${TOOL_CALL_TIMEOUT_MS}ms`));
-      }, TOOL_CALL_TIMEOUT_MS);
+        reject(new DOMException("Tool call timed out", "TimeoutError"));
+      }, timeoutMs);
 
       this.pending.set(callId, { resolve, reject, timeout, locationId });
 
@@ -1031,7 +883,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
         call_id: callId,
         tool_name: toolName,
         arguments: args,
-        timeout_ms: TOOL_CALL_TIMEOUT_MS,
+        timeout_ms: timeoutMs,
       };
 
       this.sendWs(ws, request);

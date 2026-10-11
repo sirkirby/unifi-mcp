@@ -130,7 +130,17 @@ The relay always exposes these meta-tools regardless of registration mode:
 | `unifi_tool_index` | List all available UniFi tools with optional category or search filter |
 | `unifi_execute` | Execute any UniFi tool by name; use `__location` to target a specific site |
 | `unifi_batch` | Execute multiple UniFi tools in a single request |
-| `unifi_location_timeline` | Query a unified event timeline across connected locations and products |
+| `unifi_location_timeline` | Collect bounded Network and Protect incident evidence with explicit per-source failures |
+
+The timeline tool accepts `start`/`end` with UTC offsets, exact `device_macs`
+and `camera_ids`, explicit `mappings`, and `max_window_seconds`, `max_events`,
+`max_calls`, `max_elapsed_ms`. `products` defaults to Network and Protect;
+requested Access collection is unsupported. `location_id` selects one location.
+It returns `data` as one [incident evidence document](../../docs/incident-evidence.md#relay-and-worker-consumers).
+Check `overall`, `coverage_complete`, source outcomes and exhausted budgets;
+missing or failed sources are retained. Conflicting source IDs fail combination,
+including across locations. Legacy area/name filters and `start_time`/`end_time`
+are no longer supported.
 
 ---
 
