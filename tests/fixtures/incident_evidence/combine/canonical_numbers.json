@@ -1,0 +1,2051 @@
+{
+  "expected": {
+    "budgets": {
+      "exhausted": [],
+      "limits": {
+        "calls": 20,
+        "elapsed_ms": 120000,
+        "events": 1000,
+        "window_seconds": 7200
+      },
+      "usage": {
+        "calls": 4,
+        "elapsed_ms": 1700,
+        "events": 0
+      }
+    },
+    "coverage_complete": true,
+    "mappings": null,
+    "overall": "complete",
+    "records": [
+      {
+        "attributes": {
+          "score": 1.0,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|c0050d0729c459123fc9e6ff",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190400000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:00.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 1,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|ab1a6cf9365b678caa62f84e",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190401000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:01.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 0.1,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|f6c1adfc6a21bbdec4a2c43e",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190402000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:02.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 1e+21,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|0ad162c4efa3a6fffc63165d",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190403000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:03.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": -0.0,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|79af63387115ff5c6eba1b29",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190404000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:04.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 9007199254740991,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|99b306d6fa1919e210c7ce2b",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190405000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:05.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 9007199254740993,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|52222a86a36c83a7c8a88a86",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190406000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:06.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 295147905179352825856,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|06da383a3a677b302aad44e8",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190407000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:07.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 1e-06,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|f22d2b88b9d9ed77e45d3a7a",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190408000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:08.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 1e-07,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|be5b98f4d4bfed08e1b959fd",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190409000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:09.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 333333333.3333333,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|ec7b9859a89a874285774c36",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190410000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:10.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "score": 5e-324,
+          "smart_detect_types": []
+        },
+        "conflict_group": null,
+        "entities": [],
+        "event_type": "motion",
+        "evidence_id": "protect.events|sha256|8214c4283c724c20d0cc95a3",
+        "evidence_id_basis": "content_hash",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/proxy/protect/api/events",
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "source_tool": "protect_list_events"
+        },
+        "source_id": "protect.events",
+        "summary": "motion",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "start",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786190411000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:00:11.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "category": "CLIENT_DEVICES",
+          "event": "CLIENT_CONNECTED",
+          "severity": "LOW",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "aa:bb:cc:00:20:01",
+            "id_kind": "mac",
+            "kind": "network_client",
+            "role": "CLIENT"
+          },
+          {
+            "id": "aa:bb:cc:00:10:01",
+            "id_kind": "mac",
+            "kind": "network_device",
+            "role": "AP"
+          }
+        ],
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "evidence_id": "network.events|str|evt-net-0001",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "network_v2_controller",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/system-log/all",
+          "product": "network",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": "default"
+          },
+          "source_record_id": "evt-net-0001",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_list_events"
+        },
+        "source_id": "network.events",
+        "summary": "fixture-phone has connected to fixture-ap-1.",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "timestamp",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786191005250,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:10:05.250000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "category": "SECURITY",
+          "event": "TRAFFIC_BLOCKED",
+          "severity": "MEDIUM",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "aa:bb:cc:00:20:02",
+            "id_kind": "mac",
+            "kind": "network_client",
+            "role": "SRC_CLIENT"
+          }
+        ],
+        "event_type": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+        "evidence_id": "network.events|str|evt-net-0002",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "network_v2_controller",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/system-log/all",
+          "product": "network",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": "default"
+          },
+          "source_record_id": "evt-net-0002",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_list_events"
+        },
+        "source_id": "network.events",
+        "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "timestamp",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786192200000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": null
+        }
+      },
+      {
+        "attributes": {
+          "category": "UNIFI_DEVICES",
+          "event": "DEVICE_DISCONNECTED",
+          "severity": "HIGH",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null,
+        "entities": [
+          {
+            "id": "aa:bb:cc:00:10:02",
+            "id_kind": "mac",
+            "kind": "network_device",
+            "role": "DEVICE"
+          }
+        ],
+        "event_type": "DEVICE_DISCONNECTED_AP",
+        "evidence_id": "network.events|str|evt-net-0003",
+        "evidence_id_basis": "source_record_id",
+        "mapping": {
+          "confidence": null,
+          "matched_on": [],
+          "sources": [],
+          "status": "not_evaluated",
+          "targets": []
+        },
+        "provenance": {
+          "api_family": "network_v2_controller",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "endpoint": "/system-log/all",
+          "product": "network",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": "default"
+          },
+          "source_record_id": "evt-net-0003",
+          "source_record_id_field": "id",
+          "source_tool": "unifi_list_events"
+        },
+        "source_id": "network.events",
+        "summary": "fixture-ap-2 disconnected.",
+        "time": {
+          "boundary_uncertain": false,
+          "clock_uncertainty_ms": null,
+          "original_field": "timestamp",
+          "original_format": "epoch_milliseconds",
+          "original_type": "integer",
+          "original_value": 1786193100000,
+          "precision": "millisecond",
+          "status": "in_window",
+          "timezone_basis": "epoch_utc",
+          "utc": "2026-08-08T12:45:00.000000Z",
+          "utc_offset": null
+        }
+      }
+    ],
+    "requested_window": {
+      "end": "2026-08-08T13:00:00.000000Z",
+      "end_inclusive": false,
+      "start": "2026-08-08T12:00:00.000000Z",
+      "start_inclusive": true
+    },
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "sources": [
+      {
+        "api_family": "network_v2_controller",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": true,
+          "counts": {
+            "accepted": 3,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 3,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 3,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": "2026-08-08T12:10:05.250000Z",
+          "observed_last_utc": "2026-08-08T12:45:00.000000Z",
+          "pagination": {
+            "cap": 100,
+            "has_more": false,
+            "interrupted": false,
+            "offset": 0,
+            "post_filtered": false,
+            "requested_cap": 100,
+            "returned": 3,
+            "total_reported": null
+          },
+          "population_total": 3,
+          "queried_window": {
+            "end": "2026-08-08T13:04:59.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T11:04:59.000000Z",
+            "start_inclusive": true
+          },
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "not_truncated",
+          "window_coverage": "covered"
+        },
+        "endpoint": "/system-log/all",
+        "failure": null,
+        "outcome": "complete",
+        "partial_reasons": [],
+        "product": "network",
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": "default"
+        },
+        "source_id": "network.events",
+        "source_tool": "unifi_list_events"
+      },
+      {
+        "api_family": "protect_private",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "coverage": {
+          "complete": true,
+          "counts": {
+            "accepted": 12,
+            "boundary_uncertain": 0,
+            "conflicting": 0,
+            "duplicates_dropped": 0,
+            "in_window": 12,
+            "malformed_dropped": 0,
+            "out_of_window": 0,
+            "received": 12,
+            "untimed": 0
+          },
+          "filters": {},
+          "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:00:11.000000Z",
+          "pagination": {
+            "cap": 100,
+            "has_more": false,
+            "interrupted": false,
+            "offset": null,
+            "post_filtered": false,
+            "requested_cap": 100,
+            "returned": 12,
+            "total_reported": null
+          },
+          "population_total": 12,
+          "queried_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "requested_window": {
+            "end": "2026-08-08T13:00:00.000000Z",
+            "end_inclusive": false,
+            "start": "2026-08-08T12:00:00.000000Z",
+            "start_inclusive": true
+          },
+          "truncation": "not_truncated",
+          "window_coverage": "covered"
+        },
+        "endpoint": "/proxy/protect/api/events",
+        "failure": null,
+        "outcome": "complete",
+        "partial_reasons": [],
+        "product": "protect",
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "scope": {
+          "controller_id": null,
+          "location_id": null,
+          "site": null
+        },
+        "source_id": "protect.events",
+        "source_tool": "protect_list_events"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 2,
+          "elapsed_ms": 850,
+          "events": 0
+        }
+      },
+      "coverage_complete": true,
+      "mappings": null,
+      "overall": "complete",
+      "records": [
+        {
+          "attributes": {
+            "score": 1.0,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|c0050d0729c459123fc9e6ff",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190400000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:00.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 1,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|ab1a6cf9365b678caa62f84e",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190401000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:01.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 0.1,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|f6c1adfc6a21bbdec4a2c43e",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190402000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:02.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 1e+21,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|0ad162c4efa3a6fffc63165d",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190403000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:03.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": -0.0,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|79af63387115ff5c6eba1b29",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190404000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:04.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 9007199254740991,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|99b306d6fa1919e210c7ce2b",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190405000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:05.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 9007199254740993,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|52222a86a36c83a7c8a88a86",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190406000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:06.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 295147905179352825856,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|06da383a3a677b302aad44e8",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190407000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:07.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 1e-06,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|f22d2b88b9d9ed77e45d3a7a",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190408000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:08.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 1e-07,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|be5b98f4d4bfed08e1b959fd",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190409000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:09.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 333333333.3333333,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|ec7b9859a89a874285774c36",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190410000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:10.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "score": 5e-324,
+            "smart_detect_types": []
+          },
+          "conflict_group": null,
+          "entities": [],
+          "event_type": "motion",
+          "evidence_id": "protect.events|sha256|8214c4283c724c20d0cc95a3",
+          "evidence_id_basis": "content_hash",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "protect_private",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/proxy/protect/api/events",
+            "product": "protect",
+            "query": {
+              "camera_id": null,
+              "end": "2026-08-08T13:00:00Z",
+              "event_type": null,
+              "limit": 100,
+              "start": "2026-08-08T12:00:00Z"
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": null
+            },
+            "source_record_id": null,
+            "source_record_id_field": null,
+            "source_tool": "protect_list_events"
+          },
+          "source_id": "protect.events",
+          "summary": "motion",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "start",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786190411000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:00:11.000000Z",
+            "utc_offset": null
+          }
+        }
+      ],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": "protect_private",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": true,
+            "counts": {
+              "accepted": 12,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 12,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 12,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+            "observed_last_utc": "2026-08-08T12:00:11.000000Z",
+            "pagination": {
+              "cap": 100,
+              "has_more": false,
+              "interrupted": false,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": 100,
+              "returned": 12,
+              "total_reported": null
+            },
+            "population_total": 12,
+            "queried_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "not_truncated",
+            "window_coverage": "covered"
+          },
+          "endpoint": "/proxy/protect/api/events",
+          "failure": null,
+          "outcome": "complete",
+          "partial_reasons": [],
+          "product": "protect",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "protect.events",
+          "source_tool": "protect_list_events"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 2,
+          "elapsed_ms": 850,
+          "events": 0
+        }
+      },
+      "coverage_complete": true,
+      "mappings": null,
+      "overall": "complete",
+      "records": [
+        {
+          "attributes": {
+            "category": "CLIENT_DEVICES",
+            "event": "CLIENT_CONNECTED",
+            "severity": "LOW",
+            "subcategory": "CLIENT_CONNECTIVITY"
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "aa:bb:cc:00:20:01",
+              "id_kind": "mac",
+              "kind": "network_client",
+              "role": "CLIENT"
+            },
+            {
+              "id": "aa:bb:cc:00:10:01",
+              "id_kind": "mac",
+              "kind": "network_device",
+              "role": "AP"
+            }
+          ],
+          "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+          "evidence_id": "network.events|str|evt-net-0001",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "network_v2_controller",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/system-log/all",
+            "product": "network",
+            "query": {
+              "categories": null,
+              "event_type": null,
+              "limit": 100,
+              "severities": null,
+              "start": 0,
+              "within_hours": 2
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": "default"
+            },
+            "source_record_id": "evt-net-0001",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_list_events"
+          },
+          "source_id": "network.events",
+          "summary": "fixture-phone has connected to fixture-ap-1.",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "timestamp",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786191005250,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:10:05.250000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "category": "SECURITY",
+            "event": "TRAFFIC_BLOCKED",
+            "severity": "MEDIUM",
+            "subcategory": "CLIENT_CONNECTIVITY"
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "aa:bb:cc:00:20:02",
+              "id_kind": "mac",
+              "kind": "network_client",
+              "role": "SRC_CLIENT"
+            }
+          ],
+          "event_type": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+          "evidence_id": "network.events|str|evt-net-0002",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "network_v2_controller",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/system-log/all",
+            "product": "network",
+            "query": {
+              "categories": null,
+              "event_type": null,
+              "limit": 100,
+              "severities": null,
+              "start": 0,
+              "within_hours": 2
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": "default"
+            },
+            "source_record_id": "evt-net-0002",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_list_events"
+          },
+          "source_id": "network.events",
+          "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "timestamp",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786192200000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:30:00.000000Z",
+            "utc_offset": null
+          }
+        },
+        {
+          "attributes": {
+            "category": "UNIFI_DEVICES",
+            "event": "DEVICE_DISCONNECTED",
+            "severity": "HIGH",
+            "subcategory": "CLIENT_CONNECTIVITY"
+          },
+          "conflict_group": null,
+          "entities": [
+            {
+              "id": "aa:bb:cc:00:10:02",
+              "id_kind": "mac",
+              "kind": "network_device",
+              "role": "DEVICE"
+            }
+          ],
+          "event_type": "DEVICE_DISCONNECTED_AP",
+          "evidence_id": "network.events|str|evt-net-0003",
+          "evidence_id_basis": "source_record_id",
+          "mapping": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          },
+          "provenance": {
+            "api_family": "network_v2_controller",
+            "collected_at": "2026-08-08T13:05:00.000000Z",
+            "endpoint": "/system-log/all",
+            "product": "network",
+            "query": {
+              "categories": null,
+              "event_type": null,
+              "limit": 100,
+              "severities": null,
+              "start": 0,
+              "within_hours": 2
+            },
+            "scope": {
+              "controller_id": null,
+              "location_id": null,
+              "site": "default"
+            },
+            "source_record_id": "evt-net-0003",
+            "source_record_id_field": "id",
+            "source_tool": "unifi_list_events"
+          },
+          "source_id": "network.events",
+          "summary": "fixture-ap-2 disconnected.",
+          "time": {
+            "boundary_uncertain": false,
+            "clock_uncertainty_ms": null,
+            "original_field": "timestamp",
+            "original_format": "epoch_milliseconds",
+            "original_type": "integer",
+            "original_value": 1786193100000,
+            "precision": "millisecond",
+            "status": "in_window",
+            "timezone_basis": "epoch_utc",
+            "utc": "2026-08-08T12:45:00.000000Z",
+            "utc_offset": null
+          }
+        }
+      ],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": "network_v2_controller",
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": true,
+            "counts": {
+              "accepted": 3,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 3,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 3,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": "2026-08-08T12:10:05.250000Z",
+            "observed_last_utc": "2026-08-08T12:45:00.000000Z",
+            "pagination": {
+              "cap": 100,
+              "has_more": false,
+              "interrupted": false,
+              "offset": 0,
+              "post_filtered": false,
+              "requested_cap": 100,
+              "returned": 3,
+              "total_reported": null
+            },
+            "population_total": 3,
+            "queried_window": {
+              "end": "2026-08-08T13:04:59.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T11:04:59.000000Z",
+              "start_inclusive": true
+            },
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "not_truncated",
+            "window_coverage": "covered"
+          },
+          "endpoint": "/system-log/all",
+          "failure": null,
+          "outcome": "complete",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": "default"
+          },
+          "source_id": "network.events",
+          "source_tool": "unifi_list_events"
+        }
+      ]
+    }
+  ]
+}
