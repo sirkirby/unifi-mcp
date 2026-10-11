@@ -359,14 +359,6 @@ def other_prefixes(product):
     return others + tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
 
 
-def absorbed_shared(mapping, product):
-    """Shared variables that migration reads as fallbacks, so their values now live in the options."""
-    names = set(mapping) | {shared_name(variable, product) for variable in mapping}
-    for credential in ("PASSWORD", "API_KEY"):
-        names.update(f"UNIFI_{credential}{suffix}" for suffix in ("", "_FILE", "_COMMAND"))
-    return names
-
-
 def legacy_settings(product):
     """Project settings written by earlier plugin versions, split by ownership."""
     path = Path.cwd() / ".claude/settings.local.json"
@@ -549,12 +541,11 @@ def claude_main(args, root, name, product):
         return
     remaining = None
     if args.migrate:
-        # Once no other UniFi plugin's settings remain, the shared values this plugin read are
-        # redundant: remove them with its own so none stay visible to every session in the project.
+        # We verify only this installation's options. Other products (including
+        # older plugins or standalone servers) can use shared fallbacks without
+        # leaving scoped keys here, so absence of those keys proves nothing.
         others_left = sorted(k for k in legacy_data["env"] if k.startswith(other_prefixes(product)))
         removed = set(owned)
-        if not others_left:
-            removed |= shared.keys() & absorbed_shared(mapping, product)
         remaining = dict(legacy_data)
         remaining["env"] = {k: v for k, v in legacy_data["env"].items() if k not in removed}
         original = legacy_path.read_bytes()
@@ -591,18 +582,15 @@ def claude_main(args, root, name, product):
         if dropped:
             print("Not migrated (no Claude Code option): " + ", ".join(dropped) + ".")
         kept = sorted(set(shared) - removed)
-        if kept and others_left:
+        if kept:
             print(
-                "Shared settings kept in .claude/settings.local.json because settings for other UniFi plugins "
-                "remain there (" + ", ".join(others_left) + "): " + ", ".join(kept) + ". Migrating the last "
-                "UniFi plugin removes them."
+                "Shared settings kept in .claude/settings.local.json because other consumers have not been verified "
+                "as migrated (only this plugin's options were checked): " + ", ".join(kept) + ". "
+                "A product using only shared fallbacks leaves no product-prefixed keys. "
+                "Remove shared settings only after verifying every consumer no longer needs them."
             )
-        elif kept:
-            print(
-                "Shared settings with no Claude Code option remain in .claude/settings.local.json: "
-                + ", ".join(kept)
-                + ". Remove any you no longer need."
-            )
+            if others_left:
+                print("Other product settings also remain: " + ", ".join(others_left) + ".")
     elif notice:
         print(notice)
     print(

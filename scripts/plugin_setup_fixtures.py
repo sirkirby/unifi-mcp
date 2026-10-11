@@ -692,7 +692,33 @@ class Fixtures:
             )
             self.check(remaining_env["UNIFI_API_KEY"] == sample_value, "retry preserves shared secret")
             self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "retry leaves no replacement artifacts")
-        # The last plugin to migrate also takes the shared values it read, atomically.
+        # Another product can rely entirely on shared fallbacks, without leaving
+        # any scoped keys to signal that its migration is still pending.
+        shared_fallbacks = {
+            "UNIFI_HOST": "192.0.2.80",
+            "UNIFI_USERNAME": "legacy-shared-user",
+            "UNIFI_PASSWORD_FILE": str(provider),
+        }
+        legacy_path.write_text(
+            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.70", **shared_fallbacks}}), encoding="utf-8"
+        )
+        result = migrate()
+        self.check(
+            json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == shared_fallbacks,
+            "migration preserves credentials for shared-fallback-only consumers",
+        )
+        self.check(
+            options()["host"] == "192.0.2.70"
+            and options()["username"] == "legacy-shared-user"
+            and options()["password_file"] == str(provider),
+            "migration saves this plugin without deleting other consumers fallbacks",
+        )
+        self.check(
+            all(key.encode() in result.stdout for key in shared_fallbacks)
+            and b"other consumers have not been verified" in result.stdout,
+            "retained shared keys name the missing consumer evidence",
+        )
+        # An apparent last migration still cannot prove shared consumers migrated.
         last = {
             "permissions": legacy["permissions"],
             "env": {
@@ -709,15 +735,23 @@ class Fixtures:
         result = migrate()
         remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
         self.check(
-            remaining_env == {"UNIFI_CUSTOM_FIXTURE": "kept", "KEEP": "unrelated"},
-            "the last migration removes the shared settings it moved and keeps the rest",
+            remaining_env
+            == {
+                "UNIFI_TOOL_PERMISSION_MODE": "confirm",
+                "UNIFI_API_KEY": sample_value,
+                "UNIFI_CUSTOM_FIXTURE": "kept",
+                "KEEP": "unrelated",
+            },
+            "the apparent last migration retains shared settings without consumer evidence",
         )
         self.check(options()["api_key"] == sample_value, "the shared credential reached the options")
         self.check(
             b"UNIFI_API_KEY" in result.stdout and b"UNIFI_CUSTOM_FIXTURE" in result.stdout, "removed names are reported"
         )
-        self.check(b"for other UniFi plugins" not in result.stdout, "the last migration claims no other plugin")
-        self.check(b"kept" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted")
+        self.check(b"other consumers have not been verified" in result.stdout, "consumer uncertainty is reported")
+        self.check(
+            b"legacy-user" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted"
+        )
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
     def scenario(self, product, target):
