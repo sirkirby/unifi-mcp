@@ -17,7 +17,7 @@ from unifi_core.network.managers.event_manager import EventManager
 
 
 def sdk_event_manager(*bodies: Any, v2: bool = True) -> EventManager:
-    """Answer successive requests with ``bodies`` (the last one repeats)."""
+    """Answer successive requests with ``bodies`` (the last one repeats); an exception body is raised."""
     connection = ConnectionManager("controller.invalid", "fixture-user", "fixture-password")
     connection.ensure_connected = AsyncMock(return_value=True)
     connection.controller = MagicMock()
@@ -27,6 +27,8 @@ def sdk_event_manager(*bodies: Any, v2: bool = True) -> EventManager:
     async def transport(api_request: Any) -> Any:
         sent.append(api_request)
         body = remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        if isinstance(body, BaseException):
+            raise body
         return api_request.decode(json.dumps(body).encode())
 
     connection.controller.request = transport
