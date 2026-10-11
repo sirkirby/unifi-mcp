@@ -1,5 +1,5 @@
 {
-  "count": 62,
+  "count": 63,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -26,6 +26,7 @@
     "protect_get_event_thumbnail": "unifi_protect_mcp.tools.events",
     "protect_get_firmware_status": "unifi_protect_mcp.tools.system",
     "protect_get_health": "unifi_protect_mcp.tools.system",
+    "protect_get_incident_evidence": "unifi_protect_mcp.tools.incident_evidence",
     "protect_get_recording_status": "unifi_protect_mcp.tools.recordings",
     "protect_get_snapshot": "unifi_protect_mcp.tools.cameras",
     "protect_get_system_info": "unifi_protect_mcp.tools.system",
@@ -2530,6 +2531,132 @@
         }
       },
       "title": "Get Health"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Collects bounded, read-only Protect event evidence for one incident window and returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+      "name": "protect_get_incident_evidence",
+      "schema": {
+        "input": {
+          "properties": {
+            "camera_ids": {
+              "description": "Exact Protect camera IDs, each read as its own source; omit for every camera",
+              "type": "array"
+            },
+            "end": {
+              "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+              "type": "string"
+            },
+            "location_id": {
+              "description": "Your label for the investigated location, recorded in source scope",
+              "type": "string"
+            },
+            "mappings": {
+              "description": "Explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "type": "array"
+            },
+            "max_calls": {
+              "description": "Most NVR page reads across cameras (1-100)",
+              "type": "integer"
+            },
+            "max_elapsed_ms": {
+              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "type": "integer"
+            },
+            "max_events": {
+              "description": "Most event rows to read across cameras (1-10000)",
+              "type": "integer"
+            },
+            "max_window_seconds": {
+              "description": "Longest window to read; a longer window is not read (1-2592000)",
+              "type": "integer"
+            },
+            "start": {
+              "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Incident Evidence"
     },
     {
       "annotations": {

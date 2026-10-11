@@ -84,6 +84,12 @@ def _build_tool_module_map() -> Dict[str, str]:
 TOOL_MODULE_MAP: Dict[str, str] = _build_tool_module_map()
 
 
+# Read-only tools lazy mode lists directly, so a client that permits only
+# readOnlyHint tools can call them without the non-read-only *_execute. Each
+# must live in a module holding only read-only tools.
+LAZY_DIRECT_TOOLS: tuple[str, ...] = ("unifi_get_incident_evidence",)
+
+
 @cache
 def policy_gates() -> frozenset[tuple[str, str]]:
     """(permission_category, permission_action) pairs the manifest's tools gate on."""

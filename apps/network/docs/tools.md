@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 209 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 210 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -251,6 +251,10 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 - `unifi_recent_events` — Events from the in-memory websocket buffer, with listener state (`listening`, `attached`, `buffer_capacity`)
 - `unifi_subscribe_events` — Handle for the live event resource plus listener state
 
+## Incident Evidence (1 tool)
+
+- `unifi_get_incident_evidence` — Bounded, read-only event evidence for one incident window as a versioned `unifi-incident-evidence` document with per-source coverage and budget usage (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
+
 ## Routing (5 tools)
 
 - `unifi_list_routes` — List user-defined static routes
@@ -308,7 +312,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 
 | Mode | Initial Tokens | Behavior |
 |------|---------------|----------|
-| `lazy` (default) | ~200 | Meta-tools registered; others load on first use |
+| `lazy` (default) | ~200 | Meta-tools and `unifi_get_incident_evidence` registered; others load on first use |
 | `eager` | ~5,000 | All tools registered immediately |
 | `meta_only` | ~200 | Only meta-tools; use `unifi_execute` for everything |
 
