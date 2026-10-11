@@ -440,24 +440,69 @@ UNIFI_UPDATE_INCIDENT_GOLDEN=1 uv run --package unifi-core pytest \
 Corpus fixtures use only synthetic identifiers: locally administered MACs,
 RFC 5737 documentation IPs and `fixture-` names. A test enforces this.
 
-## Relay and worker migration
+## Relay and worker consumers
 
-The corpus lives in the top-level `tests/fixtures/` directory because both
-Python package tests and the worker's Vitest suite already read shared fixtures
-from there. Each case holds per-source inputs (tool envelopes, raw records, or
-`"adapter": "page"` manager pages) with call arguments, and the normalized
-evidence (`expected`). TypeScript consumers validate `expected` against the
-schema artifact and the checks above, must reproduce it from `input` without
-importing Python, and must reject every case under `invalid/`.
+`unifi_location_timeline` returns the same standard success envelope as the
+product tools: `{"success": true, "data": <IncidentEvidence>}`. A successful
+transport envelope does not establish complete collection: inspect `overall`,
+`coverage_complete`, each source outcome and `budgets.exhausted`. Total source
+failure returns `overall: "failed"`, never an empty all-clear.
 
-`unifi_core.event_timeline` keeps `NormalizedEvent`, `merge_timelines` and
-`filter_by_area` unchanged for existing callers. `normalized_event_from_record`
-projects timed evidence onto that legacy shape and returns `None` for untimed
-records. A projected list drops coverage and failure state, so callers that
-return it must also return the evidence set's source outcomes. The relay
-location timeline and the worker timeline still use the legacy path. Moving
-them onto this contract means calling `unifi_get_incident_evidence` and
-`protect_get_incident_evidence` for one window, combining the documents with
-`combine_incident_evidence` (or, in TypeScript, the rules under
-[Combining evidence sets](#combining-evidence-sets)), and reporting per-source
-outcomes instead of skipping failed sources.
+Both consumers forward `start` and `end` with explicit UTC offsets to
+`unifi_get_incident_evidence` and `protect_get_incident_evidence`. They accept
+`device_macs`, `camera_ids`, `mappings`, `location_id`, and the four `max_*`
+budgets described above. `products` defaults to Network and Protect; requested
+Access collection produces an explicit `unsupported` source. The legacy
+`start_time`/`end_time`, `area_hint` and `event_types` arguments are rejected.
+Use exact identifiers and explicit assertions to select evidence and mappings.
+
+The Python relay calls through `ToolForwarder` and validates each returned
+document with Core before calling `combine_incident_evidence`. The worker sends
+one evidence-tool call to each selected relay location and validates the
+committed JSON Schema plus all 13 semantic rules before combining. Missing tools,
+disconnected locations, transport failures, error envelopes and malformed
+responses become failed sources within the combined document. Error envelopes
+carry no typed failure, so they are `unavailable`; raw error text is never
+inspected or copied. Failed calls make no queried-window or pagination claim.
+A product document with mismatched window, limits, mappings, product or requested
+location scope becomes `parse_failed`.
+
+Budgets are per product collection at each selected location. Combining sums
+limits and usage, takes the smallest window limit and keeps every exhausted
+kind. An unanswered transport call cannot report controller usage; its synthetic
+source document reports zero observed usage. Those zeros do not imply complete
+coverage. Transport failure sources have distinct deterministic IDs per location.
+Product source IDs remain product-owned: contradictory sets with the same
+source ID fail combination, including across locations. Select `location_id`
+when different controllers return conflicting source IDs; the consumer never
+silently rewrites provenance or merges them.
+
+The TypeScript consumer uses pinned Ajv as a development dependency to generate
+a committed standalone validator for the schema's closed shapes and conditional
+rules. Hand-written checks supply the cross-field semantics JSON Schema cannot
+express. Wrangler bundles the standalone artifact from `worker/src`; the deployed
+Worker needs neither Python nor runtime code generation. Schema-artifact drift
+is checked by `npm --prefix apps/worker/worker run check:evidence-schema`.
+The shared `cases/` expected documents must validate and every `invalid/` case
+must fail at its declared schema or semantic layer.
+
+`tests/fixtures/incident_evidence/combine/` contains Python-generated input/output
+pairs for order independence, deduplication, mapping union, conflicting source
+IDs, exhausted budgets and mixed failures. The relay suite checks generator
+drift and TypeScript compares canonical JSON with those outputs:
+
+```bash
+uv run --package unifi-core python tests/fixtures/incident_evidence/generate_combine.py --check
+npm --prefix apps/worker/worker test
+```
+
+Regenerate after an intentional change by omitting `--check`; Python remains the
+reference. One portability limitation remains in Core's digest encoding:
+Python hashes integral floats such as an attribute `1.0` differently from `1`,
+while JavaScript JSON parsing loses that distinction. If that changes a record's
+content digest, the worker reports the product document as `parse_failed`;
+it never substitutes a new evidence ID. The golden corpus does not currently
+exercise that numeric ambiguity.
+
+`unifi_core.event_timeline` still provides the legacy projection for other callers. The relay and worker timeline no longer return that projection,
+which cannot carry coverage or failure state.

@@ -13,6 +13,8 @@ from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.discovery import ServerInfo, discover_all
 from unifi_mcp_relay.forwarder import RelayBatchJobs, ToolForwarder
+from unifi_mcp_relay.location_timeline import TOOL_NAME as TIMELINE_TOOL_NAME
+from unifi_mcp_relay.location_timeline import handle_location_timeline
 from unifi_mcp_relay.policy import filter_relay_tools, relay_call_rejection
 from unifi_mcp_relay.protocol import ToolInfo
 
@@ -125,6 +127,9 @@ class RelaySidecar:
         rejection = relay_call_rejection(tool_name, arguments)
         if rejection is not None:
             return None, rejection
+
+        if tool_name == TIMELINE_TOOL_NAME:
+            return await handle_location_timeline(arguments, self._forwarder), None
 
         outcome = await self._forwarder.forward_with_error(tool_name, arguments)
         if isinstance(outcome, str):

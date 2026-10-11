@@ -10,25 +10,47 @@ Each UniFi product (Network, Protect, Access) runs as an independent MCP server.
 
 Each server runs independently. An agent connected to all three can call tools from each, but cross-product correlation must be done by the agent itself — calling individual event-listing tools and reasoning across the results.
 
-### Relay Mode (recommended for cross-product)
+### Relay Mode
 
-The [relay sidecar](../packages/unifi-mcp-relay/) connects all local servers to a Cloudflare Worker. In relay mode, the `unifi_location_timeline` tool is available — it queries events across all connected products and returns a unified, time-sorted timeline.
+The [relay sidecar](../packages/unifi-mcp-relay/) connects local servers to a
+Cloudflare Worker. Its `unifi_location_timeline` consumer collects bounded
+Network and Protect evidence through the same product evidence tools available
+to local clients. See the [incident evidence contract](incident-evidence.md).
 
 ## The Location Timeline Tool
 
-`unifi_location_timeline` merges events from Network, Protect, and Access into a single stream.
+`unifi_location_timeline` returns one versioned incident evidence document with
+ordered records, provenance, mappings, per-source coverage and failures.
 
-**Parameters:**
-- `start_time` / `end_time` (required) — ISO 8601 time window
-- `location_id` (optional) — filter to a specific location (relay mode only, queries all locations if omitted)
-- `products` (optional) — filter to specific products (defaults to all connected)
-- `area_hint` (optional) — filter by area name (e.g., "front door" matches AP, camera, and door names)
-- `event_types` (optional) — filter by event type
+Parameters:
 
-**Example:**
-> "Show me everything that happened at the front entrance between 2 AM and 3 AM"
+- `start` / `end` (required): a half-open ISO 8601 window with explicit UTC offsets.
+- `location_id`: select one relay location; omitted, the worker queries all registered locations.
+- `products`: Network and Protect by default; Access is explicitly unsupported if requested.
+- `device_macs` / `camera_ids`: exact identifiers, never inferred from names.
+- `mappings`: explicit exact-identifier assertions from the operator or product inventory.
+- `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`: limits passed to each product collection.
 
-The agent calls `unifi_location_timeline(start_time="2026-03-24T02:00:00Z", end_time="2026-03-24T03:00:00Z", area_hint="front entrance")` and gets back Network client connections, Protect camera motion events, and Access badge scans — all in one sorted timeline.
+For example, after obtaining the exact device and camera identifiers, call:
+
+```json
+{
+  "start": "2026-08-08T12:00:00Z",
+  "end": "2026-08-08T13:00:00Z",
+  "device_macs": ["02:00:00:00:00:01"],
+  "camera_ids": ["fixture-camera"],
+  "max_events": 200,
+  "max_calls": 10
+}
+```
+
+Inspect `data.overall`, `data.coverage_complete`, `data.sources` and
+`data.budgets.exhausted` before assessing the incident. Failed and missing sources
+remain in the evidence document. All sources failing yields `overall: "failed"`;
+incomplete evidence cannot establish an all-clear. Source-ID disagreements fail
+combination; select one location when controllers return conflicting source IDs.
+The former `start_time`/`end_time`, `area_hint` and `event_types` parameters are no
+longer supported.
 
 ## Hero Skills
 

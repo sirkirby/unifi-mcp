@@ -1,0 +1,179 @@
+{
+  "error": true,
+  "inputs": [
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:05:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "timeout"
+          },
+          "outcome": "timeout",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.timeout",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    },
+    {
+      "budgets": {
+        "exhausted": [],
+        "limits": {
+          "calls": 10,
+          "elapsed_ms": 60000,
+          "events": 500,
+          "window_seconds": 7200
+        },
+        "usage": {
+          "calls": 0,
+          "elapsed_ms": 0,
+          "events": 0
+        }
+      },
+      "coverage_complete": false,
+      "mappings": null,
+      "overall": "failed",
+      "records": [],
+      "requested_window": {
+        "end": "2026-08-08T13:00:00.000000Z",
+        "end_inclusive": false,
+        "start": "2026-08-08T12:00:00.000000Z",
+        "start_inclusive": true
+      },
+      "schema": "unifi-incident-evidence",
+      "schema_version": 1,
+      "sources": [
+        {
+          "api_family": null,
+          "collected_at": "2026-08-08T13:06:00.000000Z",
+          "coverage": {
+            "complete": false,
+            "counts": {
+              "accepted": 0,
+              "boundary_uncertain": 0,
+              "conflicting": 0,
+              "duplicates_dropped": 0,
+              "in_window": 0,
+              "malformed_dropped": 0,
+              "out_of_window": 0,
+              "received": 0,
+              "untimed": 0
+            },
+            "filters": {},
+            "observed_first_utc": null,
+            "observed_last_utc": null,
+            "pagination": {
+              "cap": null,
+              "has_more": null,
+              "interrupted": true,
+              "offset": null,
+              "post_filtered": false,
+              "requested_cap": null,
+              "returned": 0,
+              "total_reported": null
+            },
+            "population_total": null,
+            "queried_window": null,
+            "requested_window": {
+              "end": "2026-08-08T13:00:00.000000Z",
+              "end_inclusive": false,
+              "start": "2026-08-08T12:00:00.000000Z",
+              "start_inclusive": true
+            },
+            "truncation": "unknown",
+            "window_coverage": "unknown"
+          },
+          "endpoint": null,
+          "failure": {
+            "http_status": null,
+            "kind": "timeout"
+          },
+          "outcome": "timeout",
+          "partial_reasons": [],
+          "product": "network",
+          "query": {},
+          "scope": {
+            "controller_id": null,
+            "location_id": null,
+            "site": null
+          },
+          "source_id": "fixture.failure.timeout",
+          "source_tool": "unifi_get_incident_evidence"
+        }
+      ]
+    }
+  ]
+}
