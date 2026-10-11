@@ -40,13 +40,18 @@ and Protect servers; the relay is not used.
    mapping is passed to both tools as `mappings` assertions; ambiguous or missing
    mappings are reported and the camera is left out.
 4. **Collection.** One call per evidence tool with the same window and explicit
-   `max_window_seconds`, `max_events`, `max_calls` and `max_elapsed_ms`. A spent
-   budget, timeout or truncation is reported, with a bounded follow-up offered
-   only when it would change coverage.
+   `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms` and
+   `max_records_returned`. Each returns a bounded client view that fits in one
+   tool result. A spent budget, timeout or truncation is reported, with a
+   bounded follow-up offered only when it would change coverage; unknown
+   truncation and records omitted from the view always get a "split the window"
+   offer.
 5. **Report.** Incident and inputs; coverage per source (outcome, queried window,
-   filters, pagination, truncation, budgets, failures); cited observations;
-   hypotheses labelled as correlation; source-backed identity only; unanswered
-   questions and next reads.
+   filters, pagination, truncation, retention, budgets, failures) and the
+   records returned and omitted; every record in the view cited by its full
+   evidence ID in one fixed format; hypotheses labelled as correlation;
+   source-backed identity only; unanswered questions and next reads. An empty
+   source always carries the caveat that controller retention is unknown.
 
 If only Network is connected, the skill stops, reports Protect unavailable and,
 with the user's consent, runs a Network-only investigation labelled as having no

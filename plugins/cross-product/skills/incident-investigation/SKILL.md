@@ -7,7 +7,10 @@ description: Investigate one UniFi Network device incident (a switch, AP or gate
 
 Investigate one Network device incident over one explicit window. Every claim in
 the report cites **evidence**: records and per-source **coverage** returned by
-the two incident evidence tools. The local product servers are the whole
+the two incident evidence tools. Each tool returns a bounded **view** of its
+evidence document (`schema: "unifi-incident-evidence-view"`) that fits in one
+tool result: every source's outcome, failure and coverage, plus at most
+`max_records_returned` record citations, with omitted records counted. The local product servers are the whole
 transport; nothing here needs the relay.
 
 ## Dependencies
@@ -41,9 +44,11 @@ Every report has a Coverage and Limitations section built from the evidence
 documents, never from memory or from record counts alone:
 
 - One line per evidence document: `overall`, `coverage_complete` and budgets.
+- One line per document on `record_selection`: records returned, collected and
+  omitted from the view.
 - One line per source in each document: outcome, partial reasons, failure,
-  queried window, filters, pagination and truncation, and counts (format under
-  [Report](#report)).
+  queried window, filters, pagination, truncation, retention and counts
+  (formats under [Report](#report)).
 - Products, cameras and mappings that were not read, and why.
 
 Claims are bounded by coverage:
@@ -56,8 +61,17 @@ Claims are bounded by coverage:
   `coverage_complete: true`, and Protect was read. Otherwise write "No
   concerning activity found in the retrieved records" with the coverage gap
   beside it.
+- **Retention.** Neither product reports how long it keeps events, so every
+  source's `coverage.retention_coverage` is `unknown`. Whenever any source is
+  `empty`, including beside the all-clear, write this sentence: "Neither
+  controller reports how long it keeps events (retention `unknown`), so events
+  older than its retention may have been discarded without a trace."
 - Counts are retrieved records. `population_total` is a total only when the
   source is complete.
+- Records omitted from the view (`record_selection.omitted`) are a
+  presentation limit, not a coverage gap: coverage and counts still describe
+  every collected record. Make no claim about omitted records beyond their
+  counts.
 - A failed source (`unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`) is missing
   evidence, never an empty result.
@@ -98,9 +112,11 @@ Collect, before any read:
   dropped.
 - **Budgets:** state the values you will pass. Defaults: `max_window_seconds`
   equal to the window length, `max_events=1000`, `max_calls=20`,
-  `max_elapsed_ms=30000`. A window longer than 86400 seconds needs the user's
-  agreement; 2592000 is the hard limit. Each tool caps events at 10000, calls
-  at 100 and elapsed time at 120000 ms.
+  `max_elapsed_ms=30000`, `max_records_returned=25`. A window longer than 86400
+  seconds needs the user's agreement; 2592000 is the hard limit. Each tool caps
+  events at 10000, calls at 100, elapsed time at 120000 ms and
+  `max_records_returned` at 50. Protect takes at most 5 camera IDs, and each
+  call at most 20 mapping assertions.
 
 Done when the user has confirmed device MAC, window with offset, camera scope
 and budgets.
@@ -177,6 +193,7 @@ unifi_get_incident_evidence(
     max_events=1000,
     max_calls=20,
     max_elapsed_ms=30000,
+    max_records_returned=25,
     mappings=mappings,
 )
 protect_get_incident_evidence(
@@ -188,10 +205,13 @@ protect_get_incident_evidence(
     max_events=1000,
     max_calls=20,
     max_elapsed_ms=30000,
+    max_records_returned=25,
     mappings=mappings,
 )
 ```
 
+- Leave `detail` at its default, the view. `detail="full"` returns the whole
+  evidence document, which can exceed what a client accepts in one result.
 - Network reads the site event log for the window. Leaving `device_macs` out
   keeps upstream and neighbour events, which often explain a device incident;
   pass `device_macs=["<device mac>"]` only when the user wants the device's own
@@ -207,7 +227,7 @@ Done when each tool was called once, or its absence is recorded.
 
 ### 5. Read the evidence
 
-Read each document before writing anything from it:
+Read each view before writing anything from it:
 
 1. `requested_window` equals the confirmed window in UTC, and every source's
    `coverage.requested_window` equals it.
@@ -218,31 +238,42 @@ Read each document before writing anything from it:
 3. Per source: outcome and `partial_reasons`, `failure`,
    `coverage.queried_window` and `window_coverage`, `filters`, `pagination`
    (`returned`, `cap`, `has_more`, `total_reported`, `post_filtered`,
-   `interrupted`), `truncation`, `counts`, `population_total`.
+   `interrupted`), `truncation`, `retention_coverage` (always `unknown`),
+   `counts`, `population_total`.
 4. `budgets.exhausted`: any kind listed means collection stopped early, and
    every later source is `not_attempted`.
-5. Per record: `time.status` (`in_window`, `out_of_window`, `missing`,
-   `malformed`, `ambiguous_timezone`), `time.boundary_uncertain`, and
-   `mapping.status` (`verified`, `ambiguous`, `missing`, `not_evaluated`).
-   Only `in_window` records are observations of the window. Unplaced and
-   out-of-window records are reported under coverage, with their original
-   value, never moved into the window.
+5. `record_selection`: `collected`, `returned` and `omitted` counts by
+   placement, and `omitted_in_window_from_utc`, the time of the earliest
+   in-window record left out of the view.
+6. Per record: `evidence_id`, `product`, `source_tool`, `source_record_id`,
+   `time.status` (`in_window`, `out_of_window`, `missing`, `malformed`,
+   `ambiguous_timezone`), `time.utc`, `time.boundary_uncertain`, the original
+   time field, type and value, `event_type`, `summary`, `entity_ids`, and
+   `mapping.status` (`verified`, `ambiguous`, `missing`, `not_evaluated`) with
+   its `target_ids` and `sources`. Only `in_window` records are observations
+   of the window. Unplaced and out-of-window records are reported under
+   coverage, with their original value, never moved into the window.
 
-A bounded follow-up read is worth offering only when it would change coverage:
+A bounded follow-up read is worth offering only when it would change coverage
+or show omitted records:
 
 | Evidence says | Follow-up to offer |
 |---|---|
 | `window` exhausted | Narrow the window, or raise `max_window_seconds` to its length |
 | `events` or `calls` exhausted, or `budget_exhausted` | Repeat that product's call with a larger budget or a narrower window |
 | `timeout`, or `elapsed` exhausted | Repeat once with a larger `max_elapsed_ms` |
-| `truncation_unknown` from several reads | Split the window so each part fits one page |
+| `truncation_unknown` | Split the window into parts that each fit one page, and read each part |
+| Records omitted from the view | Split the window at `omitted_in_window_from_utc` and read the later part; or narrow to exact `device_macs` or `camera_ids`; or raise `max_records_returned` (at most 50) |
 | `auth_failed`, `permission_denied`, `unsupported` | None: point to the product setup skill |
 
-Ask before every follow-up, use the same evidence tool, and report each
-document separately. List tools return records without continuation state, so
-they never complete coverage.
+The offers for `truncation_unknown` and for omitted records are mandatory:
+whenever either appears, Unanswered Questions and Next Reads says "split the
+window" and gives the call with its new `start` and `end`. Ask before every
+follow-up, use the same evidence tool, and report each view separately. List
+tools return records without continuation state, so they never complete
+coverage.
 
-Done when every source in every document has its outcome, coverage and counts
+Done when every source in every view has its outcome, coverage and counts
 recorded, and every follow-up has been offered or ruled out.
 
 ### 6. Write the report
@@ -257,24 +288,32 @@ Use these sections, in order:
 1. **Incident and Inputs:** the incident, device MAC, window as given and in
    UTC with its offset, camera scope, mapping assertions with their sources,
    and the budgets passed.
-2. **Coverage and Limitations:** one line per document, then one line per
-   source:
+2. **Coverage and Limitations:** per document, its line and its records line,
+   then one line per source:
 
    ```text
    <document>: overall `<overall>`, coverage_complete `<true|false>`; budgets window <seconds>/<limit> s, events <used>/<limit>, calls <used>/<limit>, elapsed <used>/<limit> ms; exhausted: <kinds|none>.
-   - `<source_id>` (<product>, `<source_tool>`): outcome `<outcome>`; reasons <reasons|none>; failure <`kind`|none>; queried <start> to <end> (`<window_coverage>`) or queried none (`unknown`); filters <key=value|none>; returned <n>, cap <n>, has_more `<true|false|null>`, truncation `<truncation>`; received <n>, accepted <n>, in-window <n>, out-of-window <n>, untimed <n>, malformed <n>, duplicates <n>, conflicting <n>, boundary-uncertain <n>.
+   <document> records: returned <n> of <n> collected (in-window <n> of <n>), max_records_returned <n>; omitted <n> (in-window <n>, from <omitted_in_window_from_utc|none>), a presentation limit, not a coverage gap.
+   - `<source_id>` (<product>, `<source_tool>`): outcome `<outcome>`; reasons <reasons|none>; failure <`kind`|none>; queried <start> to <end> (`<window_coverage>`) or queried none (`unknown`); filters <key=value|none>; returned <n>, cap <n>, has_more `<true|false|null>`, truncation `<truncation>`, retention `<retention_coverage>`; received <n>, accepted <n>, in-window <n>, out-of-window <n>, untimed <n>, malformed <n>, duplicates <n>, conflicting <n>, boundary-uncertain <n>.
    ```
 
    Then the complete-coverage or all-clear sentence when
-   [allowed](#coverage-and-limitations), or the gap that rules it out.
-3. **Observations:** one line per cited record, in time order:
+   [allowed](#coverage-and-limitations), or the gap that rules it out, and the
+   retention sentence when any source is `empty`.
+3. **Observations:** one line per record in the view, in the view's order,
+   copied field by field from the record:
 
    ```text
-   - `<evidence_id>` <utc, or time `<status>`> (<product>, `<source_tool>`, record `<source record id>`): <summary> `<event_type>`; mapping `<status>`.
+   - `<evidence_id>` <time.utc, or time `<time.status>`> (<product>, `<source_tool>`, record `<source_record_id>`): <summary> `<event_type>`; mapping `<mapping.status>`.
    ```
 
-   `source_tool` is the read family named in the record's provenance (for
-   example `unifi_list_events`), not the evidence tool you called.
+   Write `(no summary)` when `summary` is null. For a record with no usable
+   time, add its original time field, type and value after the mapping.
+   `source_tool` is the read family named in the record (for example
+   `unifi_list_events`), not the evidence tool you called. Anywhere else in
+   the report, refer to a record by its full `evidence_id` in backticks. Never
+   abbreviate a citation: no bare record IDs, no product prefixes such as
+   `N/` or `P/`, no ellipses.
 4. **Hypotheses:** each is labelled a correlation, names the observations it
    rests on, and gives at least one alternative explanation. Timing and
    proximity are correlation; the evidence never states cause.
@@ -284,8 +323,8 @@ Use these sections, in order:
 6. **Unanswered Questions and Next Reads:** what the evidence cannot answer,
    and the bounded follow-ups from step 5, each with the call it would make.
 
-Worked reports for complete, empty, partial, failed, ambiguously mapped and
-malformed-time evidence are in
+Worked reports for complete evidence with records omitted from the view, and
+for empty, partial, failed, ambiguously mapped and malformed-time evidence, are in
 [references/report-examples.md](references/report-examples.md). Read it before
 writing your first report.
 

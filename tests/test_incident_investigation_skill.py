@@ -1,8 +1,9 @@
 """Hold the canonical incident investigation skill to its evidence contract.
 
 The skill may reach only read-only tools, must pass explicit budgets to both
-evidence tools, and its worked reports must quote the golden evidence sets they
-cite exactly: every coverage number, evidence ID and timestamp.
+evidence tools, and its worked reports must quote the golden client views they
+cite exactly: every coverage number, evidence ID and timestamp, in the exact
+citation format, with every mandatory follow-up offer and retention caveat.
 """
 
 from __future__ import annotations
@@ -21,9 +22,10 @@ SKILL_DIR = ROOT / "plugins/cross-product/skills/incident-investigation"
 SKILL = SKILL_DIR / "SKILL.md"
 EXAMPLES = SKILL_DIR / "references/report-examples.md"
 CASES = ROOT / "tests/fixtures/incident_evidence/cases"
+VIEWS = ROOT / "tests/fixtures/incident_evidence/views"
 
 EVIDENCE_TOOLS = {"unifi_get_incident_evidence": "network", "protect_get_incident_evidence": "protect"}
-BUDGETS = {"max_window_seconds", "max_events", "max_calls", "max_elapsed_ms"}
+BUDGETS = {"max_window_seconds", "max_events", "max_calls", "max_elapsed_ms", "max_records_returned"}
 REPORT_SECTIONS = (
     "Incident and Inputs",
     "Coverage and Limitations",
@@ -35,6 +37,17 @@ REPORT_SECTIONS = (
 SKILL_SECTIONS = ("Dependencies", "Coverage and Limitations", "Safety", "Workflow", "Report")
 ALL_CLEAR = "No events were recorded in the window by any source."
 COMPLETE = "Every source read the full window."
+RETENTION = (
+    "Neither controller reports how long it keeps events (retention `unknown`), so events older than its "
+    "retention may have been discarded without a trace."
+)
+SPLIT = "split the window"
+OBSERVATION = re.compile(
+    r"^- `(?P<evidence_id>[^`]+)` (?P<when>[0-9T:.Z-]+|time `[a-z_]+`) "
+    r"\((?P<product>[a-z]+), `(?P<source_tool>[^`]+)`, record `(?P<record>[^`]+)`\): "
+    r"(?P<summary>.*) `(?P<event_type>[^`]*)`; mapping `(?P<mapping>[a-z_]+)`(?P<rest>.*)$"
+)
+SHORTHAND = re.compile(r"^[A-Za-z]{1,3}/")
 
 
 def flat(text: str) -> str:
@@ -104,7 +117,7 @@ def skill_section_errors(text: str) -> list[str]:
     for section in REPORT_SECTIONS:
         if not report or f"**{section}:**" not in report[1]:
             errors.append(f"missing report section: {section}")
-    for sentence in (ALL_CLEAR, "coverage_complete: true"):
+    for sentence in (ALL_CLEAR, "coverage_complete: true", RETENTION, SPLIT, "full `evidence_id`"):
         if sentence not in flat(text):
             errors.append(f"missing coverage rule: {sentence}")
     return errors
@@ -135,6 +148,17 @@ def document_line(evidence: dict) -> str:
     )
 
 
+def records_line(selection: dict) -> str:
+    returned, collected, omitted = selection["returned"], selection["collected"], selection["omitted"]
+    return (
+        f"returned {returned['total']} of {collected['total']} collected "
+        f"(in-window {returned['in_window']} of {collected['in_window']}), "
+        f"max_records_returned {selection['max_records_returned']}; omitted {omitted['total']} "
+        f"(in-window {omitted['in_window']}, from {selection['omitted_in_window_from_utc'] or 'none'}), "
+        "a presentation limit, not a coverage gap."
+    )
+
+
 def source_line(source: dict) -> str:
     coverage, page, counts = source["coverage"], source["coverage"]["pagination"], source["coverage"]["counts"]
     queried = coverage["queried_window"]
@@ -146,20 +170,50 @@ def source_line(source: dict) -> str:
         f"outcome `{source['outcome']}`; reasons {', '.join(source['partial_reasons']) or 'none'}; "
         f"failure {failure}; {window} (`{coverage['window_coverage']}`); filters {filters}; "
         f"returned {page['returned']}, cap {page['cap']}, has_more `{bool_text(page['has_more'])}`, "
-        f"truncation `{coverage['truncation']}`; received {counts['received']}, accepted {counts['accepted']}, "
+        f"truncation `{coverage['truncation']}`, retention `{coverage['retention_coverage']}`; "
+        f"received {counts['received']}, accepted {counts['accepted']}, "
         f"in-window {counts['in_window']}, out-of-window {counts['out_of_window']}, untimed {counts['untimed']}, "
         f"malformed {counts['malformed_dropped']}, duplicates {counts['duplicates_dropped']}, "
         f"conflicting {counts['conflicting']}, boundary-uncertain {counts['boundary_uncertain']}."
     )
 
 
-def observation_prefix(record: dict) -> str:
-    time, provenance = record["time"], record["provenance"]
-    when = time["utc"] or f"time `{time['status']}`"
-    return (
-        f"- `{record['evidence_id']}` {when} ({provenance['product']}, `{provenance['source_tool']}`, "
-        f"record `{provenance['source_record_id']}`):"
-    )
+def observation_errors(line: str, record: dict) -> list[str]:
+    """An observation line must be the view record's citation, field by field."""
+    match = OBSERVATION.match(line)
+    if not match:
+        return [f"citation is not in the required format: {record['evidence_id']}"]
+    time = record["time"]
+    expected = {
+        "evidence_id": record["evidence_id"],
+        "when": time["utc"] or f"time `{time['status']}`",
+        "product": record["product"],
+        "source_tool": record["source_tool"],
+        "record": str(record["source_record_id"]),
+        "summary": "(no summary)" if record["summary"] is None else record["summary"],
+        "event_type": record["event_type"],
+        "mapping": record["mapping"]["status"],
+    }
+    wrong = sorted(field for field, value in expected.items() if match[field] != value)
+    if not wrong:
+        return []
+    if set(wrong) <= {"event_type", "mapping"}:
+        return [f"citation does not match event type or mapping: {record['evidence_id']}"]
+    return [f"citation does not match {', '.join(wrong)}: {record['evidence_id']}"]
+
+
+def shorthand_errors(body: str, records: dict[str, dict]) -> list[str]:
+    """Records are cited by their full evidence ID; never a bare record ID or a product prefix."""
+    errors = []
+    record_ids = {str(record["source_record_id"]) for record in records.values()}
+    for match in re.finditer(r"`([^`\n]+)`", body):
+        token = match[1]
+        quoted_as_record = body[max(0, match.start() - 7) : match.start()] == "record "
+        if SHORTHAND.match(token) or (token in record_ids and not quoted_as_record):
+            errors.append(f"citation shorthand instead of a full evidence ID: {token}")
+        elif "|" in token and token not in records:
+            errors.append(f"cited evidence not in the view: {token}")
+    return errors
 
 
 def examples(text: str) -> dict[str, str]:
@@ -167,8 +221,18 @@ def examples(text: str) -> dict[str, str]:
 
 
 def example_case(body: str) -> str | None:
-    match = re.search(r"^Golden case: `([a-z0-9_]+)`$", body, re.M)
+    match = re.search(r"^Golden view: `([a-z0-9_]+)`, max_records_returned [0-9]+$", body, re.M)
     return match[1] if match else None
+
+
+def example_view(body: str) -> dict | None:
+    """The golden client view an example is written from, or None if it names none."""
+    match = re.search(r"^Golden view: `([a-z0-9_]+)`, max_records_returned ([0-9]+)$", body, re.M)
+    path = VIEWS / f"{match[1]}.json" if match else None
+    if path is None or not path.exists():
+        return None
+    views = {item["max_records_returned"]: item["expected"] for item in json.loads(path.read_text())["views"]}
+    return views.get(int(match[2]))
 
 
 def report_sections(body: str) -> dict[str, str]:
@@ -179,32 +243,36 @@ def report_sections(body: str) -> dict[str, str]:
 
 
 def example_errors(body: str) -> list[str]:
-    """A worked report must quote its golden evidence set exactly and claim no more than it supports."""
+    """A worked report must quote its golden view exactly and claim no more than it supports."""
     case = example_case(body)
     if case is None:
-        return ["missing golden case"]
-    path = CASES / f"{case}.json"
-    if not path.exists():
-        return [f"unknown golden case: {case}"]
-    evidence = json.loads(path.read_text())["expected"]
+        return ["missing golden view"]
+    view = example_view(body)
+    if view is None:
+        return [f"unknown golden view: {case}"]
     sections = report_sections(body)
     errors = [f"missing report section: {s}" for s in REPORT_SECTIONS if s not in sections]
-    window = evidence["requested_window"]
+    window = view["requested_window"]
     inputs = flat(sections.get("Incident and Inputs", ""))
     if f"UTC `{utc(window['start'])}` to `{utc(window['end'])}`" not in inputs:
         errors.append("inputs do not state the requested window in UTC")
-    limits = evidence["budgets"]["limits"]
+    limits = view["budgets"]["limits"]
     if (
         f"Budget limits: window {limits['window_seconds']} s, events {limits['events']}, "
         f"calls {limits['calls']}, elapsed {limits['elapsed_ms']} ms." not in inputs
     ):
         errors.append("inputs do not state the budget limits")
+    selection = view["record_selection"]
+    if f"`max_records_returned={selection['max_records_returned']}`" not in inputs:
+        errors.append("inputs do not state max_records_returned")
 
     coverage = sections.get("Coverage and Limitations", "")
-    if f"Golden evidence set: {document_line(evidence)}" not in coverage.splitlines():
-        errors.append("document line does not match overall, coverage_complete or budgets")
-    expected_sources = {source["source_id"]: source_line(source) for source in evidence["sources"]}
     lines = coverage.splitlines()
+    if f"Golden evidence set: {document_line(view)}" not in lines:
+        errors.append("document line does not match overall, coverage_complete or budgets")
+    if f"Golden evidence set records: {records_line(selection)}" not in lines:
+        errors.append("records line does not match the view's record selection")
+    expected_sources = {source["source_id"]: source_line(source) for source in view["sources"]}
     for source_id, line in expected_sources.items():
         if line not in lines:
             errors.append(f"source line does not match the fixture: {source_id}")
@@ -212,7 +280,8 @@ def example_errors(body: str) -> list[str]:
         if source_id not in expected_sources:
             errors.append(f"source not in the fixture: {source_id}")
 
-    records = {record["evidence_id"]: record for record in evidence["records"]}
+    records = {record["evidence_id"]: record for record in view["records"]}
+    cited = []
     for line in sections.get("Observations", "").splitlines():
         match = re.match(r"- `([^`]*\|[^`]*)`", line)
         if not match:
@@ -221,25 +290,37 @@ def example_errors(body: str) -> list[str]:
         if record is None:
             errors.append(f"cited evidence not in the fixture: {match[1]}")
             continue
-        if not line.startswith(observation_prefix(record)):
-            errors.append(f"citation does not match time, product, source tool or record ID: {match[1]}")
-        if f"`{record['event_type']}`; mapping `{record['mapping']['status']}`" not in line:
-            errors.append(f"citation does not match event type or mapping: {match[1]}")
+        cited.append(match[1])
+        errors.extend(observation_errors(line, record))
+    if cited != [evidence_id for evidence_id in records if evidence_id in cited]:
+        errors.append("observations are not in the view's order")
+    errors.extend(f"view record not cited: {evidence_id}" for evidence_id in records if evidence_id not in cited)
+    errors.extend(shorthand_errors(body, records))
 
     text = flat(body)
-    all_clear = evidence["overall"] == "empty" and evidence["coverage_complete"]
+    all_clear = view["overall"] == "empty" and view["coverage_complete"]
     if (ALL_CLEAR in text) != all_clear:
         errors.append("all-clear sentence does not match the evidence")
-    if (COMPLETE in text) != evidence["coverage_complete"]:
+    if (COMPLETE in text) != view["coverage_complete"]:
         errors.append("complete-coverage sentence does not match the evidence")
+    if any(source["outcome"] == "empty" for source in view["sources"]) and RETENTION not in text:
+        errors.append("an empty source needs the retention sentence")
+    needs_split = selection["omitted"]["total"] > 0 or any(
+        "truncation_unknown" in source["partial_reasons"] for source in view["sources"]
+    )
+    next_reads = flat(sections.get("Unanswered Questions and Next Reads", "")).lower()
+    if needs_split and SPLIT not in next_reads:
+        errors.append("truncation_unknown or omitted records need the split the window follow-up")
     if "correlation" not in sections.get("Hypotheses", "").lower():
         errors.append("hypotheses are not labelled as correlation")
     return errors
 
 
 def scenario(evidence: dict) -> set[str]:
-    """The evidence shapes a golden set demonstrates."""
+    """The evidence shapes a golden view demonstrates."""
     found = {evidence["overall"]}
+    if evidence["record_selection"]["omitted"]["total"]:
+        found.add("omitted records")
     for source in evidence["sources"]:
         if {"budget_exhausted", "truncated", "truncation_unknown"} & set(source["partial_reasons"]):
             found.add("partial source")
@@ -278,10 +359,18 @@ def test_evidence_calls_are_explicit_and_lazy_reachable() -> None:
 def test_examples_cover_every_required_scenario() -> None:
     covered: set[str] = set()
     for body in examples(EXAMPLES.read_text()).values():
-        case = example_case(body)
-        assert case, "every example names its golden case"
-        covered |= scenario(json.loads((CASES / f"{case}.json").read_text())["expected"])
-    required = {"complete", "empty", "partial source", "protect unavailable", "ambiguous mapping", "bad timestamp"}
+        view = example_view(body)
+        assert view, "every example names its golden view"
+        covered |= scenario(view)
+    required = {
+        "complete",
+        "empty",
+        "partial source",
+        "protect unavailable",
+        "ambiguous mapping",
+        "bad timestamp",
+        "omitted records",
+    }
     assert required <= covered, required - covered
 
 
@@ -346,21 +435,49 @@ def _example(case: str) -> str:
     ("case", "old", "new", "expected"),
     [
         ("network_protect_real_shapes", "received 3, accepted 3", "received 4, accepted 3", "source line"),
+        (
+            "network_protect_real_shapes",
+            "retention `unknown`; received 3",
+            "retention `covered`; received 3",
+            "source line",
+        ),
         ("budget_exhaustion", "exhausted: calls, window.", "exhausted: calls.", "document line"),
         ("budget_exhaustion", "outcome `not_attempted`", "outcome `empty`", "source line"),
         ("healthy_empty", "overall `empty`", "overall `complete`", "document line"),
-        ("network_protect_real_shapes", "|evt-net-0003`", "|evt-net-0009`", "not in the fixture"),
-        ("network_protect_real_shapes", "12:45:00.000000Z (network", "12:46:00.000000Z (network", "citation"),
+        ("network_protect_real_shapes", "omitted 3 (in-window 3", "omitted 0 (in-window 3", "records line"),
+        ("network_protect_real_shapes", "|evt-net-0001` 2026", "|evt-net-0009` 2026", "not in the fixture"),
+        ("network_protect_real_shapes", "12:10:05.250000Z (network", "12:11:05.250000Z (network", "citation"),
+        (
+            "network_protect_real_shapes",
+            "(network, `unifi_list_events`, record `evt-net-0001`)",
+            "(N, `evt-net-0001`)",
+            "format",
+        ),
+        ("network_protect_real_shapes", "fixture-phone has connected", "phone joined", "summary"),
+        ("network_protect_real_shapes", "(`protect.events|str|evt-protect-0001`)", "(`evt-protect-0001`)", "shorthand"),
+        ("network_protect_real_shapes", "(`network.events|str|evt-net-0001`)", "(`N/evt-net-0001`)", "shorthand"),
         ("mapping_outcomes", "mapping `ambiguous`", "mapping `verified`", "event type or mapping"),
+        ("mapping_outcomes", "- `network.events|str|evt-net-1103`", "- `network.events|str|evt-net-1103`x", "format"),
         ("malformed_timestamps", "time `ambiguous_timezone`", "2026-08-08T12:20:00.000000Z", "citation"),
+        (
+            "malformed_timestamps",
+            "(no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.\n",
+            "\n",
+            "format",
+        ),
         ("timeouts", "Coverage is partial.", "No events were recorded in the window by any source.", "all-clear"),
         ("timeouts", "Coverage is partial.", "Every source read the full window.", "complete-coverage"),
+        ("timeouts", "Offer to split the window", "Offer to read", "split the window"),
+        ("budget_exhaustion", "Offer to split the window", "Offer to read", "split the window"),
+        ("network_protect_real_shapes", "Offer to split the window", "Offer to read", "split the window"),
         ("healthy_empty", "No events were recorded in the window by any\nsource.", "", "all-clear"),
+        ("healthy_empty", "Neither controller reports how long", "Nothing says how long", "retention sentence"),
         ("timeouts", "correlation", "link", "correlation"),
         ("healthy_empty", "UTC `2026-08-08T12:00:00Z`", "UTC `2026-08-08T11:00:00Z`", "requested window"),
         ("budget_exhaustion", "window 1800 s, events 500", "window 7200 s, events 500", "budget limits"),
+        ("budget_exhaustion", "`max_records_returned=25`", "`max_records_returned=50`", "max_records_returned"),
         ("timeouts", "**Identity:**", "**Identities:**", "missing report section: Identity"),
-        ("healthy_empty", "Golden case: `healthy_empty`", "Golden case: `no_such_case`", "unknown golden case"),
+        ("healthy_empty", "Golden view: `healthy_empty`", "Golden view: `no_such_case`", "unknown golden view"),
     ],
 )
 def test_example_mismatch_is_rejected(case: str, old: str, new: str, expected: str) -> None:
@@ -370,6 +487,21 @@ def test_example_mismatch_is_rejected(case: str, old: str, new: str, expected: s
     assert any(expected in error for error in example_errors(broken)), example_errors(broken)
 
 
+def test_uncited_view_record_is_rejected() -> None:
+    body = _example("mapping_outcomes")
+    line = next(line for line in body.splitlines() if line.startswith("- `protect.events|str|evt-protect-1102`"))
+    errors = example_errors(body.replace(line + "\n", ""))
+    assert any("view record not cited: protect.events|str|evt-protect-1102" in error for error in errors), errors
+
+
+def test_observations_out_of_view_order_are_rejected() -> None:
+    body = _example("mapping_outcomes")
+    lines = body.splitlines(keepends=True)
+    first = next(i for i, line in enumerate(lines) if line.startswith("- `network.events|str|evt-net-1101`"))
+    lines[first], lines[first + 1] = lines[first + 1], lines[first]
+    assert any("view's order" in error for error in example_errors("".join(lines)))
+
+
 def test_example_source_absent_from_fixture_is_rejected() -> None:
     invented = "- `access.events` (access, `access_list_events`): outcome `empty`.\n"
     body = _example("healthy_empty").replace("- `network.events` (", invented + "- `network.events` (", 1)
@@ -377,5 +509,5 @@ def test_example_source_absent_from_fixture_is_rejected() -> None:
 
 
 def test_missing_scenario_is_rejected() -> None:
-    evidence = json.loads((CASES / "healthy_empty.json").read_text())["expected"]
-    assert "ambiguous mapping" not in scenario(evidence)
+    view = json.loads((VIEWS / "healthy_empty.json").read_text())["views"][0]["expected"]
+    assert "ambiguous mapping" not in scenario(view) and "omitted records" not in scenario(view)

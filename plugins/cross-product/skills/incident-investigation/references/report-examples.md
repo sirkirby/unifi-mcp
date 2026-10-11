@@ -1,19 +1,21 @@
 # Incident Report Examples
 
-Each example is a report written from one golden evidence set in the repository's
-incident evidence corpus (`tests/fixtures/incident_evidence/cases/<case>.json`).
-A golden set holds both products' sources in one document, so each example has one
-document line; a live run has one line for the Network document and one for the
-Protect document. The corpus exercises the evidence contract, so its query shapes
-and budget usage are fixture values, reported exactly as the set states them.
+Each example is a report written from one golden client view in the repository's
+incident evidence corpus (`tests/fixtures/incident_evidence/views/<case>.json`): the
+view the evidence tools return for that case's evidence set, with the
+`max_records_returned` the example names. A golden set holds both products' sources
+in one document, so each example has one document line and one records line; a live
+run has a pair for the Network view and a pair for the Protect view. The corpus
+exercises the evidence contract, so its query shapes and budget usage are fixture
+values, reported exactly as the view states them.
 
 Every example uses the same incident window: the user asked for 08:00 to 09:00 on
 2026-08-08, America/New_York (`-04:00`), which is `2026-08-08T12:00:00Z` to
 `2026-08-08T13:00:00Z`.
 
-## Complete evidence
+## Complete evidence with records omitted from the view
 
-Golden case: `network_protect_real_shapes`
+Golden view: `network_protect_real_shapes`, max_records_returned 2
 
 **Incident and Inputs:** AP `aa:bb:cc:00:10:02` (fixture-ap-2) went offline during
 the morning. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00`
@@ -21,62 +23,68 @@ the morning. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00`
 Camera scope: every camera as unmapped context, at the user's request; the user
 knew of no camera attached to the AP and no lookup tool was listed. Mappings: none
 asserted. Budget limits: window 7200 s, events 500, calls 10, elapsed 60000 ms.
+Records per view: `max_records_returned=2`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `complete`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-- `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 2 of 5 collected (in-window 2 of 5), max_records_returned 2; omitted 3 (in-window 3, from 2026-08-08T12:30:00.000000Z), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Every source read the full window. Protect events are from cameras with no mapping
-to the AP.
+to the AP. Three in-window records from 2026-08-08T12:30:00Z onwards were collected
+but omitted from the view; they are covered, but this report cannot describe them.
 
 **Observations:**
 
 - `network.events|str|evt-net-0001` 2026-08-08T12:10:05.250000Z (network, `unifi_list_events`, record `evt-net-0001`): fixture-phone has connected to fixture-ap-1. `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
 - `protect.events|str|evt-protect-0001` 2026-08-08T12:10:07.500000Z (protect, `protect_list_events`, record `evt-protect-0001`): smartDetectZone: person `smartDetectZone`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0002` 2026-08-08T12:30:00.000000Z (network, `unifi_list_events`, record `evt-net-0002`): fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy. `TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT`; mapping `not_evaluated`.
-- `protect.events|str|evt-protect-0002` 2026-08-08T12:40:00.000000Z (protect, `protect_list_events`, record `evt-protect-0002`): motion `motion`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0003` 2026-08-08T12:45:00.000000Z (network, `unifi_list_events`, record `evt-net-0003`): fixture-ap-2 disconnected. `DEVICE_DISCONNECTED_AP`; mapping `not_evaluated`.
 
 **Hypotheses:**
 
-- Correlation: motion on camera `cam-fixture-000b` (`evt-protect-0002`) came 5
-  minutes before the disconnect (`evt-net-0003`). The camera has no mapping to the
-  AP, so this is timing only. Alternatives: unrelated motion elsewhere; a power or
-  uplink fault that no event in this window records.
-- No event in the window names the AP's uplink switch or gateway, so an upstream
-  failure is neither shown nor ruled out by these records.
+- Correlation: a person detection on camera `cam-fixture-000a`
+  (`protect.events|str|evt-protect-0001`) came two seconds after a phone joined a
+  different AP (`network.events|str|evt-net-0001`). The camera has no mapping to
+  either AP, so this is timing only. Alternatives: routine foot traffic; unrelated
+  activity elsewhere.
+- Nothing in the view names `aa:bb:cc:00:10:02`. Whether its disconnect was
+  recorded is unknown until the omitted records are read.
 
 **Identity:** No person is identified. The `person` smart detection is an object
-class, not an identity. Client MACs `aa:bb:cc:00:20:01` and `aa:bb:cc:00:20:02`
+class, not an identity. Client MACs `aa:bb:cc:00:20:01` and `aa:bb:cc:00:10:01`
 identify devices, not their users.
 
 **Unanswered Questions and Next Reads:**
 
-- Did the AP come back? Offer a bounded read of the following hour with
-  `unifi_get_incident_evidence` and the same budgets.
+- What happened after 12:30 UTC? Offer to split the window at the omitted records:
+  call `unifi_get_incident_evidence` and `protect_get_incident_evidence` again with
+  `start="2026-08-08T08:30:00-04:00"` and `end="2026-08-08T09:00:00-04:00"` and the
+  same budgets, or repeat the original window with `max_records_returned=5`.
 - Which camera, if any, is attached to the AP? Ask the user for the camera ID and
   the relationship, then repeat both calls with the mapping asserted.
 
 ## Healthy empty
 
-Golden case: `healthy_empty`
+Golden view: `healthy_empty`, max_records_returned 25
 
 **Incident and Inputs:** The user reported AP `aa:bb:cc:00:10:02` unreachable in
 the morning. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00`
 (UTC `2026-08-08T12:00:00Z` to `2026-08-08T13:00:00Z`). No `device_macs` filter.
 Camera scope: every camera as unmapped context. Mappings: none asserted. Budget
-limits: window 7200 s, events 500, calls 10, elapsed 60000 ms.
+limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
+`max_records_returned=25`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `empty`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-- `network.events` (network, `unifi_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 0 of 0 collected (in-window 0 of 0), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Every source read the full window. No events were recorded in the window by any
-source.
+source. Neither controller reports how long it keeps events (retention `unknown`),
+so events older than its retention may have been discarded without a trace.
 
 **Observations:** None. Both sources completed and returned no records.
 
@@ -95,19 +103,21 @@ source.
 
 ## Partial source from budget exhaustion
 
-Golden case: `budget_exhaustion`
+Golden view: `budget_exhaustion`, max_records_returned 25
 
 **Incident and Inputs:** Switch `aa:bb:cc:00:10:02` dropped its ports during the
 morning. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00` (UTC
 `2026-08-08T12:00:00Z` to `2026-08-08T13:00:00Z`). No `device_macs` filter.
 Camera scope: every camera as unmapped context. Mappings: none asserted. Budget
-limits: window 1800 s, events 500, calls 1, elapsed 60000 ms.
+limits: window 1800 s, events 500, calls 1, elapsed 60000 ms. Records per view:
+`max_records_returned=25`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/1800 s, events 1/500, calls 1/1, elapsed 400/60000 ms; exhausted: calls, window.
-- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons budget_exhausted, truncation_unknown; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `false`, truncation `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `not_attempted`; reasons none; failure `budget_exhausted`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons budget_exhausted, truncation_unknown; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `false`, truncation `unknown`, retention `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `not_attempted`; reasons none; failure `budget_exhausted`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Coverage is partial. The one-hour window exceeds the 1800-second window budget, and
 the single allowed call was spent before Protect was read. Network was interrupted
@@ -120,32 +130,39 @@ missing evidence, not an empty result.
 
 **Hypotheses:**
 
-- No correlation can be assessed from one Network row and no Protect evidence.
-  Nothing here explains the port drops.
+- No correlation can be assessed from one Network row
+  (`network.events|str|evt-net-1201`) and no Protect evidence. Nothing here
+  explains the port drops.
 
 **Identity:** Station `aa:bb:cc:00:20:01` is named by the record; it identifies a
 device, not a person.
 
 **Unanswered Questions and Next Reads:**
 
-- Offer to repeat both calls with `max_window_seconds=3600` and `max_calls=20`, or
-  to split the window into two 30-minute reads. Either would change coverage.
+- Network's truncation is unknown. Offer to split the window into two 30-minute
+  reads, `2026-08-08T08:00:00-04:00` to `2026-08-08T08:30:00-04:00` and
+  `2026-08-08T08:30:00-04:00` to `2026-08-08T09:00:00-04:00`, each with both
+  evidence tools and `max_window_seconds=1800`, `max_calls=20`; or to repeat both
+  calls once with `max_window_seconds=3600` and `max_calls=20`. Either would change
+  coverage.
 
 ## Unavailable Protect source
 
-Golden case: `timeouts`
+Golden view: `timeouts`, max_records_returned 25
 
 **Incident and Inputs:** AP `aa:bb:cc:00:10:01` was slow and then unreachable in
 the morning. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00`
 (UTC `2026-08-08T12:00:00Z` to `2026-08-08T13:00:00Z`). No `device_macs` filter.
 Camera scope: every camera as unmapped context. Mappings: none asserted. Budget
-limits: window 7200 s, events 500, calls 10, elapsed 60000 ms.
+limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
+`max_records_returned=25`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons partial_response, truncation_unknown; failure `timeout`; queried 2026-08-08T11:05:00.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `null`, truncation `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `timeout`; reasons none; failure `timeout`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons partial_response, truncation_unknown; failure `timeout`; queried 2026-08-08T11:05:00.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `timeout`; reasons none; failure `timeout`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Coverage is partial. Protect timed out with nothing returned: Protect is unavailable
 for this window and no camera context exists. Network timed out after its first
@@ -158,9 +175,9 @@ page, so further Network events may exist.
 **Hypotheses:**
 
 - No correlation can be assessed without camera evidence and with an interrupted
-  Network read. Both sources timing out is itself a signal worth checking: the
-  controllers or the path to them may have been slow, which is a separate question
-  from the AP incident.
+  Network read (`network.events|str|evt-net-0301` is its only record). Both sources
+  timing out is itself a signal worth checking: the controllers or the path to them
+  may have been slow, which is a separate question from the AP incident.
 
 **Identity:** Station `aa:bb:cc:00:20:01` identifies a device, not a person.
 
@@ -169,10 +186,14 @@ page, so further Network events may exist.
 - Offer to repeat both calls once with `max_elapsed_ms=120000`. If Protect fails
   again, report Protect unavailable and use the Protect setup skill to check the
   connection.
+- Network's truncation is unknown. Offer to split the window into two 30-minute
+  reads with `unifi_get_incident_evidence`, `2026-08-08T08:00:00-04:00` to
+  `2026-08-08T08:30:00-04:00` and `2026-08-08T08:30:00-04:00` to
+  `2026-08-08T09:00:00-04:00`, so each part is read in less time.
 
 ## Ambiguous camera mapping
 
-Golden case: `mapping_outcomes`
+Golden view: `mapping_outcomes`, max_records_returned 25
 
 **Incident and Inputs:** The front-door AP `aa:bb:cc:00:10:01` was dropping
 clients. Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00` (UTC
@@ -185,13 +206,15 @@ Camera scope: every camera, at the user's request. Mappings asserted:
 - `product_inventory`: camera `cam-fixture-000a` → itself, confirmed in the Protect
   inventory.
 
-Budget limits: window 7200 s, events 500, calls 10, elapsed 60000 ms.
+Budget limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per
+view: `max_records_returned=25`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `complete`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-- `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 5 of 5 collected (in-window 5 of 5), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Every source read the full window. Coverage is complete; the AP's camera mapping is
 ambiguous, so no AP event is attributed to one camera.
@@ -206,13 +229,14 @@ ambiguous, so no AP event is attributed to one camera.
 
 **Hypotheses:**
 
-- Correlation: motion on `cam-fixture-000a` (`evt-protect-1101`) came one minute
-  after a client joined the AP (`evt-net-1101`). Because the AP maps to two cameras,
-  neither camera is linked to that AP event. Alternatives: routine foot traffic;
-  motion unrelated to the AP.
-- `evt-protect-1102` happened in the same second as the `fixture-front-door`
-  disconnect (`evt-net-1102`), but its camera is unmapped and that device is not the
-  AP. Same-second timing establishes neither a mapping nor a cause.
+- Correlation: motion on `cam-fixture-000a` (`protect.events|str|evt-protect-1101`)
+  came one minute after a client joined the AP (`network.events|str|evt-net-1101`).
+  Because the AP maps to two cameras, neither camera is linked to that AP event.
+  Alternatives: routine foot traffic; motion unrelated to the AP.
+- `protect.events|str|evt-protect-1102` happened in the same second as the
+  `fixture-front-door` disconnect (`network.events|str|evt-net-1102`), but its camera
+  is unmapped and that device is not the AP. Same-second timing establishes neither
+  a mapping nor a cause.
 
 **Identity:** No person is identified. The client and station MACs identify
 devices only.
@@ -227,19 +251,21 @@ devices only.
 
 ## Malformed and untimed timestamps
 
-Golden case: `malformed_timestamps`
+Golden view: `malformed_timestamps`, max_records_returned 25
 
 **Incident and Inputs:** Switch `aa:bb:cc:00:10:01` restarted during the morning.
 Window `2026-08-08T08:00:00-04:00` to `2026-08-08T09:00:00-04:00` (UTC
 `2026-08-08T12:00:00Z` to `2026-08-08T13:00:00Z`). No `device_macs` filter.
 Camera scope: every camera as unmapped context. Mappings: none asserted. Budget
-limits: window 7200 s, events 500, calls 10, elapsed 60000 ms.
+limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
+`max_records_returned=25`.
 
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons malformed_records, untimed_records; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 10, cap 100, has_more `false`, truncation `not_truncated`; received 10, accepted 7, in-window 1, out-of-window 0, untimed 6, malformed 3, duplicates 0, conflicting 0, boundary-uncertain 0.
-- `protect.events` (protect, `protect_list_events`): outcome `partial`; reasons untimed_records; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`; received 3, accepted 3, in-window 0, out-of-window 0, untimed 3, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
+Golden evidence set records: returned 10 of 10 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+- `network.events` (network, `unifi_list_events`): outcome `partial`; reasons malformed_records, untimed_records; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 10, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 10, accepted 7, in-window 1, out-of-window 0, untimed 6, malformed 3, duplicates 0, conflicting 0, boundary-uncertain 0.
+- `protect.events` (protect, `protect_list_events`): outcome `partial`; reasons untimed_records; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 0, out-of-window 0, untimed 3, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Coverage is partial. Both sources queried the whole window, but 9 records have no
 usable time and 3 Network rows were unreadable and dropped. Any of them may belong
@@ -251,22 +277,22 @@ to the window; none is placed in it.
 
 Untimed records, reported with their original values and never placed in the window:
 
-- `network.events|str|evt-net-0701` time `missing` (network, `unifi_list_events`, record `evt-net-0701`): no time field `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0702` time `missing` (network, `unifi_list_events`, record `evt-net-0702`): `time` is null `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0703` time `malformed` (network, `unifi_list_events`, record `evt-net-0703`): `time` is the string "not-a-time" `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0704` time `malformed` (network, `unifi_list_events`, record `evt-net-0704`): `time` is the integer 0 `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0705` time `malformed` (network, `unifi_list_events`, record `evt-net-0705`): `time` is a boolean `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `network.events|str|evt-net-0706` time `malformed` (network, `unifi_list_events`, record `evt-net-0706`): `time` is an object `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
-- `protect.events|str|evt-protect-0701` time `ambiguous_timezone` (protect, `protect_list_events`, record `evt-protect-0701`): `start` "2026-08-08T12:20:00" has no offset `motion`; mapping `not_evaluated`.
-- `protect.events|str|evt-protect-0702` time `malformed` (protect, `protect_list_events`, record `evt-protect-0702`): `start` "2026-13-45T12:20:00Z" is not a date `motion`; mapping `not_evaluated`.
-- `protect.events|str|evt-protect-0703` time `malformed` (protect, `protect_list_events`, record `evt-protect-0703`): `start` is empty `motion`; mapping `not_evaluated`.
+- `network.events|str|evt-net-0701` time `missing` (network, `unifi_list_events`, record `evt-net-0701`): no time field `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; no original time field.
+- `network.events|str|evt-net-0702` time `missing` (network, `unifi_list_events`, record `evt-net-0702`): (no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; original `time` is null.
+- `network.events|str|evt-net-0703` time `malformed` (network, `unifi_list_events`, record `evt-net-0703`): (no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; original `time` is the string "not-a-time".
+- `network.events|str|evt-net-0704` time `malformed` (network, `unifi_list_events`, record `evt-net-0704`): (no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; original `time` is the integer 0.
+- `network.events|str|evt-net-0705` time `malformed` (network, `unifi_list_events`, record `evt-net-0705`): (no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; original `time` is a boolean.
+- `network.events|str|evt-net-0706` time `malformed` (network, `unifi_list_events`, record `evt-net-0706`): (no summary) `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`; original `time` is an object.
+- `protect.events|str|evt-protect-0701` time `ambiguous_timezone` (protect, `protect_list_events`, record `evt-protect-0701`): motion `motion`; mapping `not_evaluated`; original `start` "2026-08-08T12:20:00" has no offset.
+- `protect.events|str|evt-protect-0702` time `malformed` (protect, `protect_list_events`, record `evt-protect-0702`): motion `motion`; mapping `not_evaluated`; original `start` "2026-13-45T12:20:00Z" is not a date.
+- `protect.events|str|evt-protect-0703` time `malformed` (protect, `protect_list_events`, record `evt-protect-0703`): motion `motion`; mapping `not_evaluated`; original `start` is empty.
 
 **Hypotheses:**
 
-- No correlation is assessed. The one timed record is a client connection at
-  12:20 UTC; the camera events that might sit near it have no usable time. An
-  `ambiguous_timezone` value could be 12:20 in any timezone, so reading it as UTC
-  would be a guess.
+- No correlation is assessed. The one timed record
+  (`network.events|str|evt-net-0707`) is a client connection at 12:20 UTC; the
+  camera events that might sit near it have no usable time. An `ambiguous_timezone`
+  value could be 12:20 in any timezone, so reading it as UTC would be a guess.
 
 **Identity:** No person is identified; the records name no account.
 
