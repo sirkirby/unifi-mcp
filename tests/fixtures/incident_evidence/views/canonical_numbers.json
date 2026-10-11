@@ -3,6 +3,7 @@
   "views": [
     {
       "max_records_returned": 25,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -109,7 +110,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|ab1a6cf9365b678caa62f84e",
@@ -131,7 +133,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|f6c1adfc6a21bbdec4a2c43e",
@@ -153,7 +156,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|0ad162c4efa3a6fffc63165d",
@@ -175,7 +179,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|79af63387115ff5c6eba1b29",
@@ -197,7 +202,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|99b306d6fa1919e210c7ce2b",
@@ -219,7 +225,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|52222a86a36c83a7c8a88a86",
@@ -241,7 +248,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|06da383a3a677b302aad44e8",
@@ -263,7 +271,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|f22d2b88b9d9ed77e45d3a7a",
@@ -285,7 +294,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|be5b98f4d4bfed08e1b959fd",
@@ -307,7 +317,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|ec7b9859a89a874285774c36",
@@ -329,7 +340,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|8214c4283c724c20d0cc95a3",
@@ -351,15 +363,23 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           }
         ],
         "record_selection": {
           "max_records_returned": 25,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
             "total": 12,
             "in_window": 12,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -375,12 +395,15 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": null
+          "too_large": 0,
+          "limited_by": null,
+          "next_cursor": null
         }
       }
     },
     {
       "max_records_returned": 2,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -487,7 +510,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "protect.events|sha256|ab1a6cf9365b678caa62f84e",
@@ -509,15 +533,23 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           }
         ],
         "record_selection": {
           "max_records_returned": 2,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
             "total": 12,
             "in_window": 12,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -533,7 +565,179 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": "2026-08-08T12:00:02.000000Z"
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:01.000000Z|protect.events|sha256|ab1a6cf9365b678caa62f84e"
+        }
+      }
+    },
+    {
+      "max_records_returned": 2,
+      "resume_after": "0|2026-08-08T12:00:01.000000Z|protect.events|sha256|ab1a6cf9365b678caa62f84e",
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "complete",
+        "coverage_complete": true,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": null,
+        "sources": [
+          {
+            "source_id": "protect.events",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": null,
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:00:11.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": null,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 12,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 12,
+                "accepted": 12,
+                "in_window": 12,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 12
+            }
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "protect.events|sha256|f6c1adfc6a21bbdec4a2c43e",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": null,
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:02.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "integer",
+              "original_value": 1786190402000
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "protect.events|sha256|0ad162c4efa3a6fffc63165d",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": null,
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:03.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "integer",
+              "original_value": 1786190403000
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 2,
+          "omission": "presentation_limit",
+          "resume_after": "0|2026-08-08T12:00:01.000000Z|protect.events|sha256|ab1a6cf9365b678caa62f84e",
+          "collected": {
+            "total": 12,
+            "in_window": 12,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 8,
+            "in_window": 8,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:03.000000Z|protect.events|sha256|0ad162c4efa3a6fffc63165d"
         }
       }
     }

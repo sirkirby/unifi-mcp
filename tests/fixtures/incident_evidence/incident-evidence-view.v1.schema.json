@@ -772,16 +772,45 @@
     },
     "RecordSelection": {
       "additionalProperties": false,
-      "description": "Which collected records the view returns; omission never reduces coverage.",
+      "description": "Which collected records the view returns; omission never reduces coverage.\n\n``before_resume`` counts records at or before ``resume_after`` (shown by\nearlier views), ``omitted`` every other record not returned, including the\n``too_large`` records this view skipped. ``next_cursor`` is set exactly\nwhen ``limited_by`` says which limit stopped the view.",
       "properties": {
+        "before_resume": {
+          "$ref": "#/$defs/RecordTally"
+        },
         "collected": {
           "$ref": "#/$defs/RecordTally"
+        },
+        "limited_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "max_records_returned",
+                "output_budget"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Limited By"
         },
         "max_records_returned": {
           "maximum": 50,
           "minimum": 1,
           "title": "Max Records Returned",
           "type": "integer"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
         },
         "omission": {
           "const": "presentation_limit",
@@ -792,7 +821,7 @@
         "omitted": {
           "$ref": "#/$defs/RecordTally"
         },
-        "omitted_in_window_from_utc": {
+        "resume_after": {
           "anyOf": [
             {
               "type": "string"
@@ -801,18 +830,27 @@
               "type": "null"
             }
           ],
-          "title": "Omitted In Window From Utc"
+          "title": "Resume After"
         },
         "returned": {
           "$ref": "#/$defs/RecordTally"
+        },
+        "too_large": {
+          "minimum": 0,
+          "title": "Too Large",
+          "type": "integer"
         }
       },
       "required": [
         "max_records_returned",
+        "resume_after",
         "collected",
+        "before_resume",
         "returned",
         "omitted",
-        "omitted_in_window_from_utc"
+        "too_large",
+        "limited_by",
+        "next_cursor"
       ],
       "title": "RecordSelection",
       "type": "object"
@@ -1029,7 +1067,7 @@
     },
     "ViewRecord": {
       "additionalProperties": false,
-      "description": "One record in citation form; ``evidence_id`` begins with its source ID.",
+      "description": "One record in citation form; ``evidence_id`` begins with its source ID.\n\n``truncated`` names each free-text field cut to a prefix, with its full\nlength in characters; identifiers are never cut.",
       "properties": {
         "entity_ids": {
           "items": {
@@ -1097,6 +1135,20 @@
         },
         "time": {
           "$ref": "#/$defs/ViewTime"
+        },
+        "truncated": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "enum": [
+              "event_type",
+              "original_value",
+              "summary"
+            ]
+          },
+          "title": "Truncated",
+          "type": "object"
         }
       },
       "required": [
@@ -1108,7 +1160,8 @@
         "event_type",
         "summary",
         "entity_ids",
-        "mapping"
+        "mapping",
+        "truncated"
       ],
       "title": "ViewRecord",
       "type": "object"

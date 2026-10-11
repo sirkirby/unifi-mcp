@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-import math
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 import jsonschema
-import pydantic_core
 import pytest
 from pydantic import ValidationError
 from unifi_core.incident_evidence import (
@@ -22,6 +19,7 @@ from unifi_core.incident_evidence import (
 from unifi_core.incident_evidence_view import (
     DEFAULT_MAX_RECORDS_RETURNED,
     MAX_RECORDS_RETURNED,
+    VIEW_TOKEN_BUDGET,
     EvidencePresentation,
     IncidentEvidenceView,
     ViewSource,
@@ -32,6 +30,7 @@ from unifi_core.incident_evidence_view import (
 )
 
 from .incident_evidence_corpus import CORPUS_DIR, UPDATE_ENV, case_paths, load_case
+from .incident_evidence_tokens import tokens_as_sent
 from .incident_evidence_worst_case import network_worst_case, protect_worst_case
 
 UPDATING = os.environ.get(UPDATE_ENV) == "1"
@@ -50,11 +49,18 @@ def _evidence(path: Path) -> IncidentEvidence:
 
 
 def _views(path: Path) -> list[dict[str, Any]]:
+    """Each limit's first view, then the view resumed from its cursor."""
     evidence = _evidence(path)
-    return [
-        {"max_records_returned": limit, "expected": view_to_json(client_view(evidence, max_records_returned=limit))}
-        for limit in LIMITS
-    ]
+    views = []
+    for limit in LIMITS:
+        cursor = None
+        for _ in range(2):
+            view = view_to_json(client_view(evidence, max_records_returned=limit, resume_after=cursor))
+            views.append({"max_records_returned": limit, "resume_after": cursor, "expected": view})
+            cursor = view["record_selection"]["next_cursor"]
+            if cursor is None:
+                break
+    return views
 
 
 # --- golden views -------------------------------------------------------------------
@@ -128,8 +134,16 @@ def _assert_same_semantics(evidence: IncidentEvidence, view: IncidentEvidenceVie
         assert shown.source_tool == record.provenance.source_tool
         assert shown.source_record_id == record.provenance.source_record_id
         assert shown.time.status is record.time.status and shown.time.utc == record.time.utc
-        assert shown.time.original_value == record.time.original_value
-        assert (shown.event_type, shown.summary) == (record.event_type, record.summary)
+        for field, shown_text, full_text in (
+            ("event_type", shown.event_type, record.event_type),
+            ("summary", shown.summary, record.summary),
+            ("original_value", shown.time.original_value, record.time.original_value),
+        ):
+            if field in shown.truncated:
+                assert isinstance(full_text, str) and full_text.startswith(shown_text) and shown_text != full_text
+                assert shown.truncated[field] == len(full_text)
+            else:
+                assert shown_text == full_text, field
         assert shown.entity_ids == tuple(entity.id for entity in record.entities)
         assert shown.mapping.status is record.mapping.status
         assert shown.mapping.target_ids == tuple(target.id for target in record.mapping.targets)
@@ -152,20 +166,24 @@ async def test_worst_case_view_keeps_coverage_and_failure_semantics(build) -> No
 # --- record selection -------------------------------------------------------------------
 
 
-def test_in_window_records_come_first_and_omission_says_where_to_resume() -> None:
+def test_in_window_records_come_first_and_the_cursor_resumes_after_the_last_one() -> None:
     evidence = _evidence(Path(CORPUS_DIR / "cases" / "malformed_timestamps.json"))
     view = client_view(evidence, max_records_returned=1)
     (shown,) = view.records
     assert shown.time.status is TimeStatus.IN_WINDOW
     assert view.record_selection.omitted.untimed == 9
-    assert view.record_selection.omitted_in_window_from_utc is None
+    assert view.record_selection.limited_by == "max_records_returned"
+    assert view.record_selection.next_cursor == f"0|{shown.time.utc}|{shown.evidence_id}"
     assert view.record_selection.omission == "presentation_limit"
 
     evidence = _evidence(Path(CORPUS_DIR / "cases" / "network_protect_real_shapes.json"))
     view = client_view(evidence, max_records_returned=2)
     in_window = [r for r in evidence.records if r.time.status is TimeStatus.IN_WINDOW]
-    assert [r.evidence_id for r in view.records] == [r.evidence_id for r in in_window[:2]]
-    assert view.record_selection.omitted_in_window_from_utc == in_window[2].time.utc
+    in_window.sort(key=lambda r: (r.time.utc, r.evidence_id))
+    assert {r.evidence_id for r in view.records} == {r.evidence_id for r in in_window[:2]}
+    resumed = client_view(evidence, max_records_returned=2, resume_after=view.record_selection.next_cursor)
+    assert {r.evidence_id for r in resumed.records} == {r.evidence_id for r in in_window[2:4]}
+    assert resumed.record_selection.before_resume.in_window == 2
 
 
 def test_untimed_records_are_kept_before_out_of_window_records() -> None:
@@ -188,25 +206,7 @@ def test_view_is_deterministic_and_never_changes_the_document() -> None:
 
 # --- size ---------------------------------------------------------------------------------
 
-# MCP servers send a dict result as JSON indented by two spaces. Tokens are
-# estimated conservatively: every whitespace run and punctuation character is
-# a token, letters count one token per four and digits one per three.
-_TOKEN_PARTS = re.compile(r"[A-Za-z]+|[0-9]+|\s+|[^\sA-Za-z0-9]")
 DEFAULT_VIEW_TOKEN_LIMIT = 16_000
-MAX_VIEW_TOKEN_LIMIT = 24_000
-
-
-def _estimated_tokens(payload: dict[str, Any]) -> int:
-    text = pydantic_core.to_json({"success": True, "data": payload}, indent=2).decode()
-    total = 0
-    for part in _TOKEN_PARTS.findall(text):
-        if part[0].isalpha():
-            total += math.ceil(len(part) / 4)
-        elif part[0].isdigit():
-            total += math.ceil(len(part) / 3)
-        else:
-            total += 1
-    return total
 
 
 @pytest.mark.asyncio
@@ -214,12 +214,12 @@ def _estimated_tokens(payload: dict[str, Any]) -> int:
 async def test_default_view_of_the_largest_default_budget_document_fits_a_client(build) -> None:
     evidence = await build()
     assert len(evidence.records) >= 990, "the worst case must fill the default events budget"
-    full = _estimated_tokens(evidence_to_json(evidence))
-    default = _estimated_tokens(EvidencePresentation().render(evidence))
-    largest = _estimated_tokens(EvidencePresentation(max_records_returned=MAX_RECORDS_RETURNED).render(evidence))
+    full = tokens_as_sent(evidence_to_json(evidence))
+    default = tokens_as_sent(EvidencePresentation().render(evidence))
+    largest = tokens_as_sent(EvidencePresentation(max_records_returned=MAX_RECORDS_RETURNED).render(evidence))
     assert full > 200_000
     assert default <= DEFAULT_VIEW_TOKEN_LIMIT, default
-    assert largest <= MAX_VIEW_TOKEN_LIMIT, largest
+    assert largest <= VIEW_TOKEN_BUDGET, largest
 
 
 # --- presentation arguments -----------------------------------------------------------------
@@ -237,9 +237,15 @@ def test_full_detail_returns_the_contract_document() -> None:
     "arguments",
     [
         {"detail": "full", "max_records_returned": 5},
+        {"detail": "full", "resume_after": "1||network.events|int|7"},
         {"max_records_returned": 0},
         {"max_records_returned": MAX_RECORDS_RETURNED + 1},
         {"detail": "summary"},
+        {"resume_after": "2026-08-08T12:00:00.000000Z"},
+        {"resume_after": "1|2026-08-08T12:00:00.000000Z|network.events|int|7"},
+        {"resume_after": "0||network.events|int|7"},
+        {"resume_after": "0|2026-08-08T12:00:00.000000Z|network events|int|7"},
+        {"resume_after": "0|2026-08-08T12:00:00.000000Z|network.events|int|" + "7" * 300},
     ],
 )
 def test_invalid_presentation_is_rejected(arguments: dict[str, Any]) -> None:
@@ -252,6 +258,9 @@ def test_invalid_presentation_is_rejected(arguments: dict[str, Any]) -> None:
     [
         (lambda v: v.update(overall="empty", coverage_complete=True), "overall"),
         (lambda v: v["record_selection"]["omitted"].update(total=0, in_window=0), "add up"),
+        (lambda v: v["record_selection"].update(next_cursor=None), "next_cursor"),
+        (lambda v: v["record_selection"].update(limited_by="output_budget", next_cursor=None), "next_cursor"),
+        (lambda v: v["records"][0].update(truncated={"summary": 0}), "full length"),
         (lambda v: v["records"].pop(), "returned counts"),
         (lambda v: v["sources"].reverse(), "sorted"),
     ],

@@ -10,13 +10,22 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
   every coverage and failure claim reads the same as in the full document.
 - Records are compact citations (evidence ID, product, source tool, source
   record ID, time and placement, type, summary, entities and mapping). Raw
-  attributes and repeated provenance are dropped.
-- At most ``max_records_returned`` records are returned: in-window records
-  first, earliest first, then untimed records, then out-of-window records.
+  attributes and repeated provenance are dropped. Free text longer than its
+  limit is cut to a prefix and named in the record's ``truncated``;
+  identifiers are never cut, so a record whose citation cannot fit is
+  skipped and counted as ``too_large`` instead.
+- The view stays within :data:`VIEW_TOKEN_BUDGET` estimated tokens as an MCP
+  tool result. Records are taken in selection order (in-window records
+  earliest first, then untimed, then out-of-window records; ties by evidence
+  ID) until ``max_records_returned`` or the budget is reached.
   ``record_selection`` counts what was collected, returned and omitted per
-  placement. Omission is a presentation limit, never missing coverage; a
-  narrower window starting at ``omitted_in_window_from_utc`` returns the
-  in-window records left out.
+  placement; omission is a presentation limit, never missing coverage.
+  ``next_cursor`` names the last record the view examined: passing it back as
+  ``resume_after`` returns the records after it, so continuation always makes
+  progress, even through records that share a timestamp.
+
+Request validation bounds everything else the view repeats (sources, labels
+and mapping assertions), so every valid request's view fits the budget.
 
 The projection is pure and deterministic and keeps no state between calls.
 MCP tools, API routes, the relay and the worker return it by default;
@@ -26,12 +35,14 @@ MCP tools, API routes, the relay and the worker return it by default;
 from __future__ import annotations
 
 import json
+import re
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator, model_validator
 
 from unifi_core.incident_evidence import (
+    EVIDENCE_ID_PATTERN,
     INCIDENT_EVIDENCE_SCHEMA_VERSION,
     Budgets,
     Coverage,
@@ -62,7 +73,98 @@ INCIDENT_EVIDENCE_VIEW_SCHEMA_VERSION = 1
 DEFAULT_MAX_RECORDS_RETURNED = 25
 MAX_RECORDS_RETURNED = 50
 
+#: Most estimated tokens (:func:`estimated_tokens`) a view takes as an MCP tool
+#: result, ``{"success": true, "data": <view>}``: well under the roughly 25,000
+#: tokens MCP clients accept in one result.
+VIEW_TOKEN_BUDGET = 20_000
+#: Most estimated tokens one record citation takes. A record over it is never
+#: returned: its identifiers cannot be cut without breaking the citation.
+RECORD_TOKEN_LIMIT = 2_500
+#: Longest evidence ID a returned record, and so a cursor, carries.
+MAX_CITED_EVIDENCE_ID_LENGTH = 256
+#: Estimated tokens kept of each free-text field; longer text is cut to a prefix.
+TEXT_TOKEN_LIMITS: dict[str, int] = {"event_type": 40, "original_value": 40, "summary": 200}
+TruncatedField = Literal["event_type", "original_value", "summary"]
+
 _PLACED = (TimeStatus.IN_WINDOW, TimeStatus.OUT_OF_WINDOW)
+_UTC = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
+_EVIDENCE_ID_RE = re.compile(EVIDENCE_ID_PATTERN)
+# <rank>|<utc>|<evidence_id>: rank 0 in-window, 1 untimed (no utc), 2 out-of-window.
+_CURSOR_RE = re.compile(rf"^(?:[02]\|{_UTC}|1\|)\|(?P<evidence_id>.+)$")
+MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH
+
+
+# --- estimated tokens ------------------------------------------------------------------------
+
+# Every value is costed as an MCP server sends it: JSON indented by two spaces,
+# non-ASCII text unescaped, control characters escaped. The estimate never
+# undercounts the conservative reading the size tests use, in which every
+# whitespace run and punctuation character is a token, letters count one per
+# four and digits one per three. The worker ports this function exactly.
+_TEXT_PARTS = re.compile(r"[A-Za-z]+|[0-9]+| +|[\s\S]")
+
+
+def _text_tokens(text: str) -> int:
+    total = 0
+    for part in _TEXT_PARTS.findall(text):
+        first = part[0]
+        if "A" <= first <= "Z" or "a" <= first <= "z":
+            total += -(-len(part) // 4)
+        elif "0" <= first <= "9":
+            total += -(-len(part) // 3)
+        elif first in '"\\':
+            total += 2
+        elif ord(first) < 0x20:
+            total += 4
+        else:
+            total += 1
+    return total
+
+
+def _integer_tokens(value: int) -> int:
+    # A sign and a float's ".0" are allowed for.
+    return -(-len(str(abs(value))) // 3) + 3
+
+
+def estimated_tokens(value: Any) -> int:
+    """Upper bound on the tokens a JSON-ready value takes as indented JSON."""
+    if value is None:
+        return 1
+    if isinstance(value, bool):
+        return 2
+    if isinstance(value, int):
+        return _integer_tokens(value)
+    if isinstance(value, float):
+        return _integer_tokens(int(value)) if value.is_integer() else 24
+    if isinstance(value, str):
+        return _text_tokens(value) + 2
+    if isinstance(value, dict):
+        return 3 + sum(6 + _text_tokens(key) + estimated_tokens(item) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return 3 + sum(2 + estimated_tokens(item) for item in value)
+    raise TypeError(f"not a JSON value: {type(value).__name__}")
+
+
+# {"success": true, "data": <view>}, less the view itself.
+_ENVELOPE_TOKENS = estimated_tokens({"success": True, "data": None}) - estimated_tokens(None)
+
+
+def _cut(text: str, limit: int) -> str:
+    """The longest prefix of ``text`` whose estimated tokens are at most ``limit``."""
+    if _text_tokens(text) <= limit:
+        return text
+    # Every character costs at least a quarter token, so no longer prefix fits.
+    low, high = 0, min(len(text), 4 * limit + 4)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if _text_tokens(text[:middle]) <= limit:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low]
+
+
+# --- model -----------------------------------------------------------------------------------
 
 
 class _ClosedModel(BaseModel):
@@ -72,6 +174,25 @@ class _ClosedModel(BaseModel):
 class EvidenceDetail(str, Enum):
     VIEW = "view"
     FULL = "full"
+
+
+def _cursor_key(cursor: str) -> tuple[int, str, str]:
+    """The selection key a cursor names; raises ``ValueError`` for anything else."""
+    match = _CURSOR_RE.match(cursor) if len(cursor) <= MAX_CURSOR_LENGTH else None
+    if match is None or not _EVIDENCE_ID_RE.match(match["evidence_id"]):
+        raise ValueError("a cursor must be a next_cursor value returned by an evidence view")
+    rank, utc, evidence_id = cursor.split("|", 2)
+    return int(rank), utc, evidence_id
+
+
+def _cursor(key: tuple[int, str, str]) -> str:
+    return "|".join((str(key[0]), key[1], key[2]))
+
+
+def _rank(status: TimeStatus) -> int:
+    if status is TimeStatus.IN_WINDOW:
+        return 0
+    return 2 if status is TimeStatus.OUT_OF_WINDOW else 1
 
 
 class ViewTime(_ClosedModel):
@@ -94,7 +215,11 @@ class ViewMapping(_ClosedModel):
 
 
 class ViewRecord(_ClosedModel):
-    """One record in citation form; ``evidence_id`` begins with its source ID."""
+    """One record in citation form; ``evidence_id`` begins with its source ID.
+
+    ``truncated`` names each free-text field cut to a prefix, with its full
+    length in characters; identifiers are never cut.
+    """
 
     evidence_id: str
     product: Product
@@ -105,6 +230,18 @@ class ViewRecord(_ClosedModel):
     summary: str | None
     entity_ids: tuple[str, ...]
     mapping: ViewMapping
+    truncated: dict[TruncatedField, int]
+
+    @field_validator("truncated")
+    @classmethod
+    def _lengths(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(length < 1 for length in value.values()):
+            raise ValueError("a truncated field states its full length")
+        return value
+
+    @property
+    def selection_key(self) -> tuple[int, str, str]:
+        return _rank(self.time.status), self.time.utc or "", self.evidence_id
 
 
 class ViewSource(_ClosedModel):
@@ -153,26 +290,53 @@ def _tally(statuses: list[TimeStatus]) -> RecordTally:
 
 
 class RecordSelection(_ClosedModel):
-    """Which collected records the view returns; omission never reduces coverage."""
+    """Which collected records the view returns; omission never reduces coverage.
+
+    ``before_resume`` counts records at or before ``resume_after`` (shown by
+    earlier views), ``omitted`` every other record not returned, including the
+    ``too_large`` records this view skipped. ``next_cursor`` is set exactly
+    when ``limited_by`` says which limit stopped the view.
+    """
 
     max_records_returned: int = Field(ge=1, le=MAX_RECORDS_RETURNED)
     omission: Literal["presentation_limit"] = "presentation_limit"
+    resume_after: str | None
     collected: RecordTally
+    before_resume: RecordTally
     returned: RecordTally
     omitted: RecordTally
-    omitted_in_window_from_utc: str | None
+    too_large: int = Field(ge=0)
+    limited_by: Literal["max_records_returned", "output_budget"] | None
+    next_cursor: str | None
+
+    @field_validator("resume_after", "next_cursor")
+    @classmethod
+    def _cursor_shape(cls, value: str | None) -> str | None:
+        if value is not None:
+            _cursor_key(value)
+        return value
 
     @model_validator(mode="after")
     def _consistent(self) -> RecordSelection:
         for field in ("total", "in_window", "out_of_window", "untimed"):
-            if getattr(self.returned, field) + getattr(self.omitted, field) != getattr(self.collected, field):
-                raise ValueError("returned and omitted records must add up to the collected records")
+            parts = (self.before_resume, self.returned, self.omitted)
+            if sum(getattr(part, field) for part in parts) != getattr(self.collected, field):
+                raise ValueError("records before the cursor, returned and omitted must add up to the collected records")
         if self.returned.total > self.max_records_returned:
             raise ValueError("a view returns at most max_records_returned records")
-        if self.omitted.total and self.returned.total < self.max_records_returned:
-            raise ValueError("records are omitted only when the view is full")
-        if (self.omitted_in_window_from_utc is None) != (self.omitted.in_window == 0):
-            raise ValueError("omitted_in_window_from_utc is set exactly when in-window records were omitted")
+        if self.resume_after is None and self.before_resume.total:
+            raise ValueError("records come before the cursor only when the view resumes after one")
+        if self.too_large > self.omitted.total:
+            raise ValueError("too_large records are omitted records")
+        if (self.next_cursor is None) != (self.limited_by is None):
+            raise ValueError("next_cursor is set exactly when a limit stopped the view")
+        if self.next_cursor is not None and not self.omitted.total:
+            raise ValueError("a view stopped by a limit has omitted records")
+        if self.limited_by == "max_records_returned" and self.returned.total != self.max_records_returned:
+            raise ValueError("a view stopped by max_records_returned returns that many records")
+        if self.resume_after is not None and self.next_cursor is not None:
+            if _cursor_key(self.next_cursor) <= _cursor_key(self.resume_after):
+                raise ValueError("next_cursor must come after resume_after")
         return self
 
 
@@ -204,7 +368,8 @@ class IncidentEvidenceView(_ClosedModel):
         source_ids = [source.source_id for source in self.sources]
         if source_ids != sorted(set(source_ids)):
             raise ValueError("sources must be sorted by unique source_id")
-        collected = self.record_selection.collected
+        selection = self.record_selection
+        collected = selection.collected
         counts = [source.coverage.counts for source in self.sources]
         if (collected.in_window, collected.out_of_window, collected.untimed) != (
             sum(c.in_window for c in counts),
@@ -212,60 +377,155 @@ class IncidentEvidenceView(_ClosedModel):
             sum(c.untimed for c in counts),
         ):
             raise ValueError("collected records must equal the sources' accepted record counts")
-        if _tally([record.time.status for record in self.records]) != self.record_selection.returned:
+        if _tally([record.time.status for record in self.records]) != selection.returned:
             raise ValueError("returned counts must describe the records in the view")
         prefixes = set(source_ids)
         if any(record.evidence_id.split("|", 1)[0] not in prefixes for record in self.records):
             raise ValueError("every record must cite a listed source")
+        keys = [record.selection_key for record in self.records]
+        if selection.resume_after is not None and any(key <= _cursor_key(selection.resume_after) for key in keys):
+            raise ValueError("returned records must come after resume_after")
+        if selection.next_cursor is not None and any(key > _cursor_key(selection.next_cursor) for key in keys):
+            raise ValueError("returned records must not come after next_cursor")
         return self
 
 
-def _view_record(record: EvidenceRecord) -> ViewRecord:
+# --- projection ------------------------------------------------------------------------------
+
+
+def _view_record(record: EvidenceRecord) -> dict[str, Any] | None:
+    """A record's JSON citation, or None when its identifiers cannot be cited within the limit."""
+    if len(record.evidence_id) > MAX_CITED_EVIDENCE_ID_LENGTH:
+        return None
+    identifiers = [entity.id for entity in record.entities] + [target.id for target in record.mapping.targets]
+    # Every character costs at least a quarter token.
+    if sum(len(identifier) for identifier in identifiers) > 4 * RECORD_TOKEN_LIMIT:
+        return None
     time = record.time
-    return ViewRecord(
-        evidence_id=record.evidence_id,
-        product=record.provenance.product,
-        source_tool=record.provenance.source_tool,
-        source_record_id=record.provenance.source_record_id,
-        time=ViewTime(
-            status=time.status,
-            utc=time.utc,
-            boundary_uncertain=time.boundary_uncertain,
-            original_field=time.original_field,
-            original_type=time.original_type,
-            original_value=time.original_value,
-        ),
-        event_type=record.event_type,
-        summary=record.summary,
-        entity_ids=tuple(entity.id for entity in record.entities),
-        mapping=ViewMapping(
-            status=record.mapping.status,
-            target_ids=tuple(target.id for target in record.mapping.targets),
-            sources=record.mapping.sources,
-        ),
-    )
+    truncated: dict[str, int] = {}
+
+    def text(field: str, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        cut = _cut(value, TEXT_TOKEN_LIMITS[field])
+        if cut != value:
+            truncated[field] = len(value)
+        return cut
+
+    event_type = text("event_type", record.event_type)
+    original_value = text("original_value", time.original_value)
+    summary = text("summary", record.summary)
+    citation = {
+        "evidence_id": record.evidence_id,
+        "product": record.provenance.product.value,
+        "source_tool": record.provenance.source_tool,
+        "source_record_id": record.provenance.source_record_id,
+        "time": {
+            "status": time.status.value,
+            "utc": time.utc,
+            "boundary_uncertain": time.boundary_uncertain,
+            "original_field": time.original_field,
+            "original_type": time.original_type.value,
+            "original_value": original_value,
+        },
+        "event_type": event_type,
+        "summary": summary,
+        "entity_ids": [entity.id for entity in record.entities],
+        "mapping": {
+            "status": record.mapping.status.value,
+            "target_ids": [target.id for target in record.mapping.targets],
+            "sources": [source.value for source in record.mapping.sources],
+        },
+        "truncated": truncated,
+    }
+    return citation if estimated_tokens(citation) <= RECORD_TOKEN_LIMIT else None
 
 
-def _priority(record: EvidenceRecord) -> int:
-    if record.time.status is TimeStatus.IN_WINDOW:
-        return 0
-    return 2 if record.time.status is TimeStatus.OUT_OF_WINDOW else 1
+def _key(record: EvidenceRecord) -> tuple[int, str, str]:
+    return _rank(record.time.status), record.time.utc or "", record.evidence_id
 
 
 def client_view(
-    evidence: IncidentEvidence, *, max_records_returned: int = DEFAULT_MAX_RECORDS_RETURNED
+    evidence: IncidentEvidence,
+    *,
+    max_records_returned: int = DEFAULT_MAX_RECORDS_RETURNED,
+    resume_after: str | None = None,
 ) -> IncidentEvidenceView:
     """Project a validated evidence set into its bounded client view.
 
-    In-window records are kept first, earliest first, then untimed and then
-    out-of-window records; returned records keep the document's order.
+    Records after ``resume_after`` are examined in selection order: in-window
+    records earliest first, then untimed, then out-of-window records, ties by
+    evidence ID. A record too large to cite is skipped and counted; the rest
+    are returned until ``max_records_returned`` or :data:`VIEW_TOKEN_BUDGET`
+    is reached, always at least one when any remains. Returned records keep
+    the document's order.
     """
     evidence = validate_incident_evidence(evidence)
-    ranked = sorted(range(len(evidence.records)), key=lambda i: (_priority(evidence.records[i]), i))
-    kept = set(ranked[:max_records_returned])
-    returned = [record for i, record in enumerate(evidence.records) if i in kept]
-    omitted = [record for i, record in enumerate(evidence.records) if i not in kept]
-    omitted_in_window = [record.time.utc for record in omitted if record.time.status is TimeStatus.IN_WINDOW]
+    records = evidence.records
+    after = _cursor_key(resume_after) if resume_after is not None else None
+    order = sorted(range(len(records)), key=lambda i: _key(records[i]))
+    pending = [i for i in order if after is None or _key(records[i]) > after]
+
+    sources = [ViewSource.from_source(source).model_dump(mode="json") for source in evidence.sources]
+    # The selection's numbers and cursor are not known until the end, so its
+    # largest possible form is reserved up front.
+    count = max(len(records), MAX_RECORDS_RETURNED)
+    tally = {"total": count, "in_window": count, "out_of_window": count, "untimed": count}
+    reserved_selection = {
+        "max_records_returned": count,
+        "omission": "presentation_limit",
+        "resume_after": resume_after,
+        "collected": tally,
+        "before_resume": tally,
+        "returned": tally,
+        "omitted": tally,
+        "too_large": count,
+        "limited_by": "max_records_returned",
+        "next_cursor": "-" * MAX_CURSOR_LENGTH,
+    }
+    skeleton = {
+        "schema": INCIDENT_EVIDENCE_VIEW_SCHEMA,
+        "schema_version": INCIDENT_EVIDENCE_VIEW_SCHEMA_VERSION,
+        "evidence_schema_version": INCIDENT_EVIDENCE_SCHEMA_VERSION,
+        "requested_window": evidence.requested_window.model_dump(mode="json"),
+        "overall": evidence.overall.value,
+        "coverage_complete": evidence.coverage_complete,
+        "budgets": evidence.budgets.model_dump(mode="json"),
+        "mappings": None if evidence.mappings is None else [m.model_dump(mode="json") for m in evidence.mappings],
+        "sources": sources,
+        "records": [],
+        "record_selection": reserved_selection,
+    }
+    used = _ENVELOPE_TOKENS + estimated_tokens(skeleton)
+
+    kept: dict[int, dict[str, Any]] = {}
+    # Records too large to cite are counted once they lie before a returned
+    # record, or when nothing after them is left; otherwise the next view,
+    # resuming after the last returned record, examines and counts them.
+    too_large = skipped = 0
+    limited_by: Literal["max_records_returned", "output_budget"] | None = None
+    for index in pending:
+        citation = _view_record(records[index])
+        if citation is None:
+            skipped += 1
+            continue
+        if len(kept) == max_records_returned:
+            limited_by = "max_records_returned"
+            break
+        cost = 2 + estimated_tokens(citation)
+        if kept and used + cost > VIEW_TOKEN_BUDGET:
+            limited_by = "output_budget"
+            break
+        kept[index] = citation
+        used += cost
+        too_large, skipped = too_large + skipped, 0
+    if limited_by is None:
+        too_large += skipped
+
+    returned = [records[i] for i in sorted(kept)]
+    view_records = tuple(ViewRecord.model_validate(kept[i]) for i in sorted(kept))
+    omitted = [records[i] for i in pending if i not in kept]
+    before = [records[i] for i in order if after is not None and _key(records[i]) <= after]
     return IncidentEvidenceView(
         requested_window=evidence.requested_window,
         overall=evidence.overall,
@@ -273,13 +533,18 @@ def client_view(
         budgets=evidence.budgets,
         mappings=evidence.mappings,
         sources=tuple(ViewSource.from_source(source) for source in evidence.sources),
-        records=tuple(_view_record(record) for record in returned),
+        records=view_records,
         record_selection=RecordSelection(
             max_records_returned=max_records_returned,
-            collected=_tally([record.time.status for record in evidence.records]),
+            resume_after=resume_after,
+            collected=_tally([record.time.status for record in records]),
+            before_resume=_tally([record.time.status for record in before]),
             returned=_tally([record.time.status for record in returned]),
             omitted=_tally([record.time.status for record in omitted]),
-            omitted_in_window_from_utc=min(omitted_in_window) if omitted_in_window else None,
+            too_large=too_large,
+            limited_by=limited_by,
+            # A limit stops the view only after it returned a record.
+            next_cursor=_cursor(max(record.selection_key for record in view_records)) if limited_by else None,
         ),
     )
 
@@ -327,11 +592,26 @@ class EvidencePresentation(BaseModel):
             f"{MAX_RECORDS_RETURNED}); omitted records are counted, never dropped from coverage. View only"
         ),
     )
+    resume_after: str | None = Field(
+        default=None,
+        max_length=MAX_CURSOR_LENGTH,
+        description=(
+            "record_selection.next_cursor from an earlier view of the same request; returns the records "
+            "after it. View only"
+        ),
+    )
+
+    @field_validator("resume_after")
+    @classmethod
+    def _cursor_shape(cls, value: str | None) -> str | None:
+        if value is not None:
+            _cursor_key(value)
+        return value
 
     @model_validator(mode="after")
     def _view_only(self) -> EvidencePresentation:
-        if self.detail is EvidenceDetail.FULL and self.max_records_returned is not None:
-            raise ValueError("max_records_returned applies only to detail=view")
+        if self.detail is EvidenceDetail.FULL and (self.max_records_returned is not None or self.resume_after):
+            raise ValueError("max_records_returned and resume_after apply only to detail=view")
         return self
 
     def render(self, evidence: IncidentEvidence) -> dict[str, Any]:
@@ -339,4 +619,4 @@ class EvidencePresentation(BaseModel):
         if self.detail is EvidenceDetail.FULL:
             return evidence_to_json(evidence)
         limit = self.max_records_returned or DEFAULT_MAX_RECORDS_RETURNED
-        return view_to_json(client_view(evidence, max_records_returned=limit))
+        return view_to_json(client_view(evidence, max_records_returned=limit, resume_after=self.resume_after))

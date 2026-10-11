@@ -3,6 +3,7 @@
   "views": [
     {
       "max_records_returned": 25,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -113,7 +114,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-001",
@@ -135,7 +137,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-002",
@@ -157,7 +160,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-003",
@@ -179,7 +183,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-004",
@@ -201,7 +206,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-005",
@@ -223,7 +229,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-006",
@@ -245,7 +252,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-007",
@@ -267,7 +275,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-008",
@@ -289,7 +298,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-009",
@@ -311,7 +321,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-010",
@@ -333,7 +344,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-011",
@@ -355,7 +367,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-012",
@@ -377,7 +390,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-013",
@@ -399,7 +413,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-014",
@@ -421,7 +436,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-015",
@@ -443,7 +459,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-016",
@@ -465,7 +482,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-017",
@@ -487,7 +505,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-018",
@@ -509,7 +528,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-019",
@@ -531,7 +551,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-020",
@@ -553,7 +574,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-021",
@@ -575,7 +597,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-022",
@@ -597,7 +620,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-023",
@@ -619,7 +643,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-024",
@@ -641,15 +666,23 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           }
         ],
         "record_selection": {
           "max_records_returned": 25,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
             "total": 100,
             "in_window": 100,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -665,12 +698,718 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": "2026-08-08T12:00:25.000000Z"
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:24.000000Z|network.alarms|str|alarm-024"
+        }
+      }
+    },
+    {
+      "max_records_returned": 25,
+      "resume_after": "0|2026-08-08T12:00:24.000000Z|network.alarms|str|alarm-024",
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "partial",
+        "coverage_complete": false,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": null,
+        "sources": [
+          {
+            "source_id": "network.alarms",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "scope": {
+              "controller_id": null,
+              "site": "default",
+              "location_id": null
+            },
+            "outcome": "partial",
+            "failure": null,
+            "partial_reasons": [
+              "truncated"
+            ],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-07-09T13:04:59.000000Z",
+                "end": "2026-08-08T13:04:59.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:01:39.000000Z",
+              "filters": {
+                "include_archived": false
+              },
+              "pagination": {
+                "offset": 0,
+                "requested_cap": 200,
+                "cap": 100,
+                "returned": 100,
+                "has_more": null,
+                "total_reported": 150,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 100,
+                "accepted": 100,
+                "in_window": 100,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": false,
+              "population_total": null
+            }
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "network.alarms|str|alarm-025",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-025",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:25.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190425000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-026",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-026",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:26.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190426000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-027",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-027",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:27.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190427000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-028",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-028",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:28.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190428000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-029",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-029",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:29.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190429000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-030",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-030",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:30.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190430000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-031",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-031",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:31.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190431000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-032",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-032",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:32.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190432000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-033",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-033",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:33.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190433000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-034",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-034",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:34.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190434000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-035",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-035",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:35.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190435000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-036",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-036",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:36.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190436000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-037",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-037",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:37.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190437000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-038",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-038",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:38.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190438000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-039",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-039",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:39.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190439000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-040",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-040",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:40.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190440000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-041",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-041",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:41.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190441000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-042",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-042",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:42.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190442000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-043",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-043",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:43.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190443000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-044",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-044",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:44.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190444000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-045",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-045",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:45.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190445000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-046",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-046",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:46.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190446000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-047",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-047",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:47.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190447000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-048",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-048",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:48.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190448000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-049",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-049",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:49.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190449000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 25,
+          "omission": "presentation_limit",
+          "resume_after": "0|2026-08-08T12:00:24.000000Z|network.alarms|str|alarm-024",
+          "collected": {
+            "total": 100,
+            "in_window": 100,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 25,
+            "in_window": 25,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 25,
+            "in_window": 25,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 50,
+            "in_window": 50,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:49.000000Z|network.alarms|str|alarm-049"
         }
       }
     },
     {
       "max_records_returned": 2,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -781,7 +1520,8 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           },
           {
             "evidence_id": "network.alarms|str|alarm-001",
@@ -803,15 +1543,23 @@
               "status": "not_evaluated",
               "target_ids": [],
               "sources": []
-            }
+            },
+            "truncated": {}
           }
         ],
         "record_selection": {
           "max_records_returned": 2,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
             "total": 100,
             "in_window": 100,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -827,7 +1575,183 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": "2026-08-08T12:00:02.000000Z"
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:01.000000Z|network.alarms|str|alarm-001"
+        }
+      }
+    },
+    {
+      "max_records_returned": 2,
+      "resume_after": "0|2026-08-08T12:00:01.000000Z|network.alarms|str|alarm-001",
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "partial",
+        "coverage_complete": false,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": null,
+        "sources": [
+          {
+            "source_id": "network.alarms",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "scope": {
+              "controller_id": null,
+              "site": "default",
+              "location_id": null
+            },
+            "outcome": "partial",
+            "failure": null,
+            "partial_reasons": [
+              "truncated"
+            ],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-07-09T13:04:59.000000Z",
+                "end": "2026-08-08T13:04:59.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:01:39.000000Z",
+              "filters": {
+                "include_archived": false
+              },
+              "pagination": {
+                "offset": 0,
+                "requested_cap": 200,
+                "cap": 100,
+                "returned": 100,
+                "has_more": null,
+                "total_reported": 150,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 100,
+                "accepted": 100,
+                "in_window": 100,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": false,
+              "population_total": null
+            }
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "network.alarms|str|alarm-002",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-002",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:02.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190402000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.alarms|str|alarm-003",
+            "product": "network",
+            "source_tool": "unifi_list_alarms",
+            "source_record_id": "alarm-003",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:00:03.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786190403000
+            },
+            "event_type": "K",
+            "summary": null,
+            "entity_ids": [],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 2,
+          "omission": "presentation_limit",
+          "resume_after": "0|2026-08-08T12:00:01.000000Z|network.alarms|str|alarm-001",
+          "collected": {
+            "total": 100,
+            "in_window": 100,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 96,
+            "in_window": 96,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:00:03.000000Z|network.alarms|str|alarm-003"
         }
       }
     }

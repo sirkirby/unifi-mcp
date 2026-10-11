@@ -28,13 +28,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, TypeVar, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from unifi_core.incident_evidence import (
     BudgetKind,
@@ -65,6 +66,15 @@ MAX_ELAPSED_MS = 120_000
 MAX_FILTER_IDS = 50
 # Every assertion is returned with the evidence, so the count bounds its size.
 MAX_MAPPINGS = 20
+# Labels are repeated in every source's scope and mapping identifiers with
+# every assertion and mapped record, so their length and characters bound the
+# evidence view as the counts above do: a control character, quote or
+# backslash costs several tokens once escaped in JSON. Identifiers are never
+# cut to fit; they are refused.
+MAX_LABEL_LENGTH = 128
+MAX_MAPPING_ID_LENGTH = 64
+_UNLABELLED = re.compile(r'[\x00-\x1f\x7f"\\]')
+LABEL_RULE = "without control characters, quotes or backslashes"
 
 DEFAULT_WINDOW_SECONDS = 24 * 3600
 DEFAULT_EVENTS = 1_000
@@ -83,6 +93,11 @@ def utc_now() -> datetime:
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
+
+
+def is_label(value: Any, max_length: int = MAX_LABEL_LENGTH) -> bool:
+    """Whether ``value`` is 1 to ``max_length`` characters with no control character, quote or backslash."""
+    return isinstance(value, str) and 0 < len(value) <= max_length and not _UNLABELLED.search(value)
 
 
 def parse_window_bound(value: Any, name: str) -> datetime:
@@ -118,7 +133,7 @@ class IncidentCollectionRequest(BaseModel):
     location_id: str | None = Field(
         default=None,
         min_length=1,
-        max_length=128,
+        max_length=MAX_LABEL_LENGTH,
         description="Caller's label for the investigated location, recorded in each source's scope.",
     )
     max_window_seconds: int = Field(default=DEFAULT_WINDOW_SECONDS, ge=1, le=MAX_WINDOW_SECONDS)
@@ -130,6 +145,24 @@ class IncidentCollectionRequest(BaseModel):
         max_length=MAX_MAPPINGS,
         description="Explicit exact-identifier assertions records are mapped against; never inferred.",
     )
+
+    @field_validator("location_id")
+    @classmethod
+    def _label(cls, value: str | None) -> str | None:
+        if value is not None and not is_label(value):
+            raise ValueError(f"location_id must be 1-{MAX_LABEL_LENGTH} characters {LABEL_RULE}")
+        return value
+
+    @field_validator("mappings")
+    @classmethod
+    def _identifiers(cls, value: tuple[MappingAssertion, ...] | None) -> tuple[MappingAssertion, ...] | None:
+        refs = [ref for assertion in value or () for ref in (assertion.entity, assertion.target)]
+        if any(not is_label(ref.id, MAX_MAPPING_ID_LENGTH) for ref in refs):
+            raise ValueError(f"mapping identifiers must be 1-{MAX_MAPPING_ID_LENGTH} characters {LABEL_RULE}")
+        # Records are mapped by identity alone, so an assertion states no role.
+        if any(ref.role is not None for ref in refs):
+            raise ValueError("mapping assertions identify entities by kind, id_kind and id only; omit role")
+        return value
 
     @model_validator(mode="after")
     def _window(self) -> IncidentCollectionRequest:

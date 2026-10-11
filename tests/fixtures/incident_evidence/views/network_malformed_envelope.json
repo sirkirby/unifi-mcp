@@ -3,6 +3,7 @@
   "views": [
     {
       "max_records_returned": 25,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -146,7 +147,14 @@
         "record_selection": {
           "max_records_returned": 25,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
+            "total": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
             "total": 0,
             "in_window": 0,
             "out_of_window": 0,
@@ -164,12 +172,15 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": null
+          "too_large": 0,
+          "limited_by": null,
+          "next_cursor": null
         }
       }
     },
     {
       "max_records_returned": 2,
+      "resume_after": null,
       "expected": {
         "schema": "unifi-incident-evidence-view",
         "schema_version": 1,
@@ -313,7 +324,14 @@
         "record_selection": {
           "max_records_returned": 2,
           "omission": "presentation_limit",
+          "resume_after": null,
           "collected": {
+            "total": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
             "total": 0,
             "in_window": 0,
             "out_of_window": 0,
@@ -331,7 +349,9 @@
             "out_of_window": 0,
             "untimed": 0
           },
-          "omitted_in_window_from_utc": null
+          "too_large": 0,
+          "limited_by": null,
+          "next_cursor": null
         }
       }
     }
