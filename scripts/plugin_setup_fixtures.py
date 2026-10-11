@@ -576,6 +576,40 @@ class Fixtures:
             message = json.loads(notice.stdout)
             self.check("--migrate" in message["systemMessage"], "session notice names the migration")
             self.check(b"192.0.2.50" not in notice.stdout, "session notice omits values")
+            self.check(
+                "starts unconfigured" in message["systemMessage"] and "shared UNIFI_" not in message["systemMessage"],
+                "session notice says the server starts unconfigured when no shared keys exist",
+            )
+            shared_project = workspace / "shared-project"
+            (shared_project / ".claude").mkdir(parents=True)
+            (shared_project / ".claude/settings.local.json").write_text(
+                json.dumps(
+                    {
+                        "env": {
+                            f"UNIFI_{upper}_PORT": "8443",
+                            "UNIFI_HOST": "192.0.2.80",
+                            "UNIFI_USERNAME": "shared-user",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            shared_notice = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(shared_project)),
+                capture_output=True,
+            )
+            shared_message = json.loads(shared_notice.stdout)
+            for text in (shared_message["systemMessage"], shared_message["hookSpecificOutput"]["additionalContext"]):
+                self.check(
+                    "shared UNIFI_" in text and "different controller" in text and "unconfigured" not in text,
+                    "session notice says shared keys are used when they exist",
+                )
+            self.check("--migrate" in shared_message["systemMessage"], "shared-key notice still names the migration")
+            self.check(
+                b"192.0.2.80" not in shared_notice.stdout and b"shared-user" not in shared_notice.stdout,
+                "shared-key notice omits values",
+            )
             quiet = subprocess.run(
                 ["sh", str(hook), product],
                 env=dict(environment, CLAUDE_PROJECT_DIR=str(project), CLAUDE_PLUGIN_OPTION_HOST="x"),
