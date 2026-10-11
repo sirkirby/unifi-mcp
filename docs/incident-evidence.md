@@ -213,8 +213,9 @@ source keeps its own outcome, failure, reasons and coverage; a source ID that
 two sets describe differently is an error. Mapping assertions are the union of
 every set's assertions and every record is resolved again against them.
 Budget limits and usage are summed, except `window_seconds`, which is the
-smallest limit; a kind stays exhausted when the combined usage reached the
-combined limit, and whatever a budget stopped stays visible on its source.
+smallest limit. `exhausted` is the union of every set's exhausted kinds, so
+combining never hides exhaustion, even when the summed usage stays below the
+summed limit.
 
 ### Surfaces
 
@@ -373,8 +374,9 @@ point unless stated otherwise.
     source record ID as a string or empty, evidence ID).
 12. **Budgets.** `window` is exhausted exactly when `limits.window_seconds` is
     less than the requested window's duration. For events, calls and elapsed
-    time, usage above the limit must be reported exhausted and a reported
-    exhaustion needs usage at or above the limit. `exhausted` is sorted and
+    time, usage above the limit must be reported exhausted. A kind may be
+    reported exhausted below its limit: a combined set sums limits and usage
+    and keeps every kind any one collection spent. `exhausted` is sorted and
     unique.
 13. **Overall.** Recompute rule 5's outcomes and the overall status as
     described under Shape; `coverage_complete` is true exactly for `complete`
