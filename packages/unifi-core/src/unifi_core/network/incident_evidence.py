@@ -203,6 +203,7 @@ def network_events_context(
     event_type: str | None = None,
     categories: Sequence[str] | None = None,
     severities: Sequence[str] | None = None,
+    device_macs: Sequence[str] | None = None,
     api_path: ApiPath | None = None,
     page: SourcePage | None = None,
     source_id: str = "network.events",
@@ -224,6 +225,9 @@ def network_events_context(
     page does not record submitted bounds (the legacy path asks the
     controller for a relative lookback). ``start`` is an offset, so any value
     but 0 leaves the skipped prefix uncollected.
+
+    ``device_macs`` records an exact-MAC filter applied to the page's rows
+    after they were read; such a page must say ``post_filtered``.
     """
     api_path = _page_api_path(page, api_path)
     context = SourceContext(
@@ -247,6 +251,7 @@ def network_events_context(
                 ("event_type", event_type),
                 ("categories", list(categories) if categories else None),
                 ("severities", list(severities) if severities else None),
+                ("device_macs", list(device_macs) if device_macs else None),
             )
             if value is not None
         },

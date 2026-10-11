@@ -8,14 +8,24 @@ Provides:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from uiprotect.data import Event, EventType, ModelType, SmartDetectObjectType, WSAction, WSSubscriptionMessage
+from uiprotect.exceptions import BadRequest, NotAuthorized, NvrError, UnifiProtectError
 
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiConnectionError,
+    UniFiMalformedResponseError,
+    UniFiNotFoundError,
+    UniFiOperationError,
+    UniFiPermissionError,
+    UniFiRateLimitError,
+)
 from unifi_core.protect.models.detection_search import from_controller as detection_search_from_controller
 from unifi_core.protect.models.events import smart_detection_from_controller
 from unifi_core.source_page import SourcePage
@@ -72,6 +82,45 @@ def _page(
         submitted_window_ms=submitted,
         post_filtered=post_filtered,
     )
+
+
+# uiprotect folds the HTTP status into its message: "... - Status: 403 - Reason: ...".
+_NVR_STATUS = re.compile(r"\bStatus: (\d{3})\b")
+
+
+def _nvr_status(error: BaseException) -> int | None:
+    match = _NVR_STATUS.search(str(error))
+    return int(match.group(1)) if match else None
+
+
+def _safe_events_error(error: BaseException) -> Exception:
+    """A fixed-text error for a failed raw events read; NVR text never leaves the manager.
+
+    Keeps what callers classify on: the error class and the HTTP status.
+    """
+    cause = error.__cause__
+    if isinstance(error, TimeoutError) or isinstance(cause, TimeoutError):
+        translated: Exception = TimeoutError("Protect events read timed out")
+        translated.status = None  # type: ignore[attr-defined]
+        return translated
+    if isinstance(error, NvrError) and isinstance(cause, ValueError):
+        return UniFiMalformedResponseError("Unexpected response shape from events")
+    status = _nvr_status(error) if isinstance(error, UnifiProtectError) else None
+    # NotAuthorized covers 401 and 403 (and subclasses PermissionError), so the status decides.
+    if isinstance(error, NotAuthorized):
+        cls: type[Exception] = UniFiPermissionError if status == 403 else UniFiAuthError
+    elif status == 429:
+        cls = UniFiRateLimitError
+    elif isinstance(error, BadRequest):
+        cls = UniFiOperationError
+    elif isinstance(error, (NvrError, OSError)):
+        cls = UniFiConnectionError
+    else:
+        cls = UniFiOperationError
+    detail = f"{type(error).__name__}, HTTP {status}" if status is not None else type(error).__name__
+    translated = cls(f"Protect events read failed ({detail}).")
+    translated.status = status  # type: ignore[attr-defined]
+    return translated
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -774,6 +823,56 @@ class EventManager:
 
         await self._apply_known_face_names(results)
         return _page(results, raw_count=len(events), limit=limit, start=start, end=end)
+
+    async def list_events_raw_page(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        limit: int,
+        offset: int = 0,
+        camera_id: str | None = None,
+    ) -> SourcePage:
+        """One bounded read of raw NVR event rows, for incident evidence.
+
+        Always a single GET to the private ``events`` endpoint with explicit
+        bounds, limit and offset, newest first. Unlike :meth:`list_events_page`
+        it never uses the SDK's ``get_events``, which pages through every event
+        after ``start`` when no type filter is given and drops event types it
+        does not know. Rows are returned exactly as the NVR sent them, with no
+        camera-name or Known Face enrichment. Failures are raised with fixed
+        text that keeps the error class and HTTP status.
+        """
+        start_ms = int(start.timestamp() * 1000)
+        end_ms = int(end.timestamp() * 1000)
+        offset = max(offset, 0)
+        if limit <= 0:
+            return SourcePage(rows=[], offset=offset, cap=0, submitted_window_ms=(start_ms, end_ms))
+        params: dict[str, Any] = {
+            "orderDirection": "DESC",
+            "limit": limit,
+            "offset": offset,
+            "withoutDescriptions": "true",
+            "start": start_ms,
+            "end": end_ms,
+        }
+        if camera_id:
+            params["cameras"] = [camera_id]
+        try:
+            rows = await self._cm.client.api_request("events", method="get", params=params)
+        except Exception as exc:
+            logger.error("[event-mgr] Raw events read failed: %s", type(exc).__name__)
+            raise _safe_events_error(exc) from None
+        if not isinstance(rows, list):
+            raise UniFiMalformedResponseError("Unexpected response shape from events")
+        return SourcePage(
+            rows=rows,
+            # A page shorter than the limit sent is the NVR saying it ran out.
+            has_more=False if len(rows) < limit else None,
+            offset=offset,
+            cap=limit,
+            submitted_window_ms=(start_ms, end_ms),
+        )
 
     async def get_event(
         self,

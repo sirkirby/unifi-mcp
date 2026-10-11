@@ -244,6 +244,11 @@ _DEFAULT_CATEGORIES = [
 # Default severities
 _DEFAULT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"]
 
+# What ``get_events`` sends on the v2 path when the caller names no categories
+# or severities; evidence records them as the filters actually applied.
+DEFAULT_EVENT_CATEGORIES: tuple[str, ...] = tuple(_DEFAULT_CATEGORIES)
+DEFAULT_EVENT_SEVERITIES: tuple[str, ...] = tuple(_DEFAULT_SEVERITIES)
+
 
 class EventManager:
     """Manages event log operations on the UniFi Controller.
