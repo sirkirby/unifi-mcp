@@ -99,6 +99,9 @@ def fake_claude(args):
         return
     if args[:2] != ["plugin", "configure"] or args[2] != plugin_id:
         sys.exit(1)
+    # Client calls may block or be forcibly terminated. Retained project secrets
+    # must stay in memory until replacement, with no settings copy here.
+    assert not list((Path.cwd() / ".claude").glob(".unifi-setup-*")), "project settings staged during configure"
     schema = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["userConfig"]
     settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
     keychain = json.loads(keychain_path.read_text(encoding="utf-8")) if keychain_path.exists() else {}
@@ -510,6 +513,8 @@ class Fixtures:
                 f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE": "true",
                 "UNIFI_TOOL_PERMISSION_MODE": "confirm",
                 f"UNIFI_{other_product}_HOST": "192.0.2.60",
+                f"UNIFI_{other_product}_PASSWORD": sample_value,
+                "UNIFI_API_KEY": sample_value,
                 "KEEP": "unrelated",
             },
         }
@@ -555,7 +560,14 @@ class Fixtures:
         remaining = json.loads(legacy_path.read_text(encoding="utf-8"))
         self.check(
             remaining["permissions"] == legacy["permissions"]
-            and set(remaining["env"]) == {"UNIFI_TOOL_PERMISSION_MODE", f"UNIFI_{other_product}_HOST", "KEEP"},
+            and set(remaining["env"])
+            == {
+                "UNIFI_TOOL_PERMISSION_MODE",
+                f"UNIFI_{other_product}_HOST",
+                f"UNIFI_{other_product}_PASSWORD",
+                "UNIFI_API_KEY",
+                "KEEP",
+            },
             "migration removes only this plugin's legacy variables",
         )
         self.check(
@@ -564,49 +576,78 @@ class Fixtures:
         )
         self.check(f"UNIFI_POLICY_{upper}_CAMERAS_UPDATE".encode() in result.stdout, "dropped override is reported")
         migrate(1)
-        # Interrupt at the project-settings replacement after options are saved.
+        # Interrupt before and after publication, with other/shared credentials
+        # retained in the project settings. Windows must clean up without finally.
         legacy_path.write_text(json.dumps(legacy), encoding="utf-8")
         injection = workspace / "injection"
         injection.mkdir()
         (injection / "sitecustomize.py").write_text(
-            "import os,time\nfrom pathlib import Path\n"
-            "def replace(src,dst):\n"
-            ' Path(os.environ["FIXTURE_READY"]).write_text(str(os.getpid()))\n'
-            " while True: time.sleep(.02)\n"
-            "os.replace=replace\n",
+            "import os,sys,time\nfrom pathlib import Path\n"
+            "def boundary(frame,event,arg):\n"
+            ' if (event == os.environ.get("FIXTURE_BOUNDARY", "call")\n'
+            '     and frame.f_code.co_name == "publish_project_settings"):\n'
+            '  if os.environ.get("FIXTURE_REPLACE_FAIL"): raise OSError("FAKE-only write failure")\n'
+            '  Path(os.environ["FIXTURE_READY"]).write_text(str(os.getpid()))\n'
+            "  while True: time.sleep(.02)\n"
+            "sys.setprofile(boundary)\n",
             encoding="utf-8",
         )
         marker = workspace / "ready"
         legacy_bytes = legacy_path.read_bytes()
-        process = subprocess.Popen(
-            wrapper("set-env", "-Migrate" if self.powershell else "--migrate"),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=project,
-            env=dict(environment, PYTHONPATH=str(injection), FIXTURE_READY=str(marker)),
-        )
-        try:
-            deadline = time.monotonic() + 30
-            while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
-                time.sleep(0.02)
-            self.check(marker.exists(), "interruption reached project settings replacement")
-            if self.powershell and os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=False)
-            elif self.powershell:
-                os.kill(int(marker.read_text()), signal.SIGTERM)
-            else:
-                process.send_signal(signal.SIGTERM)
-            stdout, stderr = process.communicate(timeout=20)
-            self.check(process.returncode != 0, "interrupted migration exits nonzero")
-            self.check(legacy_path.read_bytes() == legacy_bytes, "interrupted migration leaves project settings intact")
-            self.check(sample_value.encode() not in stdout + stderr, "interrupted output omits secret")
-        finally:
-            if process.poll() is None:
-                process.kill()
-                process.communicate()
-        leftovers = [p.name for p in (project / ".claude").iterdir() if p.name.startswith(".unifi-setup-")]
-        self.check(not leftovers, "no staging directory left after interruption")
+        migrate(1, {"PYTHONPATH": str(injection), "FIXTURE_REPLACE_FAIL": "1"})
+        self.check(legacy_path.read_bytes() == legacy_bytes, "failed publication leaves project settings intact")
+        self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "failed publication leaves no secret copy")
+        for boundary in ("call", "return"):
+            marker.unlink(missing_ok=True)
+            legacy_path.write_bytes(legacy_bytes)
+            process = subprocess.Popen(
+                wrapper("set-env", "-Migrate" if self.powershell else "--migrate"),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=project,
+                env=dict(environment, PYTHONPATH=str(injection), FIXTURE_READY=str(marker), FIXTURE_BOUNDARY=boundary),
+            )
+            try:
+                deadline = time.monotonic() + 30
+                while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.check(marker.exists(), "interruption reached project settings replacement")
+                if self.powershell and os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=False)
+                elif self.powershell:
+                    os.kill(int(marker.read_text()), signal.SIGTERM)
+                else:
+                    process.send_signal(signal.SIGTERM)
+                stdout, stderr = process.communicate(timeout=20)
+                self.check(process.returncode != 0, "interrupted migration exits nonzero")
+                if boundary == "call":
+                    self.check(
+                        legacy_path.read_bytes() == legacy_bytes, "interrupted migration leaves project settings intact"
+                    )
+                else:
+                    self.check(
+                        json.loads(legacy_path.read_bytes()) == remaining,
+                        "published settings survive interruption and handle closure",
+                    )
+                self.check(sample_value.encode() not in stdout + stderr, "interrupted output omits secret")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
+            leftovers = [p.name for p in (project / ".claude").iterdir() if p.name.startswith(".unifi-setup-")]
+            self.check(not leftovers, "no staging directory left after interruption")
+            artifacts = list(legacy_path.parent.glob(".unifi-setup-*"))
+            self.check(not artifacts, "interrupted migration leaves no files containing retained secrets")
+            if boundary == "call":
+                migrate()
+            self.check(json.loads(legacy_path.read_bytes()) == remaining, "retry preserves complete migrated settings")
+            remaining_env = json.loads(legacy_path.read_text(encoding="utf-8"))["env"]
+            self.check(
+                remaining_env[f"UNIFI_{other_product}_PASSWORD"] == sample_value, "retry preserves other plugin secret"
+            )
+            self.check(remaining_env["UNIFI_API_KEY"] == sample_value, "retry preserves shared secret")
+            self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "retry leaves no replacement artifacts")
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
     def scenario(self, product, target):

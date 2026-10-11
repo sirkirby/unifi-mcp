@@ -341,6 +341,67 @@ def legacy_patch(owned, shared, mapping, product):
     return patch
 
 
+def publish_project_settings(handle, destination):
+    """Atomically publish without disabling Windows delete-on-close cleanup."""
+    if os.name != "nt":
+        os.replace(handle.name, destination)
+        return
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    # Renaming a delete-on-close file would delete the destination on close.
+    # Instead replace the destination's hard link while keeping the temporary
+    # link owned by the handle. Termination removes only that temporary link.
+    # FILE_LINK_INFORMATION / NtSetInformationFile, FileLinkInformation (11).
+    filename = str(destination.absolute())
+    filename = "\\??\\UNC\\" + filename[2:] if filename.startswith("\\\\") else "\\??\\" + filename
+    encoded = filename.encode("utf-16-le")
+
+    class LinkInformation(ctypes.Structure):
+        _fields_ = [
+            ("ReplaceIfExists", ctypes.c_ubyte),
+            ("RootDirectory", wintypes.HANDLE),
+            ("FileNameLength", wintypes.ULONG),
+            ("FileName", ctypes.c_ushort * (len(encoded) // 2)),
+        ]
+
+    class IoStatusBlock(ctypes.Structure):
+        _fields_ = [("Status", ctypes.c_void_p), ("Information", ctypes.c_size_t)]
+
+    info = LinkInformation(ReplaceIfExists=1, FileNameLength=len(encoded))
+    ctypes.memmove(ctypes.addressof(info) + LinkInformation.FileName.offset, encoded, len(encoded))
+    status = IoStatusBlock()
+    set_information = ctypes.WinDLL("ntdll").NtSetInformationFile
+    set_information.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p, wintypes.ULONG, ctypes.c_int]
+    set_information.restype = wintypes.LONG
+    result = set_information(
+        msvcrt.get_osfhandle(handle.fileno()), ctypes.byref(status), ctypes.byref(info), ctypes.sizeof(info), 11
+    )
+    if result < 0:
+        refuse(
+            "Windows could not atomically replace project settings on this filesystem. "
+            "Plugin options were saved; project settings are unchanged. Rerun migration on a filesystem "
+            "supporting hard links, and check permissions and open files."
+        )
+
+
+def replace_project_settings(destination, original, remaining):
+    # Keep settings in memory during Claude calls. The Windows temporary file
+    # uses O_TEMPORARY: the OS deletes it even after taskkill /F, without finally.
+    with tempfile.NamedTemporaryFile(prefix=".unifi-setup-", dir=destination.parent, delete=os.name == "nt") as handle:
+        try:
+            handle.write((json.dumps(remaining, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
+            if destination.read_bytes() != original:
+                refuse("Project settings changed during migration; the plugin options were saved, rerun to finish.")
+            publish_project_settings(handle, destination)
+        finally:
+            if os.name != "nt":
+                Path(handle.name).unlink(missing_ok=True)
+
+
 def claude_main(args, root, name, product):
     mapping, schema = claude_options(root)
     environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
@@ -412,41 +473,31 @@ def claude_main(args, root, name, product):
     if args.migrate:
         remaining = dict(legacy_data)
         remaining["env"] = {k: v for k, v in legacy_data["env"].items() if k not in owned}
-    with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=legacy_path.parent if remaining else None) as temp:
-        staged = None
-        if remaining is not None:
-            staged = Path(temp) / legacy_path.name
-            staged.write_text(json.dumps(remaining, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            staged.chmod(0o600)
-            original = legacy_path.read_bytes()
-        if claude_saved(plugin_id, environment, mapping, schema) != saved:
-            refuse("The plugin's options changed during setup; rerun against the latest options.")
-        if changes:
-            client(
-                ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
-                environment,
-                json.dumps(changes, ensure_ascii=False).encode("utf-8"),
-            )
-            after = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
-            retained = all(
-                (after[option] == KEYCHAIN) == bool(value)
-                if schema[option].get("sensitive")
-                else after[option] == value
-                for option, value in changes.items()
-            )
-            if not retained:
-                restore = {o: before[o] for o in changes if before[o] != KEYCHAIN and not schema[o].get("sensitive")}
-                if restore:
-                    client(
-                        ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
-                        environment,
-                        json.dumps(restore, ensure_ascii=False).encode("utf-8"),
-                    )
-                refuse("Claude Code did not retain the requested options; previous non-secret options were restored.")
-        if staged is not None:
-            if legacy_path.read_bytes() != original:
-                refuse("Project settings changed during migration; the plugin options were saved, rerun to finish.")
-            os.replace(staged, legacy_path)
+        original = legacy_path.read_bytes()
+    if claude_saved(plugin_id, environment, mapping, schema) != saved:
+        refuse("The plugin's options changed during setup; rerun against the latest options.")
+    if changes:
+        client(
+            ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
+            environment,
+            json.dumps(changes, ensure_ascii=False).encode("utf-8"),
+        )
+        after = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
+        retained = all(
+            (after[option] == KEYCHAIN) == bool(value) if schema[option].get("sensitive") else after[option] == value
+            for option, value in changes.items()
+        )
+        if not retained:
+            restore = {o: before[o] for o in changes if before[o] != KEYCHAIN and not schema[o].get("sensitive")}
+            if restore:
+                client(
+                    ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
+                    environment,
+                    json.dumps(restore, ensure_ascii=False).encode("utf-8"),
+                )
+            refuse("Claude Code did not retain the requested options; previous non-secret options were restored.")
+    if remaining is not None:
+        replace_project_settings(legacy_path, original, remaining)
     if args.migrate:
         print(
             "Migrated " + ", ".join(sorted(k for k in owned if k in patch)) + " into the plugin's Claude Code options "
