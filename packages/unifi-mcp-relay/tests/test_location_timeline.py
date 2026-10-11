@@ -18,6 +18,7 @@ from unifi_core.incident_evidence import (
     evidence_to_json,
     validate_incident_evidence,
 )
+from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
 from unifi_mcp_relay.location_timeline import (
     PRODUCT_TOOLS,
     TOOL_ANNOTATIONS,
@@ -43,6 +44,7 @@ def arguments(document):
         "max_calls": limits["calls"],
         "max_elapsed_ms": limits["elapsed_ms"],
         "mappings": document["mappings"],
+        "detail": "full",
     }
 
 
@@ -96,6 +98,7 @@ async def test_forwarded_arguments_match_actual_manifests():
         assert set(arguments) == set(schema["properties"])
         assert set(schema["required"]) <= set(arguments)
         assert arguments["start"].endswith("Z")
+        assert arguments["detail"] == "full" and arguments["max_records_returned"] is None
         assert "start_time" not in arguments and "end_time" not in arguments
         product = next(p for p, tool in PRODUCT_TOOLS.items() if tool == tool_name)
         return {"success": True, "data": documents[product]}
@@ -186,12 +189,41 @@ async def test_invalid_corpus_is_never_trusted(path):
         ("area_hint", "front"),
         ("start_time", "old-input"),
         ("mappings", [{"entity": {}, "target": {}, "source": "guessed"}]),
+        ("camera_ids", [f"cam-fixture-{index}" for index in range(6)]),
+        ("detail", "summary"),
+        ("max_records_returned", 51),
     ],
 )
 async def test_invalid_arguments_never_read(field, value):
     forwarder = AsyncMock()
     result = await handle_location_timeline({**arguments(read()), field: value}, forwarder)
     assert result["success"] is False
+    forwarder.forward.assert_not_awaited()
+
+
+@pytest.mark.parametrize("limit", [None, 1])
+async def test_the_combined_document_is_presented_as_the_client_view_by_default(limit):
+    products = product_documents(read())
+
+    async def forward(tool_name, arguments):
+        product = next(p for p, tool in PRODUCT_TOOLS.items() if tool == tool_name)
+        return {"success": True, "data": products[product]}
+
+    request = {key: value for key, value in arguments(read()).items() if key != "detail"}
+    if limit is not None:
+        request["max_records_returned"] = limit
+    result = await handle_location_timeline(request, AsyncMock(forward=forward))
+    assert result["success"] is True
+    view = IncidentEvidenceView.model_validate(result["data"])
+    combined = combine_incident_evidence(products.values())
+    assert result["data"] == view_to_json(client_view(combined, max_records_returned=limit or 25))
+    assert view.record_selection.collected.total == len(combined.records)
+
+
+async def test_full_detail_cannot_take_a_record_limit():
+    forwarder = AsyncMock()
+    result = await handle_location_timeline({**arguments(read()), "max_records_returned": 5}, forwarder)
+    assert result["success"] is False and "applies only to detail=view" in result["error"]
     forwarder.forward.assert_not_awaited()
 
 

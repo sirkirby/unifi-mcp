@@ -395,6 +395,7 @@
             "start": "2026-08-08T12:00:00.000000Z",
             "start_inclusive": true
           },
+          "retention_coverage": "unknown",
           "truncation": "not_truncated",
           "window_coverage": "covered"
         },
@@ -461,6 +462,7 @@
             "start": "2026-08-08T12:00:00.000000Z",
             "start_inclusive": true
           },
+          "retention_coverage": "unknown",
           "truncation": "not_truncated",
           "window_coverage": "covered"
         },
@@ -758,6 +760,7 @@
               "start": "2026-08-08T12:00:00.000000Z",
               "start_inclusive": true
             },
+            "retention_coverage": "unknown",
             "truncation": "not_truncated",
             "window_coverage": "covered"
           },
@@ -980,6 +983,7 @@
               "start": "2026-08-08T12:00:00.000000Z",
               "start_inclusive": true
             },
+            "retention_coverage": "unknown",
             "truncation": "not_truncated",
             "window_coverage": "covered"
           },

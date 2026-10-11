@@ -98,7 +98,8 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
   title: "UniFi Incident Evidence",
   description:
     "Collect validated, bounded incident evidence from Network and Protect across relay locations. " +
-    "Returns source outcomes and explicit location failures; check coverage_complete before treating an empty set as clear. " +
+    "Returns a unifi-incident-evidence-view by default (source outcomes, coverage and explicit location failures plus bounded " +
+    "record citations); detail=full returns the whole combined document. Check coverage_complete before treating an empty set as clear. " +
     "Access collection is unsupported.",
   inputSchema: {
     type: "object",
@@ -117,8 +118,16 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
         description: "Products to collect: network, protect, access (Access is explicitly unsupported)",
       },
       device_macs: { type: "array", items: { type: "string" }, description: "Exact Network device MAC identifiers" },
-      camera_ids: { type: "array", items: { type: "string" }, description: "Exact Protect camera identifiers" },
-      mappings: { type: "array", items: { type: "object" }, description: "Explicit exact-identifier mapping assertions" },
+      camera_ids: { type: "array", items: { type: "string" }, maxItems: 5, description: "Exact Protect camera identifiers" },
+      mappings: { type: "array", items: { type: "object" }, maxItems: 20, description: "Explicit exact-identifier mapping assertions" },
+      detail: {
+        type: "string", enum: ["view", "full"], default: "view",
+        description: "view: coverage plus bounded record citations; full: the whole combined evidence document",
+      },
+      max_records_returned: {
+        type: "integer", minimum: 1, maximum: 50,
+        description: "Most record citations in the view (default 25); omitted records stay in coverage. View only",
+      },
       max_window_seconds: { type: "integer", minimum: 1, maximum: 2592000 },
       max_events: { type: "integer", minimum: 1, maximum: 10000 },
       max_calls: { type: "integer", minimum: 1, maximum: 100 },

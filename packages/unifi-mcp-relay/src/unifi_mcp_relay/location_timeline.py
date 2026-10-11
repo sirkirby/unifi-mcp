@@ -20,12 +20,12 @@ from unifi_core.incident_evidence import (
     SourceContext,
     SourceFailure,
     assemble_incident_evidence,
-    evidence_to_json,
     failure_from_exception,
     format_utc,
     source_failed,
     validate_incident_evidence,
 )
+from unifi_core.incident_evidence_view import EvidencePresentation
 from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 
@@ -34,7 +34,8 @@ logger = logging.getLogger("unifi-mcp-relay")
 TOOL_NAME = "unifi_location_timeline"
 TOOL_DESCRIPTION = (
     "Collect bounded, read-only Network and Protect incident evidence for one window. "
-    "Returns a versioned evidence document with per-source coverage, failures and budgets. "
+    "Returns a unifi-incident-evidence-view by default: per-source coverage, failures and budgets "
+    "plus bounded record citations; detail=full returns the whole combined evidence document. "
     "Use exact device MACs, camera IDs and explicit mappings; names never establish mappings. "
     "Access, when requested, is explicitly unsupported. Inspect overall and coverage_complete."
 )
@@ -42,12 +43,14 @@ TOOL_DESCRIPTION = (
 # Reuse Core's argument models, including the closed mapping assertion schema.
 _network_schema = NetworkIncidentRequest.model_json_schema()
 _protect_schema = ProtectIncidentRequest.model_json_schema()
+_presentation_schema = EvidencePresentation.model_json_schema()
 TOOL_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "$defs": {**_network_schema["$defs"], **_protect_schema["$defs"]},
+    "$defs": {**_network_schema["$defs"], **_protect_schema["$defs"], **_presentation_schema["$defs"]},
     "properties": {
         **_network_schema["properties"],
+        **_presentation_schema["properties"],
         "camera_ids": _protect_schema["properties"]["camera_ids"],
         "products": {
             "type": "array",
@@ -62,6 +65,9 @@ TOOL_INPUT_SCHEMA: dict[str, Any] = {
 }
 TOOL_ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 PRODUCT_TOOLS = {"network": "unifi_get_incident_evidence", "protect": "protect_get_incident_evidence"}
+_PRESENTATION_FIELDS = frozenset(EvidencePresentation.model_fields)
+# Product documents are combined in full; the relay presents the combined set once.
+_FULL_DETAIL = {"detail": "full", "max_records_returned": None}
 
 
 def _failure_document(request: NetworkIncidentRequest | ProtectIncidentRequest, product: str, failure: SourceFailure):
@@ -130,8 +136,11 @@ async def handle_location_timeline(
             raise ValueError("products must be a nonempty unique list of network, protect or access")
         if not is_relay_mode and arguments.get("location_id") is not None:
             raise ValueError("location_id requires relay mode")
+        presentation = EvidencePresentation(**{k: v for k, v in arguments.items() if k in _PRESENTATION_FIELDS})
         common = {
-            key: value for key, value in arguments.items() if key not in ("products", "device_macs", "camera_ids")
+            key: value
+            for key, value in arguments.items()
+            if key not in ("products", "device_macs", "camera_ids", *_PRESENTATION_FIELDS)
         }
         if location_id is not None:
             if common.get("location_id") not in (None, location_id):
@@ -151,7 +160,9 @@ async def handle_location_timeline(
             return _failure_document(request, product, SourceFailure(kind=FailureKind.UNSUPPORTED))
         try:
             async with asyncio.timeout(request.max_elapsed_ms / 1000):
-                response = await forwarder.forward(tool_name=tool_name, arguments=request.model_dump(mode="json"))
+                response = await forwarder.forward(
+                    tool_name=tool_name, arguments={**request.model_dump(mode="json"), **_FULL_DETAIL}
+                )
         except Exception as exc:
             logger.warning("Incident evidence transport failed for %s: %s", product, type(exc).__name__)
             return _failure_document(request, product, failure_from_exception(exc))
@@ -168,10 +179,11 @@ async def handle_location_timeline(
 
     try:
         documents = await asyncio.gather(*(collect(product) for product in products))
-        return {"success": True, "data": evidence_to_json(combine_incident_evidence(documents))}
+        combined = combine_incident_evidence(documents)
     except Exception as exc:
         logger.error("Combining location incident evidence failed: %s", type(exc).__name__)
         return {
             "success": False,
             "error": "Failed to combine location incident evidence: conflicting or invalid evidence",
         }
+    return {"success": True, "data": presentation.render(combined)}

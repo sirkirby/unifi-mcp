@@ -19,8 +19,11 @@ to local clients. See the [incident evidence contract](incident-evidence.md).
 
 ## The Location Timeline Tool
 
-`unifi_location_timeline` returns one versioned incident evidence document with
-ordered records, provenance, mappings, per-source coverage and failures.
+`unifi_location_timeline` combines one versioned incident evidence document per
+product and location, and by default returns its
+[client view](incident-evidence.md#client-view): per-source coverage and
+failures, mappings, budgets and a bounded list of record citations, with omitted
+records counted. `detail: "full"` returns the whole combined document.
 
 Parameters:
 
@@ -30,6 +33,7 @@ Parameters:
 - `device_macs` / `camera_ids`: exact identifiers, never inferred from names.
 - `mappings`: explicit exact-identifier assertions from the operator or product inventory.
 - `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`: limits passed to each product collection.
+- `detail`: `view` (default) or `full`; `max_records_returned`: citations in the view, 1 to 50, default 25.
 
 For example, after obtaining the exact device and camera identifiers, call:
 
@@ -46,7 +50,7 @@ For example, after obtaining the exact device and camera identifiers, call:
 
 Inspect `data.overall`, `data.coverage_complete`, `data.sources` and
 `data.budgets.exhausted` before assessing the incident. Failed and missing sources
-remain in the evidence document. All sources failing yields `overall: "failed"`;
+remain in the evidence. All sources failing yields `overall: "failed"`;
 incomplete evidence cannot establish an all-clear. Source-ID disagreements fail
 combination; select one location when controllers return conflicting source IDs.
 The former `start_time`/`end_time`, `area_hint` and `event_types` parameters are no

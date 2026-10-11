@@ -99,8 +99,11 @@ and `end` with UTC offsets, optional exact `device_macs`/`camera_ids`, explicit
 `mappings` and `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`.
 Network and Protect are selected by default; Access is reported unsupported.
 
-The response's `data` is one validated incident evidence document, including
-failed sources. Inspect `overall`, `coverage_complete` and `budgets.exhausted`;
+The relay asks each product tool for its full document, validates and combines
+them, and returns the combined set's client view in `data` by default:
+per-source coverage, including failed sources, and bounded record citations.
+`detail: "full"` returns the whole combined document; `max_records_returned`
+(1 to 50, default 25) sets the citations in the view. Inspect `overall`, `coverage_complete` and `budgets.exhausted`;
 an empty record list alone says nothing about source availability. The worker
 owns cloud-facing discovery and can select one location using `location_id`.
 Contradictory source IDs across locations fail combination. See the

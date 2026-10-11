@@ -624,15 +624,18 @@ RFC 5737 documentation IPs and `fixture-` names. A test enforces this.
 ## Relay and worker consumers
 
 `unifi_location_timeline` returns the same standard success envelope as the
-product tools: `{"success": true, "data": <IncidentEvidence>}`. A successful
+product tools: `{"success": true, "data": <view or IncidentEvidence>}`. It
+calls each product tool with `detail: "full"`, combines the full documents,
+and returns the combined set's [client view](#client-view) unless its own
+`detail` is `full`; `max_records_returned` applies to that view. A successful
 transport envelope does not establish complete collection: inspect `overall`,
 `coverage_complete`, each source outcome and `budgets.exhausted`. Total source
 failure returns `overall: "failed"`, never an empty all-clear.
 
 Both consumers forward `start` and `end` with explicit UTC offsets to
 `unifi_get_incident_evidence` and `protect_get_incident_evidence`. They accept
-`device_macs`, `camera_ids`, `mappings`, `location_id`, and the four `max_*`
-budgets described above. `products` defaults to Network and Protect; requested
+`device_macs`, `camera_ids`, `mappings`, `location_id`, the four `max_*`
+budgets described above, `detail` and `max_records_returned`. `products` defaults to Network and Protect; requested
 Access collection produces an explicit `unsupported` source. The legacy
 `start_time`/`end_time`, `area_hint` and `event_types` arguments are rejected.
 Use exact identifiers and explicit assertions to select evidence and mappings.
@@ -670,7 +673,9 @@ must fail at its declared schema or semantic layer.
 `tests/fixtures/incident_evidence/combine/` contains Python-generated input/output
 pairs for order independence, deduplication, mapping union, conflicting source
 IDs, exhausted budgets and mixed failures. The relay suite checks generator
-drift and TypeScript compares canonical JSON with those outputs:
+drift and TypeScript compares canonical JSON with those outputs. TypeScript
+also projects every golden case into the client view and compares canonical
+JSON with the golden views in `views/`:
 
 ```bash
 uv run --package unifi-core python tests/fixtures/incident_evidence/generate_combine.py --check

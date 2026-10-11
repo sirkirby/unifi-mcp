@@ -342,9 +342,53 @@ export async function combineIncidentEvidence(values: unknown[]): Promise<Eviden
     budgets, mappings, sources, records, overall, coverage_complete: ["complete", "empty"].includes(overall) });
 }
 
+export const DEFAULT_MAX_RECORDS_RETURNED = 25;
+export const MAX_RECORDS_RETURNED = 50;
+const viewSourceFields = ["source_id", "product", "source_tool", "scope", "outcome", "failure", "partial_reasons", "coverage"];
+function tally(records: EvidenceDocument[]): EvidenceDocument {
+  const inWindow = records.filter((record) => record.time.status === "in_window").length;
+  const outOfWindow = records.filter((record) => record.time.status === "out_of_window").length;
+  return { total: records.length, in_window: inWindow, out_of_window: outOfWindow, untimed: records.length - inWindow - outOfWindow };
+}
+/**
+ * Core's bounded client view (`unifi_core.incident_evidence_view.client_view`) of a validated document:
+ * coverage unchanged, at most `maxRecords` citations, in-window records first and earliest first.
+ */
+export async function incidentEvidenceView(value: unknown, maxRecords = DEFAULT_MAX_RECORDS_RETURNED): Promise<EvidenceDocument> {
+  const doc = await validateIncidentEvidence(value);
+  const records: EvidenceDocument[] = doc.records;
+  const priority = (record: EvidenceDocument): number =>
+    record.time.status === "in_window" ? 0 : record.time.status === "out_of_window" ? 2 : 1;
+  const ranked = records.map((_, index) => index).sort((a, b) => priority(records[a]) - priority(records[b]) || a - b);
+  const kept = new Set(ranked.slice(0, maxRecords));
+  const returned = records.filter((_, index) => kept.has(index));
+  const omitted = records.filter((_, index) => !kept.has(index));
+  const omittedInWindow = omitted.filter((record) => record.time.status === "in_window").map((record) => record.time.utc).sort(compare);
+  return {
+    schema: "unifi-incident-evidence-view", schema_version: 1, evidence_schema_version: 1,
+    requested_window: doc.requested_window, overall: doc.overall, coverage_complete: doc.coverage_complete,
+    budgets: doc.budgets, mappings: doc.mappings,
+    sources: doc.sources.map((source: EvidenceDocument) => Object.fromEntries(viewSourceFields.map((field) => [field, source[field]]))),
+    records: returned.map((record) => ({
+      evidence_id: record.evidence_id, product: record.provenance.product, source_tool: record.provenance.source_tool,
+      source_record_id: record.provenance.source_record_id,
+      time: { status: record.time.status, utc: record.time.utc, boundary_uncertain: record.time.boundary_uncertain,
+        original_field: record.time.original_field, original_type: record.time.original_type, original_value: record.time.original_value },
+      event_type: record.event_type, summary: record.summary,
+      entity_ids: record.entities.map((entity: EvidenceDocument) => entity.id),
+      mapping: { status: record.mapping.status, target_ids: record.mapping.targets.map((target: EvidenceDocument) => target.id),
+        sources: record.mapping.sources },
+    })),
+    record_selection: { max_records_returned: maxRecords, omission: "presentation_limit", collected: tally(records),
+      returned: tally(returned), omitted: tally(omitted), omitted_in_window_from_utc: omittedInWindow[0] ?? null },
+  };
+}
+
 const evidenceTools = { network: "unifi_get_incident_evidence", protect: "protect_get_incident_evidence" } as const;
 const requestLimits = { max_window_seconds: 30 * 24 * 3600, max_events: 10_000, max_calls: 100, max_elapsed_ms: 120_000 };
-const requestFields = new Set(["start", "end", "location_id", "products", "device_macs", "camera_ids", "mappings", ...Object.keys(requestLimits)]);
+const requestFields = new Set(["start", "end", "location_id", "products", "device_macs", "camera_ids", "mappings",
+  "detail", "max_records_returned", ...Object.keys(requestLimits)]);
+const MAX_CAMERA_IDS = 5, MAX_MAPPINGS = 20;
 function normalizeBound(value: unknown): string | null {
   if (typeof value !== "string" || !isoPattern.test(value) || !isoPattern.exec(value)?.[6]) return null;
   const parsed = parsedTime({ original_type: "string", original_value: value, clock_uncertainty_ms: null },
@@ -360,7 +404,7 @@ function normalizeMac(value: string): string | null {
 }
 function normalizeMappings(value: unknown): EvidenceDocument[] | null | undefined {
   if (value === undefined || value === null) return null;
-  if (!Array.isArray(value) || value.some((assertion) => !validateMappingAssertion(assertion))) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_MAPPINGS || value.some((assertion) => !validateMappingAssertion(assertion))) return undefined;
   return value.map((assertion) => ({
     entity: { role: null, ...assertion.entity }, target: { role: null, ...assertion.target }, source: assertion.source,
   }));
@@ -399,7 +443,7 @@ async function failedDocument(
     coverage: { requested_window: window, queried_window: null, window_coverage: "unknown", observed_first_utc: null,
       observed_last_utc: null, filters: {}, pagination: { offset: null, requested_cap: null, cap: null, returned: 0,
         has_more: null, total_reported: null, post_filtered: false, interrupted: true }, truncation: "unknown",
-      counts: zeros, complete: false, population_total: null },
+      retention_coverage: "unknown", counts: zeros, complete: false, population_total: null },
   };
   return { schema: "unifi-incident-evidence", schema_version: 1, requested_window: window,
     budgets: { limits, usage: { events: 0, calls: 0, elapsed_ms: 0 }, exhausted: duration > limits.window_seconds ? ["window"] : [] },
@@ -428,12 +472,20 @@ export async function collectIncidentEvidence(
     return { success: false, error: "Failed to collect location evidence: products must be a unique nonempty list" };
   if (args.location_id !== undefined && args.location_id !== null && (typeof args.location_id !== "string" || !args.location_id || args.location_id.length > 128))
     return { success: false, error: "Failed to collect location evidence: location_id must be a nonempty string" };
+  const detail = args.detail ?? "view";
+  if (detail !== "view" && detail !== "full")
+    return { success: false, error: "Failed to collect location evidence: detail must be view or full" };
+  const maxRecords = args.max_records_returned ?? null;
+  if (maxRecords !== null && (!Number.isInteger(maxRecords) || (maxRecords as number) < 1 || (maxRecords as number) > MAX_RECORDS_RETURNED))
+    return { success: false, error: `Failed to collect location evidence: max_records_returned must be an integer from 1 to ${MAX_RECORDS_RETURNED}` };
+  if (maxRecords !== null && detail === "full")
+    return { success: false, error: "Failed to collect location evidence: max_records_returned applies only to detail=view" };
   const mappings = normalizeMappings(args.mappings);
   if (mappings === undefined) return { success: false, error: "Failed to collect location evidence: mappings must be valid exact-identifier assertions" };
   const rawMacs = args.device_macs ?? [], rawCameras = args.camera_ids ?? [];
   if (!Array.isArray(rawMacs) || rawMacs.length > 50 || rawMacs.some((value) => typeof value !== "string" || !normalizeMac(value)))
     return { success: false, error: "Failed to collect location evidence: device_macs must be MAC addresses (six hex pairs)" };
-  if (!Array.isArray(rawCameras) || rawCameras.length > 50 || rawCameras.some((value) => typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(value)))
+  if (!Array.isArray(rawCameras) || rawCameras.length > MAX_CAMERA_IDS || rawCameras.some((value) => typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(value)))
     return { success: false, error: "Failed to collect location evidence: camera_ids must be exact Protect camera IDs" };
   const deviceMacs = [...new Set(rawMacs.map((value: string) => normalizeMac(value)!))].sort(compare);
   const cameraIds = [...new Set(rawCameras as string[])].sort(compare);
@@ -452,7 +504,7 @@ export async function collectIncidentEvidence(
     const parameters: Record<string, unknown> = {
       start: args.start, end: args.end, location_id: locationId,
       max_window_seconds: limits.window_seconds, max_events: limits.events, max_calls: limits.calls,
-      max_elapsed_ms: limits.elapsed_ms, mappings,
+      max_elapsed_ms: limits.elapsed_ms, mappings, detail: "full",
     };
     if (product === "network") parameters.device_macs = deviceMacs;
     else parameters.camera_ids = cameraIds;
@@ -470,6 +522,8 @@ export async function collectIncidentEvidence(
       return doc;
     } catch { return failure("parse_failed"); }
   }));
-  try { return { success: true, data: await combineIncidentEvidence(documents) }; }
+  let combined: EvidenceDocument;
+  try { combined = await combineIncidentEvidence(documents); }
   catch { return { success: false, error: "Failed to combine location incident evidence: conflicting or invalid evidence" }; }
+  return { success: true, data: detail === "full" ? combined : await incidentEvidenceView(combined, (maxRecords as number | null) ?? undefined) };
 }

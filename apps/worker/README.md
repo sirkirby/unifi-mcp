@@ -136,7 +136,9 @@ The timeline tool accepts `start`/`end` with UTC offsets, exact `device_macs`
 and `camera_ids`, explicit `mappings`, and `max_window_seconds`, `max_events`,
 `max_calls`, `max_elapsed_ms`. `products` defaults to Network and Protect;
 requested Access collection is unsupported. `location_id` selects one location.
-It returns `data` as one [incident evidence document](../../docs/incident-evidence.md#relay-and-worker-consumers).
+It returns `data` as the [client view](../../docs/incident-evidence.md#client-view) of one combined
+[incident evidence document](../../docs/incident-evidence.md#relay-and-worker-consumers), or the whole
+document with `detail: "full"`; `max_records_returned` (1 to 50, default 25) sets the citations in the view.
 Check `overall`, `coverage_complete`, source outcomes and exhausted budgets;
 missing or failed sources are retained. Conflicting source IDs fail combination,
 including across locations. Legacy area/name filters and `start_time`/`end_time`

@@ -17,7 +17,7 @@ describe("RelayObject location evidence meta-tool", () => {
   it("uses the real tool dispatch path and returns a failed contract document when no tool is registered", async () => {
     const relay = fakeRelay(["fixture-1"], new Map([["fixture-1", []]]), null);
     const result = await relay.handleToolCall("unifi_location_timeline", windowArgs);
-    expect(result).toMatchObject({ success: true, data: { schema: "unifi-incident-evidence", overall: "failed", coverage_complete: false } });
+    expect(result).toMatchObject({ success: true, data: { schema: "unifi-incident-evidence-view", overall: "failed", coverage_complete: false } });
     expect((result as any).data.sources.map((source: any) => source.outcome)).toEqual(["unsupported", "unsupported"]);
     expect(relay.sendToolCall).not.toHaveBeenCalled();
   });

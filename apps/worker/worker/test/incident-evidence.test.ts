@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import Ajv from "ajv";
 import schema from "../../../../tests/fixtures/incident_evidence/incident-evidence.v1.schema.json";
-import { canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, validateIncidentEvidence } from "../src/incident-evidence";
+import viewSchema from "../../../../tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json";
+import {
+  canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, incidentEvidenceView, validateIncidentEvidence,
+} from "../src/incident-evidence";
 import { validateEvidenceSchema } from "../src/incident-evidence-schema.js";
 import type { EvidenceTarget } from "../src/types";
 
@@ -13,7 +16,9 @@ const read = (group: string, name: string): any => JSON.parse(readFileSync(`${co
 const cases = readdirSync(`${corpus}/cases`).filter((name) => name.endsWith(".json"));
 const invalid = readdirSync(`${corpus}/invalid`).filter((name) => name.endsWith(".json"));
 const combine = readdirSync(`${corpus}/combine`).filter((name) => name.endsWith(".json"));
+const views = readdirSync(`${corpus}/views`).filter((name) => name.endsWith(".json"));
 const schemaCheck = new Ajv({ strict: false }).compile(schema);
+const viewSchemaCheck = new Ajv({ strict: false }).compile(viewSchema);
 
 function fixtureEvidence(name: string): any { return read("cases", name).expected; }
 function expectedCanonical(value: any): string {
@@ -51,6 +56,16 @@ describe("incident evidence corpus", () => {
       expect(await canonicalIncidentEvidence(actual)).toBe(expectedCanonical(fixture.expected));
     }
   });
+  it.each(views)("projects %s exactly as Core's client view", async (name) => {
+    const fixture = read("views", name);
+    expect(fixture.views.length).toBeGreaterThan(0);
+    for (const { max_records_returned: limit, expected } of fixture.views) {
+      const actual = await incidentEvidenceView(fixtureEvidence(name), limit);
+      expect(actual).toEqual(expected);
+      expect(expectedCanonical(actual)).toBe(expectedCanonical(expected));
+      expect(viewSchemaCheck(actual)).toBe(true);
+    }
+  });
   it("accepts Python integral-float digests after JavaScript parses the wire numbers", async () => {
     const wire = readFileSync(`${corpus}/cases/canonical_numbers.json`, "utf8");
     expect(wire).toContain('"score": 1.0');
@@ -84,7 +99,7 @@ describe("location evidence collection", () => {
     { location_id: "fixture-1", product: "protect", available: true },
   ];
   const request = { start: "2026-08-08T12:00:00Z", end: "2026-08-08T13:00:00Z",
-    max_window_seconds: 7200, max_events: 500, max_calls: 10, max_elapsed_ms: 60000 };
+    max_window_seconds: 7200, max_events: 500, max_calls: 10, max_elapsed_ms: 60000, detail: "full" };
   function productDocument(product: string): any {
     const evidence = structuredClone(fixtureEvidence("healthy_empty.json"));
     evidence.sources = evidence.sources.filter((source: any) => source.product === product);
@@ -108,10 +123,33 @@ describe("location evidence collection", () => {
     expect(call).toHaveBeenCalledTimes(2);
     expect(call.mock.calls.map((args) => args[1])).toEqual(["unifi_get_incident_evidence", "protect_get_incident_evidence"]);
     expect(call.mock.calls[0][2]).toMatchObject({ start: request.start, end: request.end, max_events: 500,
-      device_macs: ["aa:bb:cc:00:10:01"] });
+      device_macs: ["aa:bb:cc:00:10:01"], detail: "full" });
     expect(call.mock.calls[1][2]).toMatchObject({ camera_ids: ["cam-fixture-000a"] });
     expect(result).toMatchObject({ success: true, data: { schema: "unifi-incident-evidence", overall: "empty", coverage_complete: true } });
     expect((result.data as any).sources.map((source: any) => source.source_id)).toEqual(["network.events", "protect.events"]);
+  });
+  it("returns the client view of the combined document by default", async () => {
+    const call = vi.fn(async (target: EvidenceTarget, _tool: string, _parameters: Record<string, unknown>) => {
+      const document = structuredClone(fixtureEvidence("network_protect_real_shapes.json"));
+      document.sources = document.sources.filter((source: any) => source.product === target.product);
+      document.records = document.records.filter((record: any) => record.provenance.product === target.product);
+      for (const source of document.sources) source.scope.location_id = "fixture-1";
+      for (const record of document.records) record.provenance.scope.location_id = "fixture-1";
+      document.overall = "complete";
+      return { success: true, data: document };
+    });
+    const { detail: _, ...viewRequest } = request;
+    const full = await collectIncidentEvidence({ ...viewRequest, detail: "full" }, targets, call);
+    expect(full).toMatchObject({ success: true, data: { schema: "unifi-incident-evidence", overall: "complete" } });
+    expect((full.data as any).records).toHaveLength(5);
+    for (const limit of [undefined, 2]) {
+      const result = await collectIncidentEvidence({ ...viewRequest, ...(limit ? { max_records_returned: limit } : {}) }, targets, call);
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(await incidentEvidenceView(full.data, limit));
+      expect(viewSchemaCheck(result.data)).toBe(true);
+      expect((result.data as any).record_selection.max_records_returned).toBe(limit ?? 25);
+    }
+    expect(call.mock.calls.every((args) => args[2]?.detail === "full")).toBe(true);
   });
   it("carries failed products inside the document, including Access", async () => {
     const result = await collectIncidentEvidence({ ...request, products: ["network", "protect", "access"] },
@@ -172,6 +210,11 @@ describe("location evidence collection", () => {
       { start_time: request.start }, { area_hint: "front" }, { device_macs: ["fixture-ap"] },
       { camera_ids: ["front door"] }, { start: "2026-08-08T12:00:00" }, { start: "1786190400" },
       { mappings: [{ entity: { kind: "camera", id_kind: "protect_camera_id", id: "x" }, target: {} }] },
+      { camera_ids: ["c1", "c2", "c3", "c4", "c5", "c6"] }, { detail: "summary" }, { max_records_returned: 5 },
+      { detail: "view", max_records_returned: 0 }, { detail: "view", max_records_returned: 51 },
+      { mappings: Array.from({ length: 21 }, () => ({
+        entity: { kind: "camera", id_kind: "protect_camera_id", id: "x" },
+        target: { kind: "network_device", id_kind: "mac", id: "02:00:00:00:00:01" }, source: "operator_input" })) },
     ]) expect((await collectIncidentEvidence({ ...request, ...bad }, targets, call)).success).toBe(false);
     expect(call).not.toHaveBeenCalled();
   });
