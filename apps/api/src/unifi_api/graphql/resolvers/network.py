@@ -28,6 +28,7 @@ from unifi_core.mac import mac_equal
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.network.acl import AclRule
 from unifi_api.graphql.types.network.ap_group import ApGroup
 from unifi_api.graphql.types.network.client import (
@@ -104,6 +105,14 @@ from unifi_api.graphql.types.network.traffic_flow import (
 from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
+from unifi_api.services.incident_evidence import (
+    DEFAULT_CALLS,
+    DEFAULT_ELAPSED_MS,
+    DEFAULT_EVENTS,
+    DEFAULT_WINDOW_SECONDS,
+    IncidentRequestError,
+    collect_network_evidence,
+)
 
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
@@ -3631,6 +3640,58 @@ class NetworkQuery:
         if raw is None:
             return None
         return ThreatPosture.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Collect bounded, read-only Network event evidence for one incident window as a versioned "
+            "unifi-incident-evidence document. Stops at the first spent budget and says so; check "
+            "coverage_complete before treating an empty result as an all-clear. Not cached."
+        ),
+    )
+    async def incident_evidence(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        start: str,
+        end: str,
+        site: str = "default",
+        device_macs: list[str] | None = None,
+        location_id: str | None = None,
+        max_window_seconds: int = DEFAULT_WINDOW_SECONDS,
+        max_events: int = DEFAULT_EVENTS,
+        max_calls: int = DEFAULT_CALLS,
+        max_elapsed_ms: int = DEFAULT_ELAPSED_MS,
+        mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
+    ) -> IncidentEvidence:
+        ctx: GraphQLContext = info.context
+        async with ctx.sessionmaker() as session:
+            events = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "event_manager",
+                site=site,
+            )
+            try:
+                evidence = await collect_network_evidence(
+                    events,
+                    site=site,
+                    start=start,
+                    end=end,
+                    device_macs=device_macs,
+                    location_id=location_id,
+                    max_window_seconds=max_window_seconds,
+                    max_events=max_events,
+                    max_calls=max_calls,
+                    max_elapsed_ms=max_elapsed_ms,
+                    mappings=mappings,
+                )
+            except IncidentRequestError:
+                raise
+            except Exception as exc:
+                raise RuntimeError(f"Failed to collect incident evidence ({type(exc).__name__})") from None
+        return IncidentEvidence.from_manager_output(evidence)
 
     @strawberry.field(
         permission_classes=[IsRead],

@@ -35,6 +35,7 @@ from unifi_core.exceptions import UniFiNotFoundError
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.protect.alarms import (
     AlarmProfileList,
     AlarmRule,
@@ -70,6 +71,14 @@ from unifi_api.graphql.types.protect.system import (
     ProtectHealth,
     ProtectSystemInfo,
     ViewerList,
+)
+from unifi_api.services.incident_evidence import (
+    DEFAULT_CALLS,
+    DEFAULT_ELAPSED_MS,
+    DEFAULT_EVENTS,
+    DEFAULT_WINDOW_SECONDS,
+    IncidentRequestError,
+    collect_protect_evidence,
 )
 
 # ---------------------------------------------------------------------------
@@ -955,6 +964,56 @@ class KnownLicensePlatePage:
 
 @strawberry.type(description="Read-only access to UniFi Protect resources.")
 class ProtectQuery:
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Collect bounded, read-only Protect event evidence for one incident window as a versioned "
+            "unifi-incident-evidence document. Each camera ID is its own source. Stops at the first "
+            "spent budget and says so; check coverage_complete before treating an empty result as an "
+            "all-clear. Not cached."
+        ),
+    )
+    async def incident_evidence(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        start: str,
+        end: str,
+        camera_ids: list[str] | None = None,
+        location_id: str | None = None,
+        max_window_seconds: int = DEFAULT_WINDOW_SECONDS,
+        max_events: int = DEFAULT_EVENTS,
+        max_calls: int = DEFAULT_CALLS,
+        max_elapsed_ms: int = DEFAULT_ELAPSED_MS,
+        mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
+    ) -> IncidentEvidence:
+        ctx: GraphQLContext = info.context
+        async with ctx.sessionmaker() as session:
+            events = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "event_manager",
+            )
+            try:
+                evidence = await collect_protect_evidence(
+                    events,
+                    start=start,
+                    end=end,
+                    camera_ids=camera_ids,
+                    location_id=location_id,
+                    max_window_seconds=max_window_seconds,
+                    max_events=max_events,
+                    max_calls=max_calls,
+                    max_elapsed_ms=max_elapsed_ms,
+                    mappings=mappings,
+                )
+            except IncidentRequestError:
+                raise
+            except Exception as exc:
+                raise RuntimeError(f"Failed to collect incident evidence ({type(exc).__name__})") from None
+        return IncidentEvidence.from_manager_output(evidence)
+
     # ---- Cameras ---------------------------------------------------------
 
     @strawberry.field(
