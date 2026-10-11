@@ -158,7 +158,7 @@ class DeviceManager:
                     devices = [self._compact_device(d) for d in devices]
                 return devices
             else:
-                raise UniFiConnectionError("No auth path available for list_devices")
+                raise self._cm.unavailable_error("No auth path available for list_devices")
         except UniFiConnectionError:
             raise
         except Exception as e:
@@ -199,7 +199,7 @@ class DeviceManager:
                         return dev
                 raise UniFiNotFoundError("device", device_id)
             else:
-                raise UniFiConnectionError("No auth path available for get_device")
+                raise self._cm.unavailable_error("No auth path available for get_device")
         except (UniFiConnectionError, UniFiNotFoundError, ValueError):
             raise
         except Exception as e:
@@ -290,7 +290,7 @@ class DeviceManager:
                     "result": "success",
                 }
             else:
-                raise UniFiConnectionError("No proxy session available for reboot_device")
+                raise self._cm.unavailable_error("No proxy session available for reboot_device")
         except UniFiConnectionError:
             raise
         except Exception as e:
@@ -318,7 +318,7 @@ class DeviceManager:
         if not device_id:
             raise ValueError("device_id is required")
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for get_device_configs")
+            raise self._cm.unavailable_error("No proxy session available for get_device_configs")
         try:
             data = await self._cm.proxy_request("GET", "devices/topology4")
             topology = self._cm.extract_data(data)

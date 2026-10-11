@@ -9,7 +9,8 @@ via two independent auth paths:
    Console (port 443) and proxies requests through
    ``/proxy/access/api/v2/...`` with cookie + CSRF token.
 
-At least one path must succeed during :meth:`initialize`.  When both are
+At least one path must succeed during :meth:`initialize`; otherwise it
+returns ``False`` and records :attr:`last_connection_error`.  When both are
 available the caller can choose which path to use per-request (API client
 is generally preferred for supported endpoints; the proxy path covers
 everything else).
@@ -96,6 +97,7 @@ class AccessConnectionManager:
         self._api_client_available = False
         self._proxy_available = False
         self._initialized = False
+        self._last_connection_error: str | None = None
         self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
         self._api_support_attempt = (
             SafeConnectionAttempt().model_dump(mode="json") if api_key else connection_attempt_not_configured()
@@ -131,16 +133,26 @@ class AccessConnectionManager:
     async def initialize(self) -> bool:
         """Authenticate via API key and/or proxy session.
 
-        Tries both paths independently.  At least one must succeed or
-        :class:`UniFiConnectionError` is raised.
+        Tries both paths independently.  Uses ``retry_with_backoff`` from
+        :mod:`unifi_core.retry` so transient network errors during startup
+        are retried.
 
-        Uses ``retry_with_backoff`` from :mod:`unifi_core.retry` so
-        transient network errors during startup are retried.
-
-        Returns ``True`` on success.
+        Returns ``True`` when at least one path succeeds, ``False`` otherwise.
+        On failure :attr:`last_connection_error` says whether credentials are
+        missing or the controller could not be reached or authenticated.
         """
         if self._initialized and (self._api_client_available or self._proxy_available):
             return True
+
+        self._support_attempt = connection_attempt_started()
+        api_configured = self.authentication_status.configured(AuthMethod.API_KEY_ONLY)
+        proxy_configured = bool(self.username and self.password)
+        if not api_configured and not proxy_configured:
+            error = UniFiConnectionError(
+                "No UniFi Access credentials are configured. Set an API key or a username and password."
+            )
+            self._record_initialize_failure(error)
+            return False
 
         policy = RetryPolicy(
             max_retries=3,
@@ -154,15 +166,12 @@ class AccessConnectionManager:
             await self._try_proxy_session()
 
             if not self._api_client_available and not self._proxy_available:
-                raise UniFiConnectionError(
-                    f"Failed to establish any auth path to UniFi Access at {self.host}. "
-                    "Ensure either an API key or username/password credentials are configured."
-                )
+                raise UniFiConnectionError(self._unreachable_message(api_configured, proxy_configured))
 
-        self._support_attempt = connection_attempt_started()
         try:
             await retry_with_backoff(_connect, policy=policy)
             self._initialized = True
+            self._last_connection_error = None
             self._support_attempt = connection_attempt_succeeded()
             logger.info(
                 "[access-cm] Connected to UniFi Access at %s (api_client=%s, proxy=%s)",
@@ -172,15 +181,41 @@ class AccessConnectionManager:
             )
             return True
         except Exception as exc:
-            self._support_attempt = connection_attempt_failed(exc)
-            logger.error(
-                "[access-cm] Failed to connect to UniFi Access at %s: %s",
-                self.host,
-                exc,
-                exc_info=True,
-            )
-            self._initialized = False
-            raise
+            self._record_initialize_failure(exc)
+            return False
+
+    def _record_initialize_failure(self, exc: Exception) -> None:
+        self._support_attempt = connection_attempt_failed(exc)
+        self._last_connection_error = str(exc)
+        self._initialized = False
+        logger.error("[access-cm] Failed to connect to UniFi Access: %s", exc)
+
+    def _unreachable_message(self, api_configured: bool, proxy_configured: bool) -> str:
+        tried = []
+        if api_configured:
+            tried.append(f"API key on port {self._api_port}")
+        if proxy_configured:
+            tried.append(f"username/password on port {self.port}")
+        return (
+            f"Could not reach or authenticate to UniFi Access at {self.host} "
+            f"(tried {' and '.join(tried)}). Check that the controller is reachable "
+            "and the configured credentials are valid."
+        )
+
+    @property
+    def last_connection_error(self) -> str | None:
+        """Why the last :meth:`initialize` failed, or ``None`` after a success."""
+        return self._last_connection_error
+
+    def unavailable_error(self, message: str) -> UniFiConnectionError:
+        """Build the error a manager raises when its auth path is unavailable.
+
+        When startup could not connect, the reason is appended so tool callers
+        see why Access is unavailable, not only which path was missing.
+        """
+        if self._last_connection_error:
+            return UniFiConnectionError(f"{message}: {self._last_connection_error}")
+        return UniFiConnectionError(message)
 
     async def _try_api_client(self) -> None:
         """Attempt to initialise the py-unifi-access API client."""
@@ -443,7 +478,7 @@ class AccessConnectionManager:
             If the proxy session is not available.
         """
         if not self._proxy_available or self._proxy_session is None:
-            raise UniFiConnectionError("Proxy session is not available. Call initialize() first.")
+            raise self.unavailable_error("Proxy session is not available")
 
         url = f"https://{self.host}:{self.port}/proxy/access/api/v2/{path.lstrip('/')}"
         return await self._proxy_request_impl(method, url, "Proxy", **kwargs)
@@ -476,7 +511,7 @@ class AccessConnectionManager:
             If the proxy session is not available.
         """
         if not self._proxy_available or self._proxy_session is None:
-            raise UniFiConnectionError("Proxy session is not available. Call initialize() first.")
+            raise self.unavailable_error("Proxy session is not available")
 
         url = f"https://{self.host}:{self.port}/proxy/access/ulp-go/api/v2/{path.lstrip('/')}"
         return await self._proxy_request_impl(method, url, "ULP proxy", **kwargs)
@@ -508,7 +543,7 @@ class AccessConnectionManager:
             If the proxy session is not available.
         """
         if not self._proxy_available or self._proxy_session is None:
-            raise UniFiConnectionError("Proxy session is not available. Call initialize() first.")
+            raise self.unavailable_error("Proxy session is not available")
 
         url = f"https://{self.host}:{self.port}/proxy/users/api/v2/{path.lstrip('/')}"
         return await self._proxy_request_impl(method, url, "Users proxy", **kwargs)

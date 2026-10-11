@@ -423,7 +423,7 @@ class EventManager:
             )
 
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for list_events")
+            raise self._cm.unavailable_error("No proxy session available for list_events")
 
         if limit == 0:
             return []
@@ -545,7 +545,7 @@ class EventManager:
             raise ValueError("event_id is required")
 
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for get_event")
+            raise self._cm.unavailable_error("No proxy session available for get_event")
 
         try:
             # The controller has no direct event-by-id endpoint. Search every
@@ -614,7 +614,7 @@ class EventManager:
             Number of days to include in the summary (default 7).
         """
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for get_activity_summary")
+            raise self._cm.unavailable_error("No proxy session available for get_activity_summary")
 
         try:
             # Clamp once and use the clamped value for the window too: the MCP

@@ -614,11 +614,12 @@ class TestInitialize:
             assert cm_dual.has_proxy is True
 
     @pytest.mark.asyncio
-    async def test_initialize_both_fail_raises(self, cm_dual):
-        """Both paths fail raises UniFiConnectionError."""
+    async def test_initialize_both_fail_returns_false(self, cm_dual):
+        """Both paths failing returns False and records an unreachable reason."""
         with (
             patch.object(cm_dual, "_try_api_client") as mock_api,
             patch.object(cm_dual, "_try_proxy_session") as mock_proxy,
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
         ):
 
             async def api_fail():
@@ -630,11 +631,65 @@ class TestInitialize:
             mock_api.side_effect = api_fail
             mock_proxy.side_effect = proxy_fail
 
-            with pytest.raises(UniFiConnectionError, match="Failed to establish any auth path"):
-                await cm_dual.initialize()
+            assert await cm_dual.initialize() is False
 
             assert cm_dual._initialized is False
             assert cm_dual.is_connected is False
+            assert cm_dual.support_status()["initialized"] is False
+
+    @pytest.mark.asyncio
+    async def test_unreachable_message_names_host_and_tried_paths(self, cm_dual):
+        """Configured credentials that fail blame reachability/auth, not missing config."""
+        with (
+            patch.object(cm_dual, "_try_api_client", AsyncMock()),
+            patch.object(cm_dual, "_try_proxy_session", AsyncMock()),
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
+        ):
+            assert await cm_dual.initialize() is False
+
+        error = cm_dual.last_connection_error
+        assert error.startswith("Could not reach or authenticate to UniFi Access at 192.168.1.1")
+        assert "API key on port 12445" in error
+        assert "username/password on port 443" in error
+        assert "configured" in error and "No UniFi Access credentials" not in error
+        assert "secret" not in error and "test-api-key-123" not in error
+
+    @pytest.mark.asyncio
+    async def test_missing_credentials_message_and_no_retry(self):
+        """No credentials fails immediately with a configuration message."""
+        cm = AccessConnectionManager(host="192.168.1.1", username="", password="", api_key=None)
+        with patch("unifi_core.retry.asyncio.sleep", AsyncMock()) as sleep:
+            assert await cm.initialize() is False
+
+        sleep.assert_not_awaited()
+        assert cm.last_connection_error.startswith("No UniFi Access credentials are configured")
+
+    @pytest.mark.asyncio
+    async def test_success_clears_last_connection_error(self, cm_proxy_only):
+        cm_proxy_only._last_connection_error = "earlier failure"
+
+        async def proxy_succeed():
+            cm_proxy_only._proxy_available = True
+            cm_proxy_only._proxy_session = MagicMock()
+
+        with patch.object(cm_proxy_only, "_try_proxy_session", side_effect=proxy_succeed):
+            assert await cm_proxy_only.initialize() is True
+
+        assert cm_proxy_only.last_connection_error is None
+
+    @pytest.mark.asyncio
+    async def test_unavailable_error_carries_startup_reason(self, cm_proxy_only):
+        assert str(cm_proxy_only.unavailable_error("No proxy session available for x")) == (
+            "No proxy session available for x"
+        )
+        with (
+            patch.object(cm_proxy_only, "_try_proxy_session", AsyncMock()),
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
+        ):
+            await cm_proxy_only.initialize()
+
+        with pytest.raises(UniFiConnectionError, match="Proxy session is not available: Could not reach"):
+            await cm_proxy_only.proxy_request("GET", "doors")
 
     @pytest.mark.asyncio
     async def test_initialize_idempotent(self, cm_dual):
