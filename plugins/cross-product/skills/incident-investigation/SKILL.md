@@ -27,10 +27,11 @@ that per source.
   never reaches complete coverage of the incident.
 - **Network not connected.** Stop and report Network unavailable. There is no
   device evidence to investigate.
-- **Relay.** Not used. The relay's merged location timeline carries no
-  per-source coverage, so it never substitutes for the evidence tools. When the
-  product servers are reached through a relay connection, call the same two
-  evidence tools.
+- **Relay.** Not needed. The relay's location timeline collects the same
+  evidence through these two tools and returns one combined document; this
+  workflow calls the tools directly so each product's document and budgets stay
+  separate. When the product servers are reached through a relay connection,
+  call the same two evidence tools.
 
 Use the product setup skills for connection help; never ask for secrets.
 
