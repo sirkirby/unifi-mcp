@@ -9,7 +9,15 @@ import jsonschema
 import pytest
 
 from unifi_core.incident_evidence import validate_incident_evidence
-from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
+from unifi_core.incident_evidence_view import (
+    TEXT_TOKEN_LIMITS,
+    VIEW_BYTE_LIMIT,
+    VIEW_TOKEN_BUDGET,
+    IncidentEvidenceView,
+    client_view,
+    estimated_tokens,
+    view_to_json,
+)
 from unifi_core.source_page import SourcePage
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -222,3 +230,19 @@ async def test_unexpected_failures_return_the_operation_and_class_only(tool, mon
     monkeypatch.setattr(module, "collect_network_incident_evidence", broken)
     result = await module.get_incident_evidence(**WINDOW)
     assert result == {"success": False, "error": "Failed to collect incident evidence: RuntimeError"}
+
+
+@pytest.mark.asyncio
+async def test_a_long_whitespace_run_is_cut_and_marked_in_the_view(tool):
+    """Four million spaces in a controller event cost a token each: the summary is cut and marked, never sent whole."""
+    module, pages = tool
+    spaces = "A" + " " * 4_000_000 + "B"
+    summary = spaces
+    pages.rows = [{"id": "evt-1", "key": "DEVICE_DISCONNECTED_AP", "timestamp": 1786191000000, "message_raw": spaces}]
+    result = await module.get_incident_evidence(**WINDOW)
+    assert result["success"] is True
+    (record,) = result["data"]["records"]
+    assert record["truncated"] == {"summary": len(summary)}
+    assert record["summary"] == summary[: TEXT_TOKEN_LIMITS["summary"]]
+    assert estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+    assert len(json.dumps(result, ensure_ascii=False, indent=2).encode()) < min(10_000, VIEW_BYTE_LIMIT)

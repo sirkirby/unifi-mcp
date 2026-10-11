@@ -20,6 +20,7 @@ from tests.unit._incident_evidence_support import (
     SCHEMA,
     VIEW_SCHEMA,
     FrozenDatetime,
+    network_page_rows,
     network_pages,
     network_scenario,
     protect_page_rows,
@@ -30,7 +31,16 @@ from tests.unit._incident_evidence_support import (
 from unifi_api.db.models import ApiKey
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_core.incident_evidence import evidence_to_json, validate_incident_evidence
-from unifi_core.incident_evidence_view import EvidencePresentation, IncidentEvidenceView, client_view, view_to_json
+from unifi_core.incident_evidence_view import (
+    TEXT_TOKEN_LIMITS,
+    VIEW_BYTE_LIMIT,
+    VIEW_TOKEN_BUDGET,
+    EvidencePresentation,
+    IncidentEvidenceView,
+    client_view,
+    estimated_tokens,
+    view_to_json,
+)
 
 NETWORK_PATH = "/v1/sites/default/incident-evidence/network"
 PROTECT_PATH = "/v1/sites/default/incident-evidence/protect"
@@ -238,6 +248,39 @@ async def test_a_network_site_is_bounded_like_a_label_before_any_read(tmp_path, 
     assert response.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
     assert SENTINEL not in response.text
     assert harness.calls == []
+
+
+SPACES = "A" + " " * 4_000_000 + "B"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_a_long_whitespace_run_is_cut_and_marked_alike_on_rest_and_graphql(
+    tmp_path, monkeypatch, clock, product
+) -> None:
+    """Four million spaces in a controller event cost a token each: the summary is cut and marked, never sent whole."""
+    if product == "network":
+        rows, summary = [{**network_page_rows(1)[0], "message_raw": SPACES}], SPACES
+        build, path = (lambda: sdk_network_events({"data": rows, "total_element_count": 1})), NETWORK_PATH
+    else:
+        rows, summary = [{**protect_page_rows(1)[0], "smartDetectTypes": [SPACES]}], f"motion: {SPACES}"
+        build, path = (lambda: sdk_protect_events(rows)), PROTECT_PATH
+    harness = await make_harness(tmp_path, monkeypatch)
+    response = await harness.rest(path, build)
+    assert response.status_code == 200, response.text[:500]
+    view = response.json()["data"]
+    check_document(view)
+    (record,) = view["records"]
+    assert record["truncated"] == {"summary": len(summary)}
+    assert record["summary"] == summary[: TEXT_TOKEN_LIMITS["summary"]]
+    assert estimated_tokens({"success": True, "data": view}) <= VIEW_TOKEN_BUDGET
+    assert len(response.content) < min(10_000, VIEW_BYTE_LIMIT)
+    harness.build = build
+    arguments = gql_args(harness.cid, locationId='"fixture-location-a"')
+    graphql = await harness.graphql(f"{{ {product} {{ incidentEvidence({arguments}) {{ document }} }} }}")
+    assert graphql.status_code == 200 and "errors" not in graphql.json(), graphql.text[:500]
+    assert without_wall_time(graphql.json()["data"][product]["incidentEvidence"]["document"]) == without_wall_time(view)
+    assert len(graphql.content) < 10_000
 
 
 @pytest.mark.asyncio

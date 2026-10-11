@@ -8,7 +8,15 @@ import jsonschema
 import pytest
 
 from unifi_core.incident_evidence import validate_incident_evidence
-from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
+from unifi_core.incident_evidence_view import (
+    TEXT_TOKEN_LIMITS,
+    VIEW_BYTE_LIMIT,
+    VIEW_TOKEN_BUDGET,
+    IncidentEvidenceView,
+    client_view,
+    estimated_tokens,
+    view_to_json,
+)
 from unifi_core.source_page import SourcePage
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -155,3 +163,21 @@ async def test_evidence_too_broad_for_its_view_is_refused_with_how_to_narrow_it(
     result = await module.get_incident_evidence(**WINDOW)
     assert result == {"success": False, "error": f"Failed to collect incident evidence: {fixture['refusal']}"}
     assert (await module.get_incident_evidence(**WINDOW, detail="full"))["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_long_whitespace_run_is_cut_and_marked_in_the_view(tool):
+    """Four million spaces in a controller event cost a token each: the summary is cut and marked, never sent whole."""
+    module, pages = tool
+    spaces = "A" + " " * 4_000_000 + "B"
+    summary = f"motion: {spaces}"
+    pages.rows = [
+        {"id": "evt-1", "type": "motion", "camera": CAMERA, "start": 1786191000000, "smartDetectTypes": [spaces]}
+    ]
+    result = await module.get_incident_evidence(**WINDOW, camera_ids=[CAMERA])
+    assert result["success"] is True
+    (record,) = result["data"]["records"]
+    assert record["truncated"] == {"summary": len(summary)}
+    assert record["summary"] == summary[: TEXT_TOKEN_LIMITS["summary"]]
+    assert estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+    assert len(json.dumps(result, ensure_ascii=False, indent=2).encode()) < min(10_000, VIEW_BYTE_LIMIT)
