@@ -9,8 +9,9 @@ Investigate one Network device incident over one explicit window. Every claim in
 the report cites **evidence**: records and per-source **coverage** returned by
 the two incident evidence tools. Each tool returns a bounded **view** of its
 evidence document (`schema: "unifi-incident-evidence-view"`) that fits in one
-tool result: every source's outcome, failure and coverage, plus at most
-`max_records_returned` record citations, with omitted records counted. The local product servers are the whole
+tool result: every source's outcome, failure and coverage, plus the record
+citations that fit (at most `max_records_returned`), with omitted records
+counted and a cursor to read the rest. The local product servers are the whole
 transport; nothing here needs the relay.
 
 ## Dependencies
@@ -71,7 +72,11 @@ Claims are bounded by coverage:
 - Records omitted from the view (`record_selection.omitted`) are a
   presentation limit, not a coverage gap: coverage and counts still describe
   every collected record. Make no claim about omitted records beyond their
-  counts.
+  counts. Records counted in `too_large` have identifiers too long to cite in a
+  view; only `detail="full"` shows them.
+- A record's `truncated` names free text the view cut to a prefix (`summary`,
+  `event_type`, `original_value`) with its full length. Quote only the prefix,
+  mark it as cut, and claim nothing about the text that was cut off.
 - A failed source (`unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`) is missing
   evidence, never an empty result.
@@ -116,7 +121,9 @@ Collect, before any read:
   seconds needs the user's agreement; 2592000 is the hard limit. Each tool caps
   events at 10000, calls at 100, elapsed time at 120000 ms and
   `max_records_returned` at 50. Protect takes at most 5 camera IDs, and each
-  call at most 20 mapping assertions.
+  call at most 20 mapping assertions. Mapping identifiers are at most 64
+  characters and `location_id` at most 128, none of them holding a control
+  character, quote or backslash; assertions carry no `role`.
 
 Done when the user has confirmed device MAC, window with offset, camera scope
 and budgets.
@@ -242,15 +249,16 @@ Read each view before writing anything from it:
    `counts`, `population_total`.
 4. `budgets.exhausted`: any kind listed means collection stopped early, and
    every later source is `not_attempted`.
-5. `record_selection`: `collected`, `returned` and `omitted` counts by
-   placement, and `omitted_in_window_from_utc`, the time of the earliest
-   in-window record left out of the view.
+5. `record_selection`: `collected`, `before_resume`, `returned` and `omitted`
+   counts by placement; `too_large`; `limited_by`, the limit that stopped the
+   view (`max_records_returned` or `output_budget`, or null when nothing more
+   was left); and `next_cursor`, set exactly when a limit stopped it.
 6. Per record: `evidence_id`, `product`, `source_tool`, `source_record_id`,
    `time.status` (`in_window`, `out_of_window`, `missing`, `malformed`,
    `ambiguous_timezone`), `time.utc`, `time.boundary_uncertain`, the original
-   time field, type and value, `event_type`, `summary`, `entity_ids`, and
+   time field, type and value, `event_type`, `summary`, `entity_ids`,
    `mapping.status` (`verified`, `ambiguous`, `missing`, `not_evaluated`) with
-   its `target_ids` and `sources`. Only `in_window` records are observations
+   its `target_ids` and `sources`, and `truncated`. Only `in_window` records are observations
    of the window. Unplaced and out-of-window records are reported under
    coverage, with their original value, never moved into the window.
 
@@ -263,12 +271,15 @@ or show omitted records:
 | `events` or `calls` exhausted, or `budget_exhausted` | Repeat that product's call with a larger budget or a narrower window |
 | `timeout`, or `elapsed` exhausted | Repeat once with a larger `max_elapsed_ms` |
 | `truncation_unknown` | Split the window into parts that each fit one page, and read each part |
-| Records omitted from the view | Split the window at `omitted_in_window_from_utc` and read the later part; or narrow to exact `device_macs` or `camera_ids`; or raise `max_records_returned` (at most 50) |
+| `next_cursor` set (records omitted from the view) | Repeat the same call with `resume_after` set to `next_cursor`; it returns the records after the cursor, even those sharing its timestamp. When `limited_by` is `max_records_returned`, raising it (at most 50) also helps; narrowing to exact `device_macs` or `camera_ids` reduces what is collected |
+| `too_large` above 0 | None in the view: report the count; those records are shown only by `detail="full"`, which can exceed one tool result |
 | `auth_failed`, `permission_denied`, `unsupported` | None: point to the product setup skill |
 
-The offers for `truncation_unknown` and for omitted records are mandatory:
-whenever either appears, Unanswered Questions and Next Reads says "split the
-window" and gives the call with its new `start` and `end`. Ask before every
+The offers for `truncation_unknown` and for omitted records are mandatory.
+Whenever a source has `truncation_unknown`, Unanswered Questions and Next Reads
+says "split the window" and gives the call with its new `start` and `end`.
+Whenever `next_cursor` is set, it gives the same call with
+`resume_after="<next_cursor>"`, the cursor copied exactly. Ask before every
 follow-up, use the same evidence tool, and report each view separately. List
 tools return records without continuation state, so they never complete
 coverage.
@@ -293,7 +304,7 @@ Use these sections, in order:
 
    ```text
    <document>: overall `<overall>`, coverage_complete `<true|false>`; budgets window <seconds>/<limit> s, events <used>/<limit>, calls <used>/<limit>, elapsed <used>/<limit> ms; exhausted: <kinds|none>.
-   <document> records: returned <n> of <n> collected (in-window <n> of <n>), max_records_returned <n>; omitted <n> (in-window <n>, from <omitted_in_window_from_utc|none>), a presentation limit, not a coverage gap.
+   <document> records: returned <n> of <n> collected (in-window <n> of <n>), max_records_returned <n>; resumed after <resume_after|none> (<before_resume.total> before it); omitted <n> (in-window <n>, too large <n>), limited by <limited_by|none>, next cursor <next_cursor|none>; a presentation limit, not a coverage gap.
    - `<source_id>` (<product>, `<source_tool>`): outcome `<outcome>`; reasons <reasons|none>; failure <`kind`|none>; queried <start> to <end> (`<window_coverage>`) or queried none (`unknown`); filters <key=value|none>; returned <n>, cap <n>, has_more `<true|false|null>`, truncation `<truncation>`, retention `<retention_coverage>`; received <n>, accepted <n>, in-window <n>, out-of-window <n>, untimed <n>, malformed <n>, duplicates <n>, conflicting <n>, boundary-uncertain <n>.
    ```
 
@@ -308,7 +319,9 @@ Use these sections, in order:
    ```
 
    Write `(no summary)` when `summary` is null. For a record with no usable
-   time, add its original time field, type and value after the mapping.
+   time, add its original time field, type and value after the mapping. For
+   each field in `truncated`, end the line with `; truncated <field> from <n>
+   characters`, so the cut is never presented as the whole text.
    `source_tool` is the read family named in the record (for example
    `unifi_list_events`), not the evidence tool you called. Anywhere else in
    the report, refer to a record by its full `evidence_id` in backticks. Never

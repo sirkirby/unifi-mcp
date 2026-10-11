@@ -42,6 +42,7 @@ RETENTION = (
     "retention may have been discarded without a trace."
 )
 SPLIT = "split the window"
+RESUME = 'resume_after="<next_cursor>"'
 OBSERVATION = re.compile(
     r"^- `(?P<evidence_id>[^`]+)` (?P<when>[0-9T:.Z-]+|time `[a-z_]+`) "
     r"\((?P<product>[a-z]+), `(?P<source_tool>[^`]+)`, record `(?P<record>[^`]+)`\): "
@@ -117,7 +118,7 @@ def skill_section_errors(text: str) -> list[str]:
     for section in REPORT_SECTIONS:
         if not report or f"**{section}:**" not in report[1]:
             errors.append(f"missing report section: {section}")
-    for sentence in (ALL_CLEAR, "coverage_complete: true", RETENTION, SPLIT, "full `evidence_id`"):
+    for sentence in (ALL_CLEAR, "coverage_complete: true", RETENTION, SPLIT, RESUME, "full `evidence_id`"):
         if sentence not in flat(text):
             errors.append(f"missing coverage rule: {sentence}")
     return errors
@@ -153,8 +154,10 @@ def records_line(selection: dict) -> str:
     return (
         f"returned {returned['total']} of {collected['total']} collected "
         f"(in-window {returned['in_window']} of {collected['in_window']}), "
-        f"max_records_returned {selection['max_records_returned']}; omitted {omitted['total']} "
-        f"(in-window {omitted['in_window']}, from {selection['omitted_in_window_from_utc'] or 'none'}), "
+        f"max_records_returned {selection['max_records_returned']}; "
+        f"resumed after {selection['resume_after'] or 'none'} ({selection['before_resume']['total']} before it); "
+        f"omitted {omitted['total']} (in-window {omitted['in_window']}, too large {selection['too_large']}), "
+        f"limited by {selection['limited_by'] or 'none'}, next cursor {selection['next_cursor'] or 'none'}; "
         "a presentation limit, not a coverage gap."
     )
 
@@ -195,6 +198,11 @@ def observation_errors(line: str, record: dict) -> list[str]:
         "mapping": record["mapping"]["status"],
     }
     wrong = sorted(field for field, value in expected.items() if match[field] != value)
+    wrong += [
+        f"truncated {field}"
+        for field, length in record["truncated"].items()
+        if f"; truncated {field} from {length} characters" not in match["rest"]
+    ]
     if not wrong:
         return []
     if set(wrong) <= {"event_type", "mapping"}:
@@ -208,6 +216,8 @@ def shorthand_errors(body: str, records: dict[str, dict]) -> list[str]:
     record_ids = {str(record["source_record_id"]) for record in records.values()}
     for match in re.finditer(r"`([^`\n]+)`", body):
         token = match[1]
+        if token.startswith("resume_after="):
+            continue
         quoted_as_record = body[max(0, match.start() - 7) : match.start()] == "record "
         if SHORTHAND.match(token) or (token in record_ids and not quoted_as_record):
             errors.append(f"citation shorthand instead of a full evidence ID: {token}")
@@ -231,7 +241,11 @@ def example_view(body: str) -> dict | None:
     path = VIEWS / f"{match[1]}.json" if match else None
     if path is None or not path.exists():
         return None
-    views = {item["max_records_returned"]: item["expected"] for item in json.loads(path.read_text())["views"]}
+    views = {
+        item["max_records_returned"]: item["expected"]
+        for item in json.loads(path.read_text())["views"]
+        if item["resume_after"] is None
+    }
     return views.get(int(match[2]))
 
 
@@ -305,12 +319,13 @@ def example_errors(body: str) -> list[str]:
         errors.append("complete-coverage sentence does not match the evidence")
     if any(source["outcome"] == "empty" for source in view["sources"]) and RETENTION not in text:
         errors.append("an empty source needs the retention sentence")
-    needs_split = selection["omitted"]["total"] > 0 or any(
-        "truncation_unknown" in source["partial_reasons"] for source in view["sources"]
-    )
-    next_reads = flat(sections.get("Unanswered Questions and Next Reads", "")).lower()
-    if needs_split and SPLIT not in next_reads:
-        errors.append("truncation_unknown or omitted records need the split the window follow-up")
+    needs_split = any("truncation_unknown" in source["partial_reasons"] for source in view["sources"])
+    next_reads = flat(sections.get("Unanswered Questions and Next Reads", ""))
+    if needs_split and SPLIT not in next_reads.lower():
+        errors.append("truncation_unknown needs the split the window follow-up")
+    cursor = selection["next_cursor"]
+    if cursor is not None and f'resume_after="{cursor}"' not in next_reads:
+        errors.append("omitted records need the follow-up that resumes after next_cursor")
     if "correlation" not in sections.get("Hypotheses", "").lower():
         errors.append("hypotheses are not labelled as correlation")
     return errors
@@ -469,7 +484,12 @@ def _example(case: str) -> str:
         ("timeouts", "Coverage is partial.", "Every source read the full window.", "complete-coverage"),
         ("timeouts", "Offer to split the window", "Offer to read", "split the window"),
         ("budget_exhaustion", "Offer to split the window", "Offer to read", "split the window"),
-        ("network_protect_real_shapes", "Offer to split the window", "Offer to read", "split the window"),
+        (
+            "network_protect_real_shapes",
+            'resume_after="0|2026-08-08T12:10:07.500000Z|',
+            'resume_after="0|2026-08-08T12:10:07.400000Z|',
+            "resumes after next_cursor",
+        ),
         ("healthy_empty", "No events were recorded in the window by any\nsource.", "", "all-clear"),
         ("healthy_empty", "Neither controller reports how long", "Nothing says how long", "retention sentence"),
         ("timeouts", "correlation", "link", "correlation"),
@@ -511,3 +531,15 @@ def test_example_source_absent_from_fixture_is_rejected() -> None:
 def test_missing_scenario_is_rejected() -> None:
     view = json.loads((VIEWS / "healthy_empty.json").read_text())["views"][0]["expected"]
     assert "ambiguous mapping" not in scenario(view) and "omitted records" not in scenario(view)
+
+
+def test_a_cut_field_must_be_marked_in_its_citation() -> None:
+    view = json.loads((VIEWS / "network_protect_real_shapes.json").read_text())["views"][0]["expected"]
+    record = {**view["records"][0], "truncated": {"summary": 90_000}}
+    line = (
+        f"- `{record['evidence_id']}` {record['time']['utc']} ({record['product']}, `{record['source_tool']}`, "
+        f"record `{record['source_record_id']}`): {record['summary']} `{record['event_type']}`; "
+        f"mapping `{record['mapping']['status']}`"
+    )
+    assert any("truncated summary" in error for error in observation_errors(line + ".", record))
+    assert observation_errors(line + "; truncated summary from 90000 characters.", record) == []

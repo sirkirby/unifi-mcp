@@ -28,13 +28,14 @@ Records per view: `max_records_returned=2`.
 **Coverage and Limitations:**
 
 Golden evidence set: overall `complete`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-Golden evidence set records: returned 2 of 5 collected (in-window 2 of 5), max_records_returned 2; omitted 3 (in-window 3, from 2026-08-08T12:30:00.000000Z), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 2 of 5 collected (in-window 2 of 5), max_records_returned 2; resumed after none (0 before it); omitted 3 (in-window 3, too large 0), limited by max_records_returned, next cursor 0|2026-08-08T12:10:07.500000Z|protect.events|str|evt-protect-0001; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
 Every source read the full window. Protect events are from cameras with no mapping
-to the AP. Three in-window records from 2026-08-08T12:30:00Z onwards were collected
-but omitted from the view; they are covered, but this report cannot describe them.
+to the AP. Three in-window records after the cursor were collected but omitted from
+the view by `max_records_returned`; they are covered, but this report cannot
+describe them.
 
 **Observations:**
 
@@ -57,10 +58,11 @@ identify devices, not their users.
 
 **Unanswered Questions and Next Reads:**
 
-- What happened after 12:30 UTC? Offer to split the window at the omitted records:
-  call `unifi_get_incident_evidence` and `protect_get_incident_evidence` again with
-  `start="2026-08-08T08:30:00-04:00"` and `end="2026-08-08T09:00:00-04:00"` and the
-  same budgets, or repeat the original window with `max_records_returned=5`.
+- What do the three omitted records show? Offer to read them: repeat the same
+  call with the same window, budgets and `max_records_returned=2`, adding
+  `resume_after="0|2026-08-08T12:10:07.500000Z|protect.events|str|evt-protect-0001"`
+  to return the records after the last one shown, or repeat the original window
+  with `max_records_returned=5`.
 - Which camera, if any, is attached to the AP? Ask the user for the camera ID and
   the relationship, then repeat both calls with the mapping asserted.
 
@@ -78,7 +80,7 @@ limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
 **Coverage and Limitations:**
 
 Golden evidence set: overall `empty`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-Golden evidence set records: returned 0 of 0 collected (in-window 0 of 0), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 0 of 0 collected (in-window 0 of 0), max_records_returned 25; resumed after none (0 before it); omitted 0 (in-window 0, too large 0), limited by none, next cursor none; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `empty`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 0, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
@@ -115,7 +117,7 @@ limits: window 1800 s, events 500, calls 1, elapsed 60000 ms. Records per view:
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/1800 s, events 1/500, calls 1/1, elapsed 400/60000 ms; exhausted: calls, window.
-Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; resumed after none (0 before it); omitted 0 (in-window 0, too large 0), limited by none, next cursor none; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `partial`; reasons budget_exhausted, truncation_unknown; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `false`, truncation `unknown`, retention `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `not_attempted`; reasons none; failure `budget_exhausted`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
@@ -160,7 +162,7 @@ limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 1 of 1 collected (in-window 1 of 1), max_records_returned 25; resumed after none (0 before it); omitted 0 (in-window 0, too large 0), limited by none, next cursor none; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `partial`; reasons partial_response, truncation_unknown; failure `timeout`; queried 2026-08-08T11:05:00.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 1, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 1, accepted 1, in-window 1, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `timeout`; reasons none; failure `timeout`; queried none (`unknown`); filters none; returned 0, cap 100, has_more `null`, truncation `unknown`, retention `unknown`; received 0, accepted 0, in-window 0, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
@@ -212,7 +214,7 @@ view: `max_records_returned=25`.
 **Coverage and Limitations:**
 
 Golden evidence set: overall `complete`, coverage_complete `true`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-Golden evidence set records: returned 5 of 5 collected (in-window 5 of 5), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 5 of 5 collected (in-window 5 of 5), max_records_returned 25; resumed after none (0 before it); omitted 0 (in-window 0, too large 0), limited by none, next cursor none; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 3, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `complete`; reasons none; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 2, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 2, accepted 2, in-window 2, out-of-window 0, untimed 0, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
@@ -263,7 +265,7 @@ limits: window 7200 s, events 500, calls 10, elapsed 60000 ms. Records per view:
 **Coverage and Limitations:**
 
 Golden evidence set: overall `partial`, coverage_complete `false`; budgets window 3600/7200 s, events 0/500, calls 2/10, elapsed 850/60000 ms; exhausted: none.
-Golden evidence set records: returned 10 of 10 collected (in-window 1 of 1), max_records_returned 25; omitted 0 (in-window 0, from none), a presentation limit, not a coverage gap.
+Golden evidence set records: returned 10 of 10 collected (in-window 1 of 1), max_records_returned 25; resumed after none (0 before it); omitted 0 (in-window 0, too large 0), limited by none, next cursor none; a presentation limit, not a coverage gap.
 - `network.events` (network, `unifi_list_events`): outcome `partial`; reasons malformed_records, untimed_records; failure none; queried 2026-08-08T11:04:59.000000Z to 2026-08-08T13:04:59.000000Z (`covered`); filters none; returned 10, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 10, accepted 7, in-window 1, out-of-window 0, untimed 6, malformed 3, duplicates 0, conflicting 0, boundary-uncertain 0.
 - `protect.events` (protect, `protect_list_events`): outcome `partial`; reasons untimed_records; failure none; queried 2026-08-08T12:00:00.000000Z to 2026-08-08T13:00:00.000000Z (`covered`); filters none; returned 3, cap 100, has_more `false`, truncation `not_truncated`, retention `unknown`; received 3, accepted 3, in-window 0, out-of-window 0, untimed 3, malformed 0, duplicates 0, conflicting 0, boundary-uncertain 0.
 
