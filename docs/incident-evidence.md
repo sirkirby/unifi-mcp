@@ -110,7 +110,7 @@ evidence = normalize_network_page(page, context)
 | Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals) | submitted `start`/`end`, unknown if either is omitted |
 | Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering | as above |
 | Protect `list_events_raw_page` | fewer raw rows than `limit` | submitted `start`/`end` |
-| Network `read_events_page` | as `get_events_page`, from one request | as `get_events_page` |
+| Network `read_events_page` | as `get_events_page`, from one request | v2: the absolute `timestampFrom`/`timestampTo` sent (`window_ms`), else as `get_events_page` |
 
 The list methods (`get_events`, `get_alarms`, `list_events`,
 `list_smart_detections`) return the same rows for tools and raise
@@ -174,7 +174,7 @@ stays visible as `truncated` or `truncation_unknown`. Overall is then
 
 | Product | Sources | Read | Window | Filters recorded |
 |---------|---------|------|--------|------------------|
-| Network | `network.events` | `EventManager.read_events_page`, one request per page of up to 100 rows by page number | relative lookback long enough to reach `start` from any read within the elapsed budget; queried window is the part every read covered | v2: the categories and severities the controller applied; `device_macs` |
+| Network | `network.events` | `EventManager.read_events_page`, one request per page of up to 100 rows by page number | v2: the requested window as absolute millisecond bounds, widened by one boundary millisecond (below); legacy: a lookback long enough to reach `start` from any read within the elapsed budget. The queried window is what was submitted (the part every read covered) | v2: the categories and severities the controller applied; `device_macs` |
 | Protect | `protect.events`, or `protect.events.camera.NN` per camera in ID order | `EventManager.list_events_raw_page`, 100 rows per read by offset, newest first | the exact window in whole milliseconds | `camera_id` |
 
 Reading a source stops when the source proves its end (`has_more: false`, a
@@ -188,8 +188,20 @@ before any exact-identifier filter that could hide the movement. A short last
 read keeps every offset a whole number of pages and never asks for more rows
 than the events budget has left.
 
-Network events take a lookback relative to now, so rows newer than the window
-are read, counted against the events budget and reported out-of-window.
+On the v2 path the event log is asked for the window itself, so a quiet window
+on a busy controller can be read in one page and be complete. The query
+records `timestamp_from_ms`/`timestamp_to_ms` in place of `within_hours`.
+Whether the controller treats `timestampFrom` and `timestampTo` as inclusive
+or exclusive has not been verified against a live controller, so the bounds
+are widened, never narrowed: `timestampFrom` is the window start floored to
+milliseconds minus 1 ms, and `timestampTo` is the window end rounded up to
+milliseconds. Under any reading the controller then returns all of
+`[start, end)`; an event it returns at a widened edge is placed by its own
+timestamp and reported out-of-window. Subtracting a millisecond from the end
+instead would lose the window's last millisecond while still claiming it was
+covered. The legacy path only takes a lookback relative to now, so its rows
+newer than the window are read, counted against the events budget and
+reported out-of-window.
 `device_macs` keeps rows naming one of the MACs in any role; rows the filter
 cannot read stay in and count as malformed. The filtered page says
 `post_filtered`, so only the source's own end proof can make it complete.
