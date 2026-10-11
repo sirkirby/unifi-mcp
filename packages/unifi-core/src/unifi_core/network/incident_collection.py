@@ -16,7 +16,6 @@ counted as malformed.
 from __future__ import annotations
 
 import math
-import time
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from typing import Any, Protocol
@@ -131,7 +130,7 @@ async def collect_network_incident_evidence(
     request: NetworkIncidentRequest,
     *,
     site: str | None = None,
-    clock: Callable[[], float] = time.monotonic,
+    clock: Callable[[], float] | None = None,
     now: Callable[[], datetime] = utc_now,
 ) -> IncidentEvidence:
     """Collect bounded Network event evidence for ``request``'s window.
