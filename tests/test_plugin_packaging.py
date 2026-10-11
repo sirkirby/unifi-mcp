@@ -46,7 +46,6 @@ RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:PASSWORD|API_KEY)
 SAFE_DEFAULTS = (
     (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS)_(?:CREATE|UPDATE|DELETE)$"), False),
     (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_TOOL_PERMISSION_MODE$"), "confirm"),
-    (re.compile(r"^UNIFI_AUTO_CONFIRM$"), False),
     (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
 )
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
@@ -704,6 +703,14 @@ def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> 
     assert any("'policy_delete'" in error and "must default to False" in error for error in errors)
 
 
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_no_client_exposes_the_deprecated_auto_confirm_switch(name: str) -> None:
+    bundle = REPO_ROOT / "plugins" / name
+    assert "auto_confirm" not in _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
+    for filename in (".claude-plugin/plugin.json", ".mcp.json", ".mcp.codex.json"):
+        assert "UNIFI_AUTO_CONFIRM" not in (bundle / filename).read_text(encoding="utf-8")
+
+
 def test_claude_option_errors_are_reported(tmp_path: Path) -> None:
     root = _copy_packaging_tree(tmp_path)
     name = _mcp_bundles()[0]
@@ -757,7 +764,7 @@ def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
 
 @pytest.mark.parametrize("name", _mcp_bundles())
 def test_claude_options_resolve_like_unset_variables(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, name: str
 ) -> None:
     bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
     policy_gate = pytest.importorskip("unifi_core.policy_gate")
@@ -793,6 +800,11 @@ def test_claude_options_resolve_like_unset_variables(
     assert not any(checker.check("any_category", action) for action in ("create", "update", "delete"))
     assert policy_gate.resolve_permission_mode(product) == "confirm"
     assert bootstrap.validate_registration_mode(logger) == "lazy"
+    # A default setup must not trip the deprecated auto-confirm warning at startup.
+    assert "UNIFI_AUTO_CONFIRM" not in _claude_server_env(name, {})
+    with caplog.at_level(logging.WARNING):
+        policy_gate.check_deprecated_env_vars(product, logger)
+    assert "deprecated" not in caplog.text.lower()
 
     resolve({})
     # Unset options behave as unset variables: the shared level still applies.

@@ -38,7 +38,6 @@
         "UNIFI_POLICY_NETWORK_UPDATE": "${user_config.policy_update}",
         "UNIFI_POLICY_NETWORK_DELETE": "${user_config.policy_delete}",
         "UNIFI_NETWORK_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
-        "UNIFI_AUTO_CONFIRM": "${user_config.auto_confirm}",
         "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
       }
     }
@@ -133,12 +132,6 @@
         "bypass"
       ],
       "default": "confirm"
-    },
-    "auto_confirm": {
-      "type": "boolean",
-      "title": "Auto-confirm (deprecated)",
-      "description": "Legacy switch equivalent to bypass permission mode. Leave off",
-      "default": false
     },
     "registration_mode": {
       "type": "string",
