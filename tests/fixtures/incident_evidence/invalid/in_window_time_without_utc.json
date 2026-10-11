@@ -1,0 +1,490 @@
+{
+  "description": "A record placed in the window carries no UTC time.",
+  "rejected_by": "schema",
+  "derived_from": "network_protect_real_shapes",
+  "evidence": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": "/system-log/all",
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:04:59.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:10:05.250000Z",
+          "observed_last_utc": "2026-08-08T12:45:00.000000Z",
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "requested_cap": 100,
+            "cap": 100,
+            "returned": 3,
+            "has_more": false,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 3,
+            "accepted": 3,
+            "in_window": 3,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": true,
+          "population_total": 3
+        }
+      },
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:10:07.500000Z",
+          "observed_last_utc": "2026-08-08T12:40:00.000000Z",
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "requested_cap": 100,
+            "cap": 100,
+            "returned": 2,
+            "has_more": false,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 2,
+            "accepted": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": true,
+          "population_total": 2
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "network.events|str|evt-net-0001",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": "/system-log/all",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0001",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "timestamp",
+          "original_type": "integer",
+          "original_value": 1786191005250,
+          "original_format": "epoch_milliseconds",
+          "utc": null,
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "fixture-phone has connected to fixture-ap-1.",
+        "entities": [
+          {
+            "kind": "network_client",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "CLIENT"
+          },
+          {
+            "kind": "network_device",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:10:01",
+            "role": "AP"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "CLIENT_DEVICES",
+          "event": "CLIENT_CONNECTED",
+          "severity": "LOW",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "protect.events|str|evt-protect-0001",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0001",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:10:07.500000+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:10:07.500000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "microsecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "smartDetectZone",
+        "summary": "smartDetectZone: person",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000a",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "end": "2026-08-08T12:10:19.000000+00:00",
+          "score": 91,
+          "smart_detect_types": [
+            "person"
+          ]
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.events|str|evt-net-0002",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": "/system-log/all",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0002",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "timestamp",
+          "original_type": "integer",
+          "original_value": 1786192200000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+        "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+        "entities": [
+          {
+            "kind": "network_client",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:02",
+            "role": "SRC_CLIENT"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "SECURITY",
+          "event": "TRAFFIC_BLOCKED",
+          "severity": "MEDIUM",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "protect.events|str|evt-protect-0002",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0002",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:40:00+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:40:00.000000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "second",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "motion",
+        "summary": "motion",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000b",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "score": 0,
+          "smart_detect_types": []
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.events|str|evt-net-0003",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": "/system-log/all",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0003",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "timestamp",
+          "original_type": "integer",
+          "original_value": 1786193100000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:45:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "DEVICE_DISCONNECTED_AP",
+        "summary": "fixture-ap-2 disconnected.",
+        "entities": [
+          {
+            "kind": "network_device",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:10:02",
+            "role": "DEVICE"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "UNIFI_DEVICES",
+          "event": "DEVICE_DISCONNECTED",
+          "severity": "HIGH",
+          "subcategory": "CLIENT_CONNECTIVITY"
+        },
+        "conflict_group": null
+      }
+    ],
+    "overall": "complete",
+    "coverage_complete": true
+  }
+}

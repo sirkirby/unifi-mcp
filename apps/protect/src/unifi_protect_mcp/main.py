@@ -12,7 +12,13 @@ from unifi_protect_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
     logger,
 )  # ensures logging/env setup early
-from unifi_protect_mcp.categories import PROTECT_CATEGORY_MAP, TOOL_MODULE_MAP, policy_gates, setup_lazy_loading
+from unifi_protect_mcp.categories import (
+    LAZY_DIRECT_TOOLS,
+    PROTECT_CATEGORY_MAP,
+    TOOL_MODULE_MAP,
+    policy_gates,
+    setup_lazy_loading,
+)
 from unifi_protect_mcp.jobs import get_job_status, start_async_tool
 
 # Shared singletons
@@ -114,6 +120,7 @@ async def main_async():
             support_bundle_handler=support_bundle_service.generate,
             prefix="protect",
             server_label="UniFi Protect",
+            lazy_direct_tools=LAZY_DIRECT_TOOLS,
         )
 
         # ---- Start transports ----

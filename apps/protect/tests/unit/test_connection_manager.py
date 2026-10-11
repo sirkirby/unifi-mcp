@@ -96,14 +96,23 @@ class TestInitialize:
         assert result is True
         assert cm._initialized is True
         assert cm._client is mock_client
-        protect_client.assert_called_once_with(
-            host="192.168.1.1",
-            port=443,
-            username="admin",
-            password="secret",
-            api_key="test-api-key",
-            verify_ssl=False,
-        )
+        protect_client.assert_called_once()
+        kwargs = protect_client.call_args.kwargs
+        sessions = (kwargs.pop("session"), kwargs.pop("public_api_session"))
+        assert kwargs == {
+            "host": "192.168.1.1",
+            "port": 443,
+            "username": "admin",
+            "password": "secret",
+            "api_key": "test-api-key",
+            "verify_ssl": False,
+        }
+        # Both sessions charge a bounded read's requests while it acquires the connection.
+        from unifi_core.request_budget import charged_session_middleware
+
+        assert all(session._middlewares == (charged_session_middleware,) for session in sessions)
+        for session in sessions:
+            await session.close()
         mock_client.update.assert_awaited_once()
 
     @pytest.mark.asyncio

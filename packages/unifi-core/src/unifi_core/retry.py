@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 
 from unifi_core.exceptions import UniFiError
+from unifi_core.request_budget import RequestBudgetSpent
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +28,19 @@ async def retry_with_backoff(operation, policy: RetryPolicy | None = None):
     for attempt in range(policy.max_retries + 1):
         try:
             return await operation()
+        except RequestBudgetSpent:
+            # A bounded read cannot pay for another attempt; retrying cannot help.
+            raise
         except policy.retryable_exceptions as e:
             last_error = e
             if attempt < policy.max_retries:
                 delay = min(policy.base_delay * (policy.backoff_factor**attempt), policy.max_delay)
+                # The class only: exception text can quote controller responses or hosts.
                 logger.warning(
                     "[retry] Attempt %d/%d failed: %s. Retrying in %.1fs",
                     attempt + 1,
                     policy.max_retries,
-                    e,
+                    type(e).__name__,
                     delay,
                 )
                 await asyncio.sleep(delay)

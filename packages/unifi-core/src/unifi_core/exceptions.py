@@ -41,6 +41,14 @@ class UniFiValidationError(UniFiError):
     """Resource exists but the requested mutation is invalid (e.g., conflicting fields)."""
 
 
+class UniFiMalformedResponseError(UniFiError):
+    """The controller answered with a payload whose shape the caller cannot read.
+
+    Distinct from a valid empty collection: callers must not treat it as "no
+    results". Messages carry fixed operation context only, never payload text.
+    """
+
+
 class UniFiOperationError(UniFiError):
     """Manager method completed but the operation reported failure (e.g., controller rejected)."""
 
