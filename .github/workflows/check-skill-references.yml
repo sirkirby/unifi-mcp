@@ -17,6 +17,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
 
     - name: Set up Python
       uses: actions/setup-python@v7
@@ -31,3 +34,9 @@ jobs:
 
     - name: Check generated files and harness contracts
       run: make catalog-test check-generated
+
+    - name: Check independent plugin versions
+      if: github.event_name == 'pull_request'
+      env:
+        PLUGIN_BASE: ${{ github.event.pull_request.base.sha }}
+      run: make check-plugin-versions PLUGIN_VERSION_BASE="$PLUGIN_BASE"

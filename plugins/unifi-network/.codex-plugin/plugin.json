@@ -1,6 +1,6 @@
 {
   "name": "unifi-network",
-  "version": "0.37.0",
+  "version": "1.0.0",
   "description": "UniFi Network MCP server \u2014 manage network devices, clients, firewall, VPN, and more",
   "author": {
     "name": "sirkirby",
@@ -17,7 +17,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.mcp.codex.json",
   "interface": {
     "displayName": "UniFi Network",
     "shortDescription": "Manage UniFi Network devices, clients, firewall, VPN, and WiFi",
