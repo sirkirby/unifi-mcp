@@ -15,7 +15,13 @@ from unifi_network_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
     logger,
 )  # ensures logging/env setup early
-from unifi_network_mcp.categories import NETWORK_CATEGORY_MAP, TOOL_MODULE_MAP, policy_gates, setup_lazy_loading
+from unifi_network_mcp.categories import (
+    LAZY_DIRECT_TOOLS,
+    NETWORK_CATEGORY_MAP,
+    TOOL_MODULE_MAP,
+    policy_gates,
+    setup_lazy_loading,
+)
 from unifi_network_mcp.jobs import get_job_status, start_async_tool
 from unifi_network_mcp.reconnect import reconnecting_tool_decorator
 
@@ -196,6 +202,7 @@ async def main_async():
             logger=logger,
             support_bundle_handler=support_bundle_service.generate,
             include_meta_tools=parse_config_bool(config.server.get("meta_tools_enabled", True), default=True),
+            lazy_direct_tools=LAZY_DIRECT_TOOLS,
         )
 
         # ---- Start transports ----

@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 62 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 63 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -43,6 +43,10 @@ In lazy mode, an additional meta-tool is available:
 - `protect_recent_events` -- Get events from the in-memory websocket buffer (fast, no API call)
 - `protect_subscribe_events` -- Get instructions for real-time event subscription via MCP resources
 - `protect_acknowledge_event` -- Mark event as favorite/acknowledged (confirm required)
+
+## Incident Evidence (1 tool)
+
+- `protect_get_incident_evidence` -- Bounded, read-only event evidence for one incident window as a versioned `unifi-incident-evidence` document; each camera ID is its own source (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
 
 ## Recordings (4 tools)
 
