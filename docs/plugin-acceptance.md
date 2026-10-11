@@ -147,8 +147,14 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    1. Start the first session after the update. Record the plugin's
       session-start notice: a `hook_response` event whose `systemMessage` names
       `set-env.sh --target claude --migrate`. Also record that the server
-      starts unconfigured, and that `ps -E -ww` shows the product-scoped
-      variables empty although the project file still holds them.
+      says what the server will do. With no shared `UNIFI_HOST` in the project
+      file it says the server starts unconfigured: record that `ps -E -ww`
+      shows the product-scoped variables empty although the project file still
+      holds them. With shared `UNIFI_HOST` / `UNIFI_USERNAME` / credential
+      provider keys it says the server will use the shared `UNIFI_*` settings,
+      which may name a different controller, until migration: record which
+      controller the server contacts, and keep that controller read-only
+      or non-production.
    2. Run the new plugin's `scripts/check-prereqs.sh --target claude` from the
       scratch project. Record that it names the leftover variables (names only).
    3. Run the new plugin's `scripts/set-env.sh --target claude --migrate`
@@ -228,7 +234,10 @@ that do not exist yet. Test them without publishing anything:
    development checkout carry a `.devN` version, which does not satisfy the
    candidate's own floors (a floor such as `unifi-core>=0.4.69` excludes
    `0.4.69.devN`). Write an override file with one exact requirement per built
-   wheel (`unifi-core==<built version>`, and so on) and set `UV_OVERRIDE` to it.
+   wheel and set `UV_OVERRIDE` to it. Name the extras the servers install:
+   `unifi-core[network,protect]==<built version>`. Without `[protect]` the
+   Protect server fails with `ModuleNotFoundError: uiprotect`; Network survives
+   only because it pins `aiounifi` directly.
 3. On the loopback marketplace mirror only, add one commit that changes nothing
    but the package pins in each plugin's `plugin.json`, `.mcp.json` and
    `.mcp.codex.json` to the built versions, and install from that commit. Never
@@ -241,6 +250,14 @@ that do not exist yet. Test them without publishing anything:
    `uv` cache inside `ACC`, the installed files match the wheel hashes, `serverInfo`
    or `claude mcp list` reports the built version, and nothing is an editable or
    workspace install.
+
+   Codex does not pass `UV_FIND_LINKS` or `UV_OVERRIDE` to plugin servers, and
+   uvx ignores `override-dependencies` in a user `uv.toml`, so the servers fail
+   with "there is no version of unifi-<product>-mcp==<built version>". On the
+   registration that setup wrote, add the passthrough
+   `env_vars = ["UV_FIND_LINKS", "UV_OVERRIDE", "UV_CACHE_DIR"]` to each server
+   table. Setup and `--refresh` preserve it. Record it as a workaround, and
+   remove it, with the rest of the registration, after the run.
 
 ## What counts as a pass
 
