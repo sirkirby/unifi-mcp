@@ -252,8 +252,25 @@ every possible consumer is proven migrated; setup currently verifies only this
 plugin's options. It names the retained shared keys and explains that other
 consumers have not been verified as migrated. Output includes only variable
 names, including what it moved and what has no Claude Code option (per-category
-policy overrides). A missing provider file stops it with nothing changed. Then
-start a new session and check `/mcp`.
+policy overrides). A missing provider file stops it with nothing changed.
+
+Plugin options apply in every project. If options saved from another project
+already hold a different host, username, port or site, `--migrate` refuses
+and names those variables without values. Ask the user which settings every
+project should use: rerun with `--replace` (`-Replace`) to make this project's
+settings the options for every project, or remove this plugin's leftover
+`UNIFI_NETWORK_*` keys from the project file to keep the saved options. A
+session-start notice also fires in a project that still holds its own
+`UNIFI_NETWORK_*` keys while options from another project are in use; offer the
+same choice there.
+
+After the migration, in a session that was already open, run `/reload-plugins`,
+then check `/mcp`; if `plugin:unifi-network:unifi-network` still shows as failed, run
+`/mcp reconnect plugin:unifi-network:unifi-network`. A new session also loads the migrated
+options. Once no UniFi plugin keys remain in the project file, the prerequisite
+check names any shared `UNIFI_*` keys still there: Claude Code exports them into
+every process in that project, so suggest removing them once nothing else needs
+them.
 
 ### Recovery
 
@@ -272,7 +289,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Saved as the unifi-network plugin's Claude Code options (a raw password or API key goes to the system keychain). Exit Claude Code and start a new session, then run `/mcp` and check that `plugin:unifi-network:unifi-network` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-network:unifi-network`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. Review or change the options with `/plugin`, then `unifi-network`, then Configure options."
+"Saved as the unifi-network plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options), then run `/mcp` and check that `plugin:unifi-network:unifi-network` is connected. If it still shows as failed, run `/mcp reconnect plugin:unifi-network:unifi-network`: Claude Code skips a server that failed to start in the last 15 minutes, while its options are unchanged, until you reconnect it. Review or change the options with `/plugin`, then `unifi-network`, then Configure options."
 
 For Codex, tell the user:
 
