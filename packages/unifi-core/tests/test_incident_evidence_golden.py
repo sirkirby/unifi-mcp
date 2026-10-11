@@ -24,6 +24,7 @@ from .incident_evidence_corpus import CASES_DIR, SCHEMA_PATH, UPDATE_ENV, build_
 
 UPDATING = os.environ.get(UPDATE_ENV) == "1"
 REQUIRED_CASES = {
+    "canonical_numbers",
     "auth_failure_total",
     "budget_exhaustion",
     "duplicate_stable_ids",
