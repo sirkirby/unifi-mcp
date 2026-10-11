@@ -220,6 +220,10 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 
 ## Release Process (Maintainers)
 
+These steps release Python packages and the Worker by tag. Plugins release by
+merge; see [Plugin changes](#plugin-changes). The `monorepo-release-pipeline`
+skill is the full procedure for both.
+
 1. Run `make pre-commit` from root.
 2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`, `worker/v*`).
 3. Build release batches from actual dependency edges. A downstream package must wait when its
@@ -245,26 +249,26 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
    `No version changes to commit`; do not require a nonexistent writeback. API-only and Worker-only
    batches do not trigger that workflow.
 
-### Plugin versions
+### Plugin changes
 
-Plugin versions describe the shipped bundle independently of server package
-versions. Every change under `plugins/<name>/` requires a bump in all existing
-Claude/Codex manifests (at least one; identical when both exist), including docs,
-skills and setup scripts. This also covers unlisted cross-product. Use patch for
-fixes/docs and patch server moves, minor for new capabilities or minor server
-moves, and major for breaking setup/configuration or major server moves. Before
-1.0 use SemVer 0.x: breaking changes advance minor, additive changes advance patch.
-All four bundles start at 1.0.0 with independent versioning.
+Plugins release by merge, not by tag: a plugin release is a version bump landing
+on `main`. Every change under `plugins/<name>/`, including docs, skills and setup
+scripts, needs a version bump of that plugin in the same PR. Run
+`make check-plugin-versions` and `make check-plugin-tool-refs` (both in
+`make pre-commit`; fetch history and tags first). The second fails when a shipped
+plugin file names a tool missing from the server release the plugin pins. Bump
+sizes, client update steps and release rules are in the `monorepo-release-pipeline`
+skill (Procedure E); user-facing support is in [plugin support](docs/plugin-support.md).
 
-Keep versions out of marketplace entries. The server pins in both MCP configs
-must agree and have release tags. `bump-plugin-versions.yml` automatically updates
-pins and bumps independent plugin versions when server releases move those pins;
-plugin-only changes need no package tag. `make check-plugin-versions` (also in
-`make pre-commit`) requires changed plugin versions to be valid, matching and
-strictly greater than at the merge base with `origin/main`. Missing base refs
-fail; fetch history and tags before running it. Version-only bumps are allowed.
-See [plugin support](docs/plugin-support.md) and the `monorepo-release-pipeline`
-skill for release and client-update procedures.
+To try a Claude Code plugin change locally, run
+`claude --plugin-dir plugins/<name>`. That loads your working copy for the session
+and silently replaces an installed marketplace copy with the same manifest name:
+`claude plugin list` still shows the marketplace plugin as enabled, and only a
+`--debug` session logs that `--plugin-dir` overrode it. Managed settings that lock
+the plugin take precedence over `--plugin-dir`. Local loading does not exercise the
+marketplace path, where the installed copy under
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` changes only when the
+version changes, so the release is verified from `main` after merge.
 
 ## Questions?
 

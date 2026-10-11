@@ -145,6 +145,12 @@ controller or infer write/websocket support from successful reads.
 
 **Skill:** `add-integration-api-tool` (full procedure for contributors).
 
+### Plugin Bundles
+
+- Plugin MCP configs launch the server over stdio only. Never set `UNIFI_MCP_HTTP_ENABLED` or `UNIFI_MCP_HTTP_FORCE` in a plugin, and keep `http.force` defaulting to `false` in every app `config.yaml`: forcing HTTP binds a listener from client-launched (non-PID-1) processes.
+- Shell scripts under `plugins/` MUST run on macOS `/bin/bash` 3.2 (no `declare -A`, `mapfile` or `readarray`). Setup scripts ship a PowerShell equivalent for Windows.
+- Plugin skill directory names MUST be unique across all bundles and distinct from `.agents/skills/` names: standalone skill installers place skills in one flat directory.
+
 ## Permission System
 
 Two concepts:
@@ -294,7 +300,7 @@ make pre-commit   # format + lint + sync-skills + test
 
 - Version is derived from git tags via `hatch-vcs`. MUST NOT manually edit version in `pyproject.toml`.
 - Before release tags, update downstream `pyproject.toml` dependency ranges when a downstream package requires newly tagged `unifi-core` or `unifi-mcp-shared` code; pip only installs versions allowed by the published wheel metadata.
-- Plugins use independent semantic versions in existing Claude/Codex manifests (identical when both exist), never marketplace entries. Every shipped-file change under `plugins/<name>/`, including unlisted bundles, MUST bump the plugin above its merge-base version: patch for fixes/docs, minor for new capabilities or minor server pin moves, major for breaking setup/configuration or major server pin moves; before 1.0 use SemVer 0.x (breaking minor, additive patch). Server-release pin moves automatically bump plugins through the shared version module; plugin-only changes need no package release. `make check-plugin-versions` enforces version/pin admission; release procedures live in `monorepo-release-pipeline`.
+- Plugins carry independent semantic versions in their Claude/Codex manifests, never in marketplace entries. Every shipped-file change under `plugins/<name>/` MUST bump that plugin in the same PR; a plugin release is that bump merging to `main`. `make check-plugin-versions` and `make check-plugin-tool-refs` enforce versions, pins and tool references against the pinned release. Bump sizes, writebacks, client updates and release rules live in `monorepo-release-pipeline` (Procedure E).
 - Each app's `tools_manifest.json` MUST be regenerated (`make manifest`) and committed before release.
 - The Cloudflare worker lives in `apps/worker/` as a self-contained Node/TypeScript app. It is intentionally excluded from the uv workspace and released from `worker/v*` tags via npm; run `make worker-check` for focused worker changes and root `make check` before merging worker or relay protocol changes.
 
