@@ -239,7 +239,7 @@ Compact mode is the recommended default when building summaries or feeding event
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Protect-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 62 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 63 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
 - [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, connection issues, SSL, missing tools
 

@@ -1,0 +1,234 @@
+{
+  "description": "Controller responses for bounded incident evidence collection. Network bodies answer the v2 system-log POST through aiounifi's own decoder; Protect bodies answer the NVR events GET through uiprotect's own decoder. A {\"raise\": kind} entry makes the transport raise that kind of failure. Rows reuse the network_protect_real_shapes golden case and synthetic raw NVR rows.",
+  "now": "2026-08-08T13:05:00.000000Z",
+  "request": {
+    "start": "2026-08-08T12:00:00Z",
+    "end": "2026-08-08T13:00:00Z",
+    "location_id": "fixture-location-a"
+  },
+  "network": {
+    "events": {
+      "responses": [
+        {
+          "data": [
+            {
+              "id": "evt-net-0001",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "category": "CLIENT_DEVICES",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "CLIENT_CONNECTED",
+              "severity": "LOW",
+              "timestamp": 1786191005250,
+              "message_raw": "{CLIENT} has connected to {AP}.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "CLIENT": {
+                  "id": "aa:bb:cc:00:20:01",
+                  "name": "fixture-phone",
+                  "hostname": "fixture-phone"
+                },
+                "AP": {
+                  "id": "aa:bb:cc:00:10:01",
+                  "name": "fixture-ap-1"
+                }
+              },
+              "type": "CLIENT_ACTIVITY"
+            },
+            {
+              "id": "evt-net-0002",
+              "key": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+              "category": "SECURITY",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "TRAFFIC_BLOCKED",
+              "severity": "MEDIUM",
+              "timestamp": 1786192200000,
+              "message_raw": "{SRC_CLIENT} was blocked from accessing {DST_IP} by the {TRIGGER} Firewall Policy.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "SRC_CLIENT": {
+                  "id": "aa:bb:cc:00:20:02",
+                  "ip": "192.0.2.21",
+                  "name": "fixture-laptop"
+                },
+                "DST_IP": {
+                  "id": "198.51.100.24",
+                  "name": "198.51.100.24"
+                },
+                "TRIGGER": {
+                  "id": "trigger-fixture-1",
+                  "name": "fixture-policy"
+                }
+              },
+              "type": "CLIENT_ACTIVITY"
+            },
+            {
+              "id": "evt-net-0003",
+              "key": "DEVICE_DISCONNECTED_AP",
+              "category": "UNIFI_DEVICES",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "DEVICE_DISCONNECTED",
+              "severity": "HIGH",
+              "timestamp": 1786193100000,
+              "message_raw": "{DEVICE} disconnected.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "DEVICE": {
+                  "id": "aa:bb:cc:00:10:02",
+                  "name": "fixture-ap-2",
+                  "model": "U7PG2"
+                }
+              },
+              "type": "CLIENT_ACTIVITY"
+            }
+          ],
+          "total_element_count": 3
+        }
+      ],
+      "outcome": "complete"
+    },
+    "healthy_empty": {
+      "responses": [
+        {
+          "data": [],
+          "total_element_count": 0
+        }
+      ],
+      "outcome": "empty"
+    },
+    "malformed": {
+      "responses": [
+        {
+          "unexpected": "fixture-private-controller-text"
+        }
+      ],
+      "outcome": "parse_failed"
+    },
+    "auth_failure": {
+      "responses": [
+        {
+          "errorCode": 401,
+          "message": "fixture-private-controller-text"
+        }
+      ],
+      "outcome": "auth_failed"
+    },
+    "permission_denied": {
+      "responses": [
+        {
+          "errorCode": 403,
+          "message": "fixture-private-controller-text"
+        }
+      ],
+      "outcome": "permission_denied"
+    },
+    "unsupported": {
+      "responses": [
+        {
+          "errorCode": 404,
+          "message": "fixture-private-controller-text"
+        }
+      ],
+      "outcome": "unsupported"
+    },
+    "timeout": {
+      "responses": [
+        {
+          "raise": "timeout"
+        }
+      ],
+      "outcome": "timeout"
+    },
+    "unavailable": {
+      "responses": [
+        {
+          "raise": "unavailable"
+        }
+      ],
+      "outcome": "unavailable"
+    }
+  },
+  "protect": {
+    "events": {
+      "responses": [
+        [
+          {
+            "id": "evt-protect-raw-0001",
+            "type": "smartDetectZone",
+            "camera": "cam-fixture-000a",
+            "start": 1786191007500,
+            "end": 1786191019000,
+            "score": 91,
+            "smartDetectTypes": [
+              "person"
+            ]
+          },
+          {
+            "id": "evt-protect-raw-0002",
+            "type": "motion",
+            "camera": "cam-fixture-000a",
+            "start": 1786192800000,
+            "end": null,
+            "score": 0,
+            "smartDetectTypes": []
+          },
+          {
+            "id": "evt-protect-raw-0003",
+            "type": "ring",
+            "camera": "cam-fixture-000a",
+            "start": 1786190398000,
+            "end": 1786190405000,
+            "score": 0,
+            "smartDetectTypes": []
+          }
+        ]
+      ],
+      "outcome": "complete"
+    },
+    "healthy_empty": {
+      "responses": [
+        []
+      ],
+      "outcome": "empty"
+    },
+    "malformed": {
+      "responses": [
+        {
+          "unexpected": "fixture-private-controller-text"
+        }
+      ],
+      "outcome": "parse_failed"
+    },
+    "auth_failure": {
+      "responses": [
+        {
+          "raise": "auth_failure"
+        }
+      ],
+      "outcome": "auth_failed"
+    },
+    "permission_denied": {
+      "responses": [
+        {
+          "raise": "permission_denied"
+        }
+      ],
+      "outcome": "permission_denied"
+    },
+    "timeout": {
+      "responses": [
+        {
+          "raise": "timeout"
+        }
+      ],
+      "outcome": "timeout"
+    },
+    "unavailable": {
+      "responses": [
+        {
+          "raise": "unavailable"
+        }
+      ],
+      "outcome": "unavailable"
+    }
+  }
+}

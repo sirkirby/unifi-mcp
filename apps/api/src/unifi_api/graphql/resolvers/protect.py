@@ -32,9 +32,16 @@ from typing import Any
 import strawberry
 from strawberry.types import Info
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.incident_collection import (
+    DEFAULT_CALLS,
+    DEFAULT_ELAPSED_MS,
+    DEFAULT_EVENTS,
+    DEFAULT_WINDOW_SECONDS,
+)
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.protect.alarms import (
     AlarmProfileList,
     AlarmRule,
@@ -71,6 +78,8 @@ from unifi_api.graphql.types.protect.system import (
     ProtectSystemInfo,
     ViewerList,
 )
+from unifi_api.services.controllers import get_controller
+from unifi_api.services.incident_evidence import collect_protect_evidence, protect_request, require_product
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -955,6 +964,56 @@ class KnownLicensePlatePage:
 
 @strawberry.type(description="Read-only access to UniFi Protect resources.")
 class ProtectQuery:
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Collect bounded, read-only Protect event evidence for one incident window as a versioned "
+            "unifi-incident-evidence document. Each camera ID is its own source. Stops at the first "
+            "spent budget and says so; check coverage_complete before treating an empty result as an "
+            "all-clear. Not cached."
+        ),
+    )
+    async def incident_evidence(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        start: str,
+        end: str,
+        camera_ids: list[str] | None = None,
+        location_id: str | None = None,
+        max_window_seconds: int = DEFAULT_WINDOW_SECONDS,
+        max_events: int = DEFAULT_EVENTS,
+        max_calls: int = DEFAULT_CALLS,
+        max_elapsed_ms: int = DEFAULT_ELAPSED_MS,
+        mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
+    ) -> IncidentEvidence:
+        ctx: GraphQLContext = info.context
+        # Validated before any controller I/O: invalid input never acquires a manager.
+        incident = protect_request(
+            start=start,
+            end=end,
+            camera_ids=camera_ids,
+            location_id=location_id,
+            max_window_seconds=max_window_seconds,
+            max_events=max_events,
+            max_calls=max_calls,
+            max_elapsed_ms=max_elapsed_ms,
+            mappings=mappings,
+        )
+        async with ctx.sessionmaker() as session:
+            # From the database only, before collecting: NOT_FOUND, then CAPABILITY_MISMATCH (REST: 404, 409).
+            require_product(await get_controller(session, controller), "protect")
+
+            async def acquire() -> Any:
+                return await ctx.manager_factory.get_event_reader(session, controller, "protect")
+
+            try:
+                # Acquisition happens inside the first bounded read; its failures are source failures.
+                evidence = await collect_protect_evidence(acquire, incident)
+            except Exception as exc:
+                raise RuntimeError(f"Failed to collect incident evidence ({type(exc).__name__})") from None
+        return IncidentEvidence.from_manager_output(evidence)
+
     # ---- Cameras ---------------------------------------------------------
 
     @strawberry.field(

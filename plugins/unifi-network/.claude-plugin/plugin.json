@@ -1,6 +1,6 @@
 {
   "name": "unifi-network",
-  "version": "0.37.0",
+  "version": "1.0.0",
   "description": "UniFi Network MCP server \u2014 manage network devices, clients, firewall, VPN, and more",
   "author": {
     "name": "sirkirby",
@@ -23,22 +23,147 @@
         "unifi-network-mcp==0.37.0"
       ],
       "env": {
-        "UNIFI_HOST": "${UNIFI_NETWORK_HOST:-}",
-        "UNIFI_USERNAME": "${UNIFI_NETWORK_USERNAME:-}",
-        "UNIFI_PASSWORD": "${UNIFI_NETWORK_PASSWORD:-}",
-        "UNIFI_PORT": "${UNIFI_NETWORK_PORT:-443}",
-        "UNIFI_SITE": "${UNIFI_NETWORK_SITE:-default}",
-        "UNIFI_VERIFY_SSL": "${UNIFI_NETWORK_VERIFY_SSL:-false}",
-        "UNIFI_NETWORK_HOST": "${UNIFI_NETWORK_HOST:-}",
-        "UNIFI_NETWORK_USERNAME": "${UNIFI_NETWORK_USERNAME:-}",
-        "UNIFI_NETWORK_PASSWORD": "${UNIFI_NETWORK_PASSWORD:-}",
-        "UNIFI_NETWORK_PASSWORD_FILE": "${UNIFI_NETWORK_PASSWORD_FILE:-}",
-        "UNIFI_NETWORK_PASSWORD_COMMAND": "${UNIFI_NETWORK_PASSWORD_COMMAND:-}",
-        "UNIFI_NETWORK_PORT": "${UNIFI_NETWORK_PORT:-443}",
-        "UNIFI_NETWORK_SITE": "${UNIFI_NETWORK_SITE:-default}",
-        "UNIFI_NETWORK_VERIFY_SSL": "${UNIFI_NETWORK_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
+        "UNIFI_NETWORK_HOST": "${user_config.host}",
+        "UNIFI_NETWORK_USERNAME": "${user_config.username}",
+        "UNIFI_NETWORK_PASSWORD_FILE": "${user_config.password_file}",
+        "UNIFI_NETWORK_PASSWORD_COMMAND": "${user_config.password_command}",
+        "UNIFI_NETWORK_PASSWORD": "${user_config.password}",
+        "UNIFI_NETWORK_API_KEY_FILE": "${user_config.api_key_file}",
+        "UNIFI_NETWORK_API_KEY_COMMAND": "${user_config.api_key_command}",
+        "UNIFI_NETWORK_API_KEY": "${user_config.api_key}",
+        "UNIFI_NETWORK_PORT": "${user_config.port}",
+        "UNIFI_NETWORK_SITE": "${user_config.site}",
+        "UNIFI_NETWORK_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_POLICY_NETWORK_CREATE": "${user_config.policy_create}",
+        "UNIFI_POLICY_NETWORK_UPDATE": "${user_config.policy_update}",
+        "UNIFI_POLICY_NETWORK_DELETE": "${user_config.policy_delete}",
+        "UNIFI_NETWORK_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
+        "UNIFI_AUTO_CONFIRM": "${user_config.auto_confirm}",
+        "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
       }
     }
+  },
+  "userConfig": {
+    "host": {
+      "type": "string",
+      "title": "Host",
+      "description": "UniFi Network controller IP address or hostname"
+    },
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Local account username for session authentication"
+    },
+    "password_file": {
+      "type": "string",
+      "title": "Password file",
+      "description": "Absolute path to a file that holds the password. Set one password source only"
+    },
+    "password_command": {
+      "type": "string",
+      "title": "Password command",
+      "description": "Absolute argv, run without a shell, that prints the password. Set one password source only"
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password stored in the system keychain. Prefer a password file or command. Set one password source only",
+      "sensitive": true
+    },
+    "api_key_file": {
+      "type": "string",
+      "title": "API key file",
+      "description": "Absolute path to a file that holds the API key. Set one API key source only"
+    },
+    "api_key_command": {
+      "type": "string",
+      "title": "API key command",
+      "description": "Absolute argv, run without a shell, that prints the API key. Set one API key source only"
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "API key stored in the system keychain. Prefer an API key file or command. Set one API key source only",
+      "sensitive": true
+    },
+    "port": {
+      "type": "number",
+      "title": "Port",
+      "description": "HTTPS port",
+      "default": 443,
+      "min": 1,
+      "max": 65535
+    },
+    "site": {
+      "type": "string",
+      "title": "Site",
+      "description": "UniFi site name",
+      "default": "default"
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "title": "Verify SSL",
+      "description": "Verify the TLS certificate",
+      "default": false
+    },
+    "policy_create": {
+      "type": "boolean",
+      "title": "Allow create",
+      "description": "Allow tools that create objects. Off keeps the server read-only for creation",
+      "default": false
+    },
+    "policy_update": {
+      "type": "boolean",
+      "title": "Allow update",
+      "description": "Allow tools that change objects. Off keeps the server read-only for changes",
+      "default": false
+    },
+    "policy_delete": {
+      "type": "boolean",
+      "title": "Allow delete",
+      "description": "Allow tools that delete, block, reboot or revoke. Off keeps them disabled",
+      "default": false
+    },
+    "permission_mode": {
+      "type": "string",
+      "title": "Permission mode",
+      "description": "confirm previews every mutation before it runs; bypass runs it immediately",
+      "options": [
+        "confirm",
+        "bypass"
+      ],
+      "default": "confirm"
+    },
+    "auto_confirm": {
+      "type": "boolean",
+      "title": "Auto-confirm (deprecated)",
+      "description": "Legacy switch equivalent to bypass permission mode. Leave off",
+      "default": false
+    },
+    "registration_mode": {
+      "type": "string",
+      "title": "Tool registration",
+      "description": "lazy loads tools on demand; eager registers every tool; meta_only exposes only discovery tools",
+      "options": [
+        "lazy",
+        "eager",
+        "meta_only"
+      ],
+      "default": "lazy"
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/claude-session-check.sh\" network",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

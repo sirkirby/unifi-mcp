@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (62 tools)
+# Protect Server Tool Reference (63 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -8,6 +8,7 @@ Permission variables use the server's config keys (`CAMERAS`, `LIGHTS`, `CHIMES`
 - [Meta-Tools](#meta-tools)
 - [Cameras](#cameras)
 - [Events](#events)
+- [Incident Evidence](#incident-evidence)
 - [Recordings](#recordings)
 - [Devices: Lights, Sensors, Chimes](#devices-lights-sensors-chimes)
 - [Liveviews](#liveviews)
@@ -89,6 +90,18 @@ Always available, regardless of registration mode.
 - `min_confidence` parameter filters out low-confidence detections (default threshold: 50)
 - Event types for filtering: `motion`, `smartDetectZone`, `ring`, `sensorMotion`, `sensorContact`, `sensorDoorbell`
 - Time parameters use ISO 8601 format: `2026-03-17T00:00:00Z`
+
+---
+
+## Incident Evidence
+
+<!-- AUTO:tools:incident_evidence -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `protect_get_incident_evidence` | Read | Collects bounded, read-only Protect event evidence for one incident window and returns a versioned unifi-incident-evidence document: cite... |
+<!-- /AUTO:tools:incident_evidence -->
 
 ---
 
@@ -244,7 +257,7 @@ Lists and manages UniFi Protect Known Faces / named face recognition groups. Rea
 
 ### "Check NVR health"
 ```
-protect_batch(tools=[
+protect_batch(operations=[
     {"tool": "protect_get_system_info"},
     {"tool": "protect_get_health"},
     {"tool": "protect_get_firmware_status"},
@@ -255,7 +268,7 @@ protect_batch(tools=[
 ### "A camera seems offline"
 1. `protect_list_cameras` → check connection state
 2. `protect_get_camera(camera_id="...")` → detailed status including IP and MAC
-3. Cross-reference with Network: `unifi_lookup_by_ip(ip="<camera IP>")` → network-level status
+3. Cross-reference with Network: `unifi_lookup_by_ip(ip_address="<camera IP>")` → network-level status
 4. If needed: `protect_reboot_camera(camera_id="...", confirm=true)` → reboot (requires permission)
 
 ---

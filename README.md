@@ -19,8 +19,8 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 209 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Stable | 62 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Network](apps/network/) | Stable | 210 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Protect](apps/protect/) | Stable | 63 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
 ## Choose an integration
@@ -131,6 +131,8 @@ Repeat for Protect or Access if needed:
 ```
 
 Each plugin's setup command walks you through connecting to your controller and configuring permissions.
+
+Prerequisites, version boundaries and verification status for each client are in the [plugin support matrix](docs/plugin-support.md).
 
 ### Codex
 
@@ -299,10 +301,12 @@ Each plugin ships with agent skills that go beyond raw tool access — they teac
 | **Network Health Check** | unifi-network | Batch diagnostics across devices, health subsystems, and alarms with reference docs for interpreting results |
 | **Firewall Manager** | unifi-network | Natural language firewall management with policy templates, config snapshots, and change tracking |
 | **Firewall Auditor** | unifi-network | Security audit with 16 benchmarks, 100-point scoring, topology analysis, and trend tracking |
-| **Security Digest** | unifi-protect | Cross-product event intelligence — summarizes camera, door, and network events with severity classification and correlation rules |
+| **Security Digest** | unifi-protect | Protect event summary with explicit coverage limits; optional Access and Network reads add correlation hypotheses |
 | **UniFi Access** | unifi-access | Door control, credentials, visitors, access policies — with real-time event streaming and activity summaries |
 
-Skills include reference documentation (device states, alarm types, firewall schemas, event catalogs) and Python scripts for deterministic operations (auditing, config export/diff, template application).
+Skills include reference documentation for device states, alarm types, firewall schemas, and event fields. The agent gathers and interprets evidence; the firewall score CLI computes scores from supported findings. Firewall snapshots, diffs, and template application follow the skill instructions.
+
+Each non-setup skill declares required and optional servers and requires a Coverage and Limitations section in reports. Missing required dependencies stop the workflow; optional missing sources, failed reads, and result caps are disclosed. Cross-product repository workflows require a separately available relay for merged timelines; see [Cross-Product Capabilities](docs/cross-product.md).
 
 ## Architecture
 
@@ -310,8 +314,8 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 209 tools)
-  protect/          # UniFi Protect MCP server (stable, 62 tools)
+  network/          # UniFi Network MCP server (stable, 210 tools)
+  protect/          # UniFi Protect MCP server (stable, 63 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI

@@ -7,11 +7,14 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate:evidence-schema": "node scripts/generate-incident-evidence-schema.mjs",
+    "check:evidence-schema": "node scripts/generate-incident-evidence-schema.mjs --check"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",
     "@types/node": "^22.20.5",
+    "ajv": "8.20.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.11",
     "wrangler": "^4.147.0"

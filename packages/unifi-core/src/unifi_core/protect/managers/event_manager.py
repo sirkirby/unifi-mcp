@@ -15,9 +15,13 @@ from typing import Any, Callable
 
 from uiprotect.data import Event, EventType, ModelType, SmartDetectObjectType, WSAction, WSSubscriptionMessage
 
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError
+from unifi_core.protect.errors import safe_protect_error
 from unifi_core.protect.models.detection_search import from_controller as detection_search_from_controller
 from unifi_core.protect.models.events import smart_detection_from_controller
+from unifi_core.request_budget import RequestBudgetSpent, charged_request_middleware
+from unifi_core.source_page import SourcePage
+from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,28 @@ _DETECTION_LIMIT_MAX = 1000
 # Inclusive bounds for the detection-search minimum-confidence filter (percent).
 _DETECTION_CONFIDENCE_MIN = 0
 _DETECTION_CONFIDENCE_MAX = 100
+
+
+def _page(
+    rows: list[dict[str, Any]],
+    *,
+    raw_count: int,
+    limit: int,
+    start: datetime | None,
+    end: datetime | None,
+    post_filtered: bool = False,
+) -> SourcePage:
+    """A page whose unfiltered read ran short of ``limit`` is the NVR saying it ran out."""
+    submitted = (
+        (int(start.timestamp() * 1000), int(end.timestamp() * 1000)) if start is not None and end is not None else None
+    )
+    return SourcePage(
+        rows=rows,
+        has_more=False if 0 < limit and raw_count < limit else None,
+        cap=max(limit, 0),
+        submitted_window_ms=submitted,
+        post_filtered=post_filtered,
+    )
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -629,6 +655,11 @@ class EventManager:
         """Current number of events in the buffer."""
         return len(self._buffer)
 
+    @property
+    def smart_detection_min_confidence(self) -> int:
+        """Confidence threshold smart-detection listings apply when the caller gives none."""
+        return self._min_confidence
+
     def add_subscriber(self, cb: Callable[[dict], None]) -> Callable[[], None]:
         """Register *cb* to receive every buffered event. Returns unsub."""
         self._subscribers.append(cb)
@@ -655,7 +686,29 @@ class EventManager:
         compact: bool = False,
         metadata_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Query events from the NVR via the REST API.
+        """Query events from the NVR via the REST API (see :meth:`list_events_page`)."""
+        page = await self.list_events_page(
+            start=start,
+            end=end,
+            event_type=event_type,
+            camera_id=camera_id,
+            limit=limit,
+            compact=compact,
+            metadata_fields=metadata_fields,
+        )
+        return page.rows
+
+    async def list_events_page(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        event_type: str | None = None,
+        camera_id: str | None = None,
+        limit: int = 30,
+        compact: bool = False,
+        metadata_fields: list[str] | None = None,
+    ) -> SourcePage:
+        """Query events from the NVR via the REST API, with the facts evidence needs.
 
         When camera_id or metadata_fields is set, bypasses uiprotect's
         get_events() (which has no camera filter and drops several metadata
@@ -667,7 +720,7 @@ class EventManager:
         # Zero requests no results and must not turn into an invalid or uncapped
         # remote query on either the SDK or raw metadata path.
         if limit == 0:
-            return []
+            return SourcePage(rows=[], cap=0)
         use_raw_path = bool(camera_id) or bool(metadata_fields)
 
         if use_raw_path:
@@ -691,7 +744,7 @@ class EventManager:
             for raw in raw_events:
                 results.append(self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields))
             await self._apply_known_face_names(results)
-            return results
+            return _page(results, raw_count=len(raw_events), limit=limit, start=start, end=end)
 
         # ----- existing uiprotect path (unchanged) -----
         kwargs: dict[str, Any] = {"limit": limit, "sorting": "desc"}
@@ -723,7 +776,68 @@ class EventManager:
             results.append(self._event_to_dict(ev, compact=compact))
 
         await self._apply_known_face_names(results)
-        return results
+        return _page(results, raw_count=len(events), limit=limit, start=start, end=end)
+
+    async def list_events_raw_page(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        limit: int,
+        offset: int = 0,
+        camera_id: str | None = None,
+    ) -> SourcePage:
+        """One bounded read of raw NVR event rows, for incident evidence.
+
+        One GET to the private ``events`` endpoint with explicit bounds, limit
+        and offset, newest first. Every attempt uiprotect makes for it (status
+        retries, the retry after a re-login) passes the request-local charge. Unlike :meth:`list_events_page`
+        it never uses the SDK's ``get_events``, which pages through every event
+        after ``start`` when no type filter is given and drops event types it
+        does not know. Rows are returned exactly as the NVR sent them, with no
+        camera-name or Known Face enrichment. Failures are raised with fixed
+        text that keeps the error class and HTTP status.
+        """
+        start_ms = int(start.timestamp() * 1000)
+        end_ms = int(end.timestamp() * 1000)
+        offset = max(offset, 0)
+        if limit <= 0:
+            return SourcePage(rows=[], offset=offset, cap=0, submitted_window_ms=(start_ms, end_ms))
+        params: dict[str, Any] = {
+            "orderDirection": "DESC",
+            "limit": limit,
+            "offset": offset,
+            "withoutDescriptions": "true",
+            "start": start_ms,
+            "end": end_ms,
+        }
+        if camera_id:
+            params["cameras"] = [camera_id]
+        try:
+            # Request-local: each attempt (uiprotect's status and reconnect retries
+            # included) is charged to a bounded read, and aiohttp's own idempotent
+            # retry is suppressed, so no attempt goes uncounted.
+            rows = await self._cm.client.api_request(
+                "events",
+                method="get",
+                params=params,
+                middlewares=(charged_request_middleware, no_retry_support_request),
+            )
+        except RequestBudgetSpent:
+            raise
+        except Exception as exc:
+            logger.error("[event-mgr] Raw events read failed: %s", type(exc).__name__)
+            raise safe_protect_error("Protect events read", exc) from None
+        if not isinstance(rows, list):
+            raise UniFiMalformedResponseError("Unexpected response shape from events")
+        return SourcePage(
+            rows=rows,
+            # A page shorter than the limit sent is the NVR saying it ran out.
+            has_more=False if len(rows) < limit else None,
+            offset=offset,
+            cap=limit,
+            submitted_window_ms=(start_ms, end_ms),
+        )
 
     async def get_event(
         self,
@@ -828,7 +942,34 @@ class EventManager:
         compact: bool = False,
         metadata_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """List smart detection events with optional filtering.
+        """List smart detection events with optional filtering (see :meth:`list_smart_detections_page`)."""
+        page = await self.list_smart_detections_page(
+            start=start,
+            end=end,
+            camera_id=camera_id,
+            detection_type=detection_type,
+            min_confidence=min_confidence,
+            limit=limit,
+            compact=compact,
+            metadata_fields=metadata_fields,
+        )
+        return page.rows
+
+    async def list_smart_detections_page(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        camera_id: str | None = None,
+        detection_type: str | None = None,
+        min_confidence: int | None = None,
+        limit: int = 30,
+        compact: bool = False,
+        metadata_fields: list[str] | None = None,
+    ) -> SourcePage:
+        """List smart detection events with optional filtering, with the facts evidence needs.
+
+        Confidence filtering runs after the NVR applies ``limit``; the page
+        reports whether the unfiltered read reached the end.
 
         Queries for ``smartDetectZone`` and ``smartDetectLine`` event types,
         then filters by detection type and confidence score.
@@ -865,7 +1006,9 @@ class EventManager:
                     continue
                 results.append(self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields))
             await self._apply_known_face_names(results)
-            return results
+            return _page(
+                results, raw_count=len(raw_events), limit=limit, start=start, end=end, post_filtered=min_conf > 0
+            )
 
         # ----- existing uiprotect path (unchanged) -----
         kwargs: dict[str, Any] = {
@@ -902,7 +1045,9 @@ class EventManager:
             uiprotect_results.append(self._event_to_dict(ev, compact=compact))
 
         await self._apply_known_face_names(uiprotect_results)
-        return uiprotect_results
+        return _page(
+            uiprotect_results, raw_count=len(events), limit=limit, start=start, end=end, post_filtered=min_conf > 0
+        )
 
     def _build_detection_search_params(
         self,
