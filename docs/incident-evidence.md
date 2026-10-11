@@ -15,6 +15,9 @@ none of them define their own evidence semantics.
 | Golden corpus | `tests/fixtures/incident_evidence/cases/*.json` |
 | Invalid corpus | `tests/fixtures/incident_evidence/invalid/*.json` |
 | Legacy timeline projection | `unifi_core.event_timeline.normalized_event_from_record` |
+| Client view (bounded projection) | `packages/unifi-core/src/unifi_core/incident_evidence_view.py` |
+| Client view JSON Schema artifact | `tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json` |
+| Golden client views | `tests/fixtures/incident_evidence/views/*.json` |
 
 Normalizers are pure: no controller I/O, no app imports. Collection (calling
 managers, enforcing budgets) belongs to the caller.
@@ -132,6 +135,37 @@ status text only; controller text never leaves the manager.
 Tool responses (`normalize_*_tool_response`) carry no continuation state, so
 their sources are never complete. The relay and worker can report what tools
 returned but cannot present an all-clear until tools expose page state.
+
+## Client view
+
+A full document carries every record with its raw attributes and repeated
+provenance; at default budgets it can exceed 2 MB, more than MCP clients accept
+in one tool result. `client_view(evidence, max_records_returned=...)` projects a
+validated document into a `unifi-incident-evidence-view` (version 1, schema
+artifact above). It is pure and deterministic and keeps no state between calls.
+
+| Field | Content |
+|-------|---------|
+| `requested_window`, `overall`, `coverage_complete`, `budgets`, `mappings` | Copied unchanged. |
+| `sources[]` | Each source's `source_id`, `product`, `source_tool`, `scope`, `outcome`, `failure`, `partial_reasons` and whole `coverage`, unchanged. API family, endpoint, query and collection time stay in the full document. |
+| `records[]` | Citations: `evidence_id`, `product`, `source_tool`, `source_record_id`, `time` (`status`, `utc`, `boundary_uncertain` and the original field, type and value), `event_type`, `summary`, `entity_ids`, and `mapping` (`status`, `target_ids`, assertion `sources`). Raw attributes are dropped. |
+| `record_selection` | `max_records_returned`; `omission: "presentation_limit"`; `collected`, `returned` and `omitted` tallies (`total`, `in_window`, `out_of_window`, `untimed`); `omitted_in_window_from_utc`. |
+
+`max_records_returned` defaults to 25 and is at most 50. In-window records are
+kept first, earliest first, then untimed records, then out-of-window records;
+the returned records keep the document's order. Omission is a presentation
+limit: coverage, counts and outcomes still describe every collected record. A
+read whose window starts at `omitted_in_window_from_utc` returns the in-window
+records left out, as does narrowing the window, filtering to exact device MACs
+or cameras, or raising `max_records_returned`.
+
+With at most 5 camera sources, 20 mapping assertions and the default budgets,
+the default view of the largest document stays under about 16,000 tokens and
+the largest view under about 24,000, as sent by an MCP server (JSON indented by
+two spaces, counted conservatively). `packages/unifi-core/tests/test_incident_evidence_view.py`
+measures it on documents collected through the SDK decoders with a full
+events budget, and checks that every view states the same overall status,
+budgets, mappings, outcomes, failures, reasons and coverage as its document.
 
 ## Current product contracts
 
@@ -279,14 +313,16 @@ above.
 
 ## Changing the contract
 
-The schema artifact and golden expected outputs are generated and drift-tested
-by `packages/unifi-core/tests/test_incident_evidence_golden.py`. After an
+The schema artifacts, golden expected outputs and golden views are generated
+and drift-tested by `packages/unifi-core/tests/test_incident_evidence_golden.py`
+and `test_incident_evidence_view.py`. After an
 intentional change, bump `INCIDENT_EVIDENCE_SCHEMA_VERSION` if serialized
 output changes incompatibly, then regenerate and review the diff:
 
 ```bash
 INCIDENT_EVIDENCE_UPDATE_GOLDEN=1 uv run --package unifi-core pytest \
-  packages/unifi-core/tests/test_incident_evidence_golden.py
+  packages/unifi-core/tests/test_incident_evidence_golden.py \
+  packages/unifi-core/tests/test_incident_evidence_view.py
 ```
 
 Corpus fixtures use only synthetic identifiers: locally administered MACs,

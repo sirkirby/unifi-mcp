@@ -6,7 +6,11 @@ import re
 
 from pydantic import Field, field_validator
 
-from unifi_core.incident_collection import MAX_FILTER_IDS, IncidentCollectionRequest
+from unifi_core.incident_collection import IncidentCollectionRequest
+
+# Each camera is its own source, and every source's coverage is returned in
+# full, so the camera count bounds the size of the evidence a client reads.
+MAX_CAMERA_IDS = 5
 
 # Protect camera IDs are opaque tokens; anything with whitespace or control
 # characters is not one, and nothing is trimmed or case-folded to fit.
@@ -16,7 +20,7 @@ _CAMERA_ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 class ProtectIncidentRequest(IncidentCollectionRequest):
     camera_ids: tuple[str, ...] = Field(
         default=(),
-        max_length=MAX_FILTER_IDS,
+        max_length=MAX_CAMERA_IDS,
         description=(
             "Exact Protect camera IDs; each is read as its own source. Omit to read every camera. "
             "Camera names are never resolved to IDs."

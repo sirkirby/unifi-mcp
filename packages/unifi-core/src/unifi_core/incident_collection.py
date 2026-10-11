@@ -63,6 +63,8 @@ MAX_EVENTS = 10_000
 MAX_CALLS = 100
 MAX_ELAPSED_MS = 120_000
 MAX_FILTER_IDS = 50
+# Every assertion is returned with the evidence, so the count bounds its size.
+MAX_MAPPINGS = 20
 
 DEFAULT_WINDOW_SECONDS = 24 * 3600
 DEFAULT_EVENTS = 1_000
@@ -125,6 +127,7 @@ class IncidentCollectionRequest(BaseModel):
     max_elapsed_ms: int = Field(default=DEFAULT_ELAPSED_MS, ge=1, le=MAX_ELAPSED_MS)
     mappings: tuple[MappingAssertion, ...] | None = Field(
         default=None,
+        max_length=MAX_MAPPINGS,
         description="Explicit exact-identifier assertions records are mapped against; never inferred.",
     )
 
