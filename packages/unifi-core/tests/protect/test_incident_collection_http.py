@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -93,6 +94,9 @@ class _NVR:
 
     def __init__(self, bootstrap: list[int]) -> None:
         self.bootstrap = bootstrap
+        # Cleared to hold an event read in flight.
+        self.events_released = asyncio.Event()
+        self.events_released.set()
         self.seen: list[str] = []
         app = web.Application()
         app.router.add_route("*", "/{tail:.*}", self.handle)
@@ -111,6 +115,7 @@ class _NVR:
                 return web.Response(status=status, text=PRIVATE)
             return web.json_response({})
         if request.path.endswith("/events"):
+            await self.events_released.wait()
             return web.json_response([])
         return web.Response(status=404)
 
@@ -119,7 +124,7 @@ class _NVR:
         return [path for path in self.seen if path != "/api/auth/login"]
 
 
-async def _collect_cold(bootstrap: list[int], monkeypatch, **budget):
+async def _collect_cold(bootstrap: list[int], monkeypatch, *, refresh_seconds: float = 0, during=None, **budget):
     """ProtectConnectionManager.initialize for real, against a local NVR, inside the first read."""
     from unifi_core.protect.managers import connection_manager as pcm
     from unifi_core.retry import RetryPolicy
@@ -144,7 +149,9 @@ async def _collect_cold(bootstrap: list[int], monkeypatch, **budget):
 
     monkeypatch.setattr(pcm, "ProtectApiClient", LocalClient)
     monkeypatch.setattr(pcm, "RetryPolicy", lambda **kw: RetryPolicy(**{**kw, "base_delay": 0}))
-    connection = pcm.ProtectConnectionManager("controller.invalid", "fixture-user", "fixture-password")
+    connection = pcm.ProtectConnectionManager(
+        "controller.invalid", "fixture-user", "fixture-password", bootstrap_refresh_seconds=refresh_seconds
+    )
 
     async def acquire() -> EventManager:
         if not await connection.initialize():
@@ -153,7 +160,12 @@ async def _collect_cold(bootstrap: list[int], monkeypatch, **budget):
 
     try:
         with patch("uiprotect.api.calculate_retry_delay", return_value=0):
-            evidence = await collect_protect_incident_evidence(acquire, ProtectIncidentRequest(**WINDOW, **budget))
+            collection = asyncio.create_task(
+                collect_protect_incident_evidence(acquire, ProtectIncidentRequest(**WINDOW, **budget))
+            )
+            if during is not None:
+                await during(nvr)
+            evidence = await collection
     finally:
         await connection.close()
         await server.close()
@@ -187,3 +199,30 @@ async def test_a_refused_bootstrap_keeps_its_category_and_no_nvr_text(monkeypatc
     assert source.failure.http_status == status
     assert PRIVATE not in json.dumps(evidence.model_dump(mode="json"))
     assert all(PRIVATE not in record.getMessage() and not record.exc_info for record in caplog.records)
+    category = {401: "authentication", 403: "permission"}[status]
+    assert any(f"(NotAuthorized; category={category}; HTTP {status})" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_a_bounded_read_never_throttles_the_bootstrap_refresh_it_started(monkeypatch) -> None:
+    """The reviewer's scenario: a cold read starts the periodic refresh, which fires while the read is open.
+
+    The default interval is 60 s; it is shortened here, which changes nothing but the wait. The refresh
+    inherits the read's context, yet must neither be charged nor refused.
+    """
+
+    async def hold_the_read_through_refreshes(nvr: _NVR) -> None:
+        nvr.events_released.clear()
+        async with asyncio.timeout(10):
+            while "/proxy/protect/api/events" not in nvr.seen:
+                await asyncio.sleep(0.01)
+            while nvr.seen.count("/proxy/protect/api/bootstrap") < 3:
+                await asyncio.sleep(0.01)
+        nvr.events_released.set()
+
+    evidence, nvr = await _collect_cold(
+        [200], monkeypatch, refresh_seconds=0.05, during=hold_the_read_through_refreshes, max_calls=2
+    )
+    assert nvr.seen.count("/proxy/protect/api/bootstrap") >= 3  # refreshes reached the NVR mid-read
+    assert evidence.budgets.usage.calls == 2 and evidence.budgets.exhausted == ()  # and cost the read nothing
+    assert evidence.sources[0].outcome is SourceOutcome.EMPTY

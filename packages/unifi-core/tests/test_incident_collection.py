@@ -498,3 +498,20 @@ async def test_retry_logs_only_the_class_and_never_retries_a_budget_refusal(capl
     with pytest.raises(RequestBudgetSpent):
         await retry_with_backoff(refused, policy=policy)
     assert attempts.count("refused") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_charge_reaches_only_the_task_that_installed_it() -> None:
+    from unifi_core.request_budget import charge_request, charging_requests, create_uncharged_task
+
+    charged: list[str] = []
+
+    async def background(label: str) -> None:
+        charge_request()
+        charged.append(f"{label} ran")
+
+    with charging_requests(lambda: charged.append("charged")):
+        charge_request()
+        await asyncio.create_task(background("inherited"))  # copies the context, is never charged
+        await create_uncharged_task(background("uncharged"))  # starts with no charge at all
+    assert charged == ["charged", "inherited ran", "uncharged ran"]
