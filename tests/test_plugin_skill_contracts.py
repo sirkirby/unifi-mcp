@@ -24,8 +24,8 @@ if "plugin_tool_refs" not in sys.modules:
     _spec.loader.exec_module(sys.modules[_spec.name])
 refs = sys.modules["plugin_tool_refs"]
 TOOL = r"(?:unifi|protect|access)_[a-z][a-z0-9_]+"
-# These are event/response field names, not tools (including in generated prose).
-DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial"}
+# These are event/response field names and contract values, not tools (including in generated prose).
+DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
 SERVERS = {"network", "protect", "access", "relay"}
 TIMELINE_TOOL = "apps/worker/worker/src/location-timeline-tool.json"
 
