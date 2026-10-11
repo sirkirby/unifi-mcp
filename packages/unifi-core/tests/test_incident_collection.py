@@ -432,3 +432,12 @@ async def test_combine_rejects_conflicting_sets() -> None:
 async def test_combining_one_set_with_itself_changes_nothing() -> None:
     network, _, _ = await _documents()
     assert combine_incident_evidence([network, network]) == network
+
+
+@pytest.mark.parametrize("path", sorted((SCHEMA_PATH.parent / "cases").glob("*.json")), ids=lambda p: p.stem)
+def test_egress_redaction_has_nothing_to_remove_from_evidence(path) -> None:
+    """Adapters return evidence unchanged: the contract already excludes every secret-like key."""
+    from unifi_core.redaction import redact_sensitive_fields
+
+    expected = json.loads(path.read_text())["expected"]
+    assert redact_sensitive_fields(expected, redact_sensitive=True) == expected
