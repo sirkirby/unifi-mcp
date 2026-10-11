@@ -9,7 +9,9 @@ call :func:`register_tools_for_mode` with server-specific parameters.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
+
+from unifi_mcp_shared.tool_index import normalize_tool_annotations
 
 
 def _parse_filter_list(value: Any) -> list[str] | None:
@@ -20,6 +22,34 @@ def _parse_filter_list(value: Any) -> list[str] | None:
         return None
     # Already a list or other type — pass through
     return value
+
+
+def _read_only(tool: Any) -> bool:
+    return (normalize_tool_annotations(getattr(tool, "annotations", None)) or {}).get("readOnlyHint") is True
+
+
+async def register_lazy_direct_tools(server: Any, lazy_loader: Any, tool_names: Sequence[str]) -> None:
+    """List read-only domain tools directly in lazy mode.
+
+    Lazy mode lists only meta-tools, and its one route to a domain tool,
+    ``*_execute``, is not read-only, so a client that permits only
+    ``readOnlyHint`` tools reaches no domain tool at all. Loading these
+    tools' modules at startup lists them with their own annotations.
+
+    Loading a module registers every tool in it, so each module must hold
+    only the named tools, and each must be read-only; anything else fails
+    startup rather than widening what lazy mode exposes.
+    """
+    before = {tool.name for tool in await server.list_tools()}
+    for name in tool_names:
+        if not await lazy_loader.load_tool(name):
+            raise ValueError(f"lazy direct tool {name!r} could not be loaded")
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    problems = [f"{name} is not registered" for name in tool_names if name not in tools]
+    problems += [f"{name} is not read-only" for name in tool_names if name in tools and not _read_only(tools[name])]
+    problems += [f"{name} was registered alongside them" for name in sorted(set(tools) - before - set(tool_names))]
+    if problems:
+        raise ValueError("lazy direct tools must be read-only tools in their own modules: " + "; ".join(problems))
 
 
 async def register_tools_for_mode(
@@ -43,6 +73,7 @@ async def register_tools_for_mode(
     register_load_tools: Callable | None = None,
     auto_load_tools: Callable | None = None,
     include_meta_tools: bool = True,
+    lazy_direct_tools: Sequence[str] = (),
 ) -> None:
     """Register meta-tools and domain tools based on *mode*.
 
@@ -68,6 +99,9 @@ async def register_tools_for_mode(
         include_meta_tools: Whether to expose indirect discovery, execute, and
             batch tools. Disabling is supported only in eager mode, where
             direct tools can be allowlisted independently.
+        lazy_direct_tools: Read-only tools lazy mode lists directly at startup
+            (see :func:`register_lazy_direct_tools`). Ignored in other modes:
+            eager lists every tool and meta_only lists none.
     """
     if not include_meta_tools and mode != "eager":
         raise ValueError("meta-tools can be disabled only in eager registration mode")
@@ -150,6 +184,10 @@ async def register_tools_for_mode(
             load_kwargs["prefix"] = prefix
             load_kwargs["server_label"] = server_label
         register_load_tools(**load_kwargs)
+
+        if lazy_direct_tools:
+            await register_lazy_direct_tools(server, lazy_loader, lazy_direct_tools)
+            logger.info("   Read-only tools listed directly: %s", ", ".join(lazy_direct_tools))
 
         logger.info("   Lazy loader ready - %d tools available on-demand", len(tool_module_map))
 

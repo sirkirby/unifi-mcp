@@ -175,3 +175,86 @@ class TestRegisterToolsForMode:
         )
 
         filtering.assert_awaited_once()
+
+
+class _ModuleLoader:
+    """Stands in for LazyToolLoader: loading a tool registers every tool its module holds."""
+
+    def __init__(self, server, modules: dict[str, list[tuple[str, bool]]]):
+        self.server = server
+        self.modules = modules
+        self.loaded: list[str] = []
+
+    async def load_tool(self, name: str) -> bool:
+        for module_tools in self.modules.values():
+            if name in {tool for tool, _ in module_tools}:
+                for tool, read_only in module_tools:
+                    if tool not in self.loaded:
+                        self.loaded.append(tool)
+                        self._register(tool, read_only)
+                return True
+        return False
+
+    def _register(self, name: str, read_only: bool) -> None:
+        from mcp.types import ToolAnnotations
+
+        async def handler() -> dict:
+            return {"success": True}
+
+        self.server.tool(name=name, annotations=ToolAnnotations(readOnlyHint=read_only, openWorldHint=False))(handler)
+
+
+class TestLazyDirectTools:
+    """Lazy mode can list chosen read-only tools so read-only clients reach them without *_execute."""
+
+    def _real_server(self):
+        from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
+
+        return StrictKwargFastMCP("lazy-direct-test")
+
+    async def _register(self, mode, server, loader, direct):
+        deps = _deps()
+        deps["setup_lazy_loading"] = Mock(return_value=loader)
+        await register_tools_for_mode(
+            mode=mode,
+            server=server,
+            base_package="unifi_network_mcp.tools",
+            config=_config(),
+            logger=logging.getLogger("test"),
+            lazy_direct_tools=direct,
+            **deps,
+        )
+
+    @pytest.mark.asyncio
+    async def test_lazy_mode_lists_direct_read_only_tools_with_their_annotations(self):
+        server = self._real_server()
+        loader = _ModuleLoader(server, {"evidence": [("unifi_get_incident_evidence", True)]})
+        await self._register("lazy", server, loader, ("unifi_get_incident_evidence",))
+        listed = {tool.name: tool for tool in await server.list_tools()}
+        assert listed["unifi_get_incident_evidence"].annotations.read_only_hint is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", ["meta_only", "eager"])
+    async def test_other_modes_ignore_direct_tools(self, mode):
+        server = self._real_server()
+        loader = _ModuleLoader(server, {"evidence": [("unifi_get_incident_evidence", True)]})
+        await self._register(mode, server, loader, ("unifi_get_incident_evidence",))
+        assert loader.loaded == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("modules", "problem"),
+        [
+            ({"evidence": [("unifi_get_incident_evidence", False)]}, "is not read-only"),
+            (
+                {"events": [("unifi_get_incident_evidence", True), ("unifi_archive_alarm", False)]},
+                "unifi_archive_alarm was registered alongside them",
+            ),
+            ({}, "could not be loaded"),
+        ],
+    )
+    async def test_direct_tools_must_be_read_only_and_alone_in_their_module(self, modules, problem):
+        server = self._real_server()
+        loader = _ModuleLoader(server, modules)
+        with pytest.raises(ValueError, match=problem):
+            await self._register("lazy", server, loader, ("unifi_get_incident_evidence",))
