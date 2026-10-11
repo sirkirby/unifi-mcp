@@ -1,6 +1,7 @@
 param(
     [string]$RepositoryRoot = (Split-Path $PSScriptRoot -Parent),
-    [string]$ExpectedVersionPrefix = ''
+    [string]$ExpectedVersionPrefix = '',
+    [switch]$SkipFixtures
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,52 +21,60 @@ function Assert-True {
 
 function Assert-Equal {
     param($Actual, $Expected, [string]$Message)
-    Assert-True -Condition ($Actual -eq $Expected) -Message $Message
+    Assert-True -Condition ($Actual -ceq $Expected) -Message $Message
 }
 
 function Get-CurrentShellPath {
-    if ($PSVersionTable.PSEdition -eq 'Desktop') {
-        return Join-Path $PSHOME 'powershell.exe'
-    }
-    if ($null -ne $IsWindows -and $IsWindows) {
-        return Join-Path $PSHOME 'pwsh.exe'
-    }
-    return Join-Path $PSHOME 'pwsh'
+    if ($PSVersionTable.PSEdition -eq 'Desktop') { return (Join-Path $PSHOME 'powershell.exe') }
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { return (Join-Path $PSHOME 'pwsh.exe') }
+    return (Join-Path $PSHOME 'pwsh')
 }
 
-function Invoke-SetEnv {
-    param(
-        [string]$Workspace,
-        [string]$ScriptPath,
-        [string[]]$Arguments
-    )
+function Clear-ControllerEnvironment {
+    param($StartInfo)
+    foreach ($name in @($StartInfo.EnvironmentVariables.Keys)) {
+        if ($name -like 'UNIFI_*') { $StartInfo.EnvironmentVariables.Remove($name) }
+    }
+}
 
-    Push-Location $Workspace
+function Invoke-PluginScript {
+    param([string]$Workspace, [string]$ScriptPath, [string[]]$Arguments, [string]$InputText = '', [switch]$NoPython)
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = Get-CurrentShellPath
+    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $ScriptPath + '"'
+    foreach ($argument in $Arguments) { $start.Arguments += ' "' + $argument + '"' }
+    $start.WorkingDirectory = $Workspace
+    $start.UseShellExecute = $false
+    $start.RedirectStandardInput = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    Clear-ControllerEnvironment $start
+    if ($NoPython) { $start.EnvironmentVariables['PATH'] = '' }
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $start
     try {
-        # Windows PowerShell 5.1 promotes native stderr records to terminating
-        # NativeCommandError exceptions when the caller uses Stop. Expected
-        # failure scenarios need the child exit code and output instead.
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $output = & (Get-CurrentShellPath) -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1
-            $exitCode = $LASTEXITCODE
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-        }
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($InputText)
+        $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+        $process.StandardInput.BaseStream.Close()
+        $process.WaitForExit()
         return [pscustomobject]@{
-            ExitCode = $exitCode
-            Output = ($output | Out-String)
+            ExitCode = $process.ExitCode
+            Output = $stdoutTask.Result + $stderrTask.Result
         }
     } finally {
-        Pop-Location
+        $process.Dispose()
     }
 }
 
 function New-ScenarioWorkspace {
     param([string]$Root, [string]$Name)
     $workspace = Join-Path $Root $Name
-    New-Item -ItemType Directory -Path (Join-Path $workspace '.claude') -Force | Out-Null
+    New-Item -ItemType Directory -Path $workspace -Force | Out-Null
     return $workspace
 }
 
@@ -74,147 +83,238 @@ function Get-BytesBase64 {
     return [Convert]::ToBase64String([IO.File]::ReadAllBytes($Path))
 }
 
+function Invoke-DirectPipeline {
+    param([string]$Workspace, [string]$ScriptPath, [string]$JsonPath)
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = Get-CurrentShellPath
+    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "Get-Content -LiteralPath $env:PS_SETUP_INPUT_PATH -Raw -Encoding UTF8 | & $env:PS_SETUP_SCRIPT_PATH -InputJson"'
+    $start.WorkingDirectory = $Workspace
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    Clear-ControllerEnvironment $start
+    $start.EnvironmentVariables['PS_SETUP_INPUT_PATH'] = $JsonPath
+    $start.EnvironmentVariables['PS_SETUP_SCRIPT_PATH'] = $ScriptPath
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $start
+    try {
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdoutTask.Result + $stderrTask.Result }
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Invoke-PortableFixtures {
+    $python = $null
+    foreach ($name in @('python3', 'python')) {
+        $command = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $command -or $command.Source -match '[\\/]WindowsApps[\\/]python[^\\/]*\.exe$') { continue }
+        try {
+            $probe = & $command.Source -c "import sys; print('unifi-setup-python-ok') if sys.version_info >= (3, 11) else sys.exit(1)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $probe -ceq 'unifi-setup-python-ok') { $python = $command.Source; break }
+        } catch { }
+    }
+    if ($null -eq $python) { return [pscustomobject]@{ ExitCode = 1; Output = 'Python 3.11+ unavailable' } }
+    $fixturePath = Join-Path $RepositoryRoot 'scripts/plugin_setup_fixtures.py'
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $python
+    $start.Arguments = '"' + $fixturePath + '" --powershell "' + (Get-CurrentShellPath) + '"'
+    $start.WorkingDirectory = $RepositoryRoot
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $start
+    try {
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdoutTask.Result + $stderrTask.Result }
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Assert-NoReplacementArtifacts {
     param([string]$Workspace, [string]$Message)
-    $settingsDirectory = Join-Path $Workspace '.claude'
-    $artifacts = @(Get-ChildItem -LiteralPath $settingsDirectory -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -like 'settings.local.json.tmp.*' -or $_.Name -like 'settings.local.json.backup.*'
+    $artifacts = @(Get-ChildItem -LiteralPath $Workspace -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(\.tmp\.|\.backup\.|\.rollback\.)'
     })
-    Assert-Equal -Actual $artifacts.Count -Expected 0 -Message $Message
+    Assert-Equal $artifacts.Count 0 $Message
 }
 
-function New-NestedSettingsJson {
-    param([int]$Depth)
-    $value = '{"leaf":"preserved"}'
-    for ($index = $Depth - 1; $index -ge 0; $index--) {
-        $value = '{"level' + $index + '":' + $value + '}'
-    }
-    return '{"env":{"EXISTING":"keep"},"deep":' + $value + '}'
-}
-
-function Get-NestedLeaf {
-    param($Settings, [int]$Depth)
-    $current = $Settings.deep
-    for ($index = 0; $index -lt $Depth; $index++) {
-        $property = $current.PSObject.Properties["level$index"]
-        if ($null -eq $property) {
-            return $null
-        }
-        $current = $property.Value
-    }
-    return $current.leaf
-}
-
-function Test-IsWindows {
-    return [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-}
-
-$networkScript = Join-Path $RepositoryRoot 'plugins/unifi-network/scripts/set-env.ps1'
-$protectScript = Join-Path $RepositoryRoot 'plugins/unifi-protect/scripts/set-env.ps1'
-$accessScript = Join-Path $RepositoryRoot 'plugins/unifi-access/scripts/set-env.ps1'
-$testRoot = Join-Path ([IO.Path]::GetTempPath()) ('unifi-mcp-plugin-setup-' + [Guid]::NewGuid().ToString('N'))
+$networkDir = Join-Path $RepositoryRoot 'plugins/unifi-network/scripts'
+$protectDir = Join-Path $RepositoryRoot 'plugins/unifi-protect/scripts'
+$accessDir = Join-Path $RepositoryRoot 'plugins/unifi-access/scripts'
+$networkScript = Join-Path $networkDir 'set-env.ps1'
+$testRoot = Join-Path $RepositoryRoot ('.setup-powershell-smoke space-' + [Guid]::NewGuid().ToString('N'))
+$priorHome = $env:HOME
+$priorUserProfile = $env:USERPROFILE
+$priorCodexHome = $env:CODEX_HOME
+$priorClaudeConfigDir = $env:CLAUDE_CONFIG_DIR
+$priorOpenClawStateDir = $env:OPENCLAW_STATE_DIR
+$priorOpenClawConfigPath = $env:OPENCLAW_CONFIG_PATH
+$priorPath = $env:PATH
 
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $env:HOME = $testRoot
+    $env:USERPROFILE = $testRoot
+    $env:CODEX_HOME = Join-Path $testRoot 'codex-home'
+    $env:CLAUDE_CONFIG_DIR = Join-Path $testRoot 'claude-home'
+    $env:OPENCLAW_STATE_DIR = Join-Path $testRoot 'openclaw-home'
+    $env:OPENCLAW_CONFIG_PATH = Join-Path $env:OPENCLAW_STATE_DIR 'openclaw.json'
+    $scratchOpenClawConfigPath = $env:OPENCLAW_CONFIG_PATH
+    $fakeBin = Join-Path $testRoot 'bin'
+    New-Item -ItemType Directory -Path $fakeBin | Out-Null
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        [IO.File]::WriteAllText((Join-Path $fakeBin 'uvx.cmd'), "@echo off`r`nexit /b 0`r`n")
+    } else {
+        $fakeUvx = Join-Path $fakeBin 'uvx'
+        [IO.File]::WriteAllText($fakeUvx, "#!/bin/sh`nexit 0`n")
+        & chmod 755 $fakeUvx
+    }
+    $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $priorPath
 
     if ($ExpectedVersionPrefix) {
-        Assert-True -Condition ($PSVersionTable.PSVersion.ToString().StartsWith($ExpectedVersionPrefix)) -Message 'expected PowerShell version is running'
+        Assert-True ($PSVersionTable.PSVersion.ToString().StartsWith($ExpectedVersionPrefix)) 'expected PowerShell version is running'
     }
 
     Write-Host '== Cross-plugin parity =='
-    $networkHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $networkScript).Hash
-    Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath $protectScript).Hash $networkHash 'Protect writer matches Network writer'
-    Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath $accessScript).Hash $networkHash 'Access writer matches Network writer'
+    foreach ($name in @('set-env.ps1', 'check-prereqs.ps1')) {
+        $expected = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $networkDir $name)).Hash
+        Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $protectDir $name)).Hash $expected "Protect $name matches Network"
+        Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $accessDir $name)).Hash $expected "Access $name matches Network"
+    }
 
-    Write-Host '== Empty workspace =='
-    $workspace = New-ScenarioWorkspace $testRoot 'empty'
-    $result = Invoke-SetEnv $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.1', 'UNIFI_NETWORK_USERNAME=test-user')
-    Assert-Equal $result.ExitCode 0 'empty-workspace write exits zero'
-    $settingsPath = Join-Path $workspace '.claude/settings.local.json'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
-    Assert-Equal $settings.env.UNIFI_NETWORK_HOST '192.0.2.1' 'empty-workspace host is written'
-    Assert-Equal $settings.env.UNIFI_NETWORK_USERNAME 'test-user' 'empty-workspace username is written'
-    Assert-NoReplacementArtifacts $workspace 'empty-workspace write removes replacement artifacts'
+    Write-Host '== Secret input and preservation =='
+    $workspace = New-ScenarioWorkspace $testRoot 'merge'
+    $settingsDir = Join-Path $workspace '.claude'
+    New-Item -ItemType Directory -Path $settingsDir | Out-Null
+    $settingsPath = Join-Path $settingsDir 'settings.local.json'
+    [IO.File]::WriteAllText($settingsPath, '{"permissions":{"allow":["Read"]},"env":{"EXISTING":"keep"},"custom":{"nested":true}}')
+    $secret = 'short-secret-' + [char]0x03A9
+    $inputJson = '{"UNIFI_NETWORK_HOST":"192.0.2.1","UNIFI_NETWORK_PASSWORD":"' + $secret + '"}'
+    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') $inputJson
+    Assert-Equal $result.ExitCode 0 'JSON stdin setup succeeds'
+    # Helpers write UTF-8 without a BOM; Windows PowerShell defaults to ANSI.
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Equal $settings.env.UNIFI_NETWORK_PASSWORD $secret 'UTF-8 secret is written exactly'
+    Assert-Equal $settings.env.EXISTING 'keep' 'unrelated env is preserved'
+    Assert-Equal @($settings.permissions.allow).Count 1 'single-item array is preserved'
+    Assert-True ($settings.custom.nested -eq $true) 'unrelated nested settings are preserved'
+    Assert-True ($result.Output -notlike "*$secret*") 'secret is absent from setup output'
+    Assert-True ($result.Output -notlike '*short*') 'secret fragment is absent from setup output'
+    Assert-NoReplacementArtifacts $workspace 'successful merge leaves no replacement artifacts'
+    $result = Invoke-PluginScript $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.9')
+    Assert-Equal $result.ExitCode 0 'legacy non-secret KEY=VALUE succeeds'
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Equal $settings.env.UNIFI_NETWORK_HOST '192.0.2.9' 'legacy non-secret value is forwarded'
+    $pipelineJsonPath = Join-Path $workspace 'pipeline-input.json'
+    $pipelineSecret = $secret + '-pipeline-' + [char]::ConvertFromUtf32(0x1F600) + ' "quoted" \ tail'
+    $pipelineJson = ConvertTo-Json -InputObject @{ UNIFI_NETWORK_PASSWORD = $pipelineSecret } -Compress
+    [IO.File]::WriteAllText($pipelineJsonPath, $pipelineJson)
+    $result = Invoke-DirectPipeline $workspace $networkScript $pipelineJsonPath
+    Assert-Equal $result.ExitCode 0 'direct PowerShell JSON pipeline succeeds'
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Equal $settings.env.UNIFI_NETWORK_PASSWORD $pipelineSecret 'direct pipeline preserves UTF-8 secret'
+    Assert-True ($result.Output -notlike "*$pipelineSecret*") 'direct pipeline output omits secret'
 
-    Write-Host '== Existing settings preservation =='
-    $workspace = New-ScenarioWorkspace $testRoot 'preserve'
-    $settingsPath = Join-Path $workspace '.claude/settings.local.json'
-    $fixture = '{"permissions":{"allow":["Read"]},"env":{"EXISTING":"keep","UNIFI_NETWORK_HOST":"192.0.2.10"},"custom":{"nested":true}}'
-    [IO.File]::WriteAllText($settingsPath, $fixture)
-    $result = Invoke-SetEnv $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.20', 'UNIFI_NETWORK_USERNAME=test-user')
-    Assert-Equal $result.ExitCode 0 'existing-settings merge exits zero'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
-    Assert-Equal @($settings.permissions.allow).Count 1 'single-item permissions array remains an array'
-    Assert-Equal $settings.permissions.allow[0] 'Read' 'permissions value is preserved'
-    Assert-True ($settings.custom.nested -eq $true) 'custom nested value is preserved'
-    Assert-Equal $settings.env.EXISTING 'keep' 'unrelated environment value is preserved'
-    Assert-Equal $settings.env.UNIFI_NETWORK_HOST '192.0.2.20' 'matching environment value is updated'
-    Assert-Equal $settings.env.UNIFI_NETWORK_USERNAME 'test-user' 'new environment value is inserted'
-    Assert-True ($result.Output -match 'te\*\*\*er') 'sensitive output remains masked'
-    Assert-True ($result.Output -notmatch 'test-user') 'raw sensitive output is not printed'
-    Assert-NoReplacementArtifacts $workspace 'successful merge removes replacement artifacts'
+    Write-Host '== Prerequisites and missing runtime =='
+    $result = Invoke-PluginScript $workspace (Join-Path $networkDir 'check-prereqs.ps1') @('-Target', 'claude')
+    Assert-Equal $result.ExitCode 0 'Claude prerequisite wrapper forwards --check'
+    $result = Invoke-PluginScript $workspace (Join-Path $networkDir 'check-prereqs.ps1') @('-Target', 'openclaw')
+    # The isolated state contains no OpenClaw install/configuration. A missing
+    # CLI or malformed config must be reported by the selected target.
+    if ($result.ExitCode -eq 0) {
+        $badOpenClawPath = Join-Path $workspace 'bad-openclaw.json'
+        [IO.File]::WriteAllText($badOpenClawPath, '{ broken')
+        $env:OPENCLAW_CONFIG_PATH = $badOpenClawPath
+        $result = Invoke-PluginScript $workspace (Join-Path $networkDir 'check-prereqs.ps1') @('-Target', 'openclaw')
+        $env:OPENCLAW_CONFIG_PATH = $scratchOpenClawConfigPath
+    }
+    Assert-True ($result.ExitCode -ne 0) 'OpenClaw prerequisite wrapper checks selected target'
+    $before = Get-BytesBase64 $settingsPath
+    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_HOST":"192.0.2.2"}' -NoPython
+    Assert-True ($result.ExitCode -ne 0) 'missing Python and uv fail closed'
+    Assert-Equal (Get-BytesBase64 $settingsPath) $before 'missing Python and uv preserve exact bytes'
 
-    Write-Host '== Deep settings preservation =='
-    $workspace = New-ScenarioWorkspace $testRoot 'deep-valid'
-    $settingsPath = Join-Path $workspace '.claude/settings.local.json'
-    [IO.File]::WriteAllText($settingsPath, (New-NestedSettingsJson 12))
-    $result = Invoke-SetEnv $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.1')
-    Assert-Equal $result.ExitCode 0 'valid deeply nested settings exit zero'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
-    Assert-Equal (Get-NestedLeaf $settings 12) 'preserved' 'deeply nested leaf is preserved'
-    Assert-NoReplacementArtifacts $workspace 'deeply nested merge removes replacement artifacts'
+    Write-Host '== Dry run and delete =='
+    $before = Get-BytesBase64 $settingsPath
+    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson', '-DryRun') '{"UNIFI_NETWORK_PASSWORD":null}'
+    Assert-Equal $result.ExitCode 0 'dry run succeeds'
+    Assert-Equal (Get-BytesBase64 $settingsPath) $before 'dry run preserves exact bytes'
+    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_PASSWORD":null}'
+    Assert-Equal $result.ExitCode 0 'null patch succeeds'
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-True ($null -eq $settings.env.PSObject.Properties['UNIFI_NETWORK_PASSWORD']) 'null removes the selected key'
 
-    $unsafeFixtures = @(
+    Write-Host '== Positional credential refusal =='
+    $before = Get-BytesBase64 $settingsPath
+    $result = Invoke-PluginScript $workspace $networkScript @('UNIFI_NETWORK_PASSWORD=do-not-print')
+    Assert-True ($result.ExitCode -ne 0) 'positional credential is rejected'
+    Assert-True ($result.Output -notlike '*do-not-print*') 'rejection output contains no credential'
+    Assert-Equal (Get-BytesBase64 $settingsPath) $before 'rejected credential preserves exact bytes'
+
+    Write-Host '== Malformed existing settings =='
+    foreach ($case in @(
         [pscustomobject]@{ Name = 'malformed'; Content = '{ broken' },
         [pscustomobject]@{ Name = 'array-root'; Content = '["not-an-object"]' },
-        [pscustomobject]@{ Name = 'array-env'; Content = '{"permissions":{"allow":["Read"]},"env":["not-an-object"]}' },
-        [pscustomobject]@{ Name = 'depth-overflow'; Content = (New-NestedSettingsJson 101) }
-    )
-
-    foreach ($fixtureCase in $unsafeFixtures) {
-        Write-Host "== Unsafe input: $($fixtureCase.Name) =="
-        $workspace = New-ScenarioWorkspace $testRoot $fixtureCase.Name
-        $settingsPath = Join-Path $workspace '.claude/settings.local.json'
-        [IO.File]::WriteAllText($settingsPath, $fixtureCase.Content)
-        $before = Get-BytesBase64 $settingsPath
-        $result = Invoke-SetEnv $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.1')
-        Assert-True ($result.ExitCode -ne 0) "$($fixtureCase.Name) exits nonzero"
-        Assert-Equal (Get-BytesBase64 $settingsPath) $before "$($fixtureCase.Name) remains byte-for-byte unchanged"
-        Assert-NoReplacementArtifacts $workspace "$($fixtureCase.Name) removes replacement artifacts"
+        [pscustomobject]@{ Name = 'array-env'; Content = '{"env":["not-an-object"]}' }
+    )) {
+        $caseWorkspace = New-ScenarioWorkspace $testRoot $case.Name
+        $caseDir = Join-Path $caseWorkspace '.claude'
+        New-Item -ItemType Directory -Path $caseDir | Out-Null
+        $casePath = Join-Path $caseDir 'settings.local.json'
+        [IO.File]::WriteAllText($casePath, $case.Content)
+        $caseBefore = Get-BytesBase64 $casePath
+        $result = Invoke-PluginScript $caseWorkspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_HOST":"192.0.2.1"}'
+        Assert-True ($result.ExitCode -ne 0) "$($case.Name) fails closed"
+        Assert-Equal (Get-BytesBase64 $casePath) $caseBefore "$($case.Name) preserves exact bytes"
+        Assert-NoReplacementArtifacts $caseWorkspace "$($case.Name) leaves no replacement artifacts"
     }
 
-    if (Test-IsWindows) {
-        Write-Host '== Replacement failure =='
-        $workspace = New-ScenarioWorkspace $testRoot 'replace-failure'
-        $settingsPath = Join-Path $workspace '.claude/settings.local.json'
-        $fixture = '{"permissions":{"allow":["Read"]},"env":{"EXISTING":"keep"}}'
-        [IO.File]::WriteAllText($settingsPath, $fixture)
-        $before = Get-BytesBase64 $settingsPath
-        (Get-Item -LiteralPath $settingsPath).IsReadOnly = $true
-        try {
-            $result = Invoke-SetEnv $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.1')
-            Assert-True ($result.ExitCode -ne 0) 'replacement failure exits nonzero'
-            Assert-Equal (Get-BytesBase64 $settingsPath) $before 'replacement failure preserves original bytes'
-            Assert-NoReplacementArtifacts $workspace 'replacement failure removes replacement artifacts'
-        } finally {
-            (Get-Item -LiteralPath $settingsPath).IsReadOnly = $false
+    if (-not $SkipFixtures) {
+        Write-Host '== Transactional client fixtures =='
+        $fixtures = Invoke-PortableFixtures
+        if ($fixtures.ExitCode -ne 0) {
+            # The fixture captures fake credential values. Report only its fixed
+            # assertion label, never raw traceback lines or client output.
+            $failureLine = @($fixtures.Output -split "`r?`n" | Where-Object { $_ -match '^AssertionError: [A-Za-z0-9 _./-]{1,120}$' } | Select-Object -Last 1)
+            if ($failureLine.Count -gt 0) {
+                Write-Host ('  Fixture failure: ' + $failureLine[0])
+            } else {
+                Write-Host '  Fixture process failed; inspect the isolated test run.'
+            }
+        } else {
+            $countLine = @($fixtures.Output -split "`r?`n" | Where-Object { $_ -match '^Fixture assertions: [0-9]+ passed$' } | Select-Object -Last 1)
+            if ($countLine.Count -gt 0) { Write-Host ('  ' + $countLine[0]) }
         }
+        Assert-Equal $fixtures.ExitCode 0 'all three plugins and client targets pass portable fixtures'
     }
 } finally {
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
-    }
+    $env:HOME = $priorHome
+    $env:USERPROFILE = $priorUserProfile
+    $env:CODEX_HOME = $priorCodexHome
+    $env:CLAUDE_CONFIG_DIR = $priorClaudeConfigDir
+    $env:OPENCLAW_STATE_DIR = $priorOpenClawStateDir
+    $env:OPENCLAW_CONFIG_PATH = $priorOpenClawConfigPath
+    $env:PATH = $priorPath
+    if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }
 
-Write-Host ''
 Write-Host "PowerShell $($PSVersionTable.PSVersion): $($script:Passes) passed, $($script:Failures.Count) failed"
 if ($script:Failures.Count -gt 0) {
-    foreach ($failure in $script:Failures) {
-        Write-Host "  - $failure"
-    }
+    foreach ($failure in $script:Failures) { Write-Host "  - $failure" }
     exit 1
 }
-
-# Expected negative child-process cases leave $LASTEXITCODE set to 1 in the
-# calling shell. Declare the successful harness result explicitly for CI.
 exit 0

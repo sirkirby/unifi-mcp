@@ -1,145 +1,159 @@
-# Merge environment variables into .claude/settings.json
-# Usage: set-env.ps1 KEY1=VALUE1 KEY2=VALUE2 ...
-#
-# Creates .claude/settings.json if it doesn't exist.
-# Merges into existing "env" object without overwriting other keys.
-
+# Apply a plugin environment patch with the shared transactional setup helper.
+# Secret values must be supplied as JSON on stdin: ... | set-env.ps1 -InputJson
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    [ValidateSet('claude', 'codex', 'openclaw')]
+    [string]$Target = 'claude',
+    [switch]$InputJson,
+    [switch]$DryRun,
+    [switch]$Refresh,
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$KeyValuePairs
+    [string[]]$KeyValuePairs,
+    [Parameter(ValueFromPipeline = $true)]
+    [string]$PipelineInput
 )
 
-function ConvertTo-MutableMap {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$InputObject,
+$ErrorActionPreference = 'Stop'
 
-        [Parameter(Mandatory = $true)]
-        [string]$Description
-    )
-
-    if ($InputObject -is [System.Collections.IDictionary]) {
-        $result = @{}
-        foreach ($key in $InputObject.Keys) {
-            $result[$key] = $InputObject[$key]
-        }
-        return $result
-    }
-
-    if ($InputObject.GetType().FullName -eq 'System.Management.Automation.PSCustomObject') {
-        $result = @{}
-        foreach ($property in $InputObject.PSObject.Properties) {
-            $result[$property.Name] = $property.Value
-        }
-        return $result
-    }
-
-    throw "$Description must be a JSON object."
-}
-
-if (-not $KeyValuePairs -or $KeyValuePairs.Count -eq 0) {
-    Write-Error "Usage: set-env.ps1 KEY1=VALUE1 KEY2=VALUE2 ..."
-    exit 1
-}
-
-# Parse key=value pairs
-$newVars = @{}
-foreach ($pair in $KeyValuePairs) {
-    $eqIndex = $pair.IndexOf('=')
-    if ($eqIndex -lt 1) {
-        Write-Error "Invalid argument '$pair'. Expected KEY=VALUE format."
-        exit 1
-    }
-    $key = $pair.Substring(0, $eqIndex)
-    $value = $pair.Substring($eqIndex + 1)
-    $newVars[$key] = $value
-}
-
-$settingsFile = ".claude/settings.local.json"
-
-# Ensure .claude directory exists
-$dir = Split-Path $settingsFile -Parent
-if (-not (Test-Path $dir)) {
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-}
-
-# Read and validate existing settings or start fresh.
-if (Test-Path -LiteralPath $settingsFile) {
-    try {
-        $parsedSettings = Get-Content -LiteralPath $settingsFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-        if ($null -eq $parsedSettings) {
-            throw 'The settings document must be a JSON object.'
-        }
-        $settings = ConvertTo-MutableMap -InputObject $parsedSettings -Description 'The settings document'
-
-        if ($settings.ContainsKey('env')) {
-            if ($null -eq $settings['env']) {
-                throw 'The env setting must be a JSON object.'
-            }
-            $settings['env'] = ConvertTo-MutableMap -InputObject $settings['env'] -Description 'The env setting'
-        } else {
-            $settings['env'] = @{}
-        }
-    } catch {
-        Write-Error "Failed to read or parse $settingsFile. Original file was not modified. $($_.Exception.Message)"
-        exit 1
-    }
-} else {
-    $settings = @{ env = @{} }
-}
-
-# Merge new vars
-foreach ($key in $newVars.Keys) {
-    $settings['env'][$key] = $newVars[$key]
-}
-
-# Generate and structurally validate the complete replacement beside the
-# destination. The adjacent paths guarantee same-volume file operations.
-$tempFile = "$settingsFile.tmp.$PID.$([Guid]::NewGuid().ToString('N'))"
-$backupFile = "$settingsFile.backup.$PID.$([Guid]::NewGuid().ToString('N'))"
-try {
-    $json = $settings | ConvertTo-Json -Depth 100 -WarningAction Stop -ErrorAction Stop
-    Set-Content -LiteralPath $tempFile -Value $json -Encoding UTF8 -ErrorAction Stop
-    Get-Content -LiteralPath $tempFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop | Out-Null
-
-    $tempFullPath = [IO.Path]::GetFullPath($tempFile)
-    $settingsFullPath = [IO.Path]::GetFullPath($settingsFile)
-    $backupFullPath = [IO.Path]::GetFullPath($backupFile)
-    if ([IO.File]::Exists($settingsFullPath)) {
-        [IO.File]::Replace($tempFullPath, $settingsFullPath, $backupFullPath)
-        [IO.File]::Delete($backupFullPath)
-    } else {
-        [IO.File]::Move($tempFullPath, $settingsFullPath)
-    }
-} catch {
-    $saveError = $_.Exception.Message
-    Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
-
-    $recoveryMessage = 'Existing settings remain at the original path.'
-    if ([IO.File]::Exists([IO.Path]::GetFullPath($backupFile))) {
+function Get-SetupRuntime {
+    foreach ($name in @('python3', 'python')) {
+        $command = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $command) { continue }
+        # Store aliases can open a dialog instead of running Python. Never launch them.
+        if ($command.Source -match '[\\/]WindowsApps[\\/]python[^\\/]*\.exe$') { continue }
+        $probeStart = New-Object System.Diagnostics.ProcessStartInfo
+        $probeStart.FileName = $command.Source
+        $probeStart.Arguments = '-c "import sys; print(''unifi-setup-python-ok'') if sys.version_info >= (3, 11) else sys.exit(1)"'
+        Set-BatchLauncher $probeStart
+        $probeStart.UseShellExecute = $false
+        $probeStart.RedirectStandardInput = $true
+        $probeStart.RedirectStandardOutput = $true
+        $probeStart.RedirectStandardError = $true
+        $probe = New-Object System.Diagnostics.Process
+        $probe.StartInfo = $probeStart
         try {
-            [IO.File]::Copy([IO.Path]::GetFullPath($backupFile), [IO.Path]::GetFullPath($settingsFile), $true)
-            [IO.File]::Delete([IO.Path]::GetFullPath($backupFile))
-            $recoveryMessage = 'Existing settings were restored from the recovery backup.'
+            [void]$probe.Start()
+            $probe.StandardInput.Close()
+            $output = $probe.StandardOutput.ReadToEndAsync()
+            $errors = $probe.StandardError.ReadToEndAsync()
+            if (-not $probe.WaitForExit(5000)) { $probe.Kill(); $probe.WaitForExit(); continue }
+            if ($probe.ExitCode -eq 0 -and $output.Result.Trim() -ceq 'unifi-setup-python-ok') {
+                return [pscustomobject]@{ FileName = $command.Source; Prefix = '' }
+            }
+            [void]$errors.Result
         } catch {
-            $recoveryMessage = "Existing settings recovery backup retained at $backupFile."
+            # A missing runtime or nonfunctional alias is not a working interpreter.
+        } finally {
+            $probe.Dispose()
         }
     }
+    $uv = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $uv) { throw 'Install uv to supply the setup runtime.' }
+    return [pscustomobject]@{ FileName = $uv.Source; Prefix = 'run --no-project --python ">=3.11" python ' }
+}
 
-    Write-Error "Failed to save $settingsFile. $recoveryMessage $saveError"
+function Set-BatchLauncher {
+    param($StartInfo)
+    # npm-style test/client launchers on Windows require cmd; all arguments are
+    # fixed options and paths. Submitted values still travel only on stdin.
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and $StartInfo.FileName -match '\.(cmd|bat)$') {
+        $StartInfo.Arguments = '/d /s /c ""' + $StartInfo.FileName + '" ' + $StartInfo.Arguments + '"'
+        $StartInfo.FileName = $env:ComSpec
+    }
+}
+
+function Invoke-SetupHelper {
+    param([string]$Json)
+    $helper = Join-Path $PSScriptRoot 'setup_config.py'
+    if (-not (Test-Path -LiteralPath $helper)) {
+        throw 'The plugin setup helper is missing.'
+    }
+    $runtime = Get-SetupRuntime
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $runtime.FileName
+    $start.Arguments = $runtime.Prefix + '"' + $helper + '" --target ' + $Target
+    if ($Refresh) { $start.Arguments += ' --refresh' }
+    if ($DryRun) { $start.Arguments += ' --dry-run' }
+    Set-BatchLauncher $start
+    $start.UseShellExecute = $false
+    $start.RedirectStandardInput = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $start
+    try {
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($Json)
+        $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+        $process.StandardInput.BaseStream.Close()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            # Child diagnostics can contain controller values or submitted secrets.
+            throw 'Plugin setup failed; configuration was not applied.'
+        }
+        if ($stdoutTask.Result) { [Console]::Out.Write($stdoutTask.Result) }
+        [void]$stderrTask.Result
+    } finally {
+        $process.Dispose()
+    }
+}
+
+try {
+    if ($Refresh) {
+        if ($Target -ne 'codex' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
+            throw 'Refresh requires Codex and no environment input.'
+        }
+        Invoke-SetupHelper -Json '{}'
+        exit 0
+    }
+    if ($InputJson) {
+        if ($KeyValuePairs -and $KeyValuePairs.Count -gt 0) {
+            throw 'Use either JSON stdin or KEY=VALUE arguments.'
+        }
+        if ($MyInvocation.ExpectingInput) {
+            # Direct PowerShell pipelines send objects through $input, while
+            # native `powershell -File` sends bytes through Console.In.
+            $json = @($input) -join [Environment]::NewLine
+        } else {
+            [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+            $json = [Console]::In.ReadToEnd()
+        }
+        if ([string]::IsNullOrWhiteSpace($json)) {
+            throw 'JSON stdin is required with -InputJson.'
+        }
+    } else {
+        if (-not $KeyValuePairs -or $KeyValuePairs.Count -eq 0) {
+            throw 'Provide non-secret KEY=VALUE arguments or use -InputJson for credentials.'
+        }
+        $patch = @{}
+        foreach ($pair in $KeyValuePairs) {
+            $separator = $pair.IndexOf('=')
+            if ($separator -lt 1) {
+                throw 'Expected KEY=VALUE format.'
+            }
+            $key = $pair.Substring(0, $separator)
+            if ($key -cnotmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+                throw 'An environment key is invalid.'
+            }
+            if ($key -match '(^|_)(PASSWORD|PASS|API_KEY|TOKEN|SECRET|PRIVATE_KEY|CREDENTIAL|AUTH)(_|$)' -and
+                $key -notmatch '(^|_)(PASSWORD|API_KEY)_(FILE|COMMAND)$') {
+                throw 'Credentials must be supplied through -InputJson on stdin.'
+            }
+            if ($patch.ContainsKey($key)) {
+                throw 'Duplicate environment keys are unsupported.'
+            }
+            $patch[$key] = $pair.Substring($separator + 1)
+        }
+        $json = ConvertTo-Json -InputObject $patch -Depth 5 -Compress
+    }
+    Invoke-SetupHelper -Json $json
+} catch {
+    # Do not include the exception: native runtimes may render stdin or argv.
+    [Console]::Error.WriteLine('Plugin setup failed. Check uv/uvx (which supply Python), the target CLI, input format, and existing configuration.')
     exit 1
 }
-
-# Report what was set (mask sensitive values)
-foreach ($key in $newVars.Keys) {
-    $value = $newVars[$key]
-    if ($value.Length -gt 4 -and -not ($key -match '_(HOST|PORT|SITE)$') -and $value -ne 'true' -and $value -ne 'false') {
-        $display = $value.Substring(0, 2) + '***' + $value.Substring($value.Length - 2)
-    } else {
-        $display = $value
-    }
-    Write-Host "  $key = $display"
-}
-
-Write-Host ""
-Write-Host "Saved to $settingsFile"
+exit 0
