@@ -110,6 +110,7 @@ evidence = normalize_network_page(page, context)
 | Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals) | submitted `start`/`end`, unknown if either is omitted |
 | Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering | as above |
 | Protect `list_events_raw_page` | fewer raw rows than `limit` | submitted `start`/`end` |
+| Network `read_events_page` | as `get_events_page`, from one request | as `get_events_page` |
 
 The list methods (`get_events`, `get_alarms`, `list_events`,
 `list_smart_detections`) return the same rows for tools and raise
@@ -158,9 +159,9 @@ runs out is cancelled. The first spent budget stops collection.
 | Budget | Counts | When spent |
 |--------|--------|------------|
 | `window` | the requested window's duration | nothing is read; every source is `not_attempted` with failure `budget_exhausted` |
-| `events` | every row a source returned, including out-of-window rows and rows an exact-identifier filter later removed | reading stops |
-| `calls` | manager page reads; each is one HTTP request, except the Network API-version probe and a last Network read shorter than a page, which can take two | reading stops |
-| `elapsed` | wall time across reads | the running read is cancelled; usage is reported at the limit |
+| `events` | every row a request returned, including out-of-window rows and rows an exact-identifier filter later removed | reading stops |
+| `calls` | every HTTP request a read sends: the page request, the Network API-version probe, and every retry (uiprotect's status and reconnect retries, the retry after a re-login). Logins are not charged. A request the budget cannot pay for is refused before it is sent | reading stops |
+| `elapsed` | wall time across reads, including connecting and, in the API, acquiring the manager | the running read is cancelled; usage is reported at the limit |
 
 A spent budget appears three ways: its kind in `budgets.exhausted`; the source
 it stopped is `partial` with `budget_exhausted` among its `partial_reasons`
@@ -173,12 +174,19 @@ stays visible as `truncated` or `truncation_unknown`. Overall is then
 
 | Product | Sources | Read | Window | Filters recorded |
 |---------|---------|------|--------|------------------|
-| Network | `network.events` | `EventManager.get_events_page`, 100 rows per read by offset | relative lookback long enough to reach `start` from any read within the elapsed budget; queried window is the part every read covered | v2: the categories and severities the controller applied; `device_macs` |
+| Network | `network.events` | `EventManager.read_events_page`, one request per page of up to 100 rows by page number | relative lookback long enough to reach `start` from any read within the elapsed budget; queried window is the part every read covered | v2: the categories and severities the controller applied; `device_macs` |
 | Protect | `protect.events`, or `protect.events.camera.NN` per camera in ID order | `EventManager.list_events_raw_page`, 100 rows per read by offset, newest first | the exact window in whole milliseconds | `camera_id` |
 
 Reading a source stops when the source proves its end (`has_more: false`, a
-short page, or its remote total reached). If the total or API path changes
-between reads, offsets no longer line up, so the end is not claimed.
+short page, or its remote total reached), when a read fails, or when a budget
+is spent. Only a source read in a single request can be complete. Neither
+product offers a snapshot or cursor, so across several offset reads an event
+inserted or removed between reads shifts later offsets and a row can be
+skipped while totals stay equal (Protect reports none). A source read in more
+than one request is therefore `partial` with `truncation_unknown`, decided
+before any exact-identifier filter that could hide the movement. A short last
+read keeps every offset a whole number of pages and never asks for more rows
+than the events budget has left.
 
 Network events take a lookback relative to now, so rows newer than the window
 are read, counted against the events budget and reported out-of-window.
@@ -197,7 +205,7 @@ fixed-text errors that keep the class and HTTP status, so `401` is
 ### Read-only by construction
 
 Collectors receive the product `EventManager` and call only the methods in
-each collector module's `READ_METHODS` (`get_events_page`,
+each collector module's `READ_METHODS` (`read_events_page`,
 `list_events_raw_page`). Tests run collection through a view that exposes only
 those methods, and through the real SDK decoders with the HTTP exchange
 replaced, asserting every request: Protect sends only GET; Network sends only
@@ -231,7 +239,13 @@ GraphQL). MCP returns `{"success": true, "data": <evidence>}`; REST returns
 `{"data": <evidence>, "render_hint": ...}`; GraphQL returns the evidence as
 the JSON `document` field, because the JSON Schema artifact, not the GraphQL
 schema, is the contract. Invalid input is an MCP error response, REST 422 or
-GraphQL `BAD_REQUEST`, naming fields without echoing values. The evidence is identical for the
+GraphQL `BAD_REQUEST`, naming fields without echoing values; framework
+argument coercion errors drop the rejected value too. The API validates input
+and checks the window budget before acquiring a manager, acquires it inside
+the first read so it is charged to the elapsed budget, reports an acquisition
+failure as a classified source failure, and never starts a background event
+listener for collection: it reuses an existing event manager or builds an
+uncached one. The evidence is identical for the
 same input and controller answers: the contract's key rules exclude every
 secret-like name, so egress redaction has nothing to remove. A source failure
 is still a successful response; check `overall` and `coverage_complete`.
