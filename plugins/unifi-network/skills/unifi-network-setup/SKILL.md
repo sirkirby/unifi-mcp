@@ -120,7 +120,7 @@ Ask whether to use defaults or customize:
 
 ## Step 4: Permission Configuration
 
-Ask whether to enable write permissions:
+Ask whether to enable write permissions. For Codex and OpenClaw, offer:
 - Read-only for now
 - Enable common write permissions: firewall, port forwards, QoS, traffic routes, VPN clients
 - Enable all write permissions except delete operations
@@ -153,8 +153,8 @@ UNIFI_POLICY_NETWORK_UPDATE=false
 UNIFI_POLICY_NETWORK_DELETE=false
 ```
 
-For requested writes, keep those server-level defaults and add only the selected
-category/action overrides using the existing
+For requested writes on Codex or OpenClaw, keep those server-level defaults and
+add only the selected category/action overrides using the existing
 `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true` format.
 
 ## Step 5: Write Configuration
