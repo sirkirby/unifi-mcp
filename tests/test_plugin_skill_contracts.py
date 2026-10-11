@@ -41,19 +41,10 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
         )
         for tool in manifest["tools"]:
             result[tool["name"]] = (product, tool["schema"]["input"])
-    # Read the literal registration schema without importing controller code.
-    path = ROOT / "packages/unifi-mcp-relay/src/unifi_mcp_relay/location_timeline.py"
-    tree = ast.parse(path.read_text())
-    schema = next(
-        ast.literal_eval(node.value)
-        for node in tree.body
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "TOOL_INPUT_SCHEMA"
-    )
-    name = next(
-        ast.literal_eval(node.value)
-        for node in tree.body
-        if isinstance(node, ast.Assign) and any(getattr(target, "id", None) == "TOOL_NAME" for target in node.targets)
-    )
+    # The relay builds its schema from Core's request models; importing it loads no controller code.
+    from unifi_mcp_relay.location_timeline import TOOL_INPUT_SCHEMA as schema
+    from unifi_mcp_relay.location_timeline import TOOL_NAME as name
+
     result[name] = ("relay", schema)
     return result
 
