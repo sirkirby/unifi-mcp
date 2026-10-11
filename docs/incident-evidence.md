@@ -160,7 +160,7 @@ runs out is cancelled. The first spent budget stops collection.
 |--------|--------|------------|
 | `window` | the requested window's duration | nothing is read; every source is `not_attempted` with failure `budget_exhausted` |
 | `events` | every row a request returned, including out-of-window rows and rows an exact-identifier filter later removed | reading stops |
-| `calls` | every HTTP request a read sends: the page request, the Network API-version probe, and every retry (uiprotect's status and reconnect retries, the retry after a re-login). Logins are not charged. A request the budget cannot pay for is refused before it is sent | reading stops |
+| `calls` | every HTTP request a read sends: the page request, the Network API-version probe, every retry (uiprotect's status and reconnect retries, the retry after a re-login, aiohttp's own), and every request a cold connection sends while being acquired inside the read (Network controller detection and sites checks, the Protect bootstrap, their retries). Logins are not charged. A request the budget cannot pay for is refused before it is sent, so a connection that cannot fit the budget fails closed with `calls` exhausted | reading stops |
 | `elapsed` | wall time across reads, including connecting and, in the API, acquiring the manager | the running read is cancelled; usage is reported at the limit |
 
 A spent budget appears three ways: its kind in `budgets.exhausted`; the source
@@ -251,11 +251,18 @@ GraphQL). MCP returns `{"success": true, "data": <evidence>}`; REST returns
 `{"data": <evidence>, "render_hint": ...}`; GraphQL returns the evidence as
 the JSON `document` field, because the JSON Schema artifact, not the GraphQL
 schema, is the contract. Invalid input is an MCP error response, REST 422 or
-GraphQL `BAD_REQUEST`, naming fields without echoing values; framework
-argument coercion errors drop the rejected value too. The API validates input
+GraphQL `BAD_REQUEST`, naming declared fields and list indexes only (an
+undeclared key is never echoed); framework argument coercion errors drop the
+rejected value too, and expected client errors are logged as one fixed line,
+without a traceback or the query source. GraphQL classifies errors by
+exception type, never by message text. A controller that does not run the
+product is refused before collection on both surfaces: REST 409
+`capability_mismatch`, GraphQL `CAPABILITY_MISMATCH`. The API validates input
 and checks the window budget before acquiring a manager, acquires it inside
-the first read so it is charged to the elapsed budget, reports an acquisition
-failure as a classified source failure, and never starts a background event
+the first read so it is charged to the elapsed and call budgets, reports an
+acquisition failure as a classified source failure (a refused login or
+bootstrap is `auth_failed` or `permission_denied` with its status; connection
+managers log only the operation and exception class), and never starts a background event
 listener for collection: it reuses an existing event manager or builds an
 uncached one. The evidence is identical for the
 same input and controller answers: the contract's key rules exclude every
