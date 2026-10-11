@@ -42,8 +42,10 @@ The setup helpers (`check-prereqs`, `set-env`) need Python 3.11 or newer on
 Auto-update is off by default for this marketplace. If you turned it on
 (`/plugin`, then **Marketplaces**, then `unifi-plugins`, then **Enable
 auto-update**), Claude Code installs 1.0.0 in the background a few minutes into
-a session, and your next session shows the notice below. Otherwise, update
-yourself:
+a session and shows `Plugins updated: … Run /reload-plugins to apply`. Start a
+new session instead of reloading, so you see the notice below; if you already
+reloaded, ask Claude to run the plugin's setup skill, which finds the old
+settings and offers the migration. Otherwise, update yourself:
 
 ```bash
 claude plugin marketplace update unifi-plugins
