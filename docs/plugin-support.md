@@ -104,7 +104,7 @@ Each cell is labelled:
 The repository checks manifests, paths, version pins and skill metadata
 automatically (`tests/test_plugin_packaging.py`), and that every tool a plugin
 names exists in the server release it pins (`scripts/plugin_tool_refs.py`).
-Those checks do not count as `tested`.
+Those checks do not count as `tested`. To produce `tested` evidence, follow the [plugin acceptance procedure](plugin-acceptance.md).
 
 | | Claude Code | Codex | OpenClaw |
 |---|---|---|---|
