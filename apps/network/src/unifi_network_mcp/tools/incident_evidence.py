@@ -5,7 +5,7 @@ startup (``LAZY_DIRECT_TOOLS``) so read-only clients can call it directly.
 """
 
 import logging
-from typing import Annotated, Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -73,9 +73,13 @@ async def get_incident_evidence(
             )
         ),
     ] = None,
+    # Validated by Core with the request, so a rejected value is never echoed.
     detail: Annotated[
-        Literal["view", "full"],
-        Field(description="view: coverage plus bounded record citations; full: the whole evidence document"),
+        str,
+        Field(
+            description="view: coverage plus bounded record citations; full: the whole evidence document",
+            json_schema_extra={"enum": ["view", "full"]},
+        ),
     ] = "view",
     max_records_returned: Annotated[
         Optional[int],

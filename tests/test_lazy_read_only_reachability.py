@@ -18,7 +18,8 @@ import anyio
 import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
-from unifi_core.incident_evidence import OverallStatus, validate_incident_evidence
+from unifi_core.incident_evidence import OverallStatus
+from unifi_core.incident_evidence_view import IncidentEvidenceView
 
 _script_path = Path(__file__).parent.parent / "scripts" / "smoke_mcp_metadata.py"
 _spec = importlib.util.spec_from_file_location("smoke_mcp_metadata_for_reachability", _script_path)
@@ -73,7 +74,8 @@ async def _read_only_client_collects(product: str) -> None:
         result = await client.call_tool(tool_name, {**WINDOW, "max_calls": 1, "max_elapsed_ms": 5_000})
         payload = _payload(result)
         assert payload["success"] is True
-        evidence = validate_incident_evidence(payload["data"])
+        # The default result is the bounded client view of the evidence.
+        evidence = IncidentEvidenceView.model_validate(payload["data"])
         # No controller answers on loopback: the failure is reported per source, never as an empty all-clear.
         assert evidence.overall is OverallStatus.FAILED
         assert evidence.coverage_complete is False
