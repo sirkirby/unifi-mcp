@@ -337,4 +337,4 @@ For Codex, tell the user:
 
 For OpenClaw, tell the user:
 
-"Saved the settings for `unifi-access` to `~/.config/unifi-mcp/access.env`, readable by you only. The plugin's own server reads them and follows plugin updates on its own. OpenClaw starts it with these settings at its next agent turn; the Gateway needs no restart."
+"Saved the settings for `unifi-access` to `~/.config/unifi-mcp/access.env`, readable by you only. The plugin's own server reads them and follows plugin updates on its own. OpenClaw starts it with these settings in a new session or after `openclaw gateway restart`; a session that is already open keeps the unconfigured server until then."

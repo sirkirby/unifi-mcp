@@ -844,7 +844,7 @@ class CodexClient:
             )
         return backup, notes
 
-    def loaded(self):
+    def loaded(self, removed):
         return "Restart Codex to load the settings."
 
 
@@ -892,9 +892,15 @@ class OpenClawClient:
             config_lock.rmdir()
         return backup, []
 
-    def loaded(self):
-        # A running gateway reloads the changed configuration; no restart is needed.
-        return "OpenClaw starts the plugin's server with these settings at its next agent turn."
+    def loaded(self, removed):
+        if removed:
+            # Removing the entry changes openclaw.json, which a running gateway reloads.
+            return "OpenClaw starts the plugin's server with these settings at its next agent turn."
+        # openclaw.json is unchanged, so an open session keeps the unconfigured server.
+        return (
+            "Start a new OpenClaw session or run openclaw gateway restart to load the settings; a session that is "
+            "already open keeps the unconfigured server."
+        )
 
 
 def backup_path(config, name):
@@ -990,7 +996,7 @@ def bundled_main(args, root, name, product, patch, client):
             print(note)
     if auto_notice:
         print(auto_notice)
-    print(client.loaded() + " Values are omitted.")
+    print(client.loaded(entry is not None) + " Values are omitted.")
 
 
 def read_patch(args):
