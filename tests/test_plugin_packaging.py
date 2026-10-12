@@ -20,7 +20,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 
@@ -654,46 +653,28 @@ def test_codex_launch_avoids_literal_credential_templates(name: str) -> None:
     resolved = check_codex_manifest(bundle, name, [])
     config = _load(mcp_config_path(bundle, resolved))
     for server in config["mcpServers"].values():
-        assert not server.get("env"), "Let the server use its defaults until setup supplies an environment"
+        # Settings come from the per-user file setup writes; the entry only names it.
+        assert set(server.get("env") or {}) <= {"UNIFI_SETTINGS_FILE"}
         assert "${" not in json.dumps(server)
 
 
 @pytest.mark.parametrize("name", _advertised_bundles())
-def test_codex_setup_entry_starts_the_bundle_pin(tmp_path: Path, name: str) -> None:
-    # Codex setup entries run a stub that starts scripts/codex_server.py in the
-    # installed version directory; that launcher starts the bundle's own server.
+def test_codex_bundled_server_reads_the_setup_settings_file(name: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
     path = mcp_config_path(bundle, check_codex_manifest(bundle, name, []))
-    (server,) = _load(path)["mcpServers"].values()
+    servers = _load(path)["mcpServers"]
+    if not servers:
+        pytest.skip("bundle declares no MCP server")
+    (server,) = servers.values()
+    product = name.removeprefix("unifi-")
     spec = importlib.util.spec_from_file_location("bundle_setup_config", bundle / "scripts" / "setup_config.py")
     setup_config = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(setup_config)
 
-    assert path.name == ".mcp.codex.json", "the launcher reads .mcp.codex.json"
-    assert server["command"] == "uvx" and all(isinstance(arg, str) for arg in server["args"])
-    assert "f='scripts/codex_server.py'" in setup_config.CODEX_STUB
-    if os.name == "nt":
-        pytest.skip("the POSIX launcher replaces itself with uvx; fixtures cover Windows")
-    installed = tmp_path / "cache" / "market" / name / "1.0.0"
-    shutil.copytree(bundle, installed)
-    fake = tmp_path / "bin" / "uvx"
-    fake.parent.mkdir()
-    fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n', encoding="utf-8")
-    fake.chmod(0o755)
-    stub = setup_config.codex_launch(installed.parent)
-    stub = stub[stub.index("python") + 1 :]
-
-    result = subprocess.run(
-        [sys.executable, *stub],
-        env={"PATH": str(fake.parent)},
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == server["args"]
+    assert server["env"] == {"UNIFI_SETTINGS_FILE": f"~/.config/unifi-mcp/{product}.env"}
+    # The server expands ~ with the home directory; setup writes the same file.
+    expected = Path(server["env"]["UNIFI_SETTINGS_FILE"]).expanduser()
+    assert setup_config.settings_path(product.upper()) == expected
 
 
 def test_codex_template_regression_is_reported(tmp_path: Path) -> None:
