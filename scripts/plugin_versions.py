@@ -185,7 +185,9 @@ def update_pin(bundle: Path, new_pin: str) -> bool:
         data = load(path)
         if filename in MANIFESTS:
             data["version"] = version
-        for server in data.get("mcpServers", {}).values():
+        servers = data.get("mcpServers", {})
+        # The Codex manifest names its server file by path; that file carries the pin.
+        for server in servers.values() if isinstance(servers, dict) else ():
             server["args"] = [
                 f"{package}=={new_pin}" if arg == f"{package}=={old_pin}" else arg for arg in server["args"]
             ]

@@ -50,6 +50,8 @@ def repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     for manifest in versions.MANIFESTS:
         write(tmp_path, f"plugins/unifi-network/{manifest}", {"name": "unifi-network", "version": "1.0.0"})
+    # As shipped: the Codex manifest names its server file by path.
+    edit(tmp_path, "plugins/unifi-network/.codex-plugin/plugin.json", mcpServers="./.mcp.codex.json")
     pins(tmp_path, "0.37.0")
     for marketplace in versions.MARKETPLACES:
         write(tmp_path, marketplace, {"plugins": [{"name": "unifi-network"}]})
