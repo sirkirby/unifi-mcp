@@ -314,7 +314,8 @@ def assert_unconfigured_server_serves_setup_mode(
         "/reload-plugins",
         "/mcp reconnect does not load new plugin options",
         "Codex: restart Codex",
-        "OpenClaw: restart the gateway",
+        "OpenClaw: start a new session or run openclaw gateway restart",
+        "Codex or OpenClaw: run the",
         "Standalone: restart the server",
         "Network, Protect, Access",
     ):

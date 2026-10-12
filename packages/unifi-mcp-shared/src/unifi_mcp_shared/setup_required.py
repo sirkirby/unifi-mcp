@@ -44,8 +44,8 @@ def setup_required_message(*, plugin_name: str, env_prefix: str, report: Setting
         "To configure it:",
         f"- Claude Code: run /{plugin_name}:{plugin_name}-setup. It also migrates settings an older plugin "
         "version saved in .claude/settings.local.json.",
-        f"- Codex: run the {plugin_name}-setup skill. It writes ~/.config/unifi-mcp/{product}.env, which this "
-        f"server reads through {SETTINGS_FILE_VAR}.",
+        f"- Codex or OpenClaw: run the {plugin_name}-setup skill. It writes ~/.config/unifi-mcp/{product}.env, "
+        f"which this server reads through {SETTINGS_FILE_VAR}.",
         f"- Any other launcher: set {var}HOST, {var}USERNAME and {var}PASSWORD in the server's environment, "
         f"or put them in a file named by {SETTINGS_FILE_VAR}.",
     ]
@@ -58,7 +58,7 @@ def setup_required_message(*, plugin_name: str, env_prefix: str, report: Setting
         "Then load the new settings:",
         "- Claude Code: run /reload-plugins or start a new session. /mcp reconnect does not load new plugin options.",
         "- Codex: restart Codex or start a new session.",
-        "- OpenClaw: restart the gateway.",
+        "- OpenClaw: start a new session or run openclaw gateway restart.",
         "- Standalone: restart the server.",
         "",
         "Any other UniFi plugins you have installed (Network, Protect, Access) need the same setup or migration.",

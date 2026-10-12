@@ -28,7 +28,7 @@ def test_names_every_setup_path():
     assert "not configured" in text
     assert "/unifi-protect:unifi-protect-setup" in text
     assert ".claude/settings.local.json" in text
-    assert "Codex: run the unifi-protect-setup skill" in text
+    assert "Codex or OpenClaw: run the unifi-protect-setup skill" in text
     assert "~/.config/unifi-mcp/protect.env" in text
     assert "UNIFI_PROTECT_HOST" in text and "UNIFI_SETTINGS_FILE" in text
     assert "does not exist yet" not in text and "ignored" not in text
@@ -39,7 +39,7 @@ def test_names_the_recovery_that_works_in_each_client():
     assert "Claude Code: run /reload-plugins or start a new session" in text
     assert "/mcp reconnect does not load new plugin options" in text
     assert "Codex: restart Codex or start a new session" in text
-    assert "OpenClaw: restart the gateway" in text
+    assert "OpenClaw: start a new session or run openclaw gateway restart" in text
     assert "Standalone: restart the server" in text
     assert "reconnect it in the client" not in text
 
