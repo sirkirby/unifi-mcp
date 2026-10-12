@@ -104,10 +104,23 @@ alone can reactivate shared credentials. Inherited environment providers must
 also be corrected in the launcher. Never delete a working provider in a separate
 preparatory write.
 
+Claude Code is the exception for a raw password or API key it holds in the
+system keychain: it cannot clear one through `claude plugin configure` or the
+options dialog. Setup therefore refuses, with nothing changed, any change that
+would clear it, such as selecting a `_FILE` or `_COMMAND` provider for that
+credential or a null deletion. The message names the variable and the choices:
+keep the saved secret, or run `claude plugin uninstall` and `claude plugin
+install` with the plugin id it names (usually `unifi-access@unifi-plugins`),
+then rerun setup with the provider and the options the message lists.
+Uninstalling clears every option of the plugin, so offer it to the user and
+never run it without their consent.
+
 Before changing or skipping API-key setup, remove obsolete
 `UNIFI_ACCESS_API_KEY`, `UNIFI_ACCESS_API_KEY_FILE`, and
 `UNIFI_ACCESS_API_KEY_COMMAND` spellings with null deletions in the same patch;
-keep only the selected replacement, or delete all three when deselecting it.
+keep only the selected replacement, or delete all three when deselecting it. In
+Claude Code, a keychain-held `UNIFI_ACCESS_API_KEY` cannot be removed this way;
+see above.
 
 At least one auth path is required.
 
@@ -288,7 +301,8 @@ every possible consumer is proven migrated; setup currently verifies only this
 plugin's options. It names the retained shared keys and explains that other
 consumers have not been verified as migrated. Output includes only variable
 names, including what it moved and what has no Claude Code option (per-category
-policy overrides). A missing provider file stops it with nothing changed.
+policy overrides). A missing provider file stops it with nothing changed, as
+does a provider that would replace a password or API key held in the keychain.
 
 Plugin options apply in every project. If options saved from another project
 already hold a different host, username, port or site, `--migrate` refuses
