@@ -132,11 +132,21 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    `claude plugin update <plugin>@<marketplace>`. Codex: it refuses to re-add a
    marketplace from a different ref, so `codex plugin marketplace remove`, add
    it at the candidate ref, then `codex plugin add <plugin>@<marketplace>` again.
-   Codex setup writes a user MCP registration that shadows the plugin's server
-   and pins its package, so after the upgrade run the new plugin's
-   `scripts/set-env.sh --target codex --refresh` (PowerShell:
-   `scripts/set-env.ps1 -Target codex -Refresh`). It reuses the saved
-   environment without asking for credentials and prints the new pin.
+   Codex setup writes a user MCP registration that shadows the plugin's server.
+   From 1.0.0 that registration runs `uv run --no-project --python >=3.11
+   python -I -c <stub> <plugin directory>`, where the plugin directory is the
+   stable `$CODEX_HOME/plugins/cache/<marketplace>/<plugin>`; the stub starts the
+   installed version's `scripts/codex_server.py`, which starts the command in
+   that version's `.mcp.codex.json`. Such a registration needs no action on
+   upgrade: record that `config.toml` is byte-identical afterwards. A
+   registration created before 1.0.0 runs `uvx` with a pinned package instead;
+   the new plugin's `scripts/check-prereqs.sh --target codex` names that pin.
+   Run the new plugin's `scripts/set-env.sh --target codex --refresh`
+   (PowerShell: `scripts/set-env.ps1 -Target codex -Refresh`) once to convert
+   it; it reuses the saved environment without asking for credentials and
+   prints the pin the plugin now starts. When Codex installs the upgrade itself
+   at a session start, that session keeps the server it already started; read
+   `serverInfo` from the next session.
    Confirm the new plugin version is installed, the saved environment is
    unchanged, the running server is the candidate's package version (for Codex,
    from `serverInfo`), and repeat steps 4 and 5.
