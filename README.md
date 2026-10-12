@@ -187,21 +187,16 @@ openclaw gateway restart
 
 In a terminal OpenClaw asks you to confirm the source and the plugin's capabilities. Without a terminal, for example in a script, add `--force --accept-capabilities`; otherwise it refuses.
 
-Then run the matching setup skill from OpenClaw (`unifi-network-setup`, `unifi-protect-setup`, or `unifi-access-setup`), or configure the server directly. Point the password at a [credential provider](docs/credential-providers.md) so the secret never appears in the command line:
+Then run the matching setup skill from OpenClaw (`unifi-network-setup`, `unifi-protect-setup`, or `unifi-access-setup`), or run the plugin's setup script yourself. Point the password at a [credential provider](docs/credential-providers.md) so the secret never appears in the command line:
 
 ```bash
-openclaw mcp set unifi-network '{
-  "command": "uvx",
-  "args": ["--python-preference", "system", "unifi-network-mcp@latest"],
-  "env": {
-    "UNIFI_NETWORK_HOST": "192.168.1.1",
-    "UNIFI_NETWORK_USERNAME": "admin",
-    "UNIFI_NETWORK_PASSWORD_FILE": "/absolute/path/to/password-file"
-  }
-}'
+bash ~/.openclaw/extensions/unifi-network/scripts/set-env.sh --target openclaw \
+  UNIFI_NETWORK_HOST=192.168.1.1 \
+  UNIFI_NETWORK_USERNAME=admin \
+  'UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file'
 ```
 
-Repeat with `unifi-protect` or `unifi-access` as needed. Restart the OpenClaw Gateway after changing MCP server configuration.
+Setup saves these settings in `~/.config/unifi-mcp/network.env`, readable by you only, and the plugin's own server reads that file. It adds no entry to `openclaw.json`, so `openclaw plugins update` brings each new server version with nothing to rerun. An `mcp.servers.unifi-network` entry in `openclaw.json` replaces the plugin's server and pins its version; setup before plugin 1.0.0 wrote one, and `set-env.sh --target openclaw --refresh` converts it once (see the [upgrade guide](docs/plugin-upgrade.md#openclaw)). Repeat with `unifi-protect` or `unifi-access` as needed.
 
 ### Other MCP clients
 

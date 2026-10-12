@@ -3,9 +3,8 @@
 
 Values enter on stdin only. Never execute credential providers or start servers.
 Client output and exception text are deliberately excluded from diagnostics.
-Claude Code options are saved through its own CLI. Codex settings go to a private
-per-user file that the plugin's bundled server reads; OpenClaw's registry is
-staged privately and replaced atomically.
+Claude Code options are saved through its own CLI. Codex and OpenClaw settings go
+to a private per-user file that the plugin's bundled server reads.
 """
 
 import argparse
@@ -248,7 +247,7 @@ PEP440_VERSION = (
 
 
 def settings_path(product):
-    """The per-user file the plugin's bundled Codex server reads through UNIFI_SETTINGS_FILE.
+    """The per-user file the plugin's bundled server reads through UNIFI_SETTINGS_FILE (Codex and OpenClaw).
 
     Path.home() is %USERPROFILE% on Windows, matching the server's expansion of ~.
     """
@@ -283,7 +282,7 @@ def read_settings(path):
 
 def settings_text(settings, name):
     lines = [
-        "# " + name + " settings for Codex, written by the plugin's setup. The plugin's server reads",
+        "# " + name + " settings for Codex and OpenClaw, written by the plugin's setup. The plugin's server reads",
         "# this file through UNIFI_SETTINGS_FILE; keep it readable by you only. Values are literal.",
     ]
     for key, value in settings.items():
@@ -311,18 +310,24 @@ def write_private(path, data):
         staged.unlink(missing_ok=True)
 
 
-def shadow_notice(name, path):
+def shadow_notice(name, path, client):
     return (
-        "Notice: config.toml has an MCP entry for " + name + " that takes precedence over the plugin's own "
-        "server (setup before plugin 1.0.0 wrote it), so plugin upgrades do not reach the server. Run "
-        "set-env.sh --target codex --refresh once (PowerShell: set-env.ps1 -Target codex -Refresh): it moves "
-        "the entry's settings into " + str(path) + " and removes the entry, without asking for credentials."
+        "Notice: " + client.label + " has an MCP entry for " + name + " that takes precedence over the plugin's "
+        "own server (setup before plugin 1.0.0 wrote it), so plugin upgrades do not reach the server. Run "
+        "set-env.sh --target "
+        + client.target
+        + " --refresh once (PowerShell: set-env.ps1 -Target "
+        + client.target
+        + " -Refresh): it moves the entry's settings into "
+        + str(path)
+        + " and removes the entry, without asking for credentials."
     )
 
 
-def package_pin(root, name, *, codex=False):
-    files = (root / ".claude-plugin/plugin.json", root / ".mcp.json")
-    if codex:
+def package_pin(root, name, *, bundled=False):
+    """The package pin of the server the client runs: the bundled entry, else Claude Code's inline one."""
+    files = (root / ".claude-plugin/plugin.json",)
+    if bundled:
         files = (root / ".mcp.codex.json", *files)
     for filename in files:
         if filename.exists():
@@ -335,7 +340,7 @@ def package_pin(root, name, *, codex=False):
 
 
 # Claude Code stores plugin options itself (user settings, sensitive values in the
-# system keychain); the shipped .mcp.json maps each option onto one variable.
+# system keychain); the manifest's inline mcpServers maps each option onto one variable.
 # A configured sensitive option whose value Claude never reveals. NUL cannot occur
 # in a real value: patches refuse it.
 KEYCHAIN = "\0claude-keychain\0"
@@ -346,8 +351,8 @@ FALSY = ("false", "0", "no", "off")
 def claude_options(root):
     """Return {variable: option} and the option schema from the installed plugin."""
     try:
-        schema = json_object((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8")).get("userConfig")
-        servers = json_object((root / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers")
+        manifest = json_object((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+        schema, servers = manifest.get("userConfig"), manifest.get("mcpServers")
     except (OSError, ValueError):
         schema = servers = None
     if not isinstance(schema, dict) or not isinstance(servers, dict) or len(servers) != 1:
@@ -767,26 +772,156 @@ def claude_main(args, root, name, product):
     )
 
 
-def codex_main(args, root, name, product, patch):
-    """Save Codex settings in the per-user file and retire a shadowing config.toml entry."""
+class CodexClient:
+    """config.toml, where setup before plugin 1.0.0 wrote a [mcp_servers.<plugin>] entry."""
+
+    target, name, label = "codex", "Codex", "config.toml"
+
+    def __init__(self):
+        home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().absolute()
+        self.config = home / "config.toml"
+
+    def read(self):
+        return read_config(self.config, "codex")
+
+    def remove(self, name, original, data, servers):
+        """Drop the entry, keeping a private backup; returns the backup and whether Codex rewrote the file."""
+        config, rewritten = self.config, False
+        config_lock = config.with_name(config.name + ".setup-lock")
+        try:
+            config_lock.mkdir(mode=0o700)
+        except FileExistsError:
+            refuse(
+                "Settings were saved, but config.toml setup is locked. If no setup is running, remove the "
+                "adjacent .setup-lock directory and rerun to remove the " + name + " entry."
+            )
+        try:
+            expected = dict(data, mcp_servers={k: v for k, v in servers.items() if k != name})
+
+            def matches(candidate):
+                try:
+                    document = tomllib.loads(candidate.decode("utf-8"))
+                except (ValueError, UnicodeDecodeError):
+                    return False
+                return document == expected or (
+                    not expected["mcp_servers"] and dict(document, mcp_servers={}) == expected
+                )
+
+            try:
+                edited = remove_codex_entry(original.decode("utf-8"), name).encode("utf-8")
+            except Exception:
+                # A scanner limitation must not prevent the supported CLI
+                # path. Never expose its potentially sensitive error.
+                edited = None
+            if edited is None or not matches(edited):
+                # An unusual layout (dotted or inline mcp_servers keys): let Codex remove the entry
+                # in a private copy, which drops comments inside MCP server tables.
+                with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=config.parent) as temporary:
+                    stage = Path(temporary)
+                    (stage / "config.toml").write_bytes(original)
+                    environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
+                    environment.update(HOME=str(stage), USERPROFILE=str(stage), CODEX_HOME=str(stage))
+                    client(["codex", "mcp", "remove", name], environment)
+                    edited = (stage / "config.toml").read_bytes()
+                rewritten = True
+                if not matches(edited):
+                    refuse(
+                        "Settings were saved, but setup could not remove the " + name + " entry from "
+                        "config.toml safely; remove it with codex mcp remove " + name + "."
+                    )
+            if config.read_bytes() != original:
+                refuse("config.toml changed during setup; settings were saved, rerun to remove the entry.")
+            backup = backup_path(config, name)
+            write_private(backup, original)
+            write_private(config, edited)
+        finally:
+            config_lock.rmdir()
+        notes = []
+        if rewritten:
+            notes.append(
+                "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
+                "Codex rewrote it and dropped the comments inside MCP server tables."
+            )
+        return backup, notes
+
+    def loaded(self):
+        return "Restart Codex to load the settings."
+
+
+class OpenClawClient:
+    """openclaw.json, where setup before plugin 1.0.0 wrote an mcp.servers.<plugin> entry."""
+
+    target, name, label = "openclaw", "OpenClaw", "openclaw.json"
+
+    def __init__(self):
+        state = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
+        self.config = Path(os.environ.get("OPENCLAW_CONFIG_PATH", str(state / "openclaw.json"))).expanduser().absolute()
+
+    def read(self):
+        return read_config(self.config, "openclaw")
+
+    def remove(self, name, original, data, servers):
+        """Remove the entry with OpenClaw's own CLI after a private backup."""
+        config = self.config
+        config_lock = config.with_name(config.name + ".setup-lock")
+        try:
+            config_lock.mkdir(mode=0o700)
+        except FileExistsError:
+            refuse(
+                "Settings were saved, but openclaw.json setup is locked. If no setup is running, remove the "
+                "adjacent .setup-lock directory and rerun to remove the " + name + " entry."
+            )
+        try:
+            if config.read_bytes() != original:
+                refuse("openclaw.json changed during setup; settings were saved, rerun to remove the entry.")
+            backup = backup_path(config, name)
+            write_private(backup, original)
+            environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
+            unremoved = (
+                "Settings were saved, but OpenClaw did not remove only the " + name + " entry. Compare "
+                "openclaw.json with " + str(backup) + " and remove the entry with openclaw mcp unset " + name + "."
+            )
+            try:
+                client(["openclaw", "mcp", "unset", name], environment)
+                _, _, remaining = read_config(config, "openclaw")
+            except SetupError:
+                refuse(unremoved)
+            if remaining != {k: v for k, v in servers.items() if k != name}:
+                refuse(unremoved)
+        finally:
+            config_lock.rmdir()
+        return backup, []
+
+    def loaded(self):
+        # A running gateway reloads the changed configuration; no restart is needed.
+        return "OpenClaw starts the plugin's server with these settings at its next agent turn."
+
+
+def backup_path(config, name):
+    stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    return config.with_name(config.name + ".bak-" + name + "-" + stamp)
+
+
+def bundled_main(args, root, name, product, patch, client):
+    """Save settings in the per-user file the bundled server reads and retire a shadowing client entry."""
     path = settings_path(product)
     saved = read_settings(path)
-    config = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().absolute() / "config.toml"
-    if config.is_symlink():
+    if client.config.is_symlink():
         refuse("Configuration symlinks are unsupported; use the client editor for this installation.")
-    original, data, servers = read_config(config, "codex")
+    original, data, servers = client.read()
     entry = servers.get(name)
     if entry is not None and not isinstance(entry, dict):
         refuse("The existing MCP server must be an object; repair it and rerun.")
-    # Only UNIFI_ settings move; the rest of an entry stays in the config.toml backup.
+    # Only UNIFI_ settings move; the rest of an entry stays in the configuration backup.
     entry_env = env_map(entry.get("env", {})) if entry else {}
     carried = {k: v for k, v in entry_env.items() if k.startswith("UNIFI_")}
     left = sorted("env " + k for k in entry_env if k not in carried)
     left += sorted("entry setting " + k for k in (entry or {}) if k not in ("command", "args", "env"))
     if entry is not None and saved is not None and saved != carried:
         refuse(
-            "Both " + str(path) + " and a config.toml entry for " + name + " hold settings, and they differ. "
-            "Delete the settings file to keep the entry's settings, or remove the entry with codex mcp remove "
+            "Both " + str(path) + " and a " + client.label + " entry for " + name + " hold settings, and they "
+            "differ. Delete the settings file to keep the entry's settings, or remove the entry with "
+            + ("codex mcp remove " if client.target == "codex" else "openclaw mcp unset ")
             + name
             + " to keep the file's, then rerun. Nothing was changed."
         )
@@ -794,15 +929,25 @@ def codex_main(args, root, name, product, patch):
     if args.check:
         merge_env(base, {}, product)
         if entry is not None:
-            print(shadow_notice(name, path))
+            print(shadow_notice(name, path, client))
         elif saved is not None and os.name != "nt" and path.stat().st_mode & 0o077:
             print("Notice: " + str(path) + " is readable by other users; rerun setup or chmod 600 it.")
         print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
         return
     if args.refresh and entry is None:
         if saved is None:
-            refuse("No saved Codex settings to convert; run ordinary setup from the installed plugin first.")
-        print("Nothing to convert: config.toml has no entry for " + name + "; settings live in " + str(path) + ".")
+            refuse(
+                "No saved " + client.name + " settings to convert; run ordinary setup from the installed plugin first."
+            )
+        print(
+            "Nothing to convert: "
+            + client.label
+            + " has no entry for "
+            + name
+            + "; settings live in "
+            + str(path)
+            + "."
+        )
         return
     merged = merge_env(base, patch, product)
     text = settings_text(merged, name).encode("utf-8")
@@ -819,84 +964,33 @@ def codex_main(args, root, name, product, patch):
         lock.mkdir(mode=0o700)
     except FileExistsError:
         refuse("Setup is locked. If no setup is running, remove the adjacent .setup-lock directory and rerun.")
-    backup, rewritten = None, False
+    backup, notes = None, []
     try:
         if read_settings(path) != saved:
             refuse("Settings changed during setup; rerun against the latest settings.")
         # The file first: if the entry removal then fails, a rerun finds matching settings.
         write_private(path, text)
         if entry is not None:
-            config_lock = config.with_name(config.name + ".setup-lock")
-            try:
-                config_lock.mkdir(mode=0o700)
-            except FileExistsError:
-                refuse(
-                    "Settings were saved, but config.toml setup is locked. If no setup is running, remove the "
-                    "adjacent .setup-lock directory and rerun to remove the " + name + " entry."
-                )
-            try:
-                expected = dict(data, mcp_servers={k: v for k, v in servers.items() if k != name})
-
-                def matches(candidate):
-                    try:
-                        document = tomllib.loads(candidate.decode("utf-8"))
-                    except (ValueError, UnicodeDecodeError):
-                        return False
-                    return document == expected or (
-                        not expected["mcp_servers"] and dict(document, mcp_servers={}) == expected
-                    )
-
-                try:
-                    edited = remove_codex_entry(original.decode("utf-8"), name).encode("utf-8")
-                except Exception:
-                    # A scanner limitation must not prevent the supported CLI
-                    # path. Never expose its potentially sensitive error.
-                    edited = None
-                if edited is None or not matches(edited):
-                    # An unusual layout (dotted or inline mcp_servers keys): let Codex remove the entry
-                    # in a private copy, which drops comments inside MCP server tables.
-                    with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=config.parent) as temporary:
-                        stage = Path(temporary)
-                        (stage / "config.toml").write_bytes(original)
-                        environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
-                        environment.update(HOME=str(stage), USERPROFILE=str(stage), CODEX_HOME=str(stage))
-                        client(["codex", "mcp", "remove", name], environment)
-                        edited = (stage / "config.toml").read_bytes()
-                    rewritten = True
-                    if not matches(edited):
-                        refuse(
-                            "Settings were saved, but setup could not remove the " + name + " entry from "
-                            "config.toml safely; remove it with codex mcp remove " + name + "."
-                        )
-                if config.read_bytes() != original:
-                    refuse("config.toml changed during setup; settings were saved, rerun to remove the entry.")
-                stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
-                backup = config.with_name(config.name + ".bak-" + name + "-" + stamp)
-                write_private(backup, original)
-                write_private(config, edited)
-            finally:
-                config_lock.rmdir()
+            backup, notes = client.remove(name, original, data, servers)
     finally:
         lock.rmdir()
     print(
-        "Saved the Codex settings for " + name + " to " + str(path) + ", readable by you only. The plugin's own "
-        "server (" + package_pin(root, name, codex=True) + ") reads this file, so plugin upgrades need no setup."
+        "Saved the " + client.name + " settings for " + name + " to " + str(path) + ", readable by you only. The "
+        "plugin's own server (" + package_pin(root, name, bundled=True) + ") reads this file, so plugin upgrades "
+        "need no setup."
     )
     if entry is not None:
         print(
-            "Moved the settings of the " + name + " entry in config.toml into that file and removed the entry, "
-            "which took precedence over the plugin's server. Previous config.toml: " + str(backup) + "."
+            "Moved the settings of the " + name + " entry in " + client.label + " into that file and removed the "
+            "entry, which took precedence over the plugin's server. Previous " + client.label + ": " + str(backup) + "."
         )
         if left:
             print("Not moved (names only; they remain in the backup): " + ", ".join(left) + ".")
-        if rewritten:
-            print(
-                "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
-                "Codex rewrote it and dropped the comments inside MCP server tables."
-            )
+        for note in notes:
+            print(note)
     if auto_notice:
         print(auto_notice)
-    print("Restart Codex to load the settings. Values are omitted.")
+    print(client.loaded() + " Values are omitted.")
 
 
 def read_patch(args):
@@ -933,7 +1027,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--pairs", action="store_true")
     parser.add_argument(
-        "--refresh", action="store_true", help="Move a pre-1.0.0 Codex entry's settings into the settings file"
+        "--refresh", action="store_true", help="Move a pre-1.0.0 client entry's settings into the settings file"
     )
     parser.add_argument(
         "--migrate", action="store_true", help="Move legacy Claude project settings into plugin options"
@@ -950,8 +1044,8 @@ def main():
         refuse("Cannot identify the plugin; rerun from a complete plugin installation.")
     product = name.removeprefix("unifi-").upper()
     target = args.target
-    if args.refresh and (target != "codex" or args.pairs or args.check):
-        refuse("Refresh is only supported for Codex, without environment arguments.")
+    if args.refresh and (target == "claude" or args.pairs or args.check):
+        refuse("Refresh is only supported for Codex and OpenClaw, without environment arguments.")
     if args.migrate and (target != "claude" or args.pairs or args.check):
         refuse("Migration is only supported for Claude Code, without environment arguments.")
     if args.replace and not args.migrate:
@@ -963,80 +1057,14 @@ def main():
     if target == "claude":
         claude_main(args, root, name, product)
         return
-    if target == "codex":
-        codex_main(args, root, name, product, {} if args.check or args.refresh else read_patch(args))
-        return
-    state = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-    destination = Path(os.environ.get("OPENCLAW_CONFIG_PATH", str(state / "openclaw.json")))
-    destination = destination.expanduser().absolute()
-    if destination.is_symlink():
-        refuse("Configuration symlinks are unsupported; use the client editor for this installation.")
-    original, data, servers = read_config(destination, target)
-    prior = servers.get(name, {})
-    if not isinstance(prior, dict):
-        refuse("The existing MCP server must be an object; repair it and rerun.")
-    previous_env = prior.get("env", {})
-    env_map(previous_env)
-    if args.check:
-        merge_env(previous_env, {}, product)
-        print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
-        return
-    merged = merge_env(previous_env, read_patch(args), product)
-    auto_notice = auto_confirm_notice(merged, product)
-    if args.dry_run:
-        print("Validation passed; dry run made no changes. Values are omitted.")
-        if auto_notice:
-            print(auto_notice)
-        return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    # Cooperating setup calls serialize; a killed process leaves a harmless lock.
-    lock = destination.with_name(destination.name + ".setup-lock")
-    try:
-        lock.mkdir(mode=0o700)
-    except FileExistsError:
-        refuse("Setup is locked. If no setup is running, remove the adjacent .setup-lock directory and rerun.")
-    try:
-        if (destination.read_bytes() if destination.exists() else None) != original:
-            refuse("Configuration changed during setup; rerun against the latest settings.")
-        with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=destination.parent) as temporary:
-            stage = Path(temporary)
-            staged = stage / destination.name
-            staged.write_bytes(original or b"{}")
-            staged.chmod(0o600)
-            environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
-            environment.update(
-                HOME=str(stage),
-                USERPROFILE=str(stage),
-                CLAUDE_CONFIG_DIR=str(stage / ".claude"),
-                OPENCLAW_STATE_DIR=str(stage),
-                OPENCLAW_CONFIG_PATH=str(staged),
-            )
-            entry = dict(prior)
-            for key in ("url", "headers", "transport"):
-                entry.pop(key, None)
-            entry.update(command="uvx", args=["--python-preference", "system", package_pin(root, name)])
-            entry["env"] = {}
-            # No supplied setting, even a provider reference, enters CLI argv.
-            client(["openclaw", "mcp", "set", name, json.dumps({"command": "uvx", "args": entry["args"]})], environment)
-            read_config(staged, target)
-            entry["env"] = merged
-            data.setdefault("mcp", {}).setdefault("servers", {})[name] = entry
-            staged.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            read_config(staged, target)
-            client(["openclaw", "config", "validate", "--json"], environment)
-            staged.chmod(0o600)
-            # Windows FlushFileBuffers (used by fsync) requires write access.
-            # Reopen without truncating the complete, validated staged file.
-            with staged.open("r+b") as handle:
-                os.fsync(handle.fileno())
-            if (destination.read_bytes() if destination.exists() else None) != original:
-                refuse("Configuration changed during setup; rerun against the latest settings.")
-            os.replace(staged, destination)
-    finally:
-        lock.rmdir()
-    if auto_notice:
-        print(auto_notice)
-    print("Configuration saved atomically. Restart the selected client to load it. Values are omitted.")
+    bundled_main(
+        args,
+        root,
+        name,
+        product,
+        {} if args.check or args.refresh else read_patch(args),
+        CodexClient() if target == "codex" else OpenClawClient(),
+    )
 
 
 if __name__ == "__main__":

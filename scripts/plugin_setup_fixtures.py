@@ -91,11 +91,20 @@ def fake_client(name):
     elif name == "openclaw":
         path = Path(os.environ["OPENCLAW_CONFIG_PATH"])
         document = json.loads(path.read_text(encoding="utf-8"))
-        if args[:2] == ["mcp", "set"]:
-            document.setdefault("mcp", {}).setdefault("servers", {})[args[2]] = json.loads(args[3])
-            path.write_text(json.dumps(document), encoding="utf-8")
-        elif args[:2] == ["config", "validate"]:
-            assert isinstance(document["mcp"]["servers"], dict)
+        if args[:2] == ["mcp", "unset"]:
+            if failure == "unset":
+                marker = Path(os.environ["FIXTURE_OUTPUT_MARKER_FILE"]).read_bytes()
+                sys.stdout.buffer.write(marker)
+                sys.stderr.buffer.write(marker)
+                sys.exit(2)
+            servers = document["mcp"]["servers"]
+            servers.pop(args[2])
+            if failure == "overreach":
+                servers.clear()  # An ill-behaved CLI that removes more than the named entry.
+            # OpenClaw rewrites the whole document in its own layout.
+            path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        else:
+            sys.exit(1)
 
 
 def forward_runtime(args):
@@ -1204,6 +1213,155 @@ class Fixtures:
         for backup in backups():
             backup.unlink()
 
+    def openclaw_conversion_scenario(self, workspace, environment, command, cached, path, product, setup):
+        """Setup before plugin 1.0.0 saved an openclaw.json entry replacing the bundled server; one refresh moves it."""
+        name = f"unifi-{product}"
+        upper = product.upper()
+        config = workspace / "openclaw/openclaw.json"
+        refresh = command[:-1] + (["-Refresh"] if self.powershell else ["--refresh"])
+        prerequisite = [
+            *(
+                [self.powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]
+                if self.powershell
+                else [self.shell]
+            ),
+            str(cached / ("check-prereqs.ps1" if self.powershell else "check-prereqs.sh")),
+            *(["-Target", "openclaw"] if self.powershell else ["--target", "openclaw"]),
+        ]
+        secret = 'FAKE-only "quoted" $dollar \\ tab\there Ω'
+        pin = json.loads((cached.parent / ".mcp.codex.json").read_text(encoding="utf-8"))["mcpServers"][name]["args"][
+            -1
+        ]
+
+        def run(argv, **extra):
+            return subprocess.run(argv, cwd=workspace, env=dict(environment, **extra), capture_output=True, timeout=30)
+
+        def backups():
+            return sorted(config.parent.glob("openclaw.json.bak-*"))
+
+        def start(document):
+            path.unlink(missing_ok=True)
+            for backup in backups():
+                backup.unlink()
+            config.write_text(json.dumps(document), encoding="utf-8")
+
+        def private(file):
+            return os.name == "nt" or file.stat().st_mode & 0o777 == 0o600
+
+        moved = {f"UNIFI_{upper}_HOST": "192.0.2.10", f"UNIFI_{upper}_PASSWORD": secret, "UNIFI_POLICY_CREATE": "false"}
+        unrelated = {"command": "keep", "env": {"KEEP": "yes"}}
+        entry = {
+            "command": "uvx",
+            "args": ["--python-preference", "system", f"{name}-mcp==0.0.1"],
+            "env": dict(moved, KEEP="old"),
+            "enabled": True,
+        }
+        document = {"custom": {"keep": [True]}, "mcp": {"servers": {"unrelated": unrelated, name: entry}}}
+        start(document)
+        source = config.read_bytes()
+        checked = run(prerequisite)
+        self.check(
+            checked.returncode == 0
+            and b"openclaw.json has an MCP entry" in checked.stdout
+            and (b"-Target openclaw -Refresh" if self.powershell else b"--target openclaw --refresh") in checked.stdout,
+            "prerequisites name the replacing OpenClaw entry and its one-time refresh",
+        )
+        self.check(config.read_bytes() == source and not path.exists(), "the prerequisite check changes nothing")
+        argv_path = workspace / "argv.jsonl"
+        argv_path.unlink(missing_ok=True)
+        result = run(refresh)
+        self.check(result.returncode == 0, "refresh converts the OpenClaw entry without input")
+        self.check(setup.read_settings(path) == moved, "conversion moves exactly the entry's UNIFI_ settings")
+        self.check(private(path), "converted settings file is private (600)")
+        calls = [json.loads(line) for line in argv_path.read_text(encoding="utf-8").splitlines()]
+        self.check(
+            [call for call in calls if call[0] == "openclaw"] == [["openclaw", "mcp", "unset", name]],
+            "the entry is removed with openclaw mcp unset only",
+        )
+        remaining = json.loads(config.read_text(encoding="utf-8"))
+        self.check(
+            remaining == {"custom": {"keep": [True]}, "mcp": {"servers": {"unrelated": unrelated}}},
+            "conversion keeps every other OpenClaw setting",
+        )
+        [backup] = backups()
+        self.check(backup.read_bytes() == source and private(backup), "private exact backup")
+        self.check(
+            b"Not moved" in result.stdout and b"KEEP" in result.stdout and b"enabled" in result.stdout,
+            "conversion names what it did not move",
+        )
+        self.check(pin.encode() in result.stdout, "conversion names the bundled server's pin")
+        self.check(b"at its next agent turn" in result.stdout, "conversion says when OpenClaw loads it")
+        self.check(secret.encode() not in result.stdout + result.stderr, "conversion output omits values")
+        self.check(secret not in argv_path.read_text(encoding="utf-8"), "conversion argv omits values")
+        checked = run(prerequisite)
+        self.check(checked.returncode == 0 and b"has an MCP entry" not in checked.stdout, "notice goes quiet")
+        again = run(refresh)
+        self.check(
+            again.returncode == 0 and b"Nothing to convert" in again.stdout and len(backups()) == 1,
+            "a second refresh changes nothing",
+        )
+
+        # Settings already saved are never overwritten by a differing entry.
+        start(document)
+        before = config.read_bytes()
+        path.write_text(setup.settings_text({f"UNIFI_{upper}_HOST": "192.0.2.14"}, name), encoding="utf-8")
+        saved = path.read_bytes()
+        result = run(refresh)
+        self.check(
+            result.returncode != 0 and config.read_bytes() == before and path.read_bytes() == saved and not backups(),
+            "differing file and entry refuse without changes",
+        )
+
+        # A failing or overreaching OpenClaw CLI leaves the saved settings and a backup; a rerun finishes.
+        for failure in ("unset", "overreach"):
+            start(document)
+            result = run(refresh, FIXTURE_FAIL=failure)
+            self.check(
+                result.returncode != 0
+                and setup.read_settings(path) == moved
+                and len(backups()) == 1
+                and backups()[0].read_bytes() == before,
+                f"a {failure} failure keeps the settings and the backup",
+            )
+            self.check(
+                b"openclaw mcp unset " + name.encode() in result.stderr
+                and (workspace / "client-output-marker").read_bytes() not in result.stdout + result.stderr,
+                f"a {failure} failure names the manual removal and hides client output",
+            )
+            self.check(not list(config.parent.glob("*.setup-lock")), f"a {failure} failure leaves no lock")
+            if failure == "unset":
+                self.check(config.read_bytes() == before, "a failed unset leaves openclaw.json unchanged")
+                result = run(refresh)
+                self.check(
+                    result.returncode == 0 and name not in json.loads(config.read_text())["mcp"]["servers"],
+                    "a matching rerun finishes the conversion",
+                )
+
+        # Ordinary setup converts too, applying the patch on top of the entry's settings.
+        start({"mcp": {"servers": {name: {"command": "uvx", "env": {f"UNIFI_{upper}_HOST": "a"}}}}})
+        result = subprocess.run(
+            command,
+            input=json.dumps({f"UNIFI_{upper}_SITE": "fixture-site"}).encode(),
+            cwd=workspace,
+            env=environment,
+            capture_output=True,
+            timeout=30,
+        )
+        self.check(
+            result.returncode == 0
+            and setup.read_settings(path) == {f"UNIFI_{upper}_HOST": "a", f"UNIFI_{upper}_SITE": "fixture-site"}
+            and json.loads(config.read_text(encoding="utf-8")) == {"mcp": {"servers": {}}},
+            "ordinary setup converts the OpenClaw entry and applies the patch",
+        )
+        # Without an entry or a file there is nothing to convert.
+        path.unlink()
+        start({"mcp": {"servers": {"unrelated": unrelated}}})
+        result = run(refresh)
+        self.check(result.returncode != 0 and not path.exists() and not backups(), "refresh without settings refuses")
+        config.unlink()
+        for backup in backups():
+            backup.unlink()
+
     def scenario(self, product, target):
         workspace = self.root / (product + "-" + target)
         workspace.mkdir()
@@ -1264,32 +1422,23 @@ class Fixtures:
             ]
         else:
             command = [self.shell, str(scripts / "set-env.sh"), "--target", target, "--input-json"]
-        # Codex settings live in the per-user file the bundled server reads; OpenClaw keeps a registry entry.
+        # Codex and OpenClaw settings live in the per-user file the bundled server reads.
         setup = setup_module(scripts)
-        keep = "UNIFI_FIXTURE_KEEP" if target == "codex" else "KEEP"
+        keep = "UNIFI_FIXTURE_KEEP"
         saved = {keep: "old", base: "FAKE-old"}
-        if target == "codex":
-            path = workspace / ".config" / "unifi-mcp" / f"{product}.env"
-            (workspace / "codex").mkdir()
-        else:
-            path = workspace / "openclaw/openclaw.json"
-            entry = {"command": "uvx", "args": ["previous"], "env": saved}
-            registry = {f"unifi-{product}": entry, "unrelated": {"command": "keep", "env": {"KEEP": "yes"}}}
-            fixture = {"custom": {"keep": [True]}, "mcp": {"servers": registry}}
+        path = workspace / ".config" / "unifi-mcp" / f"{product}.env"
+        (workspace / target).mkdir()
         path.parent.mkdir(parents=True)
 
         def seed():
-            if target == "codex":
-                path.write_text(setup.settings_text(saved, f"unifi-{product}"), encoding="utf-8")
-                path.chmod(0o600)
-            else:
-                path.write_text(json.dumps(fixture), encoding="utf-8")
+            path.write_text(setup.settings_text(saved, f"unifi-{product}"), encoding="utf-8")
+            path.chmod(0o600)
 
         def load():
-            return setup.read_settings(path) if target == "codex" else json.loads(path.read_text(encoding="utf-8"))
+            return setup.read_settings(path)
 
         def get_env(data):
-            return data if target == "codex" else data["mcp"]["servers"][f"unifi-{product}"]["env"]
+            return data
 
         def invoke(patch, expected=0, extra=None):
             env = dict(environment, **(extra or {}))
@@ -1429,21 +1578,12 @@ class Fixtures:
         executable(isolated, "uvx", "pass\n")
         invoke({base: sample_value}, 1, {"PATH": isolated_path})
         self.check(path.read_bytes() == before, "missing client preserves registration")
-        if target == "openclaw":
-            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
-            self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
-            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
-            self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
         invoke({base: sample_value})
         data = load()
         self.check(get_env(data)[base] == sample_value, "special characters round-trip")
         self.check(get_env(data)[keep] == "old", "unrelated environment preserved")
-        if target == "openclaw":
-            registry = data["mcp"]["servers"]
-            self.check(registry["unrelated"] == fixture["mcp"]["servers"]["unrelated"], "unrelated registration kept")
-        else:
-            self.check(os.name == "nt" or path.stat().st_mode & 0o777 == 0o600, "settings file is private (600)")
-            self.check(not list(path.parent.glob(".*unifi-setup-*")), "no staged settings file remains")
+        self.check(os.name == "nt" or path.stat().st_mode & 0o777 == 0o600, "settings file is private (600)")
+        self.check(not list(path.parent.glob(".*unifi-setup-*")), "no staged settings file remains")
         baseline_output = invoke({base: "FAKE-baseline-output"})
         for small in ("x", "true", "1234"):
             result = invoke({base: small})
@@ -1490,29 +1630,31 @@ class Fixtures:
         result = invoke({"UNIFI_AUTO_CONFIRM": None})
         self.check("UNIFI_AUTO_CONFIRM" not in get_env(load()), "null deletion removes auto-confirm")
         self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "a removed auto-confirm is no longer named")
+        # Installed Codex plugins include a version directory in their path; OpenClaw's do not, and both work.
+        cached = workspace / "cache" / f"unifi-{product}" / "9.8.7" / "scripts"
+        cached.mkdir(parents=True)
+        for source in scripts.iterdir():
+            if source.is_file():
+                shutil.copy2(source, cached / source.name)
+        for directory in (".codex-plugin", ".claude-plugin"):
+            shutil.copytree(scripts.parent / directory, cached.parent / directory)
+        shutil.copy2(scripts.parent / ".mcp.codex.json", cached.parent / ".mcp.codex.json")
+        suffix = "set-env.ps1" if self.powershell else "set-env.sh"
+        command[command.index(str(scripts / suffix))] = str(cached / suffix)
+        invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
+        self.check(
+            get_env(load())[f"UNIFI_{product.upper()}_HOST"] == "192.0.2.99",
+            "versioned plugin cache uses the product's settings file",
+        )
         if target == "codex":
-            # Installed Codex plugins include a version directory in their path.
-            cached = workspace / "cache" / f"unifi-{product}" / "9.8.7" / "scripts"
-            cached.mkdir(parents=True)
-            for source in scripts.iterdir():
-                if source.is_file():
-                    shutil.copy2(source, cached / source.name)
-            for directory in (".codex-plugin", ".claude-plugin"):
-                shutil.copytree(scripts.parent / directory, cached.parent / directory)
-            for filename in (".mcp.json", ".mcp.codex.json"):
-                source = scripts.parent / filename
-                if source.exists():
-                    shutil.copy2(source, cached.parent / filename)
-            suffix = "set-env.ps1" if self.powershell else "set-env.sh"
-            command[command.index(str(scripts / suffix))] = str(cached / suffix)
-            invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
-            self.check(
-                get_env(load())[f"UNIFI_{product.upper()}_HOST"] == "192.0.2.99",
-                "versioned plugin cache uses the product's settings file",
-            )
             self.check(not (workspace / "codex/config.toml").exists(), "Codex setup writes no config.toml entry")
             self.codex_conversion_scenario(workspace, environment, command, cached, path, product, setup)
-            seed()
+        else:
+            self.check(
+                not (workspace / "openclaw/openclaw.json").exists(), "OpenClaw setup writes no openclaw.json entry"
+            )
+            self.openclaw_conversion_scenario(workspace, environment, command, cached, path, product, setup)
+        seed()
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"
         injection.mkdir()

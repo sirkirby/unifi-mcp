@@ -16,8 +16,9 @@ response's top-level key names and counts only.
 
 - **Prior version:** the commit of an earlier plugin-version sync. Record the
   plugin versions in `plugins/unifi-*/.claude-plugin/plugin.json` and the
-  package pins in `plugins/unifi-*/.mcp.json` (Claude Code) and
-  `plugins/unifi-*/.mcp.codex.json` (Codex).
+  package pins in the inline `mcpServers` of `plugins/unifi-*/.claude-plugin/plugin.json`
+  (Claude Code) and `plugins/unifi-*/.mcp.codex.json` (Codex and OpenClaw). A ref
+  before 1.0.0 also ships a root `.mcp.json` with the Claude Code pin.
 - **Candidate:** the branch or commit under test. Record its commit and pins.
 - **Claude Code configuration model:** record whether each ref declares
   `userConfig` in `plugins/unifi-*/.claude-plugin/plugin.json`. Refs with
@@ -229,7 +230,7 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
 Codex reads `plugins/unifi-*/.mcp.codex.json` through its manifest's
 `mcpServers` path. Codex does not expand `${VAR:-default}` in an MCP `env`
 block, so that file must contain no interpolation templates. Claude Code reads
-`.mcp.json`, which maps each server variable to a plugin option with
+the server declared inline in `.claude-plugin/plugin.json`, which maps each server variable to a plugin option with
 `${user_config.KEY}` when the ref declares `userConfig`. If either file changes,
 check the running server's environment with `ps -E -ww` against what the client
 was given.
@@ -306,7 +307,7 @@ that do not exist yet. Test them without publishing anything:
    Protect server fails with `ModuleNotFoundError: uiprotect`; Network survives
    only because it pins `aiounifi` directly.
 3. On the loopback marketplace mirror only, add one commit that changes nothing
-   but the package pins in each plugin's `plugin.json`, `.mcp.json` and
+   but the package pins in each plugin's `plugin.json` and
    `.mcp.codex.json` to the built versions, and install from that commit. Never
    push it, and do not run `make check-plugin-versions` on it: the pins have no
    release tag by design. Codex setup does not read the pin, so it needs no

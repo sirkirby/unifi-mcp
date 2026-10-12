@@ -111,8 +111,8 @@ function Invoke-SetupHelper {
 
 try {
     if ($Refresh) {
-        if ($Target -ne 'codex' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
-            throw 'Refresh requires Codex and no environment input.'
+        if ($Target -eq 'claude' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
+            throw 'Refresh requires Codex or OpenClaw and no environment input.'
         }
         Invoke-SetupHelper -Json '{}'
         exit 0

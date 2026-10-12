@@ -258,8 +258,8 @@
 openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
 openclaw gateway restart
 
-<span class="comment"># Use the setup skill, or register the MCP server directly</span>
-openclaw mcp set <span class="value">unifi-network</span> <span class="value">'{"command":"uvx","args":["unifi-network-mcp@latest"]}'</span></code></pre>
+<span class="comment"># Run its setup skill; it saves the settings the plugin's own server reads</span>
+<span class="command">unifi-network-setup</span></code></pre>
           </div>
           <div role="tabpanel" id="panel-uvx" aria-labelledby="tab-uvx" class="install-panel" data-install-panel="uvx" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>

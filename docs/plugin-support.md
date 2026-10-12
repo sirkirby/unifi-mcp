@@ -34,7 +34,9 @@ marketplace:
   server follows the upgrade from the next session (below).
 - **OpenClaw** follows commits and changes nothing until you run
   `openclaw plugins update <id>`, which asks you to accept the plugin's
-  capabilities (`--accept-capabilities` in scripts).
+  capabilities (`--accept-capabilities` in scripts). OpenClaw runs the plugin's
+  own server, so the server follows the update from the next agent turn; a
+  running Gateway applies it without a restart.
 
 Upgrade notes for each release, including the 1.0.0 Claude Code settings
 migration, are in the [plugin upgrade guide](plugin-upgrade.md).
@@ -91,8 +93,30 @@ otherwise. Codex 0.162.0 ignores plugin-scoped environment settings, and a same-
 `[mcp_servers]` entry requires its own transport rather than merging the bundle's
 command. Plugin-scoped settings can control tool policy, not supply setup env.
 
-Claude Code reads the bundle's `.mcp.json`, which maps each server variable to a
-plugin option (`${user_config.KEY}`). Claude Code prompts for these options when
+OpenClaw treats these bundles as Codex bundles and runs the server in
+`.mcp.codex.json`. It passes the entry's `env` as written, expanding only its own
+plugin-root placeholders, and the server expands the `~` itself. OpenClaw would
+also merge a root `.mcp.json` into that server, so the bundles ship none and
+declare Claude Code's server inline. OpenClaw setup writes the same settings
+file and no `openclaw.json` entry. Setup before plugin 1.0.0 saved an
+`mcp.servers.<plugin>` entry in `openclaw.json`, which replaces the bundled
+server and keeps the server version it names. The prerequisite check names
+such an entry, and this non-secret command converts it once:
+
+```bash
+bash <plugin-root>/scripts/set-env.sh --target openclaw --refresh
+```
+
+On PowerShell use `& <plugin-root>/scripts/set-env.ps1 -Target openclaw -Refresh`.
+Refresh moves the entry's `UNIFI_` settings into the settings file, saves a
+private `openclaw.json.bak-<plugin>-<time>` beside `openclaw.json`, then removes
+the entry with `openclaw mcp unset`. It names any other entry setting it did not
+move, never asks for credentials and makes no controller connection. OpenClaw
+loads the bundled server from its next agent turn; a running Gateway needs no
+restart.
+
+Claude Code reads the server declared inline in `.claude-plugin/plugin.json`,
+which maps each server variable to a plugin option (`${user_config.KEY}`). Claude Code prompts for these options when
 the plugin is enabled, and setup saves them with `claude plugin configure`.
 - **Where they live:** non-secret options in user `settings.json`; a raw password
   or API key in the system keychain.
@@ -173,6 +197,7 @@ No minimum client version has been established for any client.
 - Codex: setup writes the settings file itself and needs the `codex` CLI on
   `PATH` only to remove a pre-1.0.0 entry from a `config.toml` layout it cannot
   edit in place; the prerequisite check still requires it.
-- OpenClaw: setup validates the server entry with the client's own CLI
-  (`openclaw mcp set` and `openclaw config validate`), so `openclaw` must be on
-  `PATH`.
+- OpenClaw: setup writes the settings file itself and needs the `openclaw` CLI
+  on `PATH` only to remove a pre-1.0.0 entry with `openclaw mcp unset`; the
+  prerequisite check still requires it. Setup reads `openclaw.json` as strict
+  JSON and refuses a JSON5 file unchanged.

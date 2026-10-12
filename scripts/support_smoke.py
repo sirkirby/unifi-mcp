@@ -153,9 +153,10 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     if codex is not None:
         require(codex["mcpServers"] == "./.mcp.codex.json", "plugin_mcp_path")
     name = f"unifi-{product}"
-    mcp_manifest = json.loads((folder / ".mcp.json").read_text())
+    # Claude Code's server is inline in its manifest; a root .mcp.json would also reach OpenClaw's server.
+    require(not (folder / ".mcp.json").exists(), "plugin_manifest_alignment")
     codex_mcp = json.loads((folder / ".mcp.codex.json").read_text())
-    launcher = mcp_manifest["mcpServers"][name]
+    launcher = (claude or codex_mcp)["mcpServers"][name]
     args = launcher.get("args", [])
     pin = re.fullmatch(rf"unifi-{product}-mcp==(.+)", args[-1]) if args and isinstance(args[-1], str) else None
     require(pin is not None, "plugin_package_pin")
@@ -165,17 +166,14 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     except ValueError:
         raise SupportSmokeError("plugin_package_version") from None
     expected_args = ["--python-preference", "system", f"unifi-{product}-mcp=={version}"]
-    launchers = [launcher, codex_mcp["mcpServers"][name]]
-    if claude is not None and "mcpServers" in claude:
-        launchers.append(claude["mcpServers"][name])
-    for config in launchers:
+    for config in (launcher, codex_mcp["mcpServers"][name]):
         require(config["command"] == "uvx" and config["args"] == expected_args, "plugin_launcher_alignment")
     # The repository artifacts are trusted, unlike --support-plugin-root. Allow
     # release-version changes only; reject extra servers, transports, hooks, and
     # every other host behavior that our manual stdio launch would not exercise.
     trusted_folder = Path(__file__).resolve().parents[1] / "plugins" / name
     expected_env = {}
-    for filename, supplied in {**manifests, ".mcp.codex.json": codex_mcp, ".mcp.json": mcp_manifest}.items():
+    for filename, supplied in {**manifests, ".mcp.codex.json": codex_mcp}.items():
         expected = json.loads((trusted_folder / filename).read_text())
         if "version" in expected:
             expected["version"] = plugin_version
@@ -185,7 +183,7 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
                 supplied["mcpServers"][name].get("env") == expected["mcpServers"][name].get("env"),
                 "plugin_env_alignment",
             )
-            if filename == ".mcp.json":
+            if filename == ".claude-plugin/plugin.json":
                 expected_env = expected["mcpServers"][name]["env"]
         require(supplied == expected, "plugin_manifest_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.

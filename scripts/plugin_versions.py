@@ -22,6 +22,8 @@ SEMVER = re.compile(
 )
 PACKAGE_PIN = re.compile(r"(unifi-(network|protect|access)-mcp)==(.+)")
 MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
+# Claude Code's servers are inline in its manifest; Codex and OpenClaw run this file's.
+CODEX_MCP = ".mcp.codex.json"
 MARKETPLACES = (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json")
 PRODUCTS = ("network", "protect", "access")
 
@@ -97,17 +99,15 @@ def plugin_state(bundle: Path) -> tuple[str, dict[str, str]]:
     if len(set(versions)) != 1:
         raise ValueError(f"{bundle.name}: manifests disagree: {versions}")
     pins: dict[str, str] = {}
-    configs = [bundle / ".mcp.json", bundle / ".mcp.codex.json"]
-    if any(path.exists() for path in configs):
-        for path in configs:
-            found = config_pins(load(path), str(path))
-            if path == configs[0]:
-                pins = found
-            elif found != pins:
-                raise ValueError(f"{bundle.name}: mismatched pins between Claude and Codex")
-        inline = load(bundle / MANIFESTS[0]) if (bundle / MANIFESTS[0]).exists() else {}
-        if "mcpServers" in inline and config_pins(inline, str(bundle / MANIFESTS[0])) != pins:
-            raise ValueError(f"{bundle.name}: mismatched pins in inline Claude manifest")
+    if (bundle / ".mcp.json").exists():
+        # OpenClaw merges a root .mcp.json into the bundled Codex server; Claude Code reads the inline servers.
+        raise ValueError(f"{bundle.name}: root .mcp.json is unsupported; declare Claude servers inline")
+    claude = load(bundle / MANIFESTS[0]) if (bundle / MANIFESTS[0]).exists() else {}
+    codex = bundle / CODEX_MCP
+    if "mcpServers" in claude or codex.exists():
+        pins = config_pins(claude, str(bundle / MANIFESTS[0]))
+        if config_pins(load(codex), str(codex)) != pins:
+            raise ValueError(f"{bundle.name}: mismatched pins between Claude and Codex")
     elif bundle.name != "cross-product":
         raise ValueError(f"{bundle.name}: missing MCP configs")
     return versions[0], pins
@@ -169,7 +169,7 @@ def check(root: Path, base_ref: str, releasing: str | None = None) -> None:
 
 
 def update_pin(bundle: Path, new_pin: str) -> bool:
-    """Update both client pins and manifest versions; retrying the same pin is a no-op."""
+    """Update the inline Claude and bundled Codex pins and manifest versions; retrying the same pin is a no-op."""
     plugin, pins = plugin_state(bundle)
     package = f"{bundle.name}-mcp"
     if set(pins) != {package}:
@@ -178,7 +178,7 @@ def update_pin(bundle: Path, new_pin: str) -> bool:
     if new_pin == old_pin:
         return False
     version = next_version(plugin, old_pin, new_pin)
-    for filename in (*MANIFESTS, ".mcp.json", ".mcp.codex.json"):
+    for filename in (*MANIFESTS, CODEX_MCP):
         path = bundle / filename
         if not path.exists() and filename in MANIFESTS:
             continue

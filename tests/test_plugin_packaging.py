@@ -30,6 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CLAUDE_MARKETPLACE = Path(".claude-plugin/marketplace.json")
 CODEX_MARKETPLACE = Path(".agents/plugins/marketplace.json")
 BUMP_WORKFLOW = Path(".github/workflows/bump-plugin-versions.yml")
+CLAUDE_MANIFEST = Path(".claude-plugin/plugin.json")
 SUPPORT_DOC = Path("docs/plugin-support.md")
 
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -275,7 +276,7 @@ def check_claude_user_config(bundle: Path, manifest: dict, errors: list[str]) ->
     """Every Claude option variable is declared, safe by default and conflict-free."""
     where = f"{bundle.name}/.claude-plugin/plugin.json"
     schema = manifest.get("userConfig")
-    servers = _load(bundle / ".mcp.json").get("mcpServers") or {}
+    servers = manifest.get("mcpServers") or {}
     if not servers:
         return
     if not isinstance(schema, dict):
@@ -348,12 +349,15 @@ def packaging_errors(root: Path) -> list[str]:
     for name in sorted(set(claude) | set(codex)):
         bundle = claude.get(name) or codex[name]
         claude_manifest = check_claude_manifest(bundle, name, errors)
-        if claude_manifest is not None and (bundle / ".mcp.json").is_file():
+        if claude_manifest is not None:
             check_claude_user_config(bundle, claude_manifest, errors)
+        if (bundle / ".mcp.json").exists():
+            # OpenClaw merges a root .mcp.json into the bundled Codex server it runs.
+            errors.append(f"{name}: root .mcp.json is unsupported; declare Claude Code servers inline")
         resolved = check_codex_manifest(bundle, name, errors)
         portable = resolved is not None and resolved["layout"] == "portable"
-        # Validate Claude and Codex launch files independently.
-        pins = check_mcp_servers(bundle / ".mcp.json", root, errors, portable=False)
+        # Validate Claude Code's inline servers and the Codex launch file independently.
+        pins = check_mcp_servers(bundle / CLAUDE_MANIFEST, root, errors, portable=False)
         codex_path = mcp_config_path(bundle, resolved)
         portable_pins = check_mcp_servers(codex_path, root, errors, portable=portable, codex=True)
         skills = check_skills(bundle, root, errors)
@@ -367,16 +371,6 @@ def packaging_errors(root: Path) -> list[str]:
             versions["Codex manifest"] = resolved["identity"].get("version")
         if pins != portable_pins:
             errors.append(f"{name}: mismatched client pins")
-        inline = (claude_manifest or {}).get("mcpServers")
-        claude_mcp = bundle / ".mcp.json"
-        if isinstance(inline, dict) and claude_mcp.is_file():
-            # Claude loads .mcp.json first, then inline servers replace same-named ones.
-            mcp_file = _load(claude_mcp).get("mcpServers", {})
-            for server_name, server in inline.items():
-                expected = {k: v for k, v in mcp_file.get(server_name, {}).items() if k not in {"type", "extensions"}}
-                actual = {k: v for k, v in server.items() if k != "type"}
-                if actual != expected:
-                    errors.append(f"{name}: inline Claude mcpServers.{server_name} differs from the MCP config file")
         if len(set(versions.values())) != 1:
             errors.append(f"{name}: plugin manifests disagree: {versions}")
 
@@ -453,7 +447,7 @@ def test_support_doc_states_setup_helper_runtime() -> None:
 @pytest.mark.parametrize("name", _advertised_bundles())
 def test_setup_skill_names_the_scoped_claude_reconnect(name: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
-    servers = (_load(bundle / ".mcp.json").get("mcpServers") or {}) if (bundle / ".mcp.json").is_file() else {}
+    servers = _load(bundle / CLAUDE_MANIFEST).get("mcpServers") or {}
     if not servers:
         pytest.skip("bundle declares no MCP server")
     skill = (bundle / "skills" / f"{name}-setup" / "SKILL.md").read_text(encoding="utf-8")
@@ -493,7 +487,7 @@ def test_source_path_outside_marketplace_root_is_reported(tmp_path: Path) -> Non
 def test_package_pin_drift_is_reported(tmp_path: Path) -> None:
     root = _copy_packaging_tree(tmp_path)
     name = _advertised_bundles()[0]
-    mcp = root / "plugins" / name / ".mcp.json"
+    mcp = root / "plugins" / name / CLAUDE_MANIFEST
 
     def bump(data: dict) -> None:
         server = next(iter(data["mcpServers"].values()))
@@ -514,7 +508,7 @@ def test_unknown_package_name_is_reported(tmp_path: Path) -> None:
         server = next(iter(data["mcpServers"].values()))
         server["args"] = [re.sub(r"^unifi-[a-z]+-mcp==", "unifi-bogus-mcp==", arg) for arg in server["args"]]
 
-    _edit_json(root / "plugins" / name / ".mcp.json", rename)
+    _edit_json(root / "plugins" / name / CLAUDE_MANIFEST, rename)
 
     errors = packaging_errors(root)
 
@@ -525,7 +519,7 @@ def test_literal_env_value_is_reported(tmp_path: Path) -> None:
     root = _copy_packaging_tree(tmp_path)
     name = _advertised_bundles()[0]
     _edit_json(
-        root / "plugins" / name / ".mcp.json",
+        root / "plugins" / name / CLAUDE_MANIFEST,
         lambda d: next(iter(d["mcpServers"].values()))["env"].update(UNIFI_HOST="192.0.2.1"),
     )
 
@@ -681,9 +675,19 @@ def test_codex_template_regression_is_reported(tmp_path: Path) -> None:
     root = _copy_packaging_tree(tmp_path)
     name = _advertised_bundles()[0]
     bundle = root / "plugins" / name
-    _edit_json(bundle / ".codex-plugin/plugin.json", lambda d: d.update(mcpServers="./.mcp.json"))
+    # Claude Code's option templates must never reach the file Codex and OpenClaw launch.
+    _edit_json(bundle / ".mcp.codex.json", lambda d: d.update(mcpServers=_load(bundle / CLAUDE_MANIFEST)["mcpServers"]))
 
     assert any("Codex env" in error for error in packaging_errors(root))
+
+
+def test_root_mcp_json_is_reported(tmp_path: Path) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    name = _advertised_bundles()[0]
+    bundle = root / "plugins" / name
+    (bundle / ".mcp.json").write_text(json.dumps({"mcpServers": _load(bundle / CLAUDE_MANIFEST)["mcpServers"]}))
+
+    assert f"{name}: root .mcp.json is unsupported; declare Claude Code servers inline" in packaging_errors(root)
 
 
 def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
@@ -697,10 +701,10 @@ def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("name", _advertised_bundles())
-@pytest.mark.parametrize("filename", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
+@pytest.mark.parametrize("filename", [".mcp.codex.json", ".claude-plugin/plugin.json"])
 def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
-    expected = check_mcp_servers(bundle / ".mcp.json", REPO_ROOT, [], portable=False)
+    expected = check_mcp_servers(bundle / CLAUDE_MANIFEST, REPO_ROOT, [], portable=False)
     pins = check_mcp_servers(bundle / filename, REPO_ROOT, [], portable=False, codex="codex" in filename)
 
     assert pins == expected
@@ -711,7 +715,7 @@ def _claude_manifest(root: Path, name: str) -> Path:
 
 
 def _mcp_bundles() -> list[str]:
-    return [name for name in _advertised_bundles() if (REPO_ROOT / "plugins" / name / ".mcp.json").is_file()]
+    return [name for name in _advertised_bundles() if _load(_claude_manifest(REPO_ROOT, name)).get("mcpServers")]
 
 
 @pytest.mark.parametrize("name", _mcp_bundles())
@@ -728,7 +732,7 @@ def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> 
 def test_no_client_exposes_the_deprecated_auto_confirm_switch(name: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
     assert "auto_confirm" not in _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
-    for filename in (".claude-plugin/plugin.json", ".mcp.json", ".mcp.codex.json"):
+    for filename in (".claude-plugin/plugin.json", ".mcp.codex.json"):
         assert "UNIFI_AUTO_CONFIRM" not in (bundle / filename).read_text(encoding="utf-8")
 
 
@@ -773,7 +777,7 @@ def test_claude_plugin_validate_passes(tmp_path: Path, name: str) -> None:
 def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
     """The env Claude hands the server: saved values, else defaults, else empty."""
     options = _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
-    server = next(iter(_load(REPO_ROOT / "plugins" / name / ".mcp.json")["mcpServers"].values()))
+    server = next(iter(_load(_claude_manifest(REPO_ROOT, name))["mcpServers"].values()))
     env = {}
     for variable, template in server["env"].items():
         option = USER_CONFIG_REFERENCE.match(template)[1]

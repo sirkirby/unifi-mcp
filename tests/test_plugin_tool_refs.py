@@ -34,8 +34,9 @@ def release_manifest(root: Path, *tools: str) -> None:
 
 def pin(root: Path, version: str) -> None:
     server = {"unifi-network": {"command": "uvx", "args": [f"unifi-network-mcp=={version}"]}}
-    for filename in (".mcp.json", ".mcp.codex.json"):
-        write(root, f"plugins/unifi-network/{filename}", json.dumps({"mcpServers": server}))
+    write(root, "plugins/unifi-network/.mcp.codex.json", json.dumps({"mcpServers": server}))
+    manifest = root / "plugins/unifi-network/.claude-plugin/plugin.json"
+    write(root, str(manifest.relative_to(root)), json.dumps(dict(json.loads(manifest.read_text()), mcpServers=server)))
 
 
 def release(root: Path, tag: str) -> None:

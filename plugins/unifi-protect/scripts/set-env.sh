@@ -42,8 +42,8 @@ if [ ${#runner[@]} -eq 0 ]; then
 fi
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 if [ "$refresh" = true ]; then
-  [ "$target" = codex ] && [ "$input_json" = false ] && [ $# -eq 0 ] || {
-    echo 'ERROR: --refresh requires --target codex and no environment arguments.' >&2; exit 1;
+  { [ "$target" = codex ] || [ "$target" = openclaw ]; } && [ "$input_json" = false ] && [ $# -eq 0 ] || {
+    echo 'ERROR: --refresh requires --target codex or openclaw and no environment arguments.' >&2; exit 1;
   }
   exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}" </dev/null
 fi
