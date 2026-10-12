@@ -1,6 +1,6 @@
 ---
 name: unifi-network-setup
-description: Configure the UniFi Network MCP server for a supported MCP client — set controller host, credentials, and permissions
+description: Configure the UniFi Network MCP server for a supported MCP client — set controller host, credentials, and permissions. Also use when the unifi-network server failed to start or its tools are missing, especially right after a plugin update, because in Claude Code the plugin no longer reads settings an earlier version saved in the project's .claude/settings.local.json, and this skill migrates them
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
