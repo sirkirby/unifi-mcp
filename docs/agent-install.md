@@ -123,11 +123,12 @@ Open Codex, run `/plugins`, install the chosen UniFi product, then ask:
 Use the unifi-network-setup skill to configure this for Codex.
 ```
 
-Setup saves a version-pinned MCP entry for the server in Codex's
-`config.toml`, editing only that server's tables. Restart Codex after
-configuration. Codex installs plugin upgrades itself at the start of a session,
-but the saved entry keeps its server version: after every plugin upgrade, re-run
-setup with `--refresh` (see the [plugin upgrade guide](plugin-upgrade.md#codex)). Roll back by uninstalling
+Setup saves an MCP entry for the server in Codex's `config.toml`, editing only
+that server's tables. Restart Codex after configuration. Codex installs plugin
+upgrades itself at the start of a session, and the saved entry starts the server
+version the installed plugin pins, so the server follows without rerunning
+setup. An entry saved by a plugin version before 1.0.0 needs one `--refresh` (see
+the [plugin upgrade guide](plugin-upgrade.md#codex)). Roll back by uninstalling
 the selected plugin and removing only its matching MCP entry with the current
 `codex mcp` command; `codex mcp remove` drops the comments inside every
 `[mcp_servers.*]` table.

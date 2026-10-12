@@ -25,6 +25,10 @@ What changes:
   you to type a password or API key into the conversation, and the setup scripts
   refuse a raw password or API key as a command argument. See
   [Moving a raw secret to a provider](#moving-a-raw-secret-to-a-provider).
+- **Codex setup follows plugin upgrades.** The MCP entry that Codex setup saves
+  starts the server version the installed plugin pins, so you no longer refresh
+  it after each upgrade. Convert an entry from an earlier version once; see
+  [Codex](#codex).
 - **Setup is transactional.** Setup validates every change before writing it and
   replaces the client configuration atomically. If anything fails, the previous
   configuration stays in place and usable.
@@ -169,22 +173,32 @@ upgrade without starting a session, run:
 codex plugin marketplace upgrade
 ```
 
-Setup created a separate, version-pinned MCP entry that takes precedence over
-the plugin's bundled server. That entry keeps the server version you had until
-you refresh it. 1.0.0 keeps the same server versions, so your server does not
-change now, but refresh after every plugin upgrade so the entry follows the new
-plugin's pin:
+Setup saved a separate MCP entry, holding your settings, that takes precedence
+over the plugin's bundled server. From 1.0.0 that entry starts the server
+version the installed plugin pins, so later plugin upgrades update the server
+with no setup. An entry saved by an earlier plugin version pins its server
+package instead, and keeps it through upgrades. 1.0.0 keeps the same server
+versions, so nothing changes now; convert the entry once so it follows later
+releases:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-You can also ask Codex to run the plugin's setup skill with `--refresh`. Refresh
-keeps your saved settings and provider references, asks for no credentials and
-prints the pinned package. Restart Codex afterwards. If there is no saved MCP
-entry, run ordinary setup instead. Your saved Codex settings carry over,
-including per-category policy overrides.
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+`<plugin-root>` is the installed plugin, for example
+`~/.codex/plugins/cache/unifi-plugins/unifi-network/1.0.0`. You can also ask
+Codex to run the plugin's setup skill: its prerequisite check names a pinned
+entry and the refresh that converts it. Refresh keeps your saved settings and
+provider references, asks for no credentials, and prints the server package the
+plugin pins. Restart Codex afterwards. You need it once per entry, not after
+every upgrade. If there is no saved MCP entry, run ordinary setup instead. Your
+saved Codex settings carry over, including per-category policy overrides.
+
+The converted entry starts through `uv`, which is installed with `uvx`. If you
+uninstall the plugin, the entry fails to start and names the missing
+installation; reinstall the plugin and refresh again, or remove the entry with
+`codex mcp remove unifi-network`.
 
 ### OpenClaw
 
@@ -243,10 +257,10 @@ What happens when a release lands, and how to stay on your current plugins:
   marketplace; then it installs the release in the background during a
   session. To hold off, leave auto-update off (turn it off under `/plugin`,
   then **Marketplaces**, if you enabled it) and don't run the update commands.
-- **Codex:** installs the release at the start of your next session. There is no
-  switch to hold off. Your setup entry keeps its pinned server version until you
-  run `--refresh`, so the server you run doesn't change; the plugin's skills and
-  files do.
+- **Codex:** installs the release at the start of your next session, together
+  with the server version it pins. There is no switch to hold off. An entry
+  saved by setup before 1.0.0 keeps its pinned server until you run `--refresh`
+  once; see [Codex](#codex).
 - **OpenClaw:** nothing until you run `openclaw plugins update`. To hold off,
   don't run it.
 

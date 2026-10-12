@@ -30,8 +30,8 @@ marketplace:
   `claude plugin update <plugin>@unifi-plugins`, then start a new session.
 - **Codex** upgrades its marketplaces at the start of every session and
   reinstalls a plugin when its version changes (`codex plugin marketplace
-  upgrade` does the same on demand). Setup's pinned server entry keeps its
-  server version until you re-run setup with `--refresh` (below).
+  upgrade` does the same on demand). Setup's server entry starts the server
+  version the installed plugin pins, so the server follows the upgrade (below).
 - **OpenClaw** follows commits and changes nothing until you run
   `openclaw plugins update <id>`, which asks you to accept the plugin's
   capabilities (`--accept-capabilities` in scripts).
@@ -43,26 +43,35 @@ Contributors: the version, pin and release rules are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#plugin-changes) and the
 `monorepo-release-pipeline` skill (Procedure E).
 
-Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
-that takes precedence over the bundle. After every plugin upgrade, re-run setup
-from the newly installed plugin before restarting Codex.** Setup pins the
-package in the server entry's `args` and prints the package version on success.
-It edits only that server's tables in `config.toml`, so the file's comments and
-other servers stay as written; `codex mcp add` and `codex mcp remove` rewrite the
-file and drop the comments inside every `[mcp_servers.*]` table. A pin may be a
-PEP 440 development or local version, such as `0.37.1.dev83+g<sha>`, when a
-candidate is tested before release. Preserve the saved environment with this
-non-secret command:
+Claude loads its bundled server on upgrade. **Codex setup creates a separate MCP
+entry, holding the settings, that takes precedence over the bundle.** Codex
+installs each plugin version in its own directory and deletes the previous one,
+so the entry names the stable plugin directory
+(`$CODEX_HOME/plugins/cache/<marketplace>/<plugin>`). It runs a short stub
+through `uv run`, which starts the installed version's
+`scripts/codex_server.py`; that launcher starts the command in the version's
+`.mcp.codex.json`, so the server follows plugin upgrades with no setup. Setup
+prints the package version the plugin pins on success. It edits only that
+server's tables in `config.toml`, so the file's comments and other servers stay
+as written; `codex mcp add` and `codex mcp remove` rewrite the file and drop the
+comments inside every `[mcp_servers.*]` table. A pin may be a PEP 440
+development or local version, such as `0.37.1.dev83+g<sha>`, when a candidate
+is tested before release.
+
+Entries saved before plugin 1.0.0 pin the package in `args` and keep it through
+upgrades. The prerequisite check names such an entry, and this non-secret
+command converts it once:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On PowerShell use `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-Resolve `<new-plugin-root>` from the current installed plugin, not an older cache
-path. Refresh preserves saved settings and provider references, validates them,
-and atomically updates the pin; it does not collect credentials or contact a
-controller. Run ordinary setup first if there is no saved MCP entry.
+On PowerShell use `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+Refresh preserves saved settings and provider references, validates them, and
+atomically points the entry at the installed plugin; it does not collect
+credentials or contact a controller. Run ordinary setup first if there is no
+saved MCP entry. If the plugin is uninstalled, the entry fails to start with a
+message naming the missing installation.
 
 Codex uses `.mcp.codex.json`, which omits shell-style environment templates:
 Codex 0.162.0 passes those templates literally. The Codex config therefore leaves

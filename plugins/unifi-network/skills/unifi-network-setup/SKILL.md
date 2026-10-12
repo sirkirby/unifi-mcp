@@ -212,20 +212,28 @@ only when the server starts.
 
 ### Codex upgrades
 
-Codex setup pins a separate MCP entry that takes precedence over the plugin's
-bundled server. After **every plugin upgrade**, resolve this newly installed
-skill's plugin root and refresh the pin before restarting Codex:
+Codex setup saves a separate MCP entry, holding the settings, that takes
+precedence over the plugin's bundled server. The entry names the plugin's
+installation directory and starts, through `uv`, the server package that the
+installed plugin version pins. When Codex installs a plugin upgrade, the next
+session runs the new server; nothing needs to be rerun.
+
+Entries saved by an earlier plugin version pin a server package instead, so the
+server stays at that version through upgrades. Step 0 then prints a notice that
+names the pinned package and `--refresh`. Relay it and, once the user agrees,
+run refresh from this skill's plugin root, then restart Codex:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-This command needs no credential input and preserves the saved environment and
-provider references. It validates providers, pins the package in the server
-entry's `args`, and prints the pinned package on success. Confirm that version
-matches the new installed plugin. Use ordinary setup first if there is
-no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+Refresh needs no credential input and keeps the saved environment and provider
+references. It validates providers, points the entry at this installation and
+prints the server package the plugin pins. It is needed once per entry. Use
+ordinary setup if there is no saved MCP entry. If the plugin is uninstalled, the
+entry fails to start with a message naming the missing installation; after
+reinstalling, run refresh from the new installation.
 
 Tell the user that `codex mcp add` and `codex mcp remove` rewrite `config.toml`
 and drop the comments inside every `[mcp_servers.*]` table, for every server.
@@ -293,7 +301,7 @@ For Claude Code, tell the user:
 
 For Codex, tell the user:
 
-"Codex MCP server `unifi-network` configured at the package version printed by setup. Restart Codex so the updated MCP server is loaded. After every plugin upgrade, re-run the new plugin’s setup with --target codex --refresh (PowerShell: -Target codex -Refresh)."
+"Codex MCP server `unifi-network` configured. It starts the server package printed by setup and follows plugin upgrades on its own. Restart Codex so the updated MCP server is loaded."
 
 For OpenClaw, tell the user:
 
