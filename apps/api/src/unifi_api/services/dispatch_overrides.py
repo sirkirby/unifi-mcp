@@ -152,10 +152,10 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # =========================================================================
     # Protect — preview/execute split (preview_X + X, X + apply_X patterns)
     # =========================================================================
-    "protect_alarm_arm": ("alarm_manager", "arm"),
-    "protect_alarm_disarm": ("alarm_manager", "disarm"),
-    # Alarm rule CRUD uses the facade so v2 UUID rules and legacy ObjectID rules
-    # route through the same family-aware path as the Protect MCP tools.
+    # Arm/disarm and alarm rule CRUD use the facade so Global-mode (v2) consoles
+    # and legacy consoles route through the same path as the Protect MCP tools.
+    "protect_alarm_arm": ("alarm_facade", "arm"),
+    "protect_alarm_disarm": ("alarm_facade", "disarm"),
     "protect_alarm_update_rule": ("alarm_facade", "update_rule"),
     "protect_alarm_delete_rule": ("alarm_facade", "delete_rule"),
     "protect_ptz_move": ("camera_manager", "ptz_move"),

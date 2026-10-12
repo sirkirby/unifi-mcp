@@ -86,8 +86,8 @@ The alarm-rule tools are version-agnostic. `protect_alarm_list_rules` / `protect
 
 - `protect_alarm_list_profiles` -- List all configured arm profiles with id, name, armed state, default flag
 - `protect_alarm_get_status` -- Current armed/disarmed state across all profiles
-- `protect_alarm_arm` -- Arm the system for a given profile (confirm required; defaults to default profile)
-- `protect_alarm_disarm` -- Disarm the system for a given profile (confirm required; defaults to default profile)
+- `protect_alarm_arm` -- Arm a profile by id or name (confirm required). Global-mode consoles arm via `POST /api/v2/alarms/profiles/{id}/actions/arm` and the result is verified against the controller state; legacy consoles use `PATCH arm` + `POST arm/enable`
+- `protect_alarm_disarm` -- Disarm every active profile, or one `profile_id` (confirm required). Global-mode consoles use `POST /api/v2/alarms/profiles/{id}/actions/disarm`; legacy consoles use `POST arm/disable`
 - `protect_alarm_list_rules` -- List alarm rules (normalized: id, title, enabled, triggers, actions, scope, stats), including AI alarms
 - `protect_alarm_get_rule` -- Fetch a single alarm rule by id (normalized)
 - `protect_alarm_create_rule` -- Create an alarm rule using the canonical shape returned by list/get (confirm required)

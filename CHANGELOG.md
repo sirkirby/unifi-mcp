@@ -11,6 +11,13 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-10-15 — unifi-protect 1.1.5
+
+- `protect_alarm_arm` and `protect_alarm_disarm` arm and disarm Global-mode Alarm Manager profiles through the
+  UniFi OS v2 profile actions and verify the controller state, instead of reporting success from the legacy
+  endpoints that do nothing in Global mode. `profile_id` accepts a profile id or name, and
+  `protect_alarm_disarm` gains an optional `profile_id`. The skill tool reference is updated to match.
+
 ## 2026-10-15 — unifi-network 1.1.5
 
 - Pins `unifi-network-mcp` [0.38.3](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.38.3).

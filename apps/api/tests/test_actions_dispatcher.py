@@ -839,7 +839,10 @@ def test_dispatch_overrides_specific_targets() -> None:
 
     # Protect preview/execute split
     assert table["protect_reboot_camera"].method == "apply_reboot_camera"
+    assert table["protect_alarm_arm"].manager_attr == "alarm_facade"
     assert table["protect_alarm_arm"].method == "arm"
+    assert table["protect_alarm_disarm"].manager_attr == "alarm_facade"
+    assert table["protect_alarm_disarm"].method == "disarm"
     assert table["protect_acknowledge_event"].method == "apply_acknowledge_event"
     assert table["protect_update_sensor_settings"].manager_attr == "sensor_manager"
     assert table["protect_update_sensor_settings"].method == "apply_sensor_settings"

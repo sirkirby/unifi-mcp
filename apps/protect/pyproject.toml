@@ -21,7 +21,7 @@ dependencies = [
     # Serving MCP before the controller connects (bounded, shared connection
     # attempt) requires Core 0.4.70.
     # Bounded incident evidence collection and its client view require Core 0.4.71.
-    "unifi-core[protect]>=0.4.71,<0.5",
+    "unifi-core[protect]>=0.4.72,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
