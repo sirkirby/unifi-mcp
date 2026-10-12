@@ -16,8 +16,8 @@ manager read methods. Budgets (see ``docs/incident-evidence.md``):
 - ``calls``: every HTTP request a read sends, including the API-version
   probe and retries (see ``unifi_core.request_budget``); a request the
   budget cannot pay for is refused before it is sent.
-- ``elapsed``: wall time across reads, including acquiring the manager; a
-  read still running when the budget runs out is cancelled.
+- ``elapsed``: wall time across reads, including waiting for the manager's
+  connection; a read still running when the budget runs out is cancelled.
 
 A budget that stops collection is reported exhausted, the source it stopped
 is ``partial`` (or ``not_attempted`` if it returned nothing), and every

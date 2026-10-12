@@ -2,7 +2,8 @@
 
 A connection manager that fails to initialize records one of these instead of
 the original exception, whose message can quote controller responses. Every
-class is a ``ConnectionError``, so existing handlers keep working, and the
+class is a ``ConnectionError`` and a ``UniFiConnectionError``, so existing
+handlers keep working, and the
 authentication, permission and timeout variants also classify as such
 (``unifi_core.support_bundle.classify_error``), so evidence reports
 ``auth_failed``, ``permission_denied`` or ``timeout`` rather than
@@ -11,11 +12,11 @@ authentication, permission and timeout variants also classify as such
 
 from __future__ import annotations
 
-from unifi_core.exceptions import UniFiAuthError, UniFiPermissionError, http_status
+from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiPermissionError, http_status
 from unifi_core.support_bundle import ErrorCategory, classify_error
 
 
-class ControllerConnectionFailed(ConnectionError):
+class ControllerConnectionFailed(UniFiConnectionError, ConnectionError):
     """Connecting to the controller failed; ``status`` is the HTTP status, when known."""
 
     #: Normalized failure category, safe to log.

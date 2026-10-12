@@ -313,12 +313,14 @@ class ProtectConnectionManager:
 
     def _connection_failed(self, error: BaseException) -> None:
         self._initialized = False
-        self._support_attempt = connection_attempt_failed(error)
         self._last_failure_class = type(error).__name__
         # The exception can quote NVR responses: keep its category and status only.
+        # uiprotect wraps a timed-out request in NvrError; classify it by its cause.
+        cause = error.__cause__ if isinstance(error.__cause__, TimeoutError) else error
         self._initialization_failure = connection_failure(
-            "Connecting to UniFi Protect failed.", error, status=nvr_status(error)
+            "Connecting to UniFi Protect failed.", cause, status=nvr_status(error)
         )
+        self._support_attempt = connection_attempt_failed(self._initialization_failure)
         self._last_connect_attempt_at = self._clock()
         if _is_terminal_auth_error(error):
             self._block_automatic_reconnect(error)

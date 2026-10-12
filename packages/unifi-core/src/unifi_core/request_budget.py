@@ -8,11 +8,13 @@ charge first, which may refuse the attempt by raising
 - Network ``ConnectionManager.request`` charges each attempt it sends,
   including the API-version probe and the retry after a re-login, and marks
   it prepaid for the session.
-- Connection sessions (Network's aiohttp session, Protect's private and
-  public sessions) carry :func:`charged_session_middleware`, so every other
-  request a cold connection sends while acquiring the manager (controller
-  detection, sites checks, the Protect bootstrap, their retries) is charged
-  too. Logins are not charged.
+- Network's aiohttp session carries :func:`charged_session_middleware`, so
+  any other request it sends from the read's own task is charged too. Logins
+  are not charged.
+- Connecting is not a read's request: every connection manager connects in
+  its shared connect attempt (``unifi_core.connect_attempt``), a task of its
+  own, so controller detection, sites checks, the Protect bootstrap and their
+  retries are never charged to, or refused by, a read that waits for it.
 - Protect evidence reads pass :func:`charged_request_middleware` for their
   one request, replacing the session's, so uiprotect's status and reconnect
   retries are charged once each.

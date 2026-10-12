@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from uiprotect.data import Event, EventType, ModelType, SmartDetectObjectType, WSAction, WSSubscriptionMessage
 
-from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError
+from unifi_core.exceptions import UniFiConnectionError, UniFiMalformedResponseError, UniFiNotFoundError
 from unifi_core.protect.errors import safe_protect_error
 from unifi_core.protect.models.detection_search import from_controller as detection_search_from_controller
 from unifi_core.protect.models.events import smart_detection_from_controller
@@ -822,10 +822,19 @@ class EventManager:
         if camera_id:
             params["cameras"] = [camera_id]
         try:
+            client = self._cm.client
+        except UniFiConnectionError:
+            # Join the manager's shared connect attempt, within its bound and this
+            # read's deadline. The attempt runs in its own task, so its login and
+            # bootstrap are never charged to this read; a connection still missing
+            # raises the manager's classified, fixed-text error.
+            await self._cm.ensure_connected()
+            client = self._cm.client
+        try:
             # Request-local: each attempt (uiprotect's status and reconnect retries
             # included) is charged to a bounded read, and aiohttp's own idempotent
             # retry is suppressed, so no attempt goes uncounted.
-            rows = await self._cm.client.api_request(
+            rows = await client.api_request(
                 "events",
                 method="get",
                 params=params,

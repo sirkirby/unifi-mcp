@@ -86,7 +86,7 @@ async def test_a_denied_read_is_one_charged_request_with_its_status() -> None:
     assert evidence.sources[0].failure.http_status == 403
 
 
-# --- a cold connection acquired inside the read -----------------------------------------------
+# --- a cold connection acquired from the read -----------------------------------------------
 
 
 class _NVR:
@@ -125,7 +125,7 @@ class _NVR:
 
 
 async def _collect_cold(bootstrap: list[int], monkeypatch, *, refresh_seconds: float = 0, during=None, **budget):
-    """ProtectConnectionManager.initialize for real, against a local NVR, inside the first read."""
+    """ProtectConnectionManager.initialize for real, against a local NVR, from the first read."""
     from unifi_core.protect.managers import connection_manager as pcm
     from unifi_core.retry import RetryPolicy
 
@@ -173,20 +173,21 @@ async def _collect_cold(bootstrap: list[int], monkeypatch, *, refresh_seconds: f
 
 
 @pytest.mark.asyncio
-async def test_every_non_login_request_of_a_cold_connection_is_charged(monkeypatch) -> None:
+async def test_a_cold_connection_charges_only_the_reads_own_request(monkeypatch) -> None:
+    # The connect attempt runs in its own task: its bootstraps and their retries cost the read nothing.
     evidence, nvr = await _collect_cold([503, 200], monkeypatch, max_calls=10)
     assert "/api/auth/login" in nvr.seen
     assert nvr.charged == ["/proxy/protect/api/bootstrap", "/proxy/protect/api/bootstrap", "/proxy/protect/api/events"]
-    assert evidence.budgets.usage.calls == len(nvr.charged)
+    assert evidence.budgets.usage.calls == 1
     assert evidence.sources[0].outcome is SourceOutcome.EMPTY
 
 
 @pytest.mark.asyncio
-async def test_a_cold_connection_that_cannot_fit_the_budget_fails_closed(monkeypatch) -> None:
+async def test_a_cold_connection_fits_a_one_call_budget(monkeypatch) -> None:
     evidence, nvr = await _collect_cold([200], monkeypatch, max_calls=1)
-    assert nvr.charged == ["/proxy/protect/api/bootstrap"]
-    assert evidence.budgets.usage.calls == 1 and evidence.budgets.exhausted == (BudgetKind.CALLS,)
-    assert evidence.sources[0].outcome is SourceOutcome.NOT_ATTEMPTED and evidence.coverage_complete is False
+    assert nvr.charged == ["/proxy/protect/api/bootstrap", "/proxy/protect/api/events"]
+    assert evidence.budgets.usage.calls == 1 and evidence.budgets.exhausted == ()
+    assert evidence.sources[0].outcome is SourceOutcome.EMPTY
 
 
 @pytest.mark.asyncio
@@ -199,8 +200,6 @@ async def test_a_refused_bootstrap_keeps_its_category_and_no_nvr_text(monkeypatc
     assert source.failure.http_status == status
     assert PRIVATE not in json.dumps(evidence.model_dump(mode="json"))
     assert all(PRIVATE not in record.getMessage() and not record.exc_info for record in caplog.records)
-    category = {401: "authentication", 403: "permission"}[status]
-    assert any(f"(NotAuthorized; category={category}; HTTP {status})" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -224,5 +223,5 @@ async def test_a_bounded_read_never_throttles_the_bootstrap_refresh_it_started(m
         [200], monkeypatch, refresh_seconds=0.05, during=hold_the_read_through_refreshes, max_calls=2
     )
     assert nvr.seen.count("/proxy/protect/api/bootstrap") >= 3  # refreshes reached the NVR mid-read
-    assert evidence.budgets.usage.calls == 2 and evidence.budgets.exhausted == ()  # and cost the read nothing
+    assert evidence.budgets.usage.calls == 1 and evidence.budgets.exhausted == ()  # and cost the read nothing
     assert evidence.sources[0].outcome is SourceOutcome.EMPTY

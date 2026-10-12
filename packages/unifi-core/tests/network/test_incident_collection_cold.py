@@ -1,9 +1,11 @@
-"""A cold Network connection acquired inside a bounded read, over real HTTPS through aiounifi.
+"""A cold Network connection acquired from a bounded read, over real HTTPS through aiounifi.
 
 The controller is a local TLS server. ConnectionManager.initialize runs for
 real: controller-type detection, the aiounifi login, post-login detection,
-then the API-version probe and the event read. Every request but the login
-must be charged to the read's call budget before it is sent.
+then the API-version probe and the event read. The connection is made by the
+manager's shared connect attempt, in its own task, so none of its requests
+are charged to the read; the read's own requests are charged before they are
+sent.
 """
 
 from __future__ import annotations
@@ -111,19 +113,25 @@ async def _collect(tmp_path: Path, login_status: int = 200, **budget):
     return evidence, controller
 
 
+def _read_requests(controller: Controller) -> list[str]:
+    return [line for line in controller.charged if "/system-log/" in line]
+
+
 @pytest.mark.asyncio
-async def test_every_non_login_request_of_a_cold_connection_is_charged(tmp_path) -> None:
+async def test_a_cold_connection_charges_only_the_reads_own_requests(tmp_path) -> None:
     evidence, controller = await _collect(tmp_path, max_calls=20)
     assert any(line.endswith("/api/auth/login") for line in controller.seen)
+    # Detection and sites checks belong to the connect attempt, not to the read.
+    assert any(line.endswith("/self/sites") for line in controller.charged)
     assert controller.charged[-1].endswith("/system-log/all")
-    assert evidence.budgets.usage.calls == len(controller.charged) > 2
+    assert evidence.budgets.usage.calls == len(_read_requests(controller)) == 2
     assert evidence.sources[0].outcome is SourceOutcome.EMPTY
 
 
 @pytest.mark.asyncio
-async def test_a_cold_connection_that_cannot_fit_the_budget_fails_closed(tmp_path) -> None:
+async def test_a_read_that_cannot_pay_for_its_own_requests_fails_closed(tmp_path) -> None:
     evidence, controller = await _collect(tmp_path, max_calls=1)
-    assert len(controller.charged) == evidence.budgets.usage.calls == 1
+    assert len(_read_requests(controller)) == evidence.budgets.usage.calls == 1
     assert not any(line.endswith("/system-log/all") for line in controller.seen)
     assert evidence.budgets.exhausted == (BudgetKind.CALLS,)
     assert evidence.sources[0].outcome is SourceOutcome.NOT_ATTEMPTED
