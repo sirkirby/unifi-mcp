@@ -20,7 +20,7 @@ from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 @pytest.fixture
 def cm_api():
     """ConnectionManager with API client available."""
-    cm = AccessConnectionManager(host="192.168.1.1", username="", password="", api_key="test-key")
+    cm = AccessConnectionManager(host="192.0.2.1", username="", password="", api_key="test-key")
     cm._api_client_available = True
     cm._api_client = create_autospec(UnifiAccessApiClient, instance=True)
     return cm
@@ -29,7 +29,7 @@ def cm_api():
 @pytest.fixture
 def cm_proxy():
     """ConnectionManager with proxy available."""
-    cm = AccessConnectionManager(host="192.168.1.1", username="admin", password="secret")
+    cm = AccessConnectionManager(host="192.0.2.1", username="admin", password="secret")
     cm._proxy_available = True
     cm._proxy_session = MagicMock()
     return cm
@@ -48,7 +48,7 @@ def cm_both(cm_api):
 @pytest.fixture
 def cm_none():
     """ConnectionManager with no auth paths."""
-    cm = AccessConnectionManager(host="192.168.1.1", username="", password="")
+    cm = AccessConnectionManager(host="192.0.2.1", username="", password="")
     return cm
 
 

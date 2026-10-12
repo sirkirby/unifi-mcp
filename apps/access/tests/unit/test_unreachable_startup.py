@@ -82,6 +82,7 @@ async def test_read_after_failed_startup_reports_the_connection_error():
 
 
 @pytest.mark.asyncio
+@pytest.mark.real_reconnect
 @pytest.mark.parametrize("websocket_enabled", [True, False])
 async def test_reconnect_after_failed_startup_starts_the_event_listener(monkeypatch, websocket_enabled):
     from unifi_access_mcp import main

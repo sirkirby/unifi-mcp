@@ -21,6 +21,8 @@ from unifi_core.access.managers.connection_manager import AccessConnectionManage
 from unifi_core.access.managers.door_manager import DoorManager
 from unifi_core.exceptions import UniFiAuthError
 
+pytestmark = pytest.mark.real_reconnect
+
 FAKE_PASSWORD = "fake-password-do-not-log"
 FAKE_API_KEY = "fake-api-key-do-not-log"
 

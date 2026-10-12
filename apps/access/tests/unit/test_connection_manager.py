@@ -19,7 +19,7 @@ from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 def cm_api_only():
     """ConnectionManager configured with API key only (no username/password)."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="",
         password="",
         port=443,
@@ -33,7 +33,7 @@ def cm_api_only():
 def cm_proxy_only():
     """ConnectionManager configured with credentials only (no API key)."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -47,7 +47,7 @@ def cm_proxy_only():
 def cm_dual():
     """ConnectionManager configured with both API key and credentials."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -641,7 +641,7 @@ class TestInitialize:
             assert await cm_dual.initialize() is False
 
         error = cm_dual.last_connection_error
-        assert error.startswith("Could not reach or authenticate to UniFi Access at 192.168.1.1")
+        assert error.startswith("Could not reach or authenticate to UniFi Access at 192.0.2.1")
         assert "API key on port 12445" in error
         assert "username/password on port 443" in error
         assert "configured" in error and "No UniFi Access credentials" not in error
@@ -650,7 +650,7 @@ class TestInitialize:
     @pytest.mark.asyncio
     async def test_missing_credentials_message_and_no_retry(self):
         """No credentials fails immediately with a configuration message."""
-        cm = AccessConnectionManager(host="192.168.1.1", username="", password="", api_key=None)
+        cm = AccessConnectionManager(host="192.0.2.1", username="", password="", api_key=None)
         with patch("unifi_core.retry.asyncio.sleep", AsyncMock()) as sleep:
             assert await cm.initialize() is False
 
@@ -839,7 +839,7 @@ class TestDeveloperRequest:
 
         assert result == [{"id": "v1"}]
         args, kwargs = session.request.call_args
-        assert args == ("GET", "https://192.168.1.1:12445/api/v1/developer/visitors")
+        assert args == ("GET", "https://192.0.2.1:12445/api/v1/developer/visitors")
         assert kwargs["headers"]["Authorization"] == "Bearer test-api-key-123"
         assert "X-API-Key" not in kwargs["headers"]
         assert kwargs["params"] == {"page_num": 1}
