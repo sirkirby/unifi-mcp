@@ -65,10 +65,12 @@ Maintain a matrix of supported client versions, OS/shell, Python/uv, plugin and
 package versions, transport and required product/relay connections. Label each
 cell tested, unsupported or not tested; static consistency is not host evidence.
 
-Use current [OpenAI packaging rules](https://developers.openai.com/plugins/build/plugins)
-for portable root `plugin.json` and `mcp.json`, including supported legacy
-`.codex-plugin/plugin.json` fallback, and the separate
-[Claude manifest reference](https://code.claude.com/docs/en/plugins-reference).
+Each bundle declares Claude Code's MCP server inline in `.claude-plugin/plugin.json`,
+with server settings as plugin options, and Codex and OpenClaw run
+`.mcp.codex.json`; a root `.mcp.json` is never shipped (see the plugin bundle
+rules in the [repository rules](../AGENTS.md)). Check layouts against the current
+[OpenAI packaging rules](https://developers.openai.com/plugins/build/plugins) and the
+separate [Claude manifest reference](https://code.claude.com/docs/en/plugins-reference).
 Do not infer incompatibility from a legacy layout alone. Verify marketplace
 resolution and installed behavior for the exact supported clients.
 
