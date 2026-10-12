@@ -31,7 +31,8 @@ marketplace:
 - **Codex** upgrades its marketplaces at the start of every session and
   reinstalls a plugin when its version changes (`codex plugin marketplace
   upgrade` does the same on demand). Setup's server entry starts the server
-  version the installed plugin pins, so the server follows the upgrade (below).
+  version the installed plugin pins, so the server follows the upgrade from the
+  next session (below).
 - **OpenClaw** follows commits and changes nothing until you run
   `openclaw plugins update <id>`, which asks you to accept the plugin's
   capabilities (`--accept-capabilities` in scripts).

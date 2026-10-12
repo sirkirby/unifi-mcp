@@ -176,7 +176,9 @@ codex plugin marketplace upgrade
 Setup saved a separate MCP entry, holding your settings, that takes precedence
 over the plugin's bundled server. From 1.0.0 that entry starts the server
 version the installed plugin pins, so later plugin upgrades update the server
-with no setup. An entry saved by an earlier plugin version pins its server
+with no setup. Codex installs an upgrade in the background as a session starts;
+that session keeps the server it already started, and the next one runs the new
+version. An entry saved by an earlier plugin version pins its server
 package instead, and keeps it through upgrades. 1.0.0 keeps the same server
 versions, so nothing changes now; convert the entry once so it follows later
 releases:
