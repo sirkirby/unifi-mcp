@@ -26,7 +26,9 @@ dependencies = [
     # Key-backed inventory and authentication status require Core 0.4.53.
     # WAN DNS, firewall-group contracts, and session event recovery require Core 0.4.55.
     # Deferred-init event listener startup requires Core 0.4.67.
-    "unifi-core[network]>=0.4.67,<0.5",
+    # Serving MCP before the controller connects (shared bounded connection
+    # attempt and not_connected_message) requires Core 0.4.70.
+    "unifi-core[network]>=0.4.70,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
