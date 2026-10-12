@@ -144,8 +144,17 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    **Claude Code, from project settings to plugin options.** When the prior ref
    configured Claude Code through `.claude/settings.local.json` and the
    candidate declares `userConfig`:
-   1. Start the first session after the update; `/reload-plugins` does not
-      run the notice. Record the plugin's session-start notice: a `hook_response` event whose `systemMessage` names
+   1. **Banner path.** In an interactive session that was open before the
+      update, run `/reload-plugins` as Claude Code's banner suggests, then ask
+      for something that needs the server. `/reload-plugins` runs no
+      SessionStart hook of an updated plugin, with any matcher, so no notice
+      appears. Record that `/mcp` shows the server as failed with no reason,
+      that Claude sees only `CONNECTION_CLOSED` and no UniFi tools, what it
+      suggests, and whether it offers the setup skill. If it does, the setup
+      skill's prerequisite check names the leftover settings. The server's own
+      refusal ("No controller host configured — refusing to start.") reaches
+      only the debug log.
+   2. Start the first session after the update. Record the plugin's session-start notice: a `hook_response` event whose `systemMessage` names
       `set-env.sh --target claude --migrate`. Also record that the server
       says what the server will do. With no shared `UNIFI_HOST` in the project
       file it says the server starts unconfigured: record that `ps -E -ww`
@@ -155,9 +164,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       which may name a different controller, until migration: record which
       controller the server contacts, and keep that controller read-only
       or non-production.
-   2. Run the new plugin's `scripts/check-prereqs.sh --target claude` from the
+   3. Run the new plugin's `scripts/check-prereqs.sh --target claude` from the
       scratch project. Record that it names the leftover variables (names only).
-   3. Run the new plugin's `scripts/set-env.sh --target claude --migrate`
+   4. Run the new plugin's `scripts/set-env.sh --target claude --migrate`
       (PowerShell: `scripts/set-env.ps1 -Target claude -Migrate`). Record the
       variable names it reports as migrated, not migrated and kept as shared
       settings. Confirm the project file now holds only the shared settings
@@ -167,11 +176,11 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       standalone server) relies on them; confirm the output says so, that
       `check-prereqs` names the remaining shared keys once no plugin keys are
       left, and remove them by hand only after checking each consumer.
-   4. In an interactive session that was open before the migration, record that
+   5. In an interactive session that was open before the migration, record that
       `/reload-plugins` brings the servers up (then `/mcp reconnect` if `/mcp`
       still shows one failed). Repeat steps 4 and 5 in fresh sessions. Confirm
       the notice no longer appears.
-   5. **Second project.** Configure another scratch project the prior way, with
+   6. **Second project.** Configure another scratch project the prior way, with
       a different host for one product (an unroutable loopback port), after the
       first project is migrated. Record that its first session shows the
       other-project notice (the server is using options saved from another
@@ -221,6 +230,18 @@ was given.
   for both when reading large results. Interactive Claude defaults to the auto
   permission mode: launch the interactive reconnect test with `--permission-mode
   default` so every tool call prompts as it would for a user.
+- **Claude Code auto-update:** each session makes one background auto-update
+  pass, after a random delay of up to ten minutes, and only for marketplaces
+  whose auto-update was already on when the session started. Turning it on
+  mid-session updates nothing until the next session, and the pass may come
+  well after the delay (one run took 18 minutes). Launch with `--debug-file
+  <path>` to see `Plugin autoupdate: updated …`, the server's stderr, and each
+  hook run with its exit status and duration.
+- **Claude Code cache:** installed plugins are cached by version, and
+  `claude plugin uninstall` keeps the cache. Before installing a different
+  candidate commit that carries the same version, delete
+  `$ACC/claude-home/.claude/plugins/cache/<marketplace>/<plugin>/<version>`;
+  otherwise the earlier copy is installed again.
 - **Codex:** `codex exec -m <model> -s read-only --json "<prompt>" </dev/null`.
   Without stdin closed it waits for input. MCP servers finish starting after the
   first step's tools are built, so have the model run `sleep 20` before its MCP
