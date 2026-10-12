@@ -7,7 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     # Optional meta-tool registration and awaited eager filtering require Shared 0.6.27.
     # The settings-file startup report and setup mode require Shared 0.6.28.
-    "unifi-mcp-shared>=0.6.28,<0.7",
+    # Listing incident evidence directly in lazy mode requires Shared 0.6.31.
+    "unifi-mcp-shared>=0.6.31,<0.7",
     # Network managers in unifi-core import aiounifi; the [network] extra
     # declares the compatibility floor for library consumers. This deployable
     # app also pins the auth client exactly so one MCP release always resolves
@@ -28,7 +29,8 @@ dependencies = [
     # Deferred-init event listener startup requires Core 0.4.67.
     # Serving MCP before the controller connects (shared bounded connection
     # attempt and not_connected_message) requires Core 0.4.70.
-    "unifi-core[network]>=0.4.70,<0.5",
+    # Bounded incident evidence collection and its client view require Core 0.4.71.
+    "unifi-core[network]>=0.4.71,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
