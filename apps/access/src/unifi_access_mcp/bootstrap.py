@@ -28,8 +28,9 @@ from unifi_core.config import setup_logging as _shared_setup_logging
 # ---------------------------------------------------------------------------
 # Use only the launcher-supplied environment. Project .env files are never loaded:
 # they must not select credential destinations or weaken permissions/redaction.
-# Operators can explicitly load a trusted env file in their launcher.
-from unifi_mcp_shared.bootstrap import load_process_env
+# Operators can explicitly load a trusted env file in their launcher, or name a
+# per-user settings file in UNIFI_SETTINGS_FILE.
+from unifi_mcp_shared.bootstrap import load_process_env, report_settings_file
 
 load_process_env()
 
@@ -43,6 +44,7 @@ def setup_logging(level: str | None = None) -> logging.Logger:
 
 
 logger = setup_logging()
+report_settings_file(logger)
 
 
 # ---------------------------------------------------------------------------
