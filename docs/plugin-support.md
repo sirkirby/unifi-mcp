@@ -54,7 +54,11 @@ entry. On POSIX the server ignores the file if another user owns it or others
 can write to it, and warns if others can read it. On Windows there is no
 permission check, so keep the file in your own profile. Server releases from
 `unifi-network-mcp` 0.37.1, `unifi-protect-mcp` 0.8.18 and `unifi-access-mcp`
-0.6.13 read the file; earlier releases ignore it.
+0.6.13 read the file; earlier releases ignore it. Those releases also start in
+setup mode while no controller host is configured: the server answers, offers
+only the read-only `unifi_setup_status`, `protect_setup_status` or
+`access_setup_status` tool, and makes no controller connection, so a Codex user
+who has not run setup sees how to configure it instead of a failed server.
 
 Setup before plugin 1.0.0 saved a `[mcp_servers.<plugin>]` entry in Codex's
 `config.toml`, which takes precedence over the bundled server and keeps the
@@ -80,8 +84,8 @@ release.
 
 Codex uses `.mcp.codex.json`, which omits shell-style environment templates:
 Codex 0.162.0 passes those templates literally, and the server expands the `~`
-in `UNIFI_SETTINGS_FILE` itself. Published servers still refuse startup until a
-controller host is configured; run setup before expecting an MCP handshake. Optional `env_vars` forwarding carries
+in `UNIFI_SETTINGS_FILE` itself. Server releases before setup mode refuse to
+start until a controller host is configured. Optional `env_vars` forwarding carries
 registration and safety controls from the launcher; application defaults apply
 otherwise. Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
 `[mcp_servers]` entry requires its own transport rather than merging the bundle's
