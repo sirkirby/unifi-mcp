@@ -641,10 +641,13 @@ class Fixtures:
                     "configured plugin still notices this project's own legacy settings",
                 )
             self.check("remove the leftover" in other_message["systemMessage"], "notice names the removal choice")
-            self.check(
-                "/reload-plugins" in other_message["systemMessage"] and "/mcp reconnect" in message["systemMessage"],
-                "notices name the verified recovery steps",
-            )
+            for text in (other_message["systemMessage"], message["systemMessage"]):
+                self.check(
+                    "/reload-plugins or start a new session" in text
+                    and "/mcp reconnect" in text
+                    and "only if /mcp shows the server as failed" in text,
+                    "notices name reload as the recovery and reconnect only for a failed server",
+                )
             self.check(b"192.0.2.50" not in elsewhere.stdout, "other-project notice omits values")
             for quiet_env in (
                 dict(
@@ -665,6 +668,7 @@ class Fixtures:
                 capture_output=True,
             )
             self.check(quiet.stdout == b"" and quiet.returncode == 0, "configured plugin ignores shared-only settings")
+            self.check_same_connection_notice(hook, product, workspace, environment)
         snapshot = state()
         migrate(1, {"FIXTURE_FAIL": "register"})
         self.check(state() == snapshot, "failed migration preserves options and project settings")
@@ -919,6 +923,78 @@ class Fixtures:
                 "migration keeps the deprecated auto-confirm with the shared keys",
             )
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
+
+    def check_same_connection_notice(self, hook, product, workspace, environment):
+        """A project whose leftover connection values equal the saved options gets the gentle notice."""
+        upper = product.upper()
+        same = workspace / "same-project"
+        (same / ".claude").mkdir(parents=True)
+        legacy = same / ".claude/settings.local.json"
+        options = {
+            "CLAUDE_PLUGIN_OPTION_HOST": "192.0.2.70",
+            "CLAUDE_PLUGIN_OPTION_USERNAME": "same-user",
+            "CLAUDE_PLUGIN_OPTION_PORT": "8443",
+        }
+        values = {
+            f"UNIFI_{upper}_HOST": "192.0.2.70",
+            f"UNIFI_{upper}_USERNAME": "same-user",
+            f"UNIFI_{upper}_PORT": "08443",
+            f"UNIFI_{upper}_PASSWORD_FILE": "/fixture/password-file",
+        }
+        if product == "network":
+            # An empty site and an unset site option both mean the default site.
+            values["UNIFI_NETWORK_SITE"] = ""
+
+        def notice(env_values, extra, shell):
+            legacy.write_text(json.dumps({"env": env_values}, indent="\t"), encoding="utf-8")
+            result = subprocess.run(
+                [shell, str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(same), **extra),
+                capture_output=True,
+            )
+            self.check(result.returncode == 0, "session notice exits cleanly")
+            for value in (b"192.0.2.70", b"192.0.2.71", b"same-user", b"other-user", b"8443", b"/fixture/"):
+                self.check(value not in result.stdout + result.stderr, "session notice omits values")
+            message = json.loads(result.stdout)
+            return message["systemMessage"] + "\n" + message["hookSpecificOutput"]["additionalContext"]
+
+        def gentle(text):
+            return "same controller" in text and "--migrate" in text and "another project" not in text
+
+        for shell in dict.fromkeys(("sh", self.shell)):
+            text = notice(values, options, shell)
+            self.check(gentle(text) and "remove" in text.lower(), "matching leftover values get the gentle notice")
+            self.check("--replace" not in text, "gentle notice does not offer replacement")
+            port_default = dict(values, **{f"UNIFI_{upper}_PORT": "443"})
+            unset_port = {k: v for k, v in options.items() if k != "CLAUDE_PLUGIN_OPTION_PORT"}
+            self.check(gentle(notice(port_default, unset_port, shell)), "an unset port option means port 443")
+            host_only = {f"UNIFI_{upper}_HOST": "192.0.2.70"}
+            self.check(gentle(notice(host_only, options, shell)), "only values the project holds are compared")
+            differing = (
+                dict(values, **{f"UNIFI_{upper}_HOST": "192.0.2.71"}),
+                dict(values, **{f"UNIFI_{upper}_USERNAME": "other-user"}),
+                dict(values, **{f"UNIFI_{upper}_PORT": "8444"}),
+                dict(values, **{f"UNIFI_{upper}_PORT": "port"}),
+                dict(values, **{f"UNIFI_{upper}_USERNAME": "same-user\\"}),
+                {k: v for k, v in values.items() if k != f"UNIFI_{upper}_HOST"},
+            )
+            for env_values in differing:
+                text = notice(env_values, options, shell)
+                self.check(
+                    "another project" in text and not gentle(text), "differing leftover values keep the other notice"
+                )
+            unset_username = {k: v for k, v in options.items() if k != "CLAUDE_PLUGIN_OPTION_USERNAME"}
+            self.check("another project" in notice(values, unset_username, shell), "an unset option differs")
+            if product == "network":
+                site = dict(values, UNIFI_NETWORK_SITE="branch")
+                self.check("another project" in notice(site, options, shell), "a differing site keeps the other notice")
+                self.check(
+                    gentle(notice(site, dict(options, CLAUDE_PLUGIN_OPTION_SITE="branch"), shell)),
+                    "a matching site gets the gentle notice",
+                )
+            else:
+                site = dict(values, **{f"UNIFI_{upper}_SITE": "branch"})
+                self.check(gentle(notice(site, options, shell)), "a site without an option is not compared")
 
     def codex_conversion_scenario(self, workspace, environment, command, cached, path, product, setup):
         """Setup before plugin 1.0.0 saved a config.toml entry that shadows the bundled server; one refresh moves it."""

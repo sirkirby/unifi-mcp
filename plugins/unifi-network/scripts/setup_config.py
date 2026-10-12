@@ -502,11 +502,11 @@ def option_conflicts(saved, patch, mapping, schema, product):
 
 
 def recovery(name):
-    # A session started before the options changed keeps its old copy until
-    # /reload-plugins; a failure cached with unchanged options needs a reconnect.
+    # A session keeps the options it started with: /mcp reconnect alone restarts
+    # the server with those, so new options need /reload-plugins or a new session.
     return (
-        "run /reload-plugins, then /mcp reconnect plugin:" + name + ":" + name + " if /mcp still shows the server "
-        "as failed"
+        "run /reload-plugins (/mcp reconnect alone keeps the options the session started with; use /mcp reconnect "
+        "plugin:" + name + ":" + name + " only if /mcp shows the server as failed)"
     )
 
 

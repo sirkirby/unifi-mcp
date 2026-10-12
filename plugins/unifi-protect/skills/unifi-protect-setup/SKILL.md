@@ -164,6 +164,12 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_POLICY_PROTECT_DELETE=false
 ```
 
+Optional values keep their defaults unless the user asks: port
+(`UNIFI_PROTECT_PORT`, default `443`), SSL verification
+(`UNIFI_PROTECT_VERIFY_SSL`, default `false`), and tool registration mode
+(`UNIFI_TOOL_REGISTRATION_MODE`: `lazy` by default, `eager` or `meta_only`; the
+Claude Code option is `registration_mode`).
+
 Add optional values and policy variables to the same command. Per-category
 overrides apply to Codex and OpenClaw only, for example:
 
@@ -261,12 +267,16 @@ settings the options for every project, or remove this plugin's leftover
 `UNIFI_PROTECT_*` keys from the project file to keep the saved options. A
 session-start notice also fires in a project that still holds its own
 `UNIFI_PROTECT_*` keys while options from another project are in use; offer the
-same choice there.
+same choice there. When the project's host, username and port equal the saved
+options, the notice says nothing changes instead; offer to remove the leftover
+keys, or to tidy up with `--migrate`, which also copies the project's other
+settings, such as its credential source, into the options.
 
-After the migration, in a session that was already open, run `/reload-plugins`,
-then check `/mcp`; if `plugin:unifi-protect:unifi-protect` still shows as failed, run
-`/mcp reconnect plugin:unifi-protect:unifi-protect`. A new session also loads the migrated
-options. Once no UniFi plugin keys remain in the project file, the prerequisite
+After the migration, in a session that was already open, run `/reload-plugins`
+or start a new session. `/mcp reconnect` alone keeps the options the session
+started with: it reports success, but the server stays in setup mode. Use
+`/mcp reconnect plugin:unifi-protect:unifi-protect` only if `/mcp` shows the server as
+failed. Once no UniFi plugin keys remain in the project file, the prerequisite
 check names any shared `UNIFI_*` keys still there: Claude Code exports them into
 every process in that project, so suggest removing them once nothing else needs
 them.
@@ -288,7 +298,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Saved as the unifi-protect plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options), then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` is connected. If it still shows as failed, run `/mcp reconnect plugin:unifi-protect:unifi-protect`: Claude Code skips a server that failed to start in the last 15 minutes, while its options are unchanged, until you reconnect it. Review or change the options with `/plugin`, then `unifi-protect`, then Configure options."
+"Saved as the unifi-protect plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options); `/mcp reconnect` alone keeps the options the session started with, so the server would stay in setup mode. Then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` offers more than one tool: a server offering only its setup-status tool is still unconfigured. Use `/mcp reconnect plugin:unifi-protect:unifi-protect` only if `/mcp` shows the server as failed. Review or change the options with `/plugin`, then `unifi-protect`, then Configure options."
 
 For Codex, tell the user:
 

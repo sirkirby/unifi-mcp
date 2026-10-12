@@ -17,8 +17,9 @@ and `unifi-access-mcp` 0.6.13. They bring three things:
   reconnect on their own before the next tool call instead of staying unusable
   until the client restarts the server.
 - **A settings file for Codex.** The servers read the private settings file that
-  Codex setup writes, named by `UNIFI_SETTINGS_FILE`. Earlier releases ignore
-  it, so the Codex bundled server needs these releases.
+  Codex setup writes, named by `UNIFI_SETTINGS_FILE`. Reading it is implemented
+  in `unifi-mcp-shared` 0.6.28, and the 1.0.0 plugins pin server releases that
+  require it.
 - **Setup mode instead of a silent failure.** With no controller host
   configured, a server answers the client and offers only a read-only
   `unifi_setup_status`, `protect_setup_status` or `access_setup_status` tool that
@@ -91,7 +92,9 @@ user `settings.json`.
 > `UNIFI_<PRODUCT>_*` keys, the session-start notice says so. There, either
 > migrate with `--replace`, which makes that project's settings the options for
 > every project, or remove the leftover keys to keep the saved options. Plugin
-> options cannot name a different controller per project.
+> options cannot name a different controller per project. When the project's
+> host, username, port and site equal the saved options, the notice says that
+> nothing changes: remove the leftover keys, or run `--migrate` to tidy up.
 
 If an earlier version configured this project, the first new session shows a
 notice like this:
@@ -100,8 +103,8 @@ notice like this:
 > UNIFI_NETWORK_* settings, which this plugin version no longer reads, so the
 > UniFi Network server starts unconfigured. Ask Claude to run the
 > unifi-network-setup migration (set-env.sh --target claude --migrate), then run
-> /reload-plugins, then /mcp reconnect plugin:unifi-network:unifi-network if
-> /mcp still shows the server as failed.
+> /reload-plugins or start a new session (use /mcp reconnect
+> plugin:unifi-network:unifi-network only if /mcp shows the server as failed).
 
 Claude also offers to run the migration when you next ask about the plugin.
 Until you migrate, the server either starts in setup mode (`/mcp` shows
@@ -141,17 +144,18 @@ project. Its output names variables only, never values:
   starts in that project, shell commands and MCP servers included, so remove
   them by hand once nothing else needs them.
 
-Then, in the session that was already open, run `/reload-plugins`, and run
-`/mcp reconnect plugin:unifi-network:unifi-network` if `/mcp` still shows the
-server as failed. A new session also loads the migrated options. Repeat the
-migration for each UniFi plugin you use.
+Then, in the session that was already open, run `/reload-plugins`, or start a
+new session. Repeat the migration for each UniFi plugin you use.
 
-Claude Code skips a server that failed to start in the last 15 minutes while
-its settings are unchanged: a new session and `/reload-plugins` both leave it
-skipped (`/mcp` reports "recent failure cached"), and `/mcp reconnect` retries
-it. With options unset, a failure in one project makes the server skip in your
-other projects too. Saving new options, by migration or setup, counts as a
-change, so `/reload-plugins` or a new session starts the server again.
+`/mcp reconnect` alone keeps the options the session started with. It reports
+success, but the server stays in setup mode, so use `/reload-plugins` or a new
+session after setup or migration. Use
+`/mcp reconnect plugin:unifi-network:unifi-network` only for a server that `/mcp`
+shows as failed: Claude Code skips a server that failed to start in the last 15
+minutes while its settings are unchanged, and a new session or
+`/reload-plugins` leaves it skipped (`/mcp` reports "recent failure cached").
+Saving new options counts as a change, so after setup or migration
+`/reload-plugins` or a new session starts the server again.
 
 If the project has no earlier settings, or you are configuring from scratch, run
 the setup skill (`/unifi-network:unifi-network-setup`) or edit the options with
@@ -170,12 +174,11 @@ per-category overrides.
 
 #### Confirm the result
 
-```bash
-claude mcp list
-```
-
-The plugin's server should be listed as connected. In a session, `/mcp` shows
-the same, and the notice no longer appears.
+In a session, run `/mcp` and select the plugin's server: it should offer more
+than one tool. A server that offers only `unifi_setup_status`
+(`protect_setup_status`, `access_setup_status`) is still unconfigured. `claude
+mcp list` is not enough: it also shows an unconfigured server in setup mode as
+connected. The migration notice no longer appears in new sessions.
 
 ### Codex
 
@@ -218,9 +221,12 @@ in the backup. Running the command again changes nothing.
 
 Codex runs the plugin's own server, which reads that file, so each plugin
 upgrade brings the server version it pins with nothing to rerun. Codex installs
-an upgrade in the background as a session starts; that session keeps the server
-it already started, and the next one runs the new version. To change a setting,
-run the setup skill again. To remove the settings, delete the file.
+an upgrade in the background as a session starts, then restarts the plugin's
+servers on the new version, typically 2 to 6 seconds in and before the first
+request. Within that session, the skill files at the old version's cache path
+are removed, so a skill that was already loaded may point at files that no
+longer exist; start a new session to avoid this. To change a setting, run the
+setup skill again. To remove the settings, delete the file.
 
 ### OpenClaw
 
