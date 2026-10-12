@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.access.models.device_configs import (
     build_config_write_body,
     is_camera_device_id,
@@ -56,6 +56,7 @@ _COMPACT_DEVICE_KEYS = frozenset(
 _API_DEVICE_LIST_KEYS = ("id", "name", "type", "connected", "firmware_version", "mac", "ip")
 
 
+@reconnects_on_demand
 class DeviceManager:
     """Reads and mutates device data from the Access controller."""
 

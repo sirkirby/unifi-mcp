@@ -123,20 +123,13 @@ class TestApiClientAuth:
             mock_session_cls.return_value.closed = False
             mock_session_cls.return_value.close = AsyncMock()
 
-            # Re-import after patching
-            from importlib import reload
-
-            import unifi_core.access.managers.connection_manager as cm_mod
-
-            reload(cm_mod)
-
-            # Actually test _try_api_client directly
+            # _try_api_client imports the SDK at call time, so the patched
+            # sys.modules entry is what it sees.
             cm_api_only._api_key = "test-key"
             await cm_api_only._try_api_client()
 
-            # The actual test uses the real import, so let's verify the pattern
-            # works via initialize instead
-            assert True  # Placeholder - tested more thoroughly below
+            mock_client.authenticate.assert_awaited_once()
+            assert cm_api_only.has_api_client is True
 
     @pytest.mark.asyncio
     async def test_api_client_skipped_when_no_key(self, cm_proxy_only):

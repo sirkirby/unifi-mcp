@@ -44,6 +44,28 @@ setup_permissioned_tool(
 logger.debug("Access MCP server module loaded; singletons initialised.")
 
 
+async def _start_event_listener() -> None:
+    """Start the websocket event listener when enabled and connected."""
+    ws_enabled_raw = config.access.events.get("websocket_enabled", True) if hasattr(config, "access") else True
+    if not parse_config_bool(ws_enabled_raw):
+        logger.info("Access event websocket disabled via config.")
+        return
+    try:
+        event_manager.set_server(server)
+        # start_listening needs an API client: the Access websocket is
+        # key-authenticated, and a proxy-only session cannot open it.
+        # It logs that condition itself and returns without raising, so
+        # a proxy-only deployment keeps working with REST queries and
+        # an empty recent-events buffer.
+        await event_manager.start_listening()
+    except Exception as ws_exc:
+        logger.error(
+            "Failed to start event websocket listener: %s. Real-time events will be unavailable; REST queries still work.",
+            ws_exc,
+            exc_info=True,
+        )
+
+
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
@@ -65,28 +87,10 @@ async def main_async():
             logger.error("Failed to connect to UniFi Access. Tool functionality may be impaired.")
         else:
             logger.info("Global Access connection initialized successfully from main_async.")
-
-            # Start the websocket event listener if enabled and connection succeeded
-            ws_enabled_raw = config.access.events.get("websocket_enabled", True) if hasattr(config, "access") else True
-            ws_enabled = parse_config_bool(ws_enabled_raw)
-            if ws_enabled:
-                try:
-                    event_manager.set_server(server)
-                    # start_listening needs an API client: the Access websocket is
-                    # key-authenticated, and a proxy-only session cannot open it.
-                    # It logs that condition itself and returns without raising, so
-                    # a proxy-only deployment keeps working with REST queries and
-                    # an empty recent-events buffer.
-                    await event_manager.start_listening()
-                except Exception as ws_exc:
-                    logger.error(
-                        "Failed to start event websocket listener: %s. "
-                        "Real-time events will be unavailable; REST queries still work.",
-                        ws_exc,
-                        exc_info=True,
-                    )
-            else:
-                logger.info("Access event websocket disabled via config.")
+            await _start_event_listener()
+        # A controller that was down at startup is reconnected on demand by the
+        # managers; start the listener then, as a successful startup would.
+        connection_manager.add_reconnect_callback(_start_event_listener)
 
         # ---- Register MCP resources ----
         try:

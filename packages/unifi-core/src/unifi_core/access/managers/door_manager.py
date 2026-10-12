@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ _COMPACT_DOOR_DEVICE_KEYS = frozenset({"name", "id", "device_type", "online", "d
 _API_DOOR_LIST_KEYS = ("id", "name", "door_position_status", "lock_relay_status")
 
 
+@reconnects_on_demand
 class DoorManager:
     """Reads and mutates door data from the Access controller."""
 

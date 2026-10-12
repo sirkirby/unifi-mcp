@@ -79,3 +79,43 @@ async def test_read_after_failed_startup_reports_the_connection_error():
     assert result["error"].startswith("Failed to list doors: No auth path available for list_doors: Could not reach")
     assert "fake-password" not in result["error"]
     await cm.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("websocket_enabled", [True, False])
+async def test_reconnect_after_failed_startup_starts_the_event_listener(monkeypatch, websocket_enabled):
+    from unifi_access_mcp import main
+    from unifi_access_mcp.runtime import config
+
+    cm = _unreachable_cm()
+    events = dict(getattr(config.access, "events", {}) or {})
+    events["websocket_enabled"] = websocket_enabled
+    reconnected: list[bool] = []
+
+    async def login_succeeds() -> None:
+        cm._csrf_token = "fake-csrf"
+
+    async def serve(**_kwargs):
+        # The controller comes back while the server is serving.
+        listener.assert_not_awaited()
+        cm._last_attempt_at -= 60
+        with patch.object(cm, "_proxy_login", login_succeeds):
+            reconnected.append(await cm.reconnect())
+
+    monkeypatch.setattr(main, "connection_manager", cm)
+    monkeypatch.setattr("unifi_mcp_shared.bootstrap.assert_credentials_configured", lambda *a, **kw: None)
+    monkeypatch.setattr("unifi_mcp_shared.tool_registration.register_tools_for_mode", AsyncMock())
+    monkeypatch.setattr("unifi_mcp_shared.transport.run_transports", AsyncMock(side_effect=serve))
+    monkeypatch.setattr(
+        "unifi_mcp_shared.transport.resolve_http_config", lambda *a, **kw: (False, "http", "127.0.0.1", 3002)
+    )
+    with (
+        patch.object(config.access, "events", events),
+        patch.object(aiohttp.ClientSession, "post", _refuse),
+        patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
+        patch.object(main.event_manager, "start_listening", AsyncMock()) as listener,
+    ):
+        await main.main_async()
+
+    assert reconnected == [True]
+    assert listener.await_count == (1 if websocket_enabled else 0)

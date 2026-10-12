@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from unifi_core.access.managers.connection_manager import reconnects_on_demand
 from unifi_core.access.models.events import event_from_controller, event_identity, with_event_identity
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiOperationError
 
@@ -209,6 +210,7 @@ _BUFFER_EXCLUDED_EVENTS: frozenset[str] = frozenset(
 )
 
 
+@reconnects_on_demand
 class EventManager:
     """Domain logic for UniFi Access events.
 

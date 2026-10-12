@@ -19,7 +19,7 @@ import asyncio
 import logging
 from typing import Any, Dict
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ _STATS_EXPAND = (
 )
 
 
+@reconnects_on_demand
 class SystemManager:
     """Reads system-level data from the Access controller."""
 
