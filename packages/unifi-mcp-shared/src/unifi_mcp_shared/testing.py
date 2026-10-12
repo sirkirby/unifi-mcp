@@ -202,3 +202,125 @@ def assert_settings_file_configures_server(tmp_path: Any, *, module: str, env_pr
     assert result.returncode == 0, result.stderr
     assert "settings-file-probe-ok" in result.stdout
     assert password not in result.stderr
+
+
+_SETUP_PROBE = """\
+import os, socket, sys
+
+marker = {marker!r}
+
+def _no_network(event, args):
+    if event == "socket.connect" and args[0].family in (socket.AF_INET, socket.AF_INET6):
+        open(marker, "a").write("socket.connect\\n")
+        raise ConnectionRefusedError("setup mode must not open a network connection")
+if os.name != "nt":  # asyncio's Windows socketpair connects over loopback
+    sys.addaudithook(_no_network)
+
+import {module}.main as m
+
+async def _no_initialize(*args, **kwargs):
+    open(marker, "a").write("initialize\\n")
+    raise AssertionError("setup mode must not initialize the controller connection")
+m.connection_manager.initialize = _no_initialize
+m.main()
+"""
+
+
+def assert_unconfigured_server_serves_setup_mode(
+    tmp_path: Any, *, module: str, env_prefix: str, plugin_name: str, tool_prefix: str, settings_file: bool
+) -> None:
+    """Start the app over stdio with no controller host and drive it as an MCP client.
+
+    The server must answer ``initialize`` with setup instructions, list only its
+    read-only setup-status tool, return the same guidance from it, and never
+    initialize a controller connection or open a network socket. A password set
+    without a host must not appear in any output. With *settings_file*, the
+    launcher names a settings file that does not exist yet.
+    """
+    import json
+    import os
+    import queue
+    import subprocess
+    import sys
+    import threading
+
+    password = "SENTINEL-unconfigured-password"
+    marker = tmp_path / "forbidden-activity"
+    probe = tmp_path / "setup_probe.py"
+    probe.write_text(_SETUP_PROBE.format(module=module, marker=str(marker)), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_") and k != "CONFIG_PATH"}
+    env[f"UNIFI_{env_prefix}_PASSWORD"] = password
+    if settings_file:
+        env["UNIFI_SETTINGS_FILE"] = str(tmp_path / "absent" / "settings.env")
+    proc = subprocess.Popen(
+        [sys.executable, str(probe)],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    assert proc.stdin is not None and proc.stdout is not None
+    replies: queue.Queue[str | None] = queue.Queue()
+
+    def _read() -> None:
+        for line in proc.stdout:
+            replies.put(line)
+        replies.put(None)  # stdout closed: the server exited
+
+    threading.Thread(target=_read, daemon=True).start()
+
+    def request(msg_id: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        message = {"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params or {}}
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+        while True:
+            line = replies.get(timeout=60)
+            assert line is not None, f"server exited before answering {method}"
+            reply = json.loads(line)
+            if reply.get("id") == msg_id:
+                assert "error" not in reply, reply
+                return reply["result"]
+
+    try:
+        init = request(
+            1,
+            "initialize",
+            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "probe", "version": "0"}},
+        )
+        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        proc.stdin.flush()
+        tools = request(2, "tools/list")["tools"]
+        status = request(3, "tools/call", {"name": f"{tool_prefix}_setup_status", "arguments": {}})
+    finally:
+        proc.stdin.close()
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    stderr = proc.stderr.read() if proc.stderr else ""
+    instructions = init.get("instructions") or ""
+    product = env_prefix.lower()
+    for expected in (
+        "not configured",
+        f"/{plugin_name}:{plugin_name}-setup",
+        ".claude/settings.local.json",
+        f"~/.config/unifi-mcp/{product}.env",
+        "UNIFI_SETTINGS_FILE",
+        f"UNIFI_{env_prefix}_HOST",
+    ):
+        assert expected in instructions, expected
+    assert ("does not exist yet" in instructions) is settings_file
+    assert init["serverInfo"]["name"] == f"{plugin_name}-mcp"
+    assert [tool["name"] for tool in tools] == [f"{tool_prefix}_setup_status"]
+    assert tools[0]["annotations"]["readOnlyHint"] is True
+    data = status["structuredContent"]["data"]
+    assert data["configured"] is False
+    assert data["message"] == instructions
+    assert proc.returncode == 0, stderr
+    assert not marker.exists(), marker.read_text()
+    assert "[setup]" in stderr
+    assert password not in stderr + instructions + json.dumps(status)

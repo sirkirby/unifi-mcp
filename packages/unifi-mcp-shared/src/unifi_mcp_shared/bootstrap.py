@@ -744,61 +744,30 @@ def assert_credentials_configured(
 ) -> None:
     """Refuse to start if no controller host has been configured.
 
-    Empty host is the universal "user hasn't run setup yet" signal — without it
-    every tool call will fail with an unhelpful connection error. Surfacing the
-    problem at startup makes the server appear as failed in ``/mcp`` instead of
-    "connected but every tool errors", which is the most common new-user
-    confusion mode.
-
-    Args:
-        cfg: Loaded OmegaConf config (must have a ``unifi`` section).
-        plugin_name: Human-facing plugin name (e.g. ``"unifi-network"``).
-        env_prefix: Server-specific env prefix without ``UNIFI_`` and trailing
-                    ``_`` (e.g. ``"NETWORK"``).
-        logger: Logger to write the error to.
+    Retained for server releases built before setup mode; current servers call
+    :func:`unifi_mcp_shared.setup_required.serve_setup_required` instead, so the
+    client sees a connected server that explains how to configure it rather
+    than a failed one with no reason.
 
     Raises:
-        SystemExit: with code 5 when host is unconfigured. The MCP harness will
-                    show the server as failed, which is the desired UX.
+        SystemExit: with code 5 when host is unconfigured.
     """
-    host = ""
-    try:
-        host = str(cfg.unifi.get("host", "") or "").strip()
-    except Exception:
-        pass
+    from unifi_mcp_shared.setup_required import controller_host_configured, setup_required_message
 
-    if host:
+    if controller_host_configured(cfg):
         return
 
-    var_prefix = f"UNIFI_{env_prefix}_"
     bar = "=" * 72
     logger.error(bar)
     logger.error("[%s] No controller host configured — refusing to start.", plugin_name)
     logger.error("")
-    logger.error("Set these environment variables before starting the server:")
-    logger.error("  %sHOST=<your-controller-ip-or-hostname>", var_prefix)
-    logger.error("  %sUSERNAME=<local-admin-username>", var_prefix)
-    logger.error("  %sPASSWORD=<local-admin-password>", var_prefix)
-    logger.error("")
-    logger.error("How to set them depends on your runtime:")
-    logger.error("  Claude Code / Codex plugin -> run the %s-setup skill", plugin_name)
-    logger.error("  Docker                     -> docker-compose .env or `environment:`")
-    logger.error("  Direct uvx / shell         -> export them before launching")
-    logger.error("  Any launcher               -> or put them in a file named by %s", SETTINGS_FILE_VAR)
-    logger.error("")
+    for line in setup_required_message(
+        plugin_name=plugin_name, env_prefix=env_prefix, report=_SETTINGS_REPORT
+    ).splitlines():
+        logger.error("%s", line)
     report = _SETTINGS_REPORT
-    if report is not None and report.state == "missing":
-        logger.error(
-            "%s names %s, which does not exist yet; the %s-setup skill creates it.",
-            SETTINGS_FILE_VAR,
-            report.path,
-            plugin_name,
-        )
-        logger.error("")
-    elif report is not None and report.state == "ignored":
-        logger.error("%s was ignored; see the [settings] error above.", SETTINGS_FILE_VAR)
-        logger.error("")
-    logger.error("Then restart the server.")
+    if report is not None and report.state in {"missing", "ignored"}:
+        logger.error("%s names %s.", SETTINGS_FILE_VAR, report.path)
     logger.error(bar)
     raise SystemExit(5)
 
