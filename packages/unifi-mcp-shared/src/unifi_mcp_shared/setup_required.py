@@ -53,7 +53,16 @@ def setup_required_message(*, plugin_name: str, env_prefix: str, report: Setting
         lines.append(f"The file named by {SETTINGS_FILE_VAR} does not exist yet; setup creates it.")
     elif report is not None and report.state == "ignored":
         lines.append(f"The file named by {SETTINGS_FILE_VAR} was ignored; the server log says why.")
-    lines += ["", "Then restart the server (reconnect it in the client)."]
+    lines += [
+        "",
+        "Then load the new settings:",
+        "- Claude Code: run /reload-plugins or start a new session. /mcp reconnect does not load new plugin options.",
+        "- Codex: restart Codex or start a new session.",
+        "- OpenClaw: restart the gateway.",
+        "- Standalone: restart the server.",
+        "",
+        "Any other UniFi plugins you have installed (Network, Protect, Access) need the same setup or migration.",
+    ]
     return "\n".join(lines)
 
 
@@ -84,8 +93,8 @@ async def serve_setup_required(
     @server.tool(
         name=f"{tool_prefix}_setup_status",
         description=(
-            f"Report why the {plugin_name} server has no controller tools and how to configure it. "
-            "Call this when the server's tools are missing."
+            f"Report why the {plugin_name} server has no controller tools, how to configure it and how to "
+            "load the new settings. Call this when the server's tools are missing."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
     )

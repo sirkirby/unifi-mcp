@@ -34,6 +34,25 @@ def test_names_every_setup_path():
     assert "does not exist yet" not in text and "ignored" not in text
 
 
+def test_names_the_recovery_that_works_in_each_client():
+    text = message(None)
+    assert "Claude Code: run /reload-plugins or start a new session" in text
+    assert "/mcp reconnect does not load new plugin options" in text
+    assert "Codex: restart Codex or start a new session" in text
+    assert "OpenClaw: restart the gateway" in text
+    assert "Standalone: restart the server" in text
+    assert "reconnect it in the client" not in text
+
+
+def test_points_at_the_other_unifi_plugins_without_naming_installed_ones():
+    text = message(None)
+    assert "Any other UniFi plugins you have installed (Network, Protect, Access) need the same setup" in text
+
+
+def test_message_stays_short():
+    assert len(message("missing").splitlines()) <= 20
+
+
 @pytest.mark.parametrize(("state", "phrase"), [("missing", "does not exist yet"), ("ignored", "was ignored")])
 def test_settings_file_state_is_named_without_its_path(state, phrase):
     text = message(state)

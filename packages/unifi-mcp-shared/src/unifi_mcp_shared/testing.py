@@ -311,8 +311,15 @@ def assert_unconfigured_server_serves_setup_mode(
         f"~/.config/unifi-mcp/{product}.env",
         "UNIFI_SETTINGS_FILE",
         f"UNIFI_{env_prefix}_HOST",
+        "/reload-plugins",
+        "/mcp reconnect does not load new plugin options",
+        "Codex: restart Codex",
+        "OpenClaw: restart the gateway",
+        "Standalone: restart the server",
+        "Network, Protect, Access",
     ):
         assert expected in instructions, expected
+    assert "reconnect it in the client" not in instructions
     assert ("does not exist yet" in instructions) is settings_file
     assert init["serverInfo"]["name"] == f"{plugin_name}-mcp"
     assert [tool["name"] for tool in tools] == [f"{tool_prefix}_setup_status"]
