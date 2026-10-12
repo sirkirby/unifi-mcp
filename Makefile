@@ -59,7 +59,7 @@ catalog-test:
 	uv run --all-packages pytest tests/ -v
 
 docs-test:
-	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
+	uv run python testsupport/run_unittest.py -s tests/docs -p 'test_*.py' -v
 
 test:
 	uv sync --all-packages
