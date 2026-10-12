@@ -10,6 +10,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
+from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.incident_collection import (
     DEFAULT_CALLS,
     DEFAULT_ELAPSED_MS,
@@ -25,7 +26,7 @@ from unifi_core.incident_evidence_view import (
 )
 from unifi_core.protect.incident_collection import collect_protect_incident_evidence
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
-from unifi_protect_mcp.runtime import event_manager, server
+from unifi_protect_mcp.runtime import connection_manager, event_manager, server
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,13 @@ async def get_incident_evidence(
         )
     except ValidationError as exc:
         return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, EvidencePresentation)}"}
+    try:
+        # The reconnect wrapper has waited for the connection. Without one, answer
+        # like every Protect tool, with the connection error (still connecting,
+        # unreachable or login rejected), before any read draws on a budget.
+        connection_manager.client
+    except UniFiConnectionError as exc:
+        return {"success": False, "error": f"{_OPERATION}: {exc}"}
     try:
         evidence = await collect_protect_incident_evidence(event_manager, request)
         return {"success": True, "data": presentation.render(evidence)}

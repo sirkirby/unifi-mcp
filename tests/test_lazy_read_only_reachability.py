@@ -18,8 +18,6 @@ import anyio
 import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
-from unifi_core.incident_evidence import OverallStatus
-from unifi_core.incident_evidence_view import IncidentEvidenceView
 
 _script_path = Path(__file__).parent.parent / "scripts" / "smoke_mcp_metadata.py"
 _spec = importlib.util.spec_from_file_location("smoke_mcp_metadata_for_reachability", _script_path)
@@ -32,6 +30,13 @@ SERVERS = {
     "protect": ("unifi-protect-mcp", "protect", "protect_get_incident_evidence"),
 }
 WINDOW = {"start": "2026-08-08T12:00:00Z", "end": "2026-08-08T13:00:00Z"}
+
+
+# How each server's tools report a missing controller connection.
+CONNECTION_ERRORS = {
+    "network": "Cannot run unifi_get_incident_evidence: Not connected to controller",
+    "protect": "Failed to collect incident evidence: UniFi Protect connection is not",
+}
 
 
 def _default_mode_env() -> dict[str, str]:
@@ -73,12 +78,11 @@ async def _read_only_client_collects(product: str) -> None:
 
         result = await client.call_tool(tool_name, {**WINDOW, "max_calls": 1, "max_elapsed_ms": 5_000})
         payload = _payload(result)
-        assert payload["success"] is True
-        # The default result is the bounded client view of the evidence.
-        evidence = IncidentEvidenceView.model_validate(payload["data"])
-        # No controller answers on loopback: the failure is reported per source, never as an empty all-clear.
-        assert evidence.overall is OverallStatus.FAILED
-        assert evidence.coverage_complete is False
+        # The tool ran: no controller answers on loopback, so like every domain tool it reports the
+        # connection error (still connecting, or unreachable) rather than evidence or an all-clear.
+        assert payload["success"] is False
+        assert "data" not in payload
+        assert payload["error"].startswith(CONNECTION_ERRORS[product])
 
 
 @pytest.mark.parametrize("product", sorted(SERVERS))

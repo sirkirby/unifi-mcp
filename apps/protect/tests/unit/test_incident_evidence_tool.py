@@ -3,6 +3,7 @@
 import ast
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jsonschema
 import pytest
@@ -50,6 +51,7 @@ def tool(monkeypatch):
 
     pages = EventPages()
     monkeypatch.setattr(incident_evidence, "event_manager", pages)
+    monkeypatch.setattr(incident_evidence, "connection_manager", SimpleNamespace(client=object()))
     return incident_evidence, pages
 
 

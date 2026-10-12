@@ -151,6 +151,7 @@ async def via_mcp(product: str, manager: Any, monkeypatch, presentation: dict[st
         from unifi_protect_mcp.tools import incident_evidence
 
         monkeypatch.setattr(incident_evidence, "event_manager", manager)
+        monkeypatch.setattr(incident_evidence, "connection_manager", SimpleNamespace(client=object()))
     response = await incident_evidence.get_incident_evidence(**INPUTS[product], **presentation)
     assert response["success"] is True, response
     assert set(response) == {"success", "data"}
