@@ -298,7 +298,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Saved as the unifi-protect plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options); `/mcp reconnect` alone keeps the options the session started with, so the server would stay in setup mode. Then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` offers more than one tool: a server offering only `protect_setup_status` is still unconfigured. Use `/mcp reconnect plugin:unifi-protect:unifi-protect` only if `/mcp` shows the server as failed. Review or change the options with `/plugin`, then `unifi-protect`, then Configure options."
+"Saved as the unifi-protect plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options); `/mcp reconnect` alone keeps the options the session started with, so the server would stay in setup mode. Then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` offers more than one tool: a server offering only its setup-status tool is still unconfigured. Use `/mcp reconnect plugin:unifi-protect:unifi-protect` only if `/mcp` shows the server as failed. Review or change the options with `/plugin`, then `unifi-protect`, then Configure options."
 
 For Codex, tell the user:
 
