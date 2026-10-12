@@ -1,6 +1,6 @@
 ---
 name: unifi-access-setup
-description: Configure the UniFi Access MCP server for a supported MCP client — set controller host, credentials, API key, and permissions
+description: Configure the UniFi Access MCP server for a supported MCP client — set controller host, credentials, API key, and permissions. Also use when the unifi-access server failed to start or its tools are missing, especially right after a plugin update, because in Claude Code the plugin no longer reads settings an earlier version saved in the project's .claude/settings.local.json, and this skill migrates them
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 

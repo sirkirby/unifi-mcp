@@ -1,6 +1,6 @@
 ---
 name: unifi-protect-setup
-description: Configure the UniFi Protect MCP server for a supported MCP client — set NVR host, credentials, and permissions
+description: Configure the UniFi Protect MCP server for a supported MCP client — set NVR host, credentials, and permissions. Also use when the unifi-protect server failed to start or its tools are missing, especially right after a plugin update, because in Claude Code the plugin no longer reads settings an earlier version saved in the project's .claude/settings.local.json, and this skill migrates them
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 

@@ -39,13 +39,18 @@ The setup helpers (`check-prereqs`, `set-env`) need Python 3.11 or newer on
 
 ### Claude Code
 
+**After the update, start a new session.** This applies whether you ran the
+update or auto-update did. The migration notice below appears only when a
+session starts. Claude Code's update banner suggests `/reload-plugins`, which
+loads the new plugin without the notice, so the UniFi servers stay unconfigured
+until your next session or until you ask Claude to run the plugin's setup
+skill.
+
 Auto-update is off by default for this marketplace. If you turned it on
 (`/plugin`, then **Marketplaces**, then `unifi-plugins`, then **Enable
-auto-update**), Claude Code installs 1.0.0 in the background a few minutes into
-a session and shows `Plugins updated: … Run /reload-plugins to apply`. Start a
-new session instead of reloading, so you see the notice below; if you already
-reloaded, ask Claude to run the plugin's setup skill, which finds the old
-settings and offers the migration. Otherwise, update yourself:
+auto-update**), Claude Code installs 1.0.0 in the background during a session
+and shows `Plugins updated: … Run /reload-plugins to apply`. Otherwise, update
+yourself:
 
 ```bash
 claude plugin marketplace update unifi-plugins
@@ -55,11 +60,6 @@ claude plugin update unifi-network@unifi-plugins
 Repeat the second command for `unifi-protect@unifi-plugins` and
 `unifi-access@unifi-plugins` if you have them. You can also use `/plugin`, then
 **Installed**, then **Update now**.
-
-Then start a new Claude Code session in the project. Don't use
-`/reload-plugins` for this step: it moves a running session to the new version
-without the notice, which appears only when a session starts, and the servers
-then fail until you migrate.
 
 #### Move your settings into plugin options
 
