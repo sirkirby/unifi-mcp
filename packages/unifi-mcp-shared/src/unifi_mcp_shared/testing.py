@@ -124,3 +124,81 @@ def assert_dotenv_command_indirection_refused(tmp_path: Any, *, module: str, env
     assert result.returncode == 0, result.stderr
     assert not marker.exists(), "a .env-supplied _COMMAND was executed"
     assert "SENTINEL-dotenv-command-secret" not in result.stderr + result.stdout
+
+
+_SETTINGS_PROBE = """\
+import asyncio, socket, sys
+from unittest import mock
+
+def _no_network(event, args):
+    if event == "socket.connect" and args[0].family in (socket.AF_INET, socket.AF_INET6):
+        raise AssertionError("the startup probe must not open a network connection")
+sys.addaudithook(_no_network)
+
+import {module}.main as m
+
+assert str(m.config.unifi.host) == "192.0.2.11", "host"
+assert int(m.config.unifi.port) == 9, "port"
+assert str(m.config.unifi.password) == "{password}", "password provider"
+assert m.UNIFI_TOOL_REGISTRATION_MODE == "meta_only", "registration mode"
+
+calls = []
+
+async def _record(name, result=None):
+    calls.append(name)
+    return result
+
+m.connection_manager.initialize = lambda *a, **k: _record("initialize", False)
+m.event_manager.start_listening = lambda *a, **k: _record("start_listening")
+transport = mock.AsyncMock()
+with mock.patch("unifi_mcp_shared.transport.run_transports", transport):
+    asyncio.run(m.main_async())
+assert transport.await_count == 1, "transport"
+assert "initialize" in calls, calls
+
+@m.server.tool(name="settings_file_probe", permission_category="settings_probe", permission_action="delete")
+async def probe(confirm: bool = False):
+    return {{"success": True}}
+
+denied = asyncio.run(probe())
+assert denied["success"] is False and "disabled by policy" in denied["error"], "policy gate"
+print("settings-file-probe-ok")
+"""
+
+
+def assert_settings_file_configures_server(tmp_path: Any, *, module: str, env_prefix: str) -> None:
+    """Start the app with only ``UNIFI_SETTINGS_FILE`` and assert it sees the file.
+
+    Runs the real import order in a subprocess whose environment holds no other
+    ``UNIFI_*`` variable. Controller I/O and the MCP transport are replaced, and
+    an audit hook fails the probe on any network connection.
+    """
+    import os
+    import subprocess
+    import sys
+
+    password = "SENTINEL-settings-file-password"
+    secret = tmp_path / "password"
+    secret.write_text(password + "\n", encoding="utf-8")
+    secret.chmod(0o600)
+    settings = tmp_path / "settings.env"
+    settings.write_text(
+        f"UNIFI_{env_prefix}_HOST=192.0.2.11\n"
+        f"UNIFI_{env_prefix}_PORT=9\n"
+        f"UNIFI_{env_prefix}_USERNAME=fake-user\n"
+        f"UNIFI_{env_prefix}_PASSWORD_FILE={secret}\n"
+        f"UNIFI_POLICY_{env_prefix}_DELETE=false\n"
+        "UNIFI_TOOL_REGISTRATION_MODE=meta_only\n",
+        encoding="utf-8",
+    )
+    settings.chmod(0o600)
+    probe = tmp_path / "probe.py"
+    probe.write_text(_SETTINGS_PROBE.format(module=module, password=password), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_") and k != "CONFIG_PATH"}
+    env["UNIFI_SETTINGS_FILE"] = str(settings)
+    result = subprocess.run(
+        [sys.executable, str(probe)], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert "settings-file-probe-ok" in result.stdout
+    assert password not in result.stderr

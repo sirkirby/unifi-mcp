@@ -65,7 +65,7 @@ class TestAssertCredentialsConfigured:
         joined = "\n".join(r.getMessage() for r in caplog.records)
         assert "unifi-network" in joined
         assert "UNIFI_NETWORK_HOST" in joined
-        assert "/setup" in joined
+        assert "unifi-network-setup skill" in joined
 
     def test_exits_when_host_whitespace(self):
         with pytest.raises(SystemExit):
