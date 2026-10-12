@@ -19,6 +19,7 @@ Complete reference for `unifi_*` tools. All read tools are always available. Mut
 - [Routing](#routing)
 - [MAC ACL Rules](#mac-acl-rules)
 - [Events & Alarms](#events--alarms)
+- [Incident Evidence](#incident-evidence)
 - [Statistics](#statistics)
 - [Hotspot / Vouchers](#hotspot--vouchers)
 - [User Groups](#user-groups)
@@ -499,6 +500,13 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 **Tips:**
 - Use `unifi_get_event_types` first to understand what event types are available for filtering
 - Events are the primary audit trail for network changes
+
+---
+
+## Incident Evidence
+
+<!-- AUTO:tools:incident_evidence -->
+<!-- /AUTO:tools:incident_evidence -->
 
 ---
 
