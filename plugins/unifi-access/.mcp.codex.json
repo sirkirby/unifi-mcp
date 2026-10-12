@@ -8,6 +8,9 @@
         "system",
         "unifi-access-mcp==0.6.12"
       ],
+      "env": {
+        "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/access.env"
+      },
       "env_vars": [
         "UNIFI_TOOL_REGISTRATION_MODE",
         "UNIFI_POLICY_CREATE",

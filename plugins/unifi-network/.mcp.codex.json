@@ -8,6 +8,9 @@
         "system",
         "unifi-network-mcp==0.37.0"
       ],
+      "env": {
+        "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/network.env"
+      },
       "env_vars": [
         "UNIFI_TOOL_REGISTRATION_MODE",
         "UNIFI_POLICY_CREATE",
