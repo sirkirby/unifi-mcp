@@ -187,13 +187,14 @@ runs out is cancelled. The first spent budget stops collection.
 |--------|--------|------------|
 | `window` | the requested window's duration | nothing is read; every source is `not_attempted` with failure `budget_exhausted` |
 | `events` | every row a request returned, including out-of-window rows and rows an exact-identifier filter later removed | reading stops |
-| `calls` | every HTTP request a read sends: the page request, the Network API-version probe, every retry (uiprotect's status and reconnect retries, the retry after a re-login, aiohttp's own), and every request a cold connection sends while being acquired inside the read (Network controller detection and sites checks, the Protect bootstrap, their retries). Logins are not charged. A request the budget cannot pay for is refused before it is sent, so a connection that cannot fit the budget fails closed with `calls` exhausted | reading stops |
+| `calls` | every HTTP request a read sends: the page request, the Network API-version probe, and every retry (uiprotect's status and reconnect retries, the retry after a re-login, aiohttp's own). Logins are not charged, and neither is connecting: each connection manager connects in its shared connect attempt, a task of its own, which a read only waits for within the `elapsed` budget. A request the budget cannot pay for is refused before it is sent | reading stops |
 | `elapsed` | wall time across reads, including connecting and, in the API, acquiring the manager | the running read is cancelled; usage is reported at the limit |
 
 A read's charge applies only in its own task. Persistent background tasks
-(the Protect bootstrap refresh, the Network websocket, API event listeners)
-start with no charge, and any task a read happens to start inherits a charge
-it cannot use, so a read never throttles them and they never draw on it.
+(the shared connect attempt, the Protect bootstrap refresh, the Network
+websocket, API event listeners) start with no charge, and any task a read
+happens to start inherits a charge it cannot use, so a read never throttles
+them and they never draw on it.
 
 A spent budget appears three ways: its kind in `budgets.exhausted`; the source
 it stopped is `partial` with `budget_exhausted` among its `partial_reasons`
@@ -411,6 +412,11 @@ any read:
 | `max_records_returned` | Record citations in the view, 1 to 50, default 25. Rejected with `detail=full`. |
 | `resume_after` | A view's `record_selection.next_cursor`; the view of the same request then returns the records after it (see [continuation](#client-view)). Rejected with `detail=full`. |
 
+The MCP tools wait for the server's controller connection like every domain
+tool, within the same bound. A call made while the controller is still
+connecting, unreachable or rejecting the login returns that standard
+connection error, reads nothing and counts against no budget.
+
 Every surface renders through `EvidencePresentation.render`, so the same input
 and controller answers give the same payload. MCP returns
 `{"success": true, "data": <view or evidence>}`; REST returns
@@ -431,7 +437,7 @@ exception type, never by message text. A controller that does not run the
 product is refused before collection on both surfaces: REST 409
 `capability_mismatch`, GraphQL `CAPABILITY_MISMATCH`. The API validates input
 and checks the window budget before acquiring a manager, acquires it inside
-the first read so it is charged to the elapsed and call budgets, reports an
+the first read so waiting for it is charged to the elapsed budget, reports an
 acquisition failure as a classified source failure (a refused login or
 bootstrap is `auth_failed` or `permission_denied` with its status; connection
 managers log only the operation and exception class), and never starts a background event
