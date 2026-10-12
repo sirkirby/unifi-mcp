@@ -25,6 +25,10 @@ What changes:
   you to type a password or API key into the conversation, and the setup scripts
   refuse a raw password or API key as a command argument. See
   [Moving a raw secret to a provider](#moving-a-raw-secret-to-a-provider).
+- **Codex runs the plugin's own server.** Codex setup now saves your settings in
+  a private file that the plugin's bundled server reads, instead of a separate
+  `config.toml` entry, so plugin upgrades upgrade the server. If you ran Codex
+  setup before 1.0.0, run one command once; see [Codex](#codex).
 - **Setup is transactional.** Setup validates every change before writing it and
   replaces the client configuration atomically. If anything fails, the previous
   configuration stays in place and usable.
@@ -169,22 +173,40 @@ upgrade without starting a session, run:
 codex plugin marketplace upgrade
 ```
 
-Setup created a separate, version-pinned MCP entry that takes precedence over
-the plugin's bundled server. That entry keeps the server version you had until
-you refresh it. 1.0.0 keeps the same server versions, so your server does not
-change now, but refresh after every plugin upgrade so the entry follows the new
-plugin's pin:
+#### One-time step if you ran Codex setup before 1.0.0
+
+Earlier setup saved your settings in a `[mcp_servers.unifi-network]` entry
+(or `unifi-protect`, `unifi-access`) in Codex's `config.toml`. That entry takes
+precedence over the plugin's own server, so it keeps running the server version
+it names, whatever the plugin installs. Once 1.0.0 is installed, run this once
+for each plugin you set up, then restart Codex:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-You can also ask Codex to run the plugin's setup skill with `--refresh`. Refresh
-keeps your saved settings and provider references, asks for no credentials and
-prints the pinned package. Restart Codex afterwards. If there is no saved MCP
-entry, run ordinary setup instead. Your saved Codex settings carry over,
-including per-category policy overrides.
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+`<plugin-root>` is the installed plugin, for example
+`~/.codex/plugins/cache/unifi-plugins/unifi-network/1.0.0`. You can also ask
+Codex to run the plugin's setup skill: its prerequisite check names the entry
+and this command.
+
+The command asks for no credentials. It moves the entry's settings, provider
+references and per-category policy overrides included, into
+`~/.config/unifi-mcp/<product>.env` (`%USERPROFILE%\.config\unifi-mcp\<product>.env`
+on Windows), readable by you only, then removes the entry from `config.toml`.
+Everything else in `config.toml` stays as written, and the previous file is kept
+beside it as `config.toml.bak-unifi-<product>-<time>`. If the entry held anything
+other than `UNIFI_` settings, the command names it (never its value); it stays
+in the backup. Running the command again changes nothing.
+
+#### After that
+
+Codex runs the plugin's own server, which reads that file, so each plugin
+upgrade brings the server version it pins with nothing to rerun. Codex installs
+an upgrade in the background as a session starts; that session keeps the server
+it already started, and the next one runs the new version. To change a setting,
+run the setup skill again. To remove the settings, delete the file.
 
 ### OpenClaw
 
@@ -243,10 +265,10 @@ What happens when a release lands, and how to stay on your current plugins:
   marketplace; then it installs the release in the background during a
   session. To hold off, leave auto-update off (turn it off under `/plugin`,
   then **Marketplaces**, if you enabled it) and don't run the update commands.
-- **Codex:** installs the release at the start of your next session. There is no
-  switch to hold off. Your setup entry keeps its pinned server version until you
-  run `--refresh`, so the server you run doesn't change; the plugin's skills and
-  files do.
+- **Codex:** installs the release at the start of your next session, together
+  with the server version it pins. There is no switch to hold off. If you ran
+  Codex setup before 1.0.0, your `config.toml` entry keeps its server until you
+  run the [one-time step](#one-time-step-if-you-ran-codex-setup-before-100).
 - **OpenClaw:** nothing until you run `openclaw plugins update`. To hold off,
   don't run it.
 

@@ -165,7 +165,7 @@ Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `uni
 
 > Use the `unifi-network-setup` skill to configure this for Codex.
 
-The setup skill saves a version-pinned MCP server entry in Codex's `config.toml` with your controller settings and credential provider references, and keeps the same preview-before-confirm safety model as Claude Code. Codex installs plugin upgrades itself at the start of a session, but that entry keeps its server version: after each plugin upgrade, re-run setup with `--refresh`; see the [plugin upgrade guide](docs/plugin-upgrade.md#codex).
+The setup skill saves your controller settings and credential provider references in a private file, `~/.config/unifi-mcp/<product>.env`, which the plugin's own server reads, and keeps the same preview-before-confirm safety model as Claude Code. Codex installs plugin upgrades itself at the start of a session, and the server comes with them, so nothing needs rerunning. If you ran Codex setup before plugin 1.0.0, run its one-time `--refresh`; see the [plugin upgrade guide](docs/plugin-upgrade.md#one-time-step-if-you-ran-codex-setup-before-100).
 
 ### UniFi account requirements
 

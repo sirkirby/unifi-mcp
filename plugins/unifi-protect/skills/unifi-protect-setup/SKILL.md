@@ -133,7 +133,8 @@ categories writable can allow the action server-wide and decline the previews
 they do not want, or keep the action off.
 
 For Codex and OpenClaw, before writing policy values, inspect a sanitized list of the selected client's
-existing `unifi-protect` MCP environment variable names.
+existing `unifi-protect` MCP environment variable names (for Codex, the key names in
+`~/.config/unifi-mcp/protect.env`).
 Remove every existing category-specific
 `UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>` entry by including null deletions
 in the same JSON patch, because those entries take precedence over server-level
@@ -184,10 +185,10 @@ The script handles the client-specific write:
   with `claude plugin configure --values-stdin` (values on stdin): non-secret
   options in user `settings.json` (`pluginConfigs`), a raw password or API key
   in the system keychain. The options apply in every project
-- Codex: checks `codex mcp add` in an empty private `CODEX_HOME`, replaces only
-  this server's tables in a staged copy of `config.toml` (every other setting
-  and comment stays as written), validates the copy with `codex mcp get`, then
-  atomically replaces `config.toml`. Env never enters argv
+- Codex: validates every value, then atomically writes the settings file
+  `~/.config/unifi-mcp/protect.env` (`%USERPROFILE%\.config\unifi-mcp\protect.env`
+  on Windows), readable by the user only. The plugin's own server reads it through
+  `UNIFI_SETTINGS_FILE`; setup writes no `config.toml` entry. Env never enters argv
 - OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
   then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
 
@@ -203,27 +204,34 @@ only when the server starts.
 
 ### Codex upgrades
 
-Codex setup pins a separate MCP entry that takes precedence over the plugin's
-bundled server. After **every plugin upgrade**, resolve this newly installed
-skill's plugin root and refresh the pin before restarting Codex:
+The plugin's own MCP server is the one Codex runs, and it reads the settings
+file setup wrote, so a plugin upgrade upgrades the server with nothing to rerun.
+Codex installs an upgrade in the background as a session starts; the next
+session runs the new server.
+
+Setup before plugin 1.0.0 saved a `[mcp_servers.unifi-protect]` entry in Codex's
+`config.toml` instead. That entry takes precedence over the plugin's server and
+keeps an old server version. Step 0 then prints a notice naming the entry and
+`--refresh`. Relay it and, once the user agrees, run refresh from this skill's
+plugin root, then restart Codex:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-This command needs no credential input and preserves the saved environment and
-provider references. It validates providers, pins the package in the server
-entry's `args`, and prints the pinned package on success. Confirm that version
-matches the new installed plugin. Use ordinary setup first if there is
-no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+Refresh needs no credential input. It moves the entry's `UNIFI_` settings,
+provider references included, into the settings file, removes the entry from
+`config.toml` after saving a private backup beside it, and names any other entry
+settings it did not move. Ordinary setup does the same when it finds the entry.
+It is needed once. If a settings file already exists and holds different
+settings, refresh changes nothing and says which to remove.
 
-Tell the user that `codex mcp add` and `codex mcp remove` rewrite `config.toml`
-and drop the comments inside every `[mcp_servers.*]` table, for every server.
-Setup never calls them on the user's file, so it keeps their comments. If the
-file lays out its MCP servers in a form setup cannot edit in place (dotted or
-inline `mcp_servers` keys), setup lets Codex rewrite it and says so in its
-output.
+Setup edits only that entry's tables in `config.toml`, so every other setting and
+comment stays as written. If the file lays out its MCP servers in a form setup
+cannot edit in place (dotted or inline `mcp_servers` keys), setup lets Codex
+remove the entry, which drops the comments inside every `[mcp_servers.*]`
+table, and says so in its output.
 
 ### Claude Code projects set up by an earlier plugin version
 
@@ -284,7 +292,7 @@ For Claude Code, tell the user:
 
 For Codex, tell the user:
 
-"Codex MCP server `unifi-protect` configured at the package version printed by setup. Restart Codex so the updated MCP server is loaded. After every plugin upgrade, re-run the new plugin’s setup with --target codex --refresh (PowerShell: -Target codex -Refresh)."
+"Saved the settings for `unifi-protect` to `~/.config/unifi-mcp/protect.env`, readable by you only. The plugin's own server reads them and follows plugin upgrades on its own. Restart Codex so the server loads them."
 
 For OpenClaw, tell the user:
 

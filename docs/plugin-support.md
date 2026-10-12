@@ -30,8 +30,8 @@ marketplace:
   `claude plugin update <plugin>@unifi-plugins`, then start a new session.
 - **Codex** upgrades its marketplaces at the start of every session and
   reinstalls a plugin when its version changes (`codex plugin marketplace
-  upgrade` does the same on demand). Setup's pinned server entry keeps its
-  server version until you re-run setup with `--refresh` (below).
+  upgrade` does the same on demand). Codex runs the plugin's own server, so the
+  server follows the upgrade from the next session (below).
 - **OpenClaw** follows commits and changes nothing until you run
   `openclaw plugins update <id>`, which asks you to accept the plugin's
   capabilities (`--accept-capabilities` in scripts).
@@ -43,32 +43,49 @@ Contributors: the version, pin and release rules are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#plugin-changes) and the
 `monorepo-release-pipeline` skill (Procedure E).
 
-Claude loads its bundled server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
-that takes precedence over the bundle. After every plugin upgrade, re-run setup
-from the newly installed plugin before restarting Codex.** Setup pins the
-package in the server entry's `args` and prints the package version on success.
-It edits only that server's tables in `config.toml`, so the file's comments and
-other servers stay as written; `codex mcp add` and `codex mcp remove` rewrite the
-file and drop the comments inside every `[mcp_servers.*]` table. A pin may be a
-PEP 440 development or local version, such as `0.37.1.dev83+g<sha>`, when a
-candidate is tested before release. Preserve the saved environment with this
-non-secret command:
+Claude loads its bundled server on upgrade, and so does Codex. **Codex setup
+saves the settings in a per-user file,** `~/.config/unifi-mcp/<product>.env`
+(`%USERPROFILE%\.config\unifi-mcp\<product>.env` on Windows), created
+readable by the user only. The bundled entry in `.mcp.codex.json` names it with
+`UNIFI_SETTINGS_FILE`, and the server loads it at startup. The process
+environment wins over the file. The file holds dotenv-style `KEY="value"`
+lines, only `UNIFI_` keys, single-line values; setup writes no `config.toml`
+entry. On POSIX the server ignores the file if another user owns it or others
+can write to it, and warns if others can read it. On Windows there is no
+permission check, so keep the file in your own profile. Server releases from
+`unifi-network-mcp` 0.37.1, `unifi-protect-mcp` 0.8.18 and `unifi-access-mcp`
+0.6.13 read the file; earlier releases ignore it. Those releases also start in
+setup mode while no controller host is configured: the server answers, offers
+only the read-only `unifi_setup_status`, `protect_setup_status` or
+`access_setup_status` tool, and makes no controller connection, so a Codex user
+who has not run setup sees how to configure it instead of a failed server.
+
+Setup before plugin 1.0.0 saved a `[mcp_servers.<plugin>]` entry in Codex's
+`config.toml`, which takes precedence over the bundled server and keeps the
+server version it names. The prerequisite check names such an entry, and this
+non-secret command converts it once:
 
 ```bash
-bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+bash <plugin-root>/scripts/set-env.sh --target codex --refresh
 ```
 
-On PowerShell use `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
-Resolve `<new-plugin-root>` from the current installed plugin, not an older cache
-path. Refresh preserves saved settings and provider references, validates them,
-and atomically updates the pin; it does not collect credentials or contact a
-controller. Run ordinary setup first if there is no saved MCP entry.
+On PowerShell use `& <plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+Refresh moves the entry's `UNIFI_` settings, provider references included, into
+the settings file, then removes only that entry's tables from `config.toml`
+after saving a private `config.toml.bak-<plugin>-<time>` beside it; comments and
+other servers stay as written. It names any other entry setting it did not move.
+It does not collect credentials or contact a controller. If a settings file
+already holds different settings, it changes nothing and says which to remove.
+If `config.toml` lays out its MCP servers in a form setup cannot edit in place,
+setup lets `codex mcp remove` rewrite it and says so; that drops the comments
+inside every `[mcp_servers.*]` table. A pin may be a PEP 440 development or
+local version, such as `0.37.1.dev83+g<sha>`, when a candidate is tested before
+release.
 
 Codex uses `.mcp.codex.json`, which omits shell-style environment templates:
-Codex 0.162.0 passes those templates literally. The Codex config therefore leaves
-credential settings unset until setup supplies them. Published servers still
-refuse startup until a controller host is configured; run setup before expecting
-an MCP handshake. Optional `env_vars` forwarding carries
+Codex 0.162.0 passes those templates literally, and the server expands the `~`
+in `UNIFI_SETTINGS_FILE` itself. Server releases before setup mode refuse to
+start until a controller host is configured. Optional `env_vars` forwarding carries
 registration and safety controls from the launcher; application defaults apply
 otherwise. Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
 `[mcp_servers]` entry requires its own transport rather than merging the bundle's
@@ -153,7 +170,9 @@ No minimum client version has been established for any client.
 - Claude Code: setup saves the plugin's options with `claude plugin configure`,
   so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
   (Git Bash on Windows).
-- Codex and OpenClaw: setup validates the server entry with the client's own
-  CLI (`codex mcp add` and `codex mcp get` against a private staging home,
-  `openclaw mcp set` and `openclaw config validate`), so that client's CLI must
-  be on `PATH`.
+- Codex: setup writes the settings file itself and needs the `codex` CLI on
+  `PATH` only to remove a pre-1.0.0 entry from a `config.toml` layout it cannot
+  edit in place; the prerequisite check still requires it.
+- OpenClaw: setup validates the server entry with the client's own CLI
+  (`openclaw mcp set` and `openclaw config validate`), so `openclaw` must be on
+  `PATH`.

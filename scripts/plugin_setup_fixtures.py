@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -79,7 +80,8 @@ def fake_client(name):
         document = tomllib.loads(path.read_text(encoding="utf-8"))
         registry = document.setdefault("mcp_servers", {})
         if args[:2] == ["mcp", "add"]:
-            registry[args[2]] = {"command": "uvx", "args": args[args.index("--") + 2 :]}
+            separator = args.index("--")
+            registry[args[2]] = {"command": args[separator + 1], "args": args[separator + 2 :]}
         elif args[:2] == ["mcp", "remove"]:
             registry.pop(args[2], None)
         elif args[:2] == ["mcp", "get"]:
@@ -202,6 +204,14 @@ def executable(directory, name, source):
         path = directory / name
         path.write_text("#!" + sys.executable + "\n" + source, encoding="utf-8")
         path.chmod(0o755)
+
+
+def setup_module(scripts):
+    """Load a plugin's setup helper to reuse its entry layout, never to re-derive it."""
+    spec = importlib.util.spec_from_file_location("fixture_setup_config", scripts / "setup_config.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def client_executable(directory, name):
@@ -910,6 +920,214 @@ class Fixtures:
             )
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
+    def codex_conversion_scenario(self, workspace, environment, command, cached, path, product, setup):
+        """Setup before plugin 1.0.0 saved a config.toml entry that shadows the bundled server; one refresh moves it."""
+        name = f"unifi-{product}"
+        upper = product.upper()
+        config = workspace / "codex/config.toml"
+        refresh = command[:-1] + (["-Refresh"] if self.powershell else ["--refresh"])
+        prerequisite = [
+            *(
+                [self.powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]
+                if self.powershell
+                else [self.shell]
+            ),
+            str(cached / ("check-prereqs.ps1" if self.powershell else "check-prereqs.sh")),
+            *(["-Target", "codex"] if self.powershell else ["--target", "codex"]),
+        ]
+        secret = 'FAKE-only "quoted" $dollar \\ tab\there Ω'
+
+        def run(argv, **extra):
+            return subprocess.run(argv, cwd=workspace, env=dict(environment, **extra), capture_output=True, timeout=30)
+
+        def backups():
+            return sorted(config.parent.glob("config.toml.bak-*"))
+
+        def start(text):
+            path.unlink(missing_ok=True)
+            for backup in backups():
+                backup.unlink()
+            config.write_bytes(text.encode("utf-8"))
+
+        def private(file):
+            return os.name == "nt" or file.stat().st_mode & 0o777 == 0o600
+
+        def without_entry(document):
+            return dict(document, mcp_servers=document.get("mcp_servers", {}))
+
+        moved = {f"UNIFI_{upper}_HOST": "192.0.2.10", f"UNIFI_{upper}_PASSWORD": secret, "UNIFI_POLICY_CREATE": "false"}
+        env_table = "".join(f"{k} = {json.dumps(v, ensure_ascii=False)}\n" for k, v in moved.items())
+        commented = (
+            '# user note\nmodel = "fixture"  # trailing\n\n# my server\n[mcp_servers.unrelated]  # keep\n'
+            'command = "keep"\n# inside\nenv = { KEEP = "yes" }\n\n'
+            f"# unifi-plugin-setup: {name} plugin 0.0.1; package {name}-mcp==0.0.1\n"
+            f'# note for the entry\n[mcp_servers."{name}"]\ncommand = "uvx"\n'
+            f'args = ["--python-preference", "system", "{name}-mcp==0.0.1"]\nstartup_timeout_sec = 30\n\n'
+            f'[mcp_servers."{name}".env]\n' + env_table + 'KEEP = "old"\n\n'
+            '# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+        )
+        for eol in ("\n", "\r\n"):
+            source = commented.replace("\n", eol)
+            start(source)
+            checked = run(prerequisite)
+            self.check(
+                checked.returncode == 0
+                and b"takes precedence over the plugin's own server" in checked.stdout
+                and (b"-Target codex -Refresh" if self.powershell else b"--target codex --refresh") in checked.stdout,
+                "prerequisites name the shadowing entry and its one-time refresh",
+            )
+            result = run(refresh)
+            self.check(result.returncode == 0, "refresh converts a shadowing entry without input")
+            self.check(setup.read_settings(path) == moved, "conversion moves exactly the entry's UNIFI_ settings")
+            self.check(private(path), "converted settings file is private (600)")
+            text = config.read_bytes().decode("utf-8")
+            prefix = commented.split(f"# unifi-plugin-setup: {name} ")[0] + "# note for the entry\n"
+            suffix = '# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
+            self.check(
+                text == (prefix + suffix).replace("\n", eol),
+                "conversion leaves config.toml byte-identical apart from the entry",
+            )
+            [backup] = backups()
+            self.check(backup.read_bytes() == source.encode("utf-8") and private(backup), "private exact backup")
+            self.check(
+                b"Not moved" in result.stdout and b"KEEP" in result.stdout and b"startup_timeout_sec" in result.stdout,
+                "conversion names what it did not move",
+            )
+            self.check(secret.encode() not in result.stdout + result.stderr, "conversion output omits values")
+            checked = run(prerequisite)
+            self.check(checked.returncode == 0 and b"takes precedence" not in checked.stdout, "notice goes quiet")
+            again = run(refresh)
+            self.check(
+                again.returncode == 0 and b"Nothing to convert" in again.stdout and len(backups()) == 1,
+                "a second refresh changes nothing",
+            )
+
+        # Every TOML layout the editor understands keeps the rest of the document exactly.
+        server_text = (
+            f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+            f'env = {{ UNIFI_{upper}_HOST = "192.0.2.11" }}\n'
+            'note = """\n# string content\n[mcp_servers.fake]\n"""\n'
+        )
+        lexical_cases = {
+            "multiline basic": 'developer_instructions = """\nSample:\n'
+            f'[mcp_servers.{name}]\ncommand = "old"\n'
+            f'# unifi-plugin-setup: {name} example inside a string\n"""\n',
+            "multiline literal": "developer_instructions = '''\nSample:\n"
+            f"[[mcp_servers.{name}.example]]\ncommand = \"old\"\n'''\n",
+            "arrays and comments": 'custom = [\n"""\n[mcp_servers.fake]\n""", # """ ignored\n'
+            "['''\n[[mcp_servers.fake]]\n'''],\n]\n",
+            "array tables": '[[custom]]\nlabel = "a"\n[[custom]]\nlabel = "b"\n',
+            "escaped delimiters": 'developer_instructions = """\n'
+            + r'\""" still inside the string'
+            + '\n[mcp_servers.fake]\n"""\n',
+            "closing quote runs": 'developer_instructions = """two trailing quotes"""""\n',
+            "unicode line separators": 'developer_instructions = "first\u2028second"\n',
+            "unicode keys": '[profiles."\\U0001F600"]\nmodel = "fixture"\n',
+        }
+        for label, prefix in lexical_cases.items():
+            source = prefix + server_text
+            if label == "unicode keys":
+                source = source.replace(f'"{name}"', '"' + name[:-1] + f'\\U{ord(name[-1]):08X}"')
+            expected = tomllib.loads(source)
+            del expected["mcp_servers"][name]
+            for eol in ("\n", "\r\n"):
+                start(source.replace("\n", eol))
+                result = run(refresh)
+                self.check(result.returncode == 0, "conversion handles " + label)
+                document = tomllib.loads(config.read_text(encoding="utf-8"))
+                self.check(without_entry(document) == expected, "conversion keeps all TOML values for " + label)
+                self.check(b"dropped the comments" not in result.stdout, "lexical layout needs no rewrite " + label)
+                self.check(
+                    config.read_bytes().startswith(prefix.replace("\n", eol).encode("utf-8")),
+                    "conversion preserves unrelated TOML text for " + label,
+                )
+
+        # A scanner failure falls back to Codex's own removal in a private copy.
+        scanner_injection = workspace / "scanner-injection"
+        scanner_injection.mkdir()
+        (scanner_injection / "sitecustomize.py").write_text(
+            "import sys\n"
+            "def boundary(frame, event, arg):\n"
+            " if event == 'call' and frame.f_code.co_name == 'table_path':\n"
+            "  raise ValueError('FAKE scanner failure')\n"
+            "sys.setprofile(boundary)\n",
+            encoding="utf-8",
+        )
+        start(source)
+        result = run(refresh, PYTHONPATH=str(scanner_injection))
+        document = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.check(
+            result.returncode == 0 and b"dropped the comments" in result.stdout,
+            "scanner exceptions use the validated Codex removal fallback",
+        )
+        self.check(without_entry(document) == expected, "scanner fallback keeps every other setting")
+
+        # A layout setup cannot edit in place is rewritten by Codex, with a notice.
+        start(
+            f'# kept\n[mcp_servers]\nunrelated.command = "keep"\n"{name}".command = "old"\n'
+            f'"{name}".env.UNIFI_{upper}_HOST = "192.0.2.12"\n'
+        )
+        result = run(refresh)
+        document = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.check(result.returncode == 0 and b"dropped the comments" in result.stdout, "rewrite is announced")
+        self.check(
+            document["mcp_servers"] == {"unrelated": {"command": "keep"}}
+            and setup.read_settings(path) == {f"UNIFI_{upper}_HOST": "192.0.2.12"},
+            "dotted layout is converted through Codex",
+        )
+
+        # A value the settings file cannot hold refuses, leaving everything as it was.
+        start(f'[mcp_servers."{name}"]\ncommand = "uvx"\nenv = {{ UNIFI_{upper}_HOST = "two\\nlines" }}\n')
+        before = config.read_bytes()
+        result = run(refresh)
+        self.check(
+            result.returncode != 0 and config.read_bytes() == before and not path.exists() and not backups(),
+            "an unrepresentable value refuses without changes",
+        )
+
+        # Settings already saved are never overwritten by a differing entry.
+        start(f'[mcp_servers."{name}"]\ncommand = "uvx"\nenv = {{ UNIFI_{upper}_HOST = "192.0.2.13" }}\n')
+        before = config.read_bytes()
+        path.write_text(setup.settings_text({f"UNIFI_{upper}_HOST": "192.0.2.14"}, name), encoding="utf-8")
+        saved = path.read_bytes()
+        result = run(refresh)
+        self.check(
+            result.returncode != 0 and config.read_bytes() == before and path.read_bytes() == saved,
+            "differing file and entry refuse without changes",
+        )
+        # Matching settings (a rerun after an interrupted conversion) finish the conversion.
+        path.write_text(setup.settings_text({f"UNIFI_{upper}_HOST": "192.0.2.13"}, name), encoding="utf-8")
+        result = run(refresh)
+        self.check(
+            result.returncode == 0 and not tomllib.loads(config.read_text(encoding="utf-8")).get("mcp_servers"),
+            "a matching rerun finishes the conversion",
+        )
+
+        # Ordinary setup converts too, applying the patch on top of the entry's settings.
+        start(f'model = "fixture"\n[mcp_servers."{name}"]\ncommand = "uvx"\nenv = {{ UNIFI_{upper}_HOST = "a" }}\n')
+        result = subprocess.run(
+            command,
+            input=json.dumps({f"UNIFI_{upper}_SITE": "fixture-site"}).encode(),
+            cwd=workspace,
+            env=environment,
+            capture_output=True,
+            timeout=30,
+        )
+        self.check(
+            result.returncode == 0
+            and setup.read_settings(path) == {f"UNIFI_{upper}_HOST": "a", f"UNIFI_{upper}_SITE": "fixture-site"}
+            and tomllib.loads(config.read_text(encoding="utf-8")) == {"model": "fixture"},
+            "ordinary setup converts a shadowing entry and applies the patch",
+        )
+        # Without an entry or a file there is nothing to convert.
+        path.unlink()
+        config.write_text('model = "fixture"\n', encoding="utf-8")
+        result = run(refresh)
+        self.check(result.returncode != 0 and not path.exists(), "refresh without saved settings refuses")
+        config.unlink()
+        for backup in backups():
+            backup.unlink()
+
     def scenario(self, product, target):
         workspace = self.root / (product + "-" + target)
         workspace.mkdir()
@@ -970,32 +1188,32 @@ class Fixtures:
             ]
         else:
             command = [self.shell, str(scripts / "set-env.sh"), "--target", target, "--input-json"]
-        path = workspace / ("codex/config.toml" if target == "codex" else "openclaw/openclaw.json")
-        entry = {"command": "uvx", "args": ["previous"], "env": {"KEEP": "old", base: "FAKE-old"}}
-        registry = {f"unifi-{product}": entry, "unrelated": {"command": "keep", "env": {"KEEP": "yes"}}}
-        fixture = (
-            {"model": "fixture", "mcp_servers": registry}
-            if target == "codex"
-            else {"custom": {"keep": [True]}, "mcp": {"servers": registry}}
-        )
-        path.parent.mkdir()
+        # Codex settings live in the per-user file the bundled server reads; OpenClaw keeps a registry entry.
+        setup = setup_module(scripts)
+        keep = "UNIFI_FIXTURE_KEEP" if target == "codex" else "KEEP"
+        saved = {keep: "old", base: "FAKE-old"}
+        if target == "codex":
+            path = workspace / ".config" / "unifi-mcp" / f"{product}.env"
+            (workspace / "codex").mkdir()
+        else:
+            path = workspace / "openclaw/openclaw.json"
+            entry = {"command": "uvx", "args": ["previous"], "env": saved}
+            registry = {f"unifi-{product}": entry, "unrelated": {"command": "keep", "env": {"KEEP": "yes"}}}
+            fixture = {"custom": {"keep": [True]}, "mcp": {"servers": registry}}
+        path.parent.mkdir(parents=True)
 
         def seed():
             if target == "codex":
-                write_toml(path, fixture)
+                path.write_text(setup.settings_text(saved, f"unifi-{product}"), encoding="utf-8")
+                path.chmod(0o600)
             else:
                 path.write_text(json.dumps(fixture), encoding="utf-8")
 
         def load():
-            return (
-                tomllib.loads(path.read_text(encoding="utf-8"))
-                if target == "codex"
-                else json.loads(path.read_text(encoding="utf-8"))
-            )
+            return setup.read_settings(path) if target == "codex" else json.loads(path.read_text(encoding="utf-8"))
 
         def get_env(data):
-            registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
-            return registry[f"unifi-{product}"]["env"]
+            return data if target == "codex" else data["mcp"]["servers"][f"unifi-{product}"]["env"]
 
         def invoke(patch, expected=0, extra=None):
             env = dict(environment, **(extra or {}))
@@ -1085,8 +1303,8 @@ class Fixtures:
                 sample_value.encode() not in checked.stdout + checked.stderr,
                 "runtime prerequisite output omits secrets",
             )
-            calls = [json.loads(line) for line in argv_path.read_text(encoding="utf-8").splitlines()]
-            managed = [call for call in calls if call[0] == "uv"]
+            lines = argv_path.read_text(encoding="utf-8").splitlines() if argv_path.exists() else []
+            managed = [call for call in map(json.loads, lines) if call[0] == "uv"]
             self.check(
                 not managed if mode == "second" else len(managed) == 2,
                 "local Python preference and managed Python fallback",
@@ -1135,17 +1353,21 @@ class Fixtures:
         executable(isolated, "uvx", "pass\n")
         invoke({base: sample_value}, 1, {"PATH": isolated_path})
         self.check(path.read_bytes() == before, "missing client preserves registration")
-        invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
-        self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
-        invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
-        self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
+        if target == "openclaw":
+            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
+            self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
+            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
+            self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
         invoke({base: sample_value})
         data = load()
         self.check(get_env(data)[base] == sample_value, "special characters round-trip")
-        self.check(get_env(data)["KEEP"] == "old", "unrelated environment preserved")
-        registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
-        original_registry = fixture["mcp_servers"] if target == "codex" else fixture["mcp"]["servers"]
-        self.check(registry["unrelated"] == original_registry["unrelated"], "unrelated registration preserved")
+        self.check(get_env(data)[keep] == "old", "unrelated environment preserved")
+        if target == "openclaw":
+            registry = data["mcp"]["servers"]
+            self.check(registry["unrelated"] == fixture["mcp"]["servers"]["unrelated"], "unrelated registration kept")
+        else:
+            self.check(os.name == "nt" or path.stat().st_mode & 0o777 == 0o600, "settings file is private (600)")
+            self.check(not list(path.parent.glob(".*unifi-setup-*")), "no staged settings file remains")
         baseline_output = invoke({base: "FAKE-baseline-output"})
         for small in ("x", "true", "1234"):
             result = invoke({base: small})
@@ -1210,241 +1432,11 @@ class Fixtures:
             invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
             self.check(
                 get_env(load())[f"UNIFI_{product.upper()}_HOST"] == "192.0.2.99",
-                "versioned plugin cache uses semantic server name",
+                "versioned plugin cache uses the product's settings file",
             )
-        if target == "codex":
-            manifest = cached.parent / ".codex-plugin/plugin.json"
-            manifest.parent.mkdir(exist_ok=True)
-            manifest.write_text(json.dumps({"version": "1.2.3"}), encoding="utf-8")
-            mcp = cached.parent / ".mcp.codex.json"
-            mcp.write_text(
-                json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp==9.8.7"]}}}),
-                encoding="utf-8",
-            )
-            refresh = command[:-1] + (["-Refresh"] if self.powershell else ["--refresh"])
-            saved_env = get_env(load())
-            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-            self.check(result.returncode == 0, "Codex refresh succeeds without credential input")
-            self.check(get_env(load()) == saved_env, "Codex refresh preserves saved environment exactly")
-            entry = load()["mcp_servers"][f"unifi-{product}"]
-            self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
-            self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
-            self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "refresh stays quiet without an auto-confirm")
-            invoke({"UNIFI_AUTO_CONFIRM": "garbage-marker"})
-            carried = get_env(load())
-            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-            self.check(result.returncode == 0 and get_env(load()) == carried, "refresh keeps a carried auto-confirm")
-            self.check(
-                b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout
-                and b"no effect" in result.stdout
-                and b"garbage-marker" not in result.stdout + result.stderr,
-                "refresh names a carried-forward auto-confirm without its value",
-            )
-            invoke({"UNIFI_AUTO_CONFIRM": "true"})
-            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-            self.check(
-                b"turns on bypass" in result.stdout and b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout,
-                "refresh says a truthy carried-forward auto-confirm enables bypass",
-            )
-            invoke({"UNIFI_AUTO_CONFIRM": None})
-            self.check(get_env(load()) == saved_env, "removing auto-confirm restores the saved environment")
-            self.check("unifi-plugin-setup" not in path.read_text(), "Codex setup keeps no pin note in config.toml")
-            before_refresh = path.read_bytes()
-            failed = subprocess.run(
-                refresh, cwd=workspace, env=dict(environment, FIXTURE_FAIL="validate"), capture_output=True, timeout=30
-            )
-            self.check(
-                failed.returncode != 0 and path.read_bytes() == before_refresh,
-                "failed Codex refresh preserves complete registration",
-            )
-
-            def pinned(version):
-                mcp.write_text(
-                    json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp=={version}"]}}}),
-                    encoding="utf-8",
-                )
-                return subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-
-            for valid in ("9.8.7rc2", "9.8.7.post1", "9.8.8.dev83", "9.8.8.dev83+ge51932dd"):
-                result = pinned(valid)
-                self.check(result.returncode == 0, "Codex accepts PEP 440 pin " + valid)
-                self.check(
-                    load()["mcp_servers"][f"unifi-{product}"]["args"][-1] == f"unifi-{product}-mcp=={valid}",
-                    "Codex registers PEP 440 pin " + valid,
-                )
-            before_pins = path.read_bytes()
-            for malformed in ("9.8", "9.8.7-rc1", "9.8.8.dev", "9.8.8+G1", "9.8.8+ge519-32"):
-                result = pinned(malformed)
-                self.check(result.returncode != 0, "Codex refuses malformed pin " + malformed)
-                self.check(path.read_bytes() == before_pins, "malformed pin preserves configuration " + malformed)
-            pinned("9.8.7")
-
-            # Codex drops comments in the MCP tables it saves; setup edits only this server's tables.
-            name = f"unifi-{product}"
-            commented = (
-                '# user note\nmodel = "fixture"  # trailing\n\n# my server\n[mcp_servers.unrelated]  # keep\n'
-                'command = "keep"\n# inside\nenv = { KEEP = "yes" }\n\n'
-                f"# unifi-plugin-setup: {name} plugin 0.0.1; package {name}-mcp==0.0.1\n"
-                f'# note for the entry\n[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
-                'env = { KEEP = "old" }\n\n# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
-            )
-            # Model Windows' default text-write translation even on POSIX. Seed
-            # explicit bytes so both LF and CRLF inputs run on every host.
-            newline_injection = workspace / "newline-injection"
-            newline_injection.mkdir()
-            (newline_injection / "sitecustomize.py").write_text(
-                "from pathlib import Path\n"
-                "real_write_text = Path.write_text\n"
-                "def write_text(self, data, encoding=None, errors=None, newline=None):\n"
-                " if self.name == 'config.toml' and newline is None: newline = '\\r\\n'\n"
-                " return real_write_text(self, data, encoding=encoding, errors=errors, newline=newline)\n"
-                "Path.write_text = write_text\n",
-                encoding="utf-8",
-            )
-            for eol in ("\r\n", "\n"):
-                path.write_bytes(commented.replace("\n", eol).encode("utf-8"))
-                result = subprocess.run(
-                    refresh,
-                    cwd=workspace,
-                    env=dict(environment, PYTHONPATH=str(newline_injection)),
-                    capture_output=True,
-                    timeout=30,
-                )
-                self.check(result.returncode == 0, "Codex refresh edits a commented configuration")
-                text = path.read_bytes().decode("utf-8")
-                for comment in (
-                    "# user note",
-                    "# trailing",
-                    "# my server",
-                    "# keep",
-                    "# inside",
-                    "# note for the entry",
-                    "# about the next server",
-                ):
-                    self.check(comment in text, "Codex setup keeps the comment " + comment)
-                self.check(b"dropped the comments" not in result.stdout, "newline style needs no Codex rewrite")
-                self.check("\r\r\n" not in text, "Codex setup never doubles carriage returns")
-                self.check(
-                    "\r" not in text.replace(eol, "") and "\n" not in text.replace(eol, ""),
-                    "Codex setup preserves the original newline style",
-                )
-                prefix = commented.split(f"# unifi-plugin-setup: {name} ")[0]
-                suffix = '# about the next server\n[mcp_servers.after]\ncommand = "after"\n'
-                self.check(
-                    text.startswith(prefix.replace("\n", eol)) and text.endswith(suffix.replace("\n", eol)),
-                    "Codex setup preserves unrelated text exactly",
-                )
-            self.check("unifi-plugin-setup" not in text, "Codex setup drops its obsolete pin note")
-            document = tomllib.loads(text)
-            self.check(
-                document["mcp_servers"]["unrelated"] == {"command": "keep", "env": {"KEEP": "yes"}}
-                and document["mcp_servers"]["after"] == {"command": "after"}
-                and document["model"] == "fixture",
-                "Codex setup leaves other settings and servers untouched",
-            )
-            self.check(
-                document["mcp_servers"][name]["env"] == {"KEEP": "old"}
-                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
-                "Codex setup replaces only this server's pin",
-            )
-            self.check(text.index("# note for the entry") < text.index(f'[mcp_servers."{name}"]'), "entry stays put")
-
-            lexical_cases = {
-                "multiline basic": 'developer_instructions = """\nSample:\n'
-                f'[mcp_servers.{name}]\ncommand = "old"\n'
-                f'# unifi-plugin-setup: {name} example inside a string\n"""\n',
-                "multiline literal": "developer_instructions = '''\nSample:\n"
-                f"[[mcp_servers.{name}.example]]\ncommand = \"old\"\n'''\n",
-                "arrays and comments": 'custom = [\n"""\n[mcp_servers.fake]\n""", # """ ignored\n'
-                "['''\n[[mcp_servers.fake]]\n'''],\n]\n",
-                "array tables": '[[custom]]\nlabel = "a"\n[[custom]]\nlabel = "b"\n',
-                "escaped delimiters": 'developer_instructions = """\n'
-                + r'\""" still inside the string'
-                + '\n[mcp_servers.fake]\n"""\n',
-                "closing quote runs": 'developer_instructions = """two trailing quotes"""""\n',
-                "unicode line separators": 'developer_instructions = "first\u2028second"\n',
-                "unicode keys": '[profiles."\\U0001F600"]\nmodel = "fixture"\n',
-            }
-            server_text = (
-                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
-                'env = { KEEP = "old" }\n'
-                'note = """\n# string content\n[mcp_servers.fake]\n"""\n'
-            )
-            for label, prefix in lexical_cases.items():
-                source = prefix + server_text
-                if label == "unicode keys":
-                    source = source.replace(f'"{name}"', '"' + name[:-1] + f'\\U{ord(name[-1]):08X}"')
-                expected = tomllib.loads(source)
-                expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
-                for eol in ("\n", "\r\n"):
-                    path.write_bytes(source.replace("\n", eol).encode("utf-8"))
-                    result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-                    self.check(result.returncode == 0, "Codex refresh handles " + label)
-                    self.check(load() == expected, "Codex preserves all TOML values for " + label)
-                    self.check(b"dropped the comments" not in result.stdout, "lexical layout needs no rewrite " + label)
-                    self.check(
-                        path.read_bytes().startswith(prefix.replace("\n", eol).encode("utf-8")),
-                        "Codex preserves unrelated TOML text for " + label,
-                    )
-
-            scanner_injection = workspace / "scanner-injection"
-            scanner_injection.mkdir()
-            (scanner_injection / "sitecustomize.py").write_text(
-                "import sys\n"
-                "def boundary(frame, event, arg):\n"
-                " if event == 'call' and frame.f_code.co_name == 'table_path':\n"
-                "  raise ValueError('FAKE scanner failure')\n"
-                "sys.setprofile(boundary)\n",
-                encoding="utf-8",
-            )
-            result = subprocess.run(
-                refresh,
-                cwd=workspace,
-                env=dict(environment, PYTHONPATH=str(scanner_injection)),
-                capture_output=True,
-                timeout=30,
-            )
-            self.check(
-                result.returncode == 0 and b"dropped the comments" in result.stdout,
-                "scanner exceptions use the validated Codex rewrite fallback",
-            )
-            self.check(load() == expected, "scanner exception fallback preserves all settings")
-
-            # Control characters (DEL included) in an existing env are written back escaped; other Unicode stays raw.
-            escaped_env = (
-                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
-                'env = { KEEP = "synthetic", "\\u007f" = "synthetic", '
-                '"k\\u0001\\u001f\\u00e9" = "v\\u007f\\t\\u00e9\\u4e2d\\"\\\\" }\n'
-            )
-            escaped_expected = tomllib.loads(escaped_env)
-            escaped_expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
-            for eol in ("\n", "\r\n"):
-                path.write_bytes(escaped_env.replace("\n", eol).encode("utf-8"))
-                result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-                self.check(result.returncode == 0, "Codex refresh accepts escaped control characters")
-                self.check(load() == escaped_expected, "Codex preserves escaped control characters")
-                written = path.read_bytes()
-                self.check(
-                    not any(byte < 0x20 and byte not in b"\r\n" or byte == 0x7F for byte in written),
-                    "Codex output has no raw control characters",
-                )
-                self.check("\u00e9\u4e2d".encode() in written, "Codex output keeps non-ASCII text raw")
-
-            # A layout setup cannot edit in place is rewritten by Codex, with a notice.
-            path.write_text(
-                f'# kept\n[mcp_servers]\nunrelated.command = "keep"\n"{name}".command = "old"\n'
-                f'"{name}".env.KEEP = "dotted"\n',
-                encoding="utf-8",
-            )
-            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
-            self.check(result.returncode == 0 and b"dropped the comments" in result.stdout, "rewrite is announced")
-            document = tomllib.loads(path.read_text(encoding="utf-8"))
-            self.check(
-                document["mcp_servers"]["unrelated"] == {"command": "keep"}
-                and document["mcp_servers"][name]["env"] == {"KEEP": "dotted"}
-                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
-                "dotted layout is registered through Codex",
-            )
+            self.check(not (workspace / "codex/config.toml").exists(), "Codex setup writes no config.toml entry")
+            self.codex_conversion_scenario(workspace, environment, command, cached, path, product, setup)
+            seed()
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"
         injection.mkdir()

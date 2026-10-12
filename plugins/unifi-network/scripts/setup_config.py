@@ -3,8 +3,9 @@
 
 Values enter on stdin only. Never execute credential providers or start servers.
 Client output and exception text are deliberately excluded from diagnostics.
-Claude Code options are saved through its own CLI; Codex and OpenClaw registries
-are staged privately and replaced atomically.
+Claude Code options are saved through its own CLI. Codex settings go to a private
+per-user file that the plugin's bundled server reads; OpenClaw's registry is
+staged privately and replaced atomically.
 """
 
 import argparse
@@ -142,35 +143,6 @@ def client(command, environment, data=None):
     return completed.stdout
 
 
-TOML_ESCAPES = {"\b": "\\b", "\t": "\\t", "\n": "\\n", "\f": "\\f", "\r": "\\r", '"': '\\"', "\\": "\\\\"}
-
-
-def toml_string(value):
-    """Encode a TOML basic string: escape controls (including DEL), quotes and backslashes; keep other Unicode raw."""
-    return (
-        '"'
-        + re.sub(r'[\x00-\x1f\x7f"\\]', lambda match: TOML_ESCAPES.get(match[0]) or f"\\u{ord(match[0]):04X}", value)
-        + '"'
-    )
-
-
-def toml_value(value):
-    # Only the server entry is serialized; client tooling preserves other tables.
-    if isinstance(value, str):
-        return toml_string(value)
-    if isinstance(value, bool):
-        return str(value).lower()
-    if isinstance(value, (int, float)):
-        return repr(value)
-    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
-        return value.isoformat()
-    if isinstance(value, list):
-        return "[" + ", ".join(toml_value(v) for v in value) + "]"
-    if isinstance(value, dict):
-        return "{ " + ", ".join(toml_string(k) + " = " + toml_value(v) for k, v in value.items()) + " }"
-    refuse("Unsupported existing server value; use the client configuration editor and rerun.")
-
-
 KEY_PART = r"(?:\"(?:[^\"\\]|\\.)*\"|'[^']*'|[A-Za-z0-9_-]+)"
 
 
@@ -223,24 +195,15 @@ def toml_lines(text):
         raise ValueError("Unsupported TOML lexical layout")
 
 
-def codex_entry_lines(name, entry):
-    return (
-        ["[mcp_servers." + json.dumps(name) + "]"]
-        + [toml_string(key) + " = " + toml_value(value) for key, value in entry.items()]
-        + [""]
-    )
-
-
-def replace_codex_entry(text, name, entry):
-    """Swap one server's tables in the config text; comments and layout elsewhere stay as written."""
+def remove_codex_entry(text, name):
+    """Drop one server's tables from the config text; comments and layout elsewhere stay as written."""
     eol = "\r\n" if "\r\n" in text else "\n"
-    block = codex_entry_lines(name, entry)
-    # Older setup versions left a pin note above the entry; the pin lives in its args.
+    # Older setup versions left a pin note above the entry; drop it with the entry.
     note = "# unifi-plugin-setup: " + name + " "
-    lines, trailing, placed, skipping = [], [], False, False
+    lines, trailing, skipping = [], [], False
 
     def flush():
-        # Comments after the replaced tables belong to whatever follows them.
+        # Comments after the removed tables belong to whatever follows them.
         while trailing and not trailing[0].strip():
             trailing.pop(0)
         lines.extend(line for line in trailing if not line.startswith(note))
@@ -249,10 +212,7 @@ def replace_codex_entry(text, name, entry):
     for line, path, standalone in toml_lines(text):
         if path is not None:
             flush()
-            skipping = path is not None and path[:2] == ["mcp_servers", name]
-            if skipping and not placed:
-                lines.extend(block)
-                placed = True
+            skipping = path[:2] == ["mcp_servers", name]
         if not skipping:
             if not (standalone and line.startswith(note)):
                 lines.append(line)
@@ -261,10 +221,6 @@ def replace_codex_entry(text, name, entry):
         else:
             trailing.clear()
     flush()
-    if not placed:
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines.extend(block)
     return eol.join(lines).rstrip() + eol
 
 
@@ -289,6 +245,79 @@ PEP440_VERSION = (
     r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)*(?:(?:a|b|rc)[0-9]+)?(?:\.post[0-9]+)?(?:\.dev[0-9]+)?"
     r"(?:\+[a-z0-9]+(?:\.[a-z0-9]+)*)?"
 )
+
+
+def settings_path(product):
+    """The per-user file the plugin's bundled Codex server reads through UNIFI_SETTINGS_FILE.
+
+    Path.home() is %USERPROFILE% on Windows, matching the server's expansion of ~.
+    """
+    return Path.home() / ".config" / "unifi-mcp" / (product.lower() + ".env")
+
+
+def read_settings(path):
+    """Parse the settings file as the server does, refusing anything it would skip."""
+    if path.is_symlink():
+        refuse("The settings file is a symlink; replace it with a regular file and rerun.")
+    if not path.exists():
+        return None
+    try:
+        text = path.read_bytes().decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        refuse("The settings file cannot be read as UTF-8; repair or remove it and rerun.")
+    settings = {}
+    # Split on "\n" only, as the server does; settings_text refuses other line boundaries.
+    for number, line in enumerate(text.split("\n"), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not re.fullmatch(r"UNIFI_[A-Z][A-Z0-9_]*", key) or key in settings:
+            refuse(f"Line {number} of the settings file is not a unique UNIFI_ setting; repair it and rerun.")
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        settings[key] = value
+    return settings
+
+
+def settings_text(settings, name):
+    lines = [
+        "# " + name + " settings for Codex, written by the plugin's setup. The plugin's server reads",
+        "# this file through UNIFI_SETTINGS_FILE; keep it readable by you only. Values are literal.",
+    ]
+    for key, value in settings.items():
+        # Any line boundary a reader might honour (\x85 and \u2028 included) would split the value.
+        if "\0" in value or len(("|" + value + "|").splitlines()) != 1:
+            refuse("Settings file values must be single lines; correct the value and rerun.")
+        # The server strips one pair of matching quotes, so quoting keeps every value exact.
+        lines.append(key + '="' + value + '"')
+    return "\n".join(lines) + "\n"
+
+
+def write_private(path, data):
+    """Atomically replace *path* with *data*, created readable by the current user only."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staged = path.with_name("." + path.name + ".unifi-setup-" + str(os.getpid()))
+    staged.unlink(missing_ok=True)
+    try:
+        descriptor = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(staged, path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def shadow_notice(name, path):
+    return (
+        "Notice: config.toml has an MCP entry for " + name + " that takes precedence over the plugin's own "
+        "server (setup before plugin 1.0.0 wrote it), so plugin upgrades do not reach the server. Run "
+        "set-env.sh --target codex --refresh once (PowerShell: set-env.ps1 -Target codex -Refresh): it moves "
+        "the entry's settings into " + str(path) + " and removes the entry, without asking for credentials."
+    )
 
 
 def package_pin(root, name, *, codex=False):
@@ -738,81 +767,140 @@ def claude_main(args, root, name, product):
     )
 
 
-def main():
-    class SafeParser(argparse.ArgumentParser):
-        def error(self, message):
-            refuse("Unsupported setup arguments; choose claude, codex or openclaw.")
-
-    parser = SafeParser(description=__doc__)
-    parser.add_argument("--target", choices=("claude", "codex", "openclaw"), default="claude")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--check", action="store_true")
-    parser.add_argument("--pairs", action="store_true")
-    parser.add_argument("--refresh", action="store_true", help="Re-pin Codex using the saved environment")
-    parser.add_argument(
-        "--migrate", action="store_true", help="Move legacy Claude project settings into plugin options"
-    )
-    parser.add_argument(
-        "--replace", action="store_true", help="Let a migration replace differing options saved from another project"
-    )
-    args = parser.parse_args()
-    if sys.version_info < (3, 11):
-        refuse("No usable setup interpreter; install uv (which supplies Python) and rerun.")
-    root = Path(__file__).resolve().parent.parent
-    name = root.name if root.name in ("unifi-network", "unifi-protect", "unifi-access") else root.parent.name
-    if name not in ("unifi-network", "unifi-protect", "unifi-access"):
-        refuse("Cannot identify the plugin; rerun from a complete plugin installation.")
-    product = name.removeprefix("unifi-").upper()
-    target = args.target
-    if args.refresh and (target != "codex" or args.pairs or args.check):
-        refuse("Refresh is only supported for an existing Codex registration, without environment arguments.")
-    if args.migrate and (target != "claude" or args.pairs or args.check):
-        refuse("Migration is only supported for Claude Code, without environment arguments.")
-    if args.replace and not args.migrate:
-        refuse("--replace is only supported together with --migrate.")
-    pin = package_pin(root, name, codex=True) if target == "codex" else None
-    plugin_version = None
-    if target == "codex" and not args.check:
-        manifest = root / ".codex-plugin/plugin.json"
-        # Legacy installations can use the Claude manifest as their identity.
-        if not manifest.is_file():
-            manifest = root / ".claude-plugin/plugin.json"
-        if manifest.is_file():
-            plugin_version = json_object(manifest.read_text(encoding="utf-8")).get("version")
-        if (
-            not isinstance(plugin_version, str)
-            or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", plugin_version)
-            or not re.fullmatch(re.escape(name) + "-mcp==" + PEP440_VERSION, pin or "")
-        ):
-            refuse("The installed plugin version or package pin is missing or malformed; reinstall the plugin.")
-    if not shutil.which("uvx"):
-        refuse("uvx is required; install uv from https://astral.sh/uv/install.sh and rerun.")
-    if not shutil.which(target):
-        refuse("The selected client CLI is missing from PATH; install it and rerun.")
-    if target == "claude":
-        claude_main(args, root, name, product)
-        return
-    if target == "codex":
-        destination = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "config.toml"
-    else:
-        state = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
-        destination = Path(os.environ.get("OPENCLAW_CONFIG_PATH", str(state / "openclaw.json")))
-    destination = destination.expanduser().absolute()
-    if destination.is_symlink():
+def codex_main(args, root, name, product, patch):
+    """Save Codex settings in the per-user file and retire a shadowing config.toml entry."""
+    path = settings_path(product)
+    saved = read_settings(path)
+    config = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().absolute() / "config.toml"
+    if config.is_symlink():
         refuse("Configuration symlinks are unsupported; use the client editor for this installation.")
-    original, data, servers = read_config(destination, target)
-    prior = servers.get(name, {})
-    if not isinstance(prior, dict):
+    original, data, servers = read_config(config, "codex")
+    entry = servers.get(name)
+    if entry is not None and not isinstance(entry, dict):
         refuse("The existing MCP server must be an object; repair it and rerun.")
-    previous_env = prior.get("env", {})
-    env_map(previous_env)
+    # Only UNIFI_ settings move; the rest of an entry stays in the config.toml backup.
+    entry_env = env_map(entry.get("env", {})) if entry else {}
+    carried = {k: v for k, v in entry_env.items() if k.startswith("UNIFI_")}
+    left = sorted("env " + k for k in entry_env if k not in carried)
+    left += sorted("entry setting " + k for k in (entry or {}) if k not in ("command", "args", "env"))
+    if entry is not None and saved is not None and saved != carried:
+        refuse(
+            "Both " + str(path) + " and a config.toml entry for " + name + " hold settings, and they differ. "
+            "Delete the settings file to keep the entry's settings, or remove the entry with codex mcp remove "
+            + name
+            + " to keep the file's, then rerun. Nothing was changed."
+        )
+    base = carried if entry is not None else (saved or {})
     if args.check:
-        merge_env(previous_env, {}, product)
+        merge_env(base, {}, product)
+        if entry is not None:
+            print(shadow_notice(name, path))
+        elif saved is not None and os.name != "nt" and path.stat().st_mode & 0o077:
+            print("Notice: " + str(path) + " is readable by other users; rerun setup or chmod 600 it.")
         print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
         return
-    if args.refresh and (name not in servers or not previous_env):
-        refuse("No saved Codex environment to refresh; run ordinary setup from the installed plugin first.")
-    raw_input = "{}" if args.refresh else sys.stdin.buffer.read().decode("utf-8-sig")
+    if args.refresh and entry is None:
+        if saved is None:
+            refuse("No saved Codex settings to convert; run ordinary setup from the installed plugin first.")
+        print("Nothing to convert: config.toml has no entry for " + name + "; settings live in " + str(path) + ".")
+        return
+    merged = merge_env(base, patch, product)
+    text = settings_text(merged, name).encode("utf-8")
+    auto_notice = auto_confirm_notice(merged, product)
+    if args.dry_run:
+        print("Validation passed; dry run made no changes. Values are omitted.")
+        if auto_notice:
+            print(auto_notice)
+        return
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Cooperating setup calls serialize; a killed process leaves a harmless lock.
+    lock = path.with_name("." + path.name + ".setup-lock")
+    try:
+        lock.mkdir(mode=0o700)
+    except FileExistsError:
+        refuse("Setup is locked. If no setup is running, remove the adjacent .setup-lock directory and rerun.")
+    backup, rewritten = None, False
+    try:
+        if read_settings(path) != saved:
+            refuse("Settings changed during setup; rerun against the latest settings.")
+        # The file first: if the entry removal then fails, a rerun finds matching settings.
+        write_private(path, text)
+        if entry is not None:
+            config_lock = config.with_name(config.name + ".setup-lock")
+            try:
+                config_lock.mkdir(mode=0o700)
+            except FileExistsError:
+                refuse(
+                    "Settings were saved, but config.toml setup is locked. If no setup is running, remove the "
+                    "adjacent .setup-lock directory and rerun to remove the " + name + " entry."
+                )
+            try:
+                expected = dict(data, mcp_servers={k: v for k, v in servers.items() if k != name})
+
+                def matches(candidate):
+                    try:
+                        document = tomllib.loads(candidate.decode("utf-8"))
+                    except (ValueError, UnicodeDecodeError):
+                        return False
+                    return document == expected or (
+                        not expected["mcp_servers"] and dict(document, mcp_servers={}) == expected
+                    )
+
+                try:
+                    edited = remove_codex_entry(original.decode("utf-8"), name).encode("utf-8")
+                except Exception:
+                    # A scanner limitation must not prevent the supported CLI
+                    # path. Never expose its potentially sensitive error.
+                    edited = None
+                if edited is None or not matches(edited):
+                    # An unusual layout (dotted or inline mcp_servers keys): let Codex remove the entry
+                    # in a private copy, which drops comments inside MCP server tables.
+                    with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=config.parent) as temporary:
+                        stage = Path(temporary)
+                        (stage / "config.toml").write_bytes(original)
+                        environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
+                        environment.update(HOME=str(stage), USERPROFILE=str(stage), CODEX_HOME=str(stage))
+                        client(["codex", "mcp", "remove", name], environment)
+                        edited = (stage / "config.toml").read_bytes()
+                    rewritten = True
+                    if not matches(edited):
+                        refuse(
+                            "Settings were saved, but setup could not remove the " + name + " entry from "
+                            "config.toml safely; remove it with codex mcp remove " + name + "."
+                        )
+                if config.read_bytes() != original:
+                    refuse("config.toml changed during setup; settings were saved, rerun to remove the entry.")
+                stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+                backup = config.with_name(config.name + ".bak-" + name + "-" + stamp)
+                write_private(backup, original)
+                write_private(config, edited)
+            finally:
+                config_lock.rmdir()
+    finally:
+        lock.rmdir()
+    print(
+        "Saved the Codex settings for " + name + " to " + str(path) + ", readable by you only. The plugin's own "
+        "server (" + package_pin(root, name, codex=True) + ") reads this file, so plugin upgrades need no setup."
+    )
+    if entry is not None:
+        print(
+            "Moved the settings of the " + name + " entry in config.toml into that file and removed the entry, "
+            "which took precedence over the plugin's server. Previous config.toml: " + str(backup) + "."
+        )
+        if left:
+            print("Not moved (names only; they remain in the backup): " + ", ".join(left) + ".")
+        if rewritten:
+            print(
+                "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
+                "Codex rewrote it and dropped the comments inside MCP server tables."
+            )
+    if auto_notice:
+        print(auto_notice)
+    print("Restart Codex to load the settings. Values are omitted.")
+
+
+def read_patch(args):
+    raw_input = sys.stdin.buffer.read().decode("utf-8-sig")
     if args.pairs:
         patch = {}
         for pair in raw_input.rstrip("\0").split("\0"):
@@ -829,9 +917,71 @@ def main():
             patch[key] = value
     else:
         patch = json_object(raw_input)
-    if not patch and not args.refresh:
+    if not patch:
         refuse("Supply at least one environment setting or null deletion.")
-    merged = merge_env(previous_env, patch, product)
+    return patch
+
+
+def main():
+    class SafeParser(argparse.ArgumentParser):
+        def error(self, message):
+            refuse("Unsupported setup arguments; choose claude, codex or openclaw.")
+
+    parser = SafeParser(description=__doc__)
+    parser.add_argument("--target", choices=("claude", "codex", "openclaw"), default="claude")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--pairs", action="store_true")
+    parser.add_argument(
+        "--refresh", action="store_true", help="Move a pre-1.0.0 Codex entry's settings into the settings file"
+    )
+    parser.add_argument(
+        "--migrate", action="store_true", help="Move legacy Claude project settings into plugin options"
+    )
+    parser.add_argument(
+        "--replace", action="store_true", help="Let a migration replace differing options saved from another project"
+    )
+    args = parser.parse_args()
+    if sys.version_info < (3, 11):
+        refuse("No usable setup interpreter; install uv (which supplies Python) and rerun.")
+    root = Path(__file__).resolve().parent.parent
+    name = root.name if root.name in ("unifi-network", "unifi-protect", "unifi-access") else root.parent.name
+    if name not in ("unifi-network", "unifi-protect", "unifi-access"):
+        refuse("Cannot identify the plugin; rerun from a complete plugin installation.")
+    product = name.removeprefix("unifi-").upper()
+    target = args.target
+    if args.refresh and (target != "codex" or args.pairs or args.check):
+        refuse("Refresh is only supported for Codex, without environment arguments.")
+    if args.migrate and (target != "claude" or args.pairs or args.check):
+        refuse("Migration is only supported for Claude Code, without environment arguments.")
+    if args.replace and not args.migrate:
+        refuse("--replace is only supported together with --migrate.")
+    if not shutil.which("uvx"):
+        refuse("uvx is required; install uv from https://astral.sh/uv/install.sh and rerun.")
+    if not shutil.which(target):
+        refuse("The selected client CLI is missing from PATH; install it and rerun.")
+    if target == "claude":
+        claude_main(args, root, name, product)
+        return
+    if target == "codex":
+        codex_main(args, root, name, product, {} if args.check or args.refresh else read_patch(args))
+        return
+    state = Path(os.environ.get("OPENCLAW_STATE_DIR", str(Path.home() / ".openclaw")))
+    destination = Path(os.environ.get("OPENCLAW_CONFIG_PATH", str(state / "openclaw.json")))
+    destination = destination.expanduser().absolute()
+    if destination.is_symlink():
+        refuse("Configuration symlinks are unsupported; use the client editor for this installation.")
+    original, data, servers = read_config(destination, target)
+    prior = servers.get(name, {})
+    if not isinstance(prior, dict):
+        refuse("The existing MCP server must be an object; repair it and rerun.")
+    previous_env = prior.get("env", {})
+    env_map(previous_env)
+    if args.check:
+        merge_env(previous_env, {}, product)
+        print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
+        return
+    merged = merge_env(previous_env, read_patch(args), product)
     auto_notice = auto_confirm_notice(merged, product)
     if args.dry_run:
         print("Validation passed; dry run made no changes. Values are omitted.")
@@ -845,92 +995,35 @@ def main():
         lock.mkdir(mode=0o700)
     except FileExistsError:
         refuse("Setup is locked. If no setup is running, remove the adjacent .setup-lock directory and rerun.")
-    rewritten = False
     try:
         if (destination.read_bytes() if destination.exists() else None) != original:
             refuse("Configuration changed during setup; rerun against the latest settings.")
         with tempfile.TemporaryDirectory(prefix=".unifi-setup-", dir=destination.parent) as temporary:
             stage = Path(temporary)
             staged = stage / destination.name
-            staged.write_bytes(original or (b"" if target == "codex" else b"{}"))
+            staged.write_bytes(original or b"{}")
             staged.chmod(0o600)
             environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
             environment.update(
                 HOME=str(stage),
                 USERPROFILE=str(stage),
-                CODEX_HOME=str(stage),
                 CLAUDE_CONFIG_DIR=str(stage / ".claude"),
                 OPENCLAW_STATE_DIR=str(stage),
                 OPENCLAW_CONFIG_PATH=str(staged),
             )
-            if target == "codex":
-                # Exercise the supported operation in an empty private CODEX_HOME. Codex rewrites
-                # every MCP server table it saves and drops their comments, so it never touches
-                # the user's file: setup swaps this server's tables in the original text instead.
-                probe = stage / "probe"
-                probe.mkdir(mode=0o700)
-                (probe / "config.toml").write_bytes(b"")
-                probe_environment = dict(environment, HOME=str(probe), USERPROFILE=str(probe), CODEX_HOME=str(probe))
-                add = ["codex", "mcp", "add", name, "--", "uvx", "--python-preference", "system", pin]
-                client(add, probe_environment)
-                entry = dict(prior)
-                for key in ("url", "bearer_token_env_var", "http_headers", "env_http_headers"):
-                    entry.pop(key, None)
-                entry.update(command="uvx", args=["--python-preference", "system", pin], env=merged)
-                expected_data = dict(data)
-                expected_data["mcp_servers"] = dict(servers, **{name: entry})
-
-                def staged_matches():
-                    try:
-                        _, final_data, final_servers = read_config(staged, target)
-                    except (SetupError, ValueError):
-                        return False
-                    return final_servers.get(name) == entry and final_data == expected_data
-
-                try:
-                    edited = replace_codex_entry((original or b"").decode("utf-8"), name, entry)
-                except Exception:
-                    # A scanner limitation must not prevent the supported CLI
-                    # rewrite path. Never expose its potentially sensitive error.
-                    edited = None
-                if edited is not None:
-                    # The editor chose the newline style; Windows text writes
-                    # would translate CRLF into CRCRLF.
-                    staged.write_bytes(edited.encode("utf-8"))
-                if edited is None or not staged_matches():
-                    # An unusual layout (inline or dotted mcp_servers keys): let Codex rewrite the file.
-                    staged.write_bytes(original or b"")
-                    client(add, environment)
-                    client(["codex", "mcp", "remove", name], environment)
-                    # Codex removed every table for this server. Append a fresh
-                    # entry without consulting the scanner that just failed.
-                    rewritten_text = staged.read_bytes().decode("utf-8")
-                    eol = "\r\n" if "\r\n" in rewritten_text else "\n"
-                    staged.write_bytes(
-                        (rewritten_text.rstrip() + eol * 2 + eol.join(codex_entry_lines(name, entry))).encode("utf-8")
-                    )
-                    rewritten = True
-                    if not staged_matches():
-                        refuse("Staged registry validation failed; existing configuration is unchanged.")
-                checked = json_object(client(["codex", "mcp", "get", name, "--json"], environment).decode("utf-8"))
-                if checked.get("transport", {}).get("env") != merged:
-                    refuse("The client did not retain the requested environment; existing configuration is unchanged.")
-            else:
-                entry = dict(prior)
-                for key in ("url", "headers", "transport"):
-                    entry.pop(key, None)
-                entry.update(command="uvx", args=["--python-preference", "system", package_pin(root, name)])
-                entry["env"] = {}
-                # No supplied setting, even a provider reference, enters CLI argv.
-                client(
-                    ["openclaw", "mcp", "set", name, json.dumps({"command": "uvx", "args": entry["args"]})], environment
-                )
-                read_config(staged, target)
-                entry["env"] = merged
-                data.setdefault("mcp", {}).setdefault("servers", {})[name] = entry
-                staged.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-                read_config(staged, target)
-                client(["openclaw", "config", "validate", "--json"], environment)
+            entry = dict(prior)
+            for key in ("url", "headers", "transport"):
+                entry.pop(key, None)
+            entry.update(command="uvx", args=["--python-preference", "system", package_pin(root, name)])
+            entry["env"] = {}
+            # No supplied setting, even a provider reference, enters CLI argv.
+            client(["openclaw", "mcp", "set", name, json.dumps({"command": "uvx", "args": entry["args"]})], environment)
+            read_config(staged, target)
+            entry["env"] = merged
+            data.setdefault("mcp", {}).setdefault("servers", {})[name] = entry
+            staged.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            read_config(staged, target)
+            client(["openclaw", "config", "validate", "--json"], environment)
             staged.chmod(0o600)
             # Windows FlushFileBuffers (used by fsync) requires write access.
             # Reopen without truncating the complete, validated staged file.
@@ -941,17 +1034,6 @@ def main():
             os.replace(staged, destination)
     finally:
         lock.rmdir()
-    if target == "codex":
-        print("Codex pinned package: " + pin + " (plugin " + plugin_version + ").")
-        if rewritten:
-            print(
-                "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
-                "Codex rewrote it and dropped the comments inside MCP server tables."
-            )
-        print(
-            "After every plugin upgrade, rerun the new plugin's set-env.sh --target codex --refresh "
-            "or set-env.ps1 -Target codex -Refresh, then restart Codex."
-        )
     if auto_notice:
         print(auto_notice)
     print("Configuration saved atomically. Restart the selected client to load it. Values are omitted.")

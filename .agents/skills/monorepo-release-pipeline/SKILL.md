@@ -269,7 +269,7 @@ packages and the Worker still release only by tag.
 | Client | Reads | Detects an update by | Users update with |
 |---|---|---|---|
 | Claude Code | Marketplace on the default branch unless added as `owner/repo#ref` | Manifest `version`; the cache is keyed by it | `claude plugin marketplace update unifi-plugins`, then `claude plugin update <plugin>@unifi-plugins` (or `/plugin` → Installed → Update now), then a new session: the SessionStart notice does not run on `/reload-plugins`. Auto-update is off by default for our marketplace; a user can turn it on under `/plugin` → Marketplaces, and it then installs releases in the background during a session and prompts for `/reload-plugins`, which also skips the notice. |
-| Codex | `.agents/plugins/marketplace.json` on remote HEAD unless added as `owner/repo@ref` | Manifest `version`: Codex re-clones configured Git marketplaces at the start of every session (and on `codex plugin marketplace upgrade`) and reinstalls a plugin only on a version change | Nothing for the plugin itself; setup's version-pinned MCP entry keeps its server until the user reruns setup with `--refresh` |
+| Codex | `.agents/plugins/marketplace.json` on remote HEAD unless added as `owner/repo@ref` | Manifest `version`: Codex re-clones configured Git marketplaces at the start of every session (and on `codex plugin marketplace upgrade`) and reinstalls a plugin only on a version change | Nothing: Codex runs the bundled server, which reads the per-user settings file setup writes (`UNIFI_SETTINGS_FILE`), so a pin bump starts in the session after the one that installs the release. A `[mcp_servers.<plugin>]` entry from setup before plugin 1.0.0 shadows the bundled server until the user runs setup with `--refresh` once |
 | OpenClaw | `git:owner/repo[@ref]` or our Claude-format marketplace; reads the `.claude-plugin`/`.codex-plugin` bundle and its `.mcp.json` | Commits, not `version` | `openclaw plugins update <id>` or `openclaw plugins update --all`; it asks for capability consent, or needs `--accept-capabilities` without a terminal |
 | Hermes Agent | Cannot load the current layout (needs a root `plugin.json`, `skills/` and `mcp.json`) | Commits | Not supported |
 
@@ -333,8 +333,10 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
 3. Merge as one squash merge.
 4. Tell users how to update, per the client table: Claude Code users update the
    marketplace and plugin themselves (unless they turned on auto-update), then start a
-   new session; Codex installs the release at the next session start, and users run
-   setup with `--refresh` when the server pin moved; OpenClaw users run
+   new session; Codex installs the release and its pinned server at the next session
+   start (users whose `config.toml` entry predates plugin 1.0.0 run setup with
+   `--refresh` once);
+   OpenClaw users run
    `openclaw plugins update`.
 5. From `main`, after the merge, run the real-client acceptance procedure in
    `docs/plugin-acceptance.md`.

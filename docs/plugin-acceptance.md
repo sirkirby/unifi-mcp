@@ -45,9 +45,12 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   from this profile: it would be written to the shared keychain. Configure the
   password and API key only through `_FILE` or `_COMMAND` provider references,
   which are saved as ordinary options.
-- **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home`, and
-  symlink (never copy) `~/.codex/auth.json` into it. Codex setup reads
-  `CODEX_HOME` too: without it, setup falls back to `~/.codex/config.toml`.
+- **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home` and
+  `HOME=$ACC/home`, and symlink (never copy) `~/.codex/auth.json` into
+  `CODEX_HOME`. Codex setup reads both: it writes the settings file under
+  `$HOME/.config/unifi-mcp/`, which the bundled server reads from the same
+  `HOME`, and converts entries in `$CODEX_HOME/config.toml`. Without them, setup
+  writes your real `~/.config/unifi-mcp/` and edits `~/.codex/config.toml`.
 - **Clean-environment wrappers:** a wrapper that clears the environment (`env -i`,
   or unsetting variables) must set `HOME`, `CLAUDE_CONFIG_DIR` where used, and
   `CODEX_HOME` after the clearing, and the same wrapper must launch setup and
@@ -114,7 +117,8 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    only the option key names listed under `pluginConfigs` there.
 4. **Handshake.** In a session, call the product's `*_tool_index` tool and
    confirm the server's tools are listed. Record the server version: the
-   package pin from `claude mcp list` or `codex mcp list`, and for Codex the
+   package pin from `claude mcp list` or `codex mcp list` (which lists only the
+   `config.toml` entry while one shadows the plugin's server), and for Codex the
    `serverInfo` version visible with `RUST_LOG=rmcp=info`. With Claude Code
    plugin options, `claude mcp list` must also report the server as connected.
 5. **Harmless read.** In a session, have the model call
@@ -132,11 +136,21 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    `claude plugin update <plugin>@<marketplace>`. Codex: it refuses to re-add a
    marketplace from a different ref, so `codex plugin marketplace remove`, add
    it at the candidate ref, then `codex plugin add <plugin>@<marketplace>` again.
-   Codex setup writes a user MCP registration that shadows the plugin's server
-   and pins its package, so after the upgrade run the new plugin's
-   `scripts/set-env.sh --target codex --refresh` (PowerShell:
-   `scripts/set-env.ps1 -Target codex -Refresh`). It reuses the saved
-   environment without asking for credentials and prints the new pin.
+   From 1.0.0 Codex setup writes no `config.toml` entry: it saves the settings in
+   `$HOME/.config/unifi-mcp/<product>.env` (mode 600), which the bundled entry in
+   `.mcp.codex.json` names with `UNIFI_SETTINGS_FILE`, so the upgrade needs no
+   action. Record that the settings file and `config.toml` are byte-identical
+   afterwards. A prior ref before 1.0.0 wrote a `[mcp_servers.<plugin>]` entry
+   that shadows the bundled server and pins its package. Run the new plugin's
+   `scripts/check-prereqs.sh --target codex` and record that it names the entry
+   and the refresh. Then run `scripts/set-env.sh --target codex --refresh`
+   (PowerShell: `scripts/set-env.ps1 -Target codex -Refresh`) once. Record that
+   it asks for no credentials, that the settings file holds the entry's `UNIFI_`
+   key names (names only) with mode 600, that `config.toml` differs from the
+   saved `config.toml.bak-<plugin>-<time>` only by the entry's tables, and that a
+   second refresh reports nothing to convert. When Codex installs the upgrade
+   itself at a session start, that session keeps the server it already started;
+   read `serverInfo` from the next session.
    Confirm the new plugin version is installed, the saved environment is
    unchanged, the running server is the candidate's package version (for Codex,
    from `serverInfo`), and repeat steps 4 and 5.
@@ -277,8 +291,8 @@ that do not exist yet. Test them without publishing anything:
    but the package pins in each plugin's `plugin.json`, `.mcp.json` and
    `.mcp.codex.json` to the built versions, and install from that commit. Never
    push it, and do not run `make check-plugin-versions` on it: the pins have no
-   release tag by design. Codex setup accepts `.devN` and local (`+g<sha>`)
-   versions, so it needs no hand-written registration.
+   release tag by design. Codex setup does not read the pin, so it needs no
+   hand-written registration.
 4. Export `UV_FIND_LINKS` and `UV_OVERRIDE` in the environment that launches the
    client, so the client's server processes inherit them. Prove the servers ran
    the candidate: each server's own interpreter reports the package under the
@@ -288,11 +302,10 @@ that do not exist yet. Test them without publishing anything:
 
    Codex does not pass `UV_FIND_LINKS` or `UV_OVERRIDE` to plugin servers, and
    uvx ignores `override-dependencies` in a user `uv.toml`, so the servers fail
-   with "there is no version of unifi-<product>-mcp==<built version>". On the
-   registration that setup wrote, add the passthrough
-   `env_vars = ["UV_FIND_LINKS", "UV_OVERRIDE", "UV_CACHE_DIR"]` to each server
-   table. Setup and `--refresh` preserve it. Record it as a workaround, and
-   remove it, with the rest of the registration, after the run.
+   with "there is no version of unifi-<product>-mcp==<built version>". In the
+   same mirror-only commit, add `"UV_FIND_LINKS"`, `"UV_OVERRIDE"` and
+   `"UV_CACHE_DIR"` to each server's `env_vars` in `.mcp.codex.json`. Record it
+   as a workaround.
 
 ## What counts as a pass
 
