@@ -97,8 +97,8 @@ async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.config_helpers import parse_config_bool
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
-    from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
+    from unifi_mcp_shared.setup_required import controller_host_configured, serve_setup_required
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.transport import resolve_http_config, run_transports
 
@@ -106,7 +106,19 @@ async def main_async():
     apply_log_level(config, "unifi-network-mcp")
     check_deprecated_env_vars("network", logger)
     check_unknown_policy_env_vars("network", logger, policy_gates(), NETWORK_CATEGORY_MAP)
-    assert_credentials_configured(config, plugin_name="unifi-network", env_prefix="NETWORK", logger=logger)
+    if not controller_host_configured(config):
+        # Answer initialize and explain setup instead of exiting; register no
+        # controller tools and open no controller connection.
+        await serve_setup_required(
+            server=server,
+            config=config,
+            plugin_name="unifi-network",
+            env_prefix="NETWORK",
+            tool_prefix="unifi",
+            default_port=3000,
+            logger=logger,
+        )
+        return
 
     deferred_event_listener_task = None
     try:

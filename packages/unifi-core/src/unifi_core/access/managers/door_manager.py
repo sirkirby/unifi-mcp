@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ _COMPACT_DOOR_DEVICE_KEYS = frozenset({"name", "id", "device_type", "online", "d
 _API_DOOR_LIST_KEYS = ("id", "name", "door_position_status", "lock_relay_status")
 
 
+@reconnects_on_demand
 class DoorManager:
     """Reads and mutates door data from the Access controller."""
 
@@ -103,7 +104,7 @@ class DoorManager:
                     doors = [self._compact_door(d) for d in doors if isinstance(d, dict)]
                 return doors
             else:
-                raise UniFiConnectionError("No auth path available for list_doors")
+                raise self._cm.unavailable_error("No auth path available for list_doors")
         except UniFiConnectionError:
             raise
         except Exception as e:
@@ -137,7 +138,7 @@ class DoorManager:
                             return loc
                 raise UniFiNotFoundError("door", door_id)
             else:
-                raise UniFiConnectionError("No auth path available for get_door")
+                raise self._cm.unavailable_error("No auth path available for get_door")
         except (UniFiConnectionError, UniFiNotFoundError, ValueError):
             raise
         except Exception as e:
@@ -167,7 +168,7 @@ class DoorManager:
                 data = await self._cm.proxy_request("GET", "access_groups")
                 return self._cm.extract_data(data)
             else:
-                raise UniFiConnectionError("No auth path available for list_door_groups (proxy session required)")
+                raise self._cm.unavailable_error("No auth path available for list_door_groups (proxy session required)")
         except UniFiConnectionError:
             raise
         except Exception as e:
@@ -235,7 +236,7 @@ class DoorManager:
                     "result": "success",
                 }
             else:
-                raise UniFiConnectionError("No auth path available for unlock_door")
+                raise self._cm.unavailable_error("No auth path available for unlock_door")
         except (UniFiConnectionError, ValueError):
             raise
         except Exception as e:
@@ -290,7 +291,7 @@ class DoorManager:
                     "result": "success",
                 }
             else:
-                raise UniFiConnectionError("No auth path available for lock_door")
+                raise self._cm.unavailable_error("No auth path available for lock_door")
         except (UniFiConnectionError, ValueError):
             raise
         except Exception as e:

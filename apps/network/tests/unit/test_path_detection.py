@@ -93,7 +93,7 @@ class TestPathDetection:
 
         Expected: detect_unifi_os_proactively() returns True
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
             # Mock UniFi OS endpoint to succeed
@@ -122,7 +122,7 @@ class TestPathDetection:
 
         Expected: detect_unifi_os_proactively() returns False
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
             # Mock UniFi OS endpoint to fail
@@ -152,7 +152,7 @@ class TestPathDetection:
 
         Expected: detect_unifi_os_proactively() returns None (fallback to aiounifi)
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
             # Mock both endpoints to fail
@@ -176,7 +176,7 @@ class TestPathDetection:
 
         Expected: detect_unifi_os_proactively() returns False (prefers direct)
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
             # Mock both endpoints to succeed
@@ -213,7 +213,7 @@ class TestPathDetection:
 
         Expected: detect_unifi_os_proactively() returns None
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
             # Mock timeout on UniFi OS endpoint
@@ -255,7 +255,7 @@ class TestPathDetection:
         returns None (not an exception). Retries happen immediately without
         exponential backoff since no exception bubbles up to detect_with_retry.
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
         attempt_count = 0
 
         with aioresponses() as mock:
@@ -309,7 +309,7 @@ class TestPathDetection:
         Note: Exponential backoff only triggers on exceptions. When detection
         returns None (no exception), retries happen without delay.
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
         call_count = 0
 
         def error_callback(url, **kwargs):
@@ -353,7 +353,7 @@ class TestPathDetection:
 
         Note: Uses HTTP-level mocking for reliability across environments.
         """
-        base_url = "https://192.168.1.1:443"
+        base_url = "https://192.0.2.1:443"
         pre_login_probe_count = 0
         post_login_probe_count = 0
 
@@ -383,7 +383,7 @@ class TestPathDetection:
 
         # Create connection manager
         manager = ConnectionManager(
-            host="192.168.1.1",
+            host="192.0.2.1",
             username="test_user",
             password="test_pass",
             port=443,
@@ -452,7 +452,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_request_includes_safe_initialize_guidance_after_auth_failure(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+        manager = ConnectionManager("192.0.2.1", "admin", "secret", max_retries=1)
 
         with patch("unifi_core.network.managers.connection_manager.Controller", _FailingLoginController):
             with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
@@ -478,7 +478,7 @@ class TestPathDetection:
         ],
     )
     async def test_terminal_auth_failure_blocks_automatic_reconnects(self, error):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=3)
+        manager = ConnectionManager("192.0.2.1", "admin", "secret", max_retries=3)
         manager._cache["networks_default"] = [{"_id": "stale"}]
         controller = MagicMock()
         controller.connectivity = MagicMock()
@@ -499,7 +499,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_each_retry_is_reported_as_in_progress_while_active(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=2, retry_delay=0)
+        manager = ConnectionManager("192.0.2.1", "admin", "secret", max_retries=2, retry_delay=0)
         controller = MagicMock()
         controller.connectivity = MagicMock()
         controller.connectivity.is_unifi_os = False
@@ -524,7 +524,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_auth_circuit_half_opens_after_cooldown_and_success_resets(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+        manager = ConnectionManager("192.0.2.1", "admin", "secret", max_retries=1)
         controller = MagicMock()
         controller.connectivity = MagicMock()
         controller.connectivity.is_unifi_os = False
@@ -554,7 +554,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_auth_circuit_relatch_escalates_cooldown(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+        manager = ConnectionManager("192.0.2.1", "admin", "secret", max_retries=1)
         first = manager._block_automatic_reconnect(AuthenticationRateLimitError("429"))
         first_deadline = manager._reconnect_block_until
         manager._reconnect_block_until = 0.0
@@ -569,7 +569,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_expired_session_explicitly_reauthenticates_and_retries_request(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -599,7 +599,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_concurrent_expired_requests_share_one_reauthentication(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -625,7 +625,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_cleanup_waits_for_inflight_reauthentication(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -663,7 +663,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_concurrent_expired_requests_through_request_share_one_login(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -702,7 +702,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_persistent_login_required_after_reauthentication_opens_auth_circuit(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -730,7 +730,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_endpoint_forbidden_after_reauthentication_does_not_open_auth_circuit(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -754,7 +754,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_terminal_reauthentication_preserves_actionable_error_with_path_override(self):
-        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        manager = ConnectionManager("192.0.2.1", "admin", "secret")
         session = MagicMock()
         session.closed = False
         session.close = AsyncMock()
@@ -796,7 +796,7 @@ class TestPathDetection:
 
     @pytest.mark.asyncio
     async def test_last_initialize_error_redacts_configured_secret(self, caplog):
-        manager = ConnectionManager("192.168.1.1", "admin", "super-secret-password", max_retries=1)
+        manager = ConnectionManager("192.0.2.1", "admin", "super-secret-password", max_retries=1)
 
         with patch("unifi_core.network.managers.connection_manager.Controller", _PasswordLeakingLoginController):
             with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):

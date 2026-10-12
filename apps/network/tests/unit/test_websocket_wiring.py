@@ -30,7 +30,7 @@ def _startup(
     events["websocket_enabled"] = websocket_enabled
     with (
         patch.object(config.network, "events", events),
-        patch("unifi_mcp_shared.bootstrap.assert_credentials_configured"),
+        patch("unifi_mcp_shared.setup_required.controller_host_configured", return_value=True),
         patch.object(network_main.connection_manager, "initialize", AsyncMock(return_value=connected)),
         patch.object(
             type(network_main.connection_manager),

@@ -19,7 +19,7 @@ from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 def cm_api_only():
     """ConnectionManager configured with API key only (no username/password)."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="",
         password="",
         port=443,
@@ -33,7 +33,7 @@ def cm_api_only():
 def cm_proxy_only():
     """ConnectionManager configured with credentials only (no API key)."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -47,7 +47,7 @@ def cm_proxy_only():
 def cm_dual():
     """ConnectionManager configured with both API key and credentials."""
     return AccessConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -123,20 +123,13 @@ class TestApiClientAuth:
             mock_session_cls.return_value.closed = False
             mock_session_cls.return_value.close = AsyncMock()
 
-            # Re-import after patching
-            from importlib import reload
-
-            import unifi_core.access.managers.connection_manager as cm_mod
-
-            reload(cm_mod)
-
-            # Actually test _try_api_client directly
+            # _try_api_client imports the SDK at call time, so the patched
+            # sys.modules entry is what it sees.
             cm_api_only._api_key = "test-key"
             await cm_api_only._try_api_client()
 
-            # The actual test uses the real import, so let's verify the pattern
-            # works via initialize instead
-            assert True  # Placeholder - tested more thoroughly below
+            mock_client.authenticate.assert_awaited_once()
+            assert cm_api_only.has_api_client is True
 
     @pytest.mark.asyncio
     async def test_api_client_skipped_when_no_key(self, cm_proxy_only):
@@ -614,11 +607,12 @@ class TestInitialize:
             assert cm_dual.has_proxy is True
 
     @pytest.mark.asyncio
-    async def test_initialize_both_fail_raises(self, cm_dual):
-        """Both paths fail raises UniFiConnectionError."""
+    async def test_initialize_both_fail_returns_false(self, cm_dual):
+        """Both paths failing returns False and records an unreachable reason."""
         with (
             patch.object(cm_dual, "_try_api_client") as mock_api,
             patch.object(cm_dual, "_try_proxy_session") as mock_proxy,
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
         ):
 
             async def api_fail():
@@ -630,11 +624,65 @@ class TestInitialize:
             mock_api.side_effect = api_fail
             mock_proxy.side_effect = proxy_fail
 
-            with pytest.raises(UniFiConnectionError, match="Failed to establish any auth path"):
-                await cm_dual.initialize()
+            assert await cm_dual.initialize() is False
 
             assert cm_dual._initialized is False
             assert cm_dual.is_connected is False
+            assert cm_dual.support_status()["initialized"] is False
+
+    @pytest.mark.asyncio
+    async def test_unreachable_message_names_host_and_tried_paths(self, cm_dual):
+        """Configured credentials that fail blame reachability/auth, not missing config."""
+        with (
+            patch.object(cm_dual, "_try_api_client", AsyncMock()),
+            patch.object(cm_dual, "_try_proxy_session", AsyncMock()),
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
+        ):
+            assert await cm_dual.initialize() is False
+
+        error = cm_dual.last_connection_error
+        assert error.startswith("Could not reach or authenticate to UniFi Access at 192.0.2.1")
+        assert "API key on port 12445" in error
+        assert "username/password on port 443" in error
+        assert "configured" in error and "No UniFi Access credentials" not in error
+        assert "secret" not in error and "test-api-key-123" not in error
+
+    @pytest.mark.asyncio
+    async def test_missing_credentials_message_and_no_retry(self):
+        """No credentials fails immediately with a configuration message."""
+        cm = AccessConnectionManager(host="192.0.2.1", username="", password="", api_key=None)
+        with patch("unifi_core.retry.asyncio.sleep", AsyncMock()) as sleep:
+            assert await cm.initialize() is False
+
+        sleep.assert_not_awaited()
+        assert cm.last_connection_error.startswith("No UniFi Access credentials are configured")
+
+    @pytest.mark.asyncio
+    async def test_success_clears_last_connection_error(self, cm_proxy_only):
+        cm_proxy_only._last_connection_error = "earlier failure"
+
+        async def proxy_succeed():
+            cm_proxy_only._proxy_available = True
+            cm_proxy_only._proxy_session = MagicMock()
+
+        with patch.object(cm_proxy_only, "_try_proxy_session", side_effect=proxy_succeed):
+            assert await cm_proxy_only.initialize() is True
+
+        assert cm_proxy_only.last_connection_error is None
+
+    @pytest.mark.asyncio
+    async def test_unavailable_error_carries_startup_reason(self, cm_proxy_only):
+        assert str(cm_proxy_only.unavailable_error("No proxy session available for x")) == (
+            "No proxy session available for x"
+        )
+        with (
+            patch.object(cm_proxy_only, "_try_proxy_session", AsyncMock()),
+            patch("unifi_core.retry.asyncio.sleep", AsyncMock()),
+        ):
+            await cm_proxy_only.initialize()
+
+        with pytest.raises(UniFiConnectionError, match="Proxy session is not available: Could not reach"):
+            await cm_proxy_only.proxy_request("GET", "doors")
 
     @pytest.mark.asyncio
     async def test_initialize_idempotent(self, cm_dual):
@@ -791,7 +839,7 @@ class TestDeveloperRequest:
 
         assert result == [{"id": "v1"}]
         args, kwargs = session.request.call_args
-        assert args == ("GET", "https://192.168.1.1:12445/api/v1/developer/visitors")
+        assert args == ("GET", "https://192.0.2.1:12445/api/v1/developer/visitors")
         assert kwargs["headers"]["Authorization"] == "Bearer test-api-key-123"
         assert "X-API-Key" not in kwargs["headers"]
         assert kwargs["params"] == {"page_num": 1}

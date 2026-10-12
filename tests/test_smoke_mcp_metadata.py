@@ -143,8 +143,8 @@ def test_validate_meta_tool_surface_requires_every_meta_tool() -> None:
 
 
 def test_smoke_env_defaults_to_offline_metadata_credentials(monkeypatch) -> None:
-    monkeypatch.setenv("UNIFI_HOST", "10.0.0.1")
-    monkeypatch.setenv("UNIFI_NETWORK_HOST", "10.0.0.2")
+    monkeypatch.setenv("UNIFI_HOST", "192.0.2.1")
+    monkeypatch.setenv("UNIFI_NETWORK_HOST", "192.0.2.2")
     monkeypatch.setenv("UNIFI_TOOL_REGISTRATION_MODE", "meta_only")
     monkeypatch.setenv("UNIFI_MCP_HTTP_ENABLED", "true")
 
@@ -158,28 +158,45 @@ def test_smoke_env_defaults_to_offline_metadata_credentials(monkeypatch) -> None
 
 
 def test_smoke_env_can_preserve_current_controller_env(monkeypatch) -> None:
-    monkeypatch.setenv("UNIFI_HOST", "10.0.0.1")
+    monkeypatch.setenv("UNIFI_HOST", "192.0.2.1")
     monkeypatch.setenv("UNIFI_TOOL_REGISTRATION_MODE", "meta_only")
     monkeypatch.setenv("UNIFI_MCP_HTTP_ENABLED", "true")
 
     env = smoke_env(registration_mode="eager", use_current_env=True)
 
-    assert env["UNIFI_HOST"] == "10.0.0.1"
+    assert env["UNIFI_HOST"] == "192.0.2.1"
     assert env["UNIFI_TOOL_REGISTRATION_MODE"] == "eager"
     assert env["UNIFI_MCP_HTTP_ENABLED"] == "false"
 
 
-def test_selected_server_names_skips_access_for_default_offline_smoke() -> None:
-    assert selected_server_names(server="all", use_current_env=False) == ["network", "protect"]
+def test_selected_server_names_includes_access_in_default_offline_smoke() -> None:
+    assert selected_server_names(server="all", use_current_env=False) == ["network", "protect", "access"]
 
 
 def test_selected_server_names_includes_access_with_current_env() -> None:
     assert selected_server_names(server="all", use_current_env=True) == ["network", "protect", "access"]
 
 
-def test_selected_server_names_rejects_access_without_current_env() -> None:
-    with pytest.raises(MetadataSmokeError, match="requires --use-current-env"):
-        selected_server_names(server="access", use_current_env=False)
+def test_selected_server_names_runs_access_alone_offline() -> None:
+    assert selected_server_names(server="access", use_current_env=False) == ["access"]
+
+
+def test_offline_smoke_env_drops_inherited_controller_settings(monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_ACCESS_PASSWORD_FILE", "/inherited/secret")
+    monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_COMMAND", "inherited-helper")
+    monkeypatch.setenv("UNIFI_ACCESS_API_PORT", "19010")
+    monkeypatch.setenv("UNIFI_PROTECT_PORT", "7443")
+
+    env = smoke_env(registration_mode="lazy", use_current_env=False)
+
+    for name in (
+        "UNIFI_ACCESS_PASSWORD_FILE",
+        "UNIFI_NETWORK_PASSWORD_COMMAND",
+        "UNIFI_ACCESS_API_PORT",
+        "UNIFI_PROTECT_PORT",
+    ):
+        assert name not in env
+    assert env["UNIFI_ACCESS_HOST"] == "127.0.0.1"
 
 
 def test_run_smoke_matrix_runs_cases_concurrently_and_preserves_order(monkeypatch) -> None:

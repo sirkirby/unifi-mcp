@@ -56,3 +56,19 @@ def test_retry_policy_defaults():
     assert policy.base_delay == 1.0
     assert policy.max_delay == 30.0
     assert policy.backoff_factor == 2.0
+
+
+@pytest.mark.asyncio
+async def test_retry_log_reads_as_one_sentence_and_counts_every_attempt(caplog):
+    async def always_fails():
+        raise UniFiConnectionError("Could not reach the controller.")
+
+    policy = RetryPolicy(max_retries=2, base_delay=0.0)
+    with caplog.at_level("WARNING", logger="unifi_core.retry"), pytest.raises(UniFiConnectionError):
+        await retry_with_backoff(always_fails, policy)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages == [
+        "[retry] Attempt 1/3 failed: Could not reach the controller. Retrying in 0.0s",
+        "[retry] Attempt 2/3 failed: Could not reach the controller. Retrying in 0.0s",
+    ]

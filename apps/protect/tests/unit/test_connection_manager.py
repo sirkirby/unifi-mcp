@@ -11,7 +11,7 @@ from unifi_core.protect.managers.connection_manager import ProtectConnectionMana
 def cm():
     """Create a ProtectConnectionManager with test params."""
     return ProtectConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -23,7 +23,7 @@ def cm():
 
 class TestInit:
     def test_stores_connection_params(self, cm):
-        assert cm.host == "192.168.1.1"
+        assert cm.host == "192.0.2.1"
         assert cm.username == "admin"
         assert cm.password == "secret"
         assert cm.port == 443
@@ -97,7 +97,7 @@ class TestInitialize:
         assert cm._initialized is True
         assert cm._client is mock_client
         protect_client.assert_called_once_with(
-            host="192.168.1.1",
+            host="192.0.2.1",
             port=443,
             username="admin",
             password="secret",

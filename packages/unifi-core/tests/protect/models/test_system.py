@@ -66,7 +66,7 @@ class TestSystemInfoFromController:
             "model": "UDR",
             "firmware_version": "4.0.10",
             "version": "4.0.10",
-            "host": "192.168.1.1",
+            "host": "192.0.2.1",
             "mac": "AA:BB:CC:DD:EE:FF",
             "uptime_seconds": 172800,
             "up_since": "2026-05-11T12:00:00+00:00",
@@ -85,7 +85,7 @@ class TestSystemInfoFromController:
         assert info.model == "UDR"
         assert info.firmware_version == "4.0.10"
         assert info.version == "4.0.10"
-        assert info.host == "192.168.1.1"
+        assert info.host == "192.0.2.1"
         assert info.mac == "AA:BB:CC:DD:EE:FF"
         assert info.uptime_seconds == 172800
         assert info.up_since == "2026-05-11T12:00:00+00:00"
@@ -263,7 +263,7 @@ class TestViewerFromController:
             "name": "Office Viewer",
             "type": "UP Viewport",
             "mac": "11:22:33:44:55:66",
-            "host": "192.168.1.50",
+            "host": "192.0.2.50",
             "firmware_version": "2.0.1",
             "is_connected": True,
             "is_updating": False,
@@ -278,7 +278,7 @@ class TestViewerFromController:
         assert viewer.name == "Office Viewer"
         assert viewer.type == "UP Viewport"
         assert viewer.mac == "11:22:33:44:55:66"
-        assert viewer.host == "192.168.1.50"
+        assert viewer.host == "192.0.2.50"
         assert viewer.firmware_version == "2.0.1"
         assert viewer.is_connected is True
         assert viewer.is_updating is False

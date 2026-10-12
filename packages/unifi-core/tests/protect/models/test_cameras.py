@@ -22,7 +22,7 @@ SAMPLE = {
     "is_motion_detected": False,
     "is_smart_detected": False,
     "firmware_version": "5.4.132",
-    "ip_address": "10.0.1.42",
+    "ip_address": "192.0.2.42",
     "smart_detect_types": ["person", "vehicle"],
     "is_ptz": False,
     "channels": {"0": {"resolution": "3840x2160"}},
@@ -66,14 +66,14 @@ class TestCameraModel:
         assert cam.ir_led_mode == "auto"
         assert cam.mic_volume == 80
         assert cam.firmware_version == "5.4.132"
-        assert cam.host == "10.0.1.42"
+        assert cam.host == "192.0.2.42"
         assert cam.smart_detect_types == ["person", "vehicle"]
         assert cam.is_ptz is False
         assert cam.channels == {"0": {"resolution": "3840x2160"}}
 
     def test_from_controller_accepts_host_fallback(self) -> None:
-        cam = from_controller({"id": "cam-host", "host": "10.0.1.43"})
-        assert cam.host == "10.0.1.43"
+        cam = from_controller({"id": "cam-host", "host": "192.0.2.43"})
+        assert cam.host == "192.0.2.43"
 
     def test_from_controller_handles_missing_fields(self) -> None:
         cam = from_controller({"id": "cam002"})

@@ -47,7 +47,7 @@ class TestAssertCredentialsConfigured:
 
     def test_passes_when_host_set(self):
         assert_credentials_configured(
-            self._cfg("10.0.0.1"),
+            self._cfg("192.0.2.1"),
             plugin_name="unifi-network",
             env_prefix="NETWORK",
             logger=logging.getLogger("test"),
@@ -65,7 +65,7 @@ class TestAssertCredentialsConfigured:
         joined = "\n".join(r.getMessage() for r in caplog.records)
         assert "unifi-network" in joined
         assert "UNIFI_NETWORK_HOST" in joined
-        assert "/setup" in joined
+        assert "unifi-network-setup skill" in joined
 
     def test_exits_when_host_whitespace(self):
         with pytest.raises(SystemExit):
@@ -379,11 +379,11 @@ class TestLoadServerConfigSecrets:
         assert self._load().unifi.verify_ssl is True
 
     def test_debug_log_masks_secrets(self, monkeypatch, caplog):
-        monkeypatch.setenv("UNIFI_NETWORK_HOST", "10.0.0.1")
+        monkeypatch.setenv("UNIFI_NETWORK_HOST", "192.0.2.1")
         monkeypatch.setenv("UNIFI_NETWORK_PASSWORD", "hunter2-plain")
         monkeypatch.setenv("UNIFI_NETWORK_API_KEY", "key-abc-123")
         with caplog.at_level(logging.DEBUG):
             self._load()
-        assert "10.0.0.1" in caplog.text
+        assert "192.0.2.1" in caplog.text
         assert "hunter2-plain" not in caplog.text
         assert "key-abc-123" not in caplog.text

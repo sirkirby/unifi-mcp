@@ -74,14 +74,14 @@ def test_connection_manager_properties():
     from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
 
     cm = ProtectConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=7443,
         site="default",
         verify_ssl=True,
     )
-    assert cm.host == "192.168.1.1"
+    assert cm.host == "192.0.2.1"
     assert cm.username == "admin"
     assert cm.port == 7443
     assert cm.verify_ssl is True

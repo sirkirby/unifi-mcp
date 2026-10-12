@@ -54,6 +54,7 @@ Only select files you trust; explicitly loading a project's malicious env file i
 | `UNIFI_ENABLED_CATEGORIES` | -- | Comma-separated tool categories to load (eager mode only) |
 | `UNIFI_ENABLED_TOOLS` | -- | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | -- | Path to a custom config YAML file |
+| `UNIFI_SETTINGS_FILE` | -- | Absolute path to a per-user file of `UNIFI_*` settings, read at startup; the process environment wins ([details](../../../README.md#configuration)) |
 
 ## MCP Response Content
 
