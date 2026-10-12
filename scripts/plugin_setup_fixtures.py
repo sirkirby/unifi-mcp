@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -79,7 +80,8 @@ def fake_client(name):
         document = tomllib.loads(path.read_text(encoding="utf-8"))
         registry = document.setdefault("mcp_servers", {})
         if args[:2] == ["mcp", "add"]:
-            registry[args[2]] = {"command": "uvx", "args": args[args.index("--") + 2 :]}
+            separator = args.index("--")
+            registry[args[2]] = {"command": args[separator + 1], "args": args[separator + 2 :]}
         elif args[:2] == ["mcp", "remove"]:
             registry.pop(args[2], None)
         elif args[:2] == ["mcp", "get"]:
@@ -204,6 +206,14 @@ def executable(directory, name, source):
         path.chmod(0o755)
 
 
+def setup_module(scripts):
+    """Load a plugin's setup helper to reuse its entry layout, never to re-derive it."""
+    spec = importlib.util.spec_from_file_location("fixture_setup_config", scripts / "setup_config.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def client_executable(directory, name):
     executable(
         directory,
@@ -240,6 +250,7 @@ class Fixtures:
                 "check-prereqs.sh",
                 "check-prereqs.ps1",
                 "setup_config.py",
+                "codex_server.py",
             ):
                 self.check(
                     (scripts / filename).read_bytes() == (reference / filename).read_bytes(),
@@ -910,12 +921,87 @@ class Fixtures:
             )
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
+    def codex_follow_scenario(self, workspace, environment, path, load, refresh, cached, name, launch):
+        """Earlier setups pinned a package; one refresh makes the entry follow plugin upgrades."""
+        shell_flag = ["-Target", "codex"] if self.powershell else ["--target", "codex"]
+        prerequisite = [
+            *(
+                [self.powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]
+                if self.powershell
+                else [self.shell]
+            ),
+            str(cached / ("check-prereqs.ps1" if self.powershell else "check-prereqs.sh")),
+            *shell_flag,
+        ]
+        saved = {"KEEP": "old", "UNIFI_PASSWORD_FILE": str(workspace / "shared")}
+        legacy = {"command": "uvx", "args": ["--python-preference", "system", f"{name}-mcp==0.0.1"], "env": saved}
+        write_toml(path, {"model": "fixture", "mcp_servers": {name: legacy, "unrelated": {"command": "keep"}}})
+        checked = subprocess.run(prerequisite, cwd=workspace, env=environment, capture_output=True, timeout=30)
+        self.check(
+            checked.returncode == 0 and f"keeps {name}-mcp==0.0.1".encode() in checked.stdout,
+            "prerequisites name a pinned legacy Codex entry",
+        )
+        self.check(
+            (b"-Target codex -Refresh" if self.powershell else b"--target codex --refresh") in checked.stdout,
+            "prerequisites name the one-time refresh",
+        )
+        result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+        entry = load()["mcp_servers"][name]
+        self.check(
+            result.returncode == 0 and entry["command"] == "uv" and entry["args"] == launch and entry["env"] == saved,
+            "refresh converts a pinned legacy entry and keeps its environment",
+        )
+        self.check(load()["mcp_servers"]["unrelated"] == {"command": "keep"}, "conversion leaves other servers")
+        self.check(b"Updated the Codex MCP entry" in result.stdout, "refresh says it converted the entry")
+        checked = subprocess.run(prerequisite, cwd=workspace, env=environment, capture_output=True, timeout=30)
+        self.check(
+            checked.returncode == 0 and b"Notice: the Codex MCP entry" not in checked.stdout,
+            "a converted entry needs no further refresh",
+        )
+        # Start the saved entry as Codex would. Its uv arguments end at the interpreter.
+        argv_path = Path(environment["FIXTURE_ARGV"])
+
+        def start():
+            argv_path.unlink(missing_ok=True)
+            stub = entry["args"][entry["args"].index("python") + 1 :]
+            started = subprocess.run([sys.executable, *stub], cwd=workspace, env=environment, capture_output=True)
+            lines = argv_path.read_text(encoding="utf-8").splitlines() if argv_path.exists() else []
+            return started, [call[1:] for call in map(json.loads, lines) if call[0] == "uvx"]
+
+        started, calls = start()
+        self.check(started.returncode == 0, "the entry starts through the installed plugin's launcher")
+        self.check(calls == [["--python-preference", "system", f"{name}-mcp==9.8.7"]], "launcher starts the pin")
+        # A plugin upgrade installs a new version directory and deletes the old one.
+        configured = path.read_bytes()
+        upgraded = cached.parent.parent / "9.10.0"
+        aside = workspace / "aside"
+        shutil.copytree(cached.parent, upgraded)
+        server = {"command": "uvx", "args": ["--python-preference", "system", f"{name}-mcp==9.10.0"]}
+        (upgraded / ".mcp.codex.json").write_text(json.dumps({"mcpServers": {name: server}}), encoding="utf-8")
+        cached.parent.rename(aside)
+        try:
+            started, calls = start()
+            self.check(
+                started.returncode == 0 and calls == [server["args"]],
+                "the entry follows a plugin upgrade without setup",
+            )
+            self.check(path.read_bytes() == configured, "a plugin upgrade leaves config.toml untouched")
+            shutil.rmtree(upgraded)
+            started, calls = start()
+            self.check(
+                started.returncode != 0 and not calls and b"No installed UniFi plugin" in started.stderr,
+                "a removed plugin fails with a fixed message",
+            )
+        finally:
+            shutil.rmtree(upgraded, ignore_errors=True)
+            aside.rename(cached.parent)
+
     def scenario(self, product, target):
         workspace = self.root / (product + "-" + target)
         workspace.mkdir()
         bindir = workspace / "bin"
         bindir.mkdir()
-        for name in ("uvx", "codex", "openclaw"):
+        for name in ("uv", "uvx", "codex", "openclaw"):
             client_executable(bindir, name)
         executable(bindir, "fixture-provider", "pass\n")
         environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
@@ -1132,7 +1218,8 @@ class Fixtures:
             invoke({base: sample_value}, 1, {"PATH": isolated_path})
             self.check(path.read_bytes() == before, "missing Python preserves configuration")
             (isolated / "python3").symlink_to(sys.executable)
-        executable(isolated, "uvx", "pass\n")
+        for name in ("uv", "uvx"):
+            executable(isolated, name, "pass\n")
         invoke({base: sample_value}, 1, {"PATH": isolated_path})
         self.check(path.read_bytes() == before, "missing client preserves registration")
         invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
@@ -1217,18 +1304,28 @@ class Fixtures:
             manifest.parent.mkdir(exist_ok=True)
             manifest.write_text(json.dumps({"version": "1.2.3"}), encoding="utf-8")
             mcp = cached.parent / ".mcp.codex.json"
-            mcp.write_text(
-                json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp==9.8.7"]}}}),
-                encoding="utf-8",
-            )
+            name = f"unifi-{product}"
+
+            def definition(version):
+                server = {"command": "uvx", "args": ["--python-preference", "system", f"{name}-mcp=={version}"]}
+                return json.dumps({"mcpServers": {name: server}})
+
+            mcp.write_text(definition("9.8.7"), encoding="utf-8")
             refresh = command[:-1] + (["-Refresh"] if self.powershell else ["--refresh"])
+            # The entry names the stable plugin directory, not the version directory Codex replaces.
+            launch = setup_module(scripts).codex_launch(cached.parent.parent.resolve())
+
+            def follows(entry):
+                return entry["command"] == "uv" and entry["args"] == launch
+
             saved_env = get_env(load())
             result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
             self.check(result.returncode == 0, "Codex refresh succeeds without credential input")
             self.check(get_env(load()) == saved_env, "Codex refresh preserves saved environment exactly")
             entry = load()["mcp_servers"][f"unifi-{product}"]
-            self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
+            self.check(follows(entry), "Codex refresh points the entry at the installed plugin")
             self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
+            self.check(b"rerunning setup" in result.stdout, "Codex success says upgrades need no setup")
             self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "refresh stays quiet without an auto-confirm")
             invoke({"UNIFI_AUTO_CONFIRM": "garbage-marker"})
             carried = get_env(load())
@@ -1259,18 +1356,15 @@ class Fixtures:
             )
 
             def pinned(version):
-                mcp.write_text(
-                    json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp=={version}"]}}}),
-                    encoding="utf-8",
-                )
+                mcp.write_text(definition(version), encoding="utf-8")
                 return subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
 
             for valid in ("9.8.7rc2", "9.8.7.post1", "9.8.8.dev83", "9.8.8.dev83+ge51932dd"):
                 result = pinned(valid)
                 self.check(result.returncode == 0, "Codex accepts PEP 440 pin " + valid)
                 self.check(
-                    load()["mcp_servers"][f"unifi-{product}"]["args"][-1] == f"unifi-{product}-mcp=={valid}",
-                    "Codex registers PEP 440 pin " + valid,
+                    f"unifi-{product}-mcp=={valid}".encode() in result.stdout and follows(load()["mcp_servers"][name]),
+                    "Codex reports PEP 440 pin " + valid,
                 )
             before_pins = path.read_bytes()
             for malformed in ("9.8", "9.8.7-rc1", "9.8.8.dev", "9.8.8+G1", "9.8.8+ge519-32"):
@@ -1280,7 +1374,6 @@ class Fixtures:
             pinned("9.8.7")
 
             # Codex drops comments in the MCP tables it saves; setup edits only this server's tables.
-            name = f"unifi-{product}"
             commented = (
                 '# user note\nmodel = "fixture"  # trailing\n\n# my server\n[mcp_servers.unrelated]  # keep\n'
                 'command = "keep"\n# inside\nenv = { KEEP = "yes" }\n\n'
@@ -1343,9 +1436,8 @@ class Fixtures:
                 "Codex setup leaves other settings and servers untouched",
             )
             self.check(
-                document["mcp_servers"][name]["env"] == {"KEEP": "old"}
-                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
-                "Codex setup replaces only this server's pin",
+                document["mcp_servers"][name]["env"] == {"KEEP": "old"} and follows(document["mcp_servers"][name]),
+                "Codex setup replaces only this server's launch",
             )
             self.check(text.index("# note for the entry") < text.index(f'[mcp_servers."{name}"]'), "entry stays put")
 
@@ -1375,7 +1467,7 @@ class Fixtures:
                 if label == "unicode keys":
                     source = source.replace(f'"{name}"', '"' + name[:-1] + f'\\U{ord(name[-1]):08X}"')
                 expected = tomllib.loads(source)
-                expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+                expected["mcp_servers"][name].update(command="uv", args=launch)
                 for eol in ("\n", "\r\n"):
                     path.write_bytes(source.replace("\n", eol).encode("utf-8"))
                     result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
@@ -1417,7 +1509,7 @@ class Fixtures:
                 '"k\\u0001\\u001f\\u00e9" = "v\\u007f\\t\\u00e9\\u4e2d\\"\\\\" }\n'
             )
             escaped_expected = tomllib.loads(escaped_env)
-            escaped_expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+            escaped_expected["mcp_servers"][name].update(command="uv", args=launch)
             for eol in ("\n", "\r\n"):
                 path.write_bytes(escaped_env.replace("\n", eol).encode("utf-8"))
                 result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
@@ -1442,9 +1534,10 @@ class Fixtures:
             self.check(
                 document["mcp_servers"]["unrelated"] == {"command": "keep"}
                 and document["mcp_servers"][name]["env"] == {"KEEP": "dotted"}
-                and document["mcp_servers"][name]["args"][-1] == f"{name}-mcp==9.8.7",
+                and follows(document["mcp_servers"][name]),
                 "dotted layout is registered through Codex",
             )
+            self.codex_follow_scenario(workspace, environment, path, load, refresh, cached, name, launch)
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"
         injection.mkdir()
