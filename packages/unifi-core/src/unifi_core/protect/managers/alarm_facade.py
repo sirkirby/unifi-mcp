@@ -1,6 +1,7 @@
 """Version-agnostic alarm-rule façade.
 
-Presents a single capability — alarm rules — over the two UniFi alarm APIs.
+Presents a single capability — alarm rules and arm state — over the two UniFi
+alarm APIs.
 Prefers the UniFi-OS Alarm Manager (``/api/v2/alarms``) when it actually serves
 rules, and falls back to the legacy automations API when v2 is empty or
 unavailable on this console (e.g. Protect not yet migrated to v2, or the request
@@ -146,6 +147,153 @@ class AlarmRulesFacade:
             "breach_event_count": None,
             "profiles": profiles,
         }
+
+    # ------------------------------------------------------------------
+    # Arm / disarm
+    # ------------------------------------------------------------------
+
+    async def preview_arm(self, profile_id: str | None = None) -> dict[str, Any]:
+        """Return current + proposed state for an arm preview, v2-first."""
+        profiles, complete = await self.list_profiles()
+        if not complete:
+            return await self._legacy.preview_arm(profile_id)
+        target = self._resolve_v2_profile(profiles, profile_id)
+        active = self._active_v2_profiles(profiles)
+        return {
+            "target_profile_id": target["id"],
+            "target_profile_name": target.get("name"),
+            "current_state": {
+                "armed": bool(active),
+                "active_profile_id": active[0]["id"] if active else None,
+                "status": target.get("state"),
+            },
+            "proposed_changes": {"armed": True, "active_profile_id": target["id"]},
+        }
+
+    async def arm(self, profile_id: str | None = None) -> dict[str, Any]:
+        """Arm a profile, verifying the controller actually changed state.
+
+        On a Global-mode console the legacy ``arm/enable`` endpoint returns 204
+        without arming anything, so the v2 action is used whenever v2 serves the
+        profiles. The profile is re-read afterwards and the call only reports
+        success when the controller shows it ``arming`` or ``armed``.
+        """
+        profiles, complete = await self.list_profiles()
+        if not complete:
+            return await self._legacy.arm(profile_id)
+
+        target = self._resolve_v2_profile(profiles, profile_id)
+        if AlarmManager._is_armed_status(target.get("state")):
+            return {
+                "armed": True,
+                "profile_id": target["id"],
+                "profile_name": target.get("name"),
+                "state": target.get("state"),
+                "state_set_at": target.get("state_set_at"),
+                "already_armed": True,
+            }
+
+        await self._service.arm_profile(target["id"])
+        after = await self._v2_profile_after_action(target["id"])
+        if not AlarmManager._is_armed_status(after.get("state")):
+            raise ValueError(
+                f"The controller accepted the arm request for profile {target.get('name') or target['id']!r} "
+                f"but it is still {after.get('state')!r}. Check for open sensors or arm it from the Protect app."
+            )
+        return {
+            "armed": True,
+            "profile_id": target["id"],
+            "profile_name": target.get("name"),
+            "state": after.get("state"),
+            "state_set_at": after.get("state_set_at"),
+            "activation_delay_s": after.get("activation_delay"),
+        }
+
+    async def preview_disarm(self, profile_id: str | None = None) -> dict[str, Any]:
+        """Return current state for a disarm preview, v2-first."""
+        profiles, complete = await self.list_profiles()
+        if not complete:
+            return await self._legacy.preview_disarm()
+        targets = self._disarm_targets(profiles, profile_id)
+        first = targets[0] if targets else None
+        return {
+            "active_profile_id": first["id"] if first else None,
+            "active_profile_name": first.get("name") if first else None,
+            "current_state": {
+                "armed": bool(targets),
+                "status": first.get("state") if first else "disarmed",
+                "profiles": [{"id": p["id"], "name": p.get("name"), "state": p.get("state")} for p in targets],
+            },
+            "proposed_changes": {"armed": False},
+        }
+
+    async def disarm(self, profile_id: str | None = None) -> dict[str, Any]:
+        """Disarm one profile, or every active profile when ``profile_id`` is omitted.
+
+        Each disarm is verified by re-reading the profile from the controller.
+        """
+        profiles, complete = await self.list_profiles()
+        if not complete:
+            return await self._legacy.disarm()
+
+        targets = self._disarm_targets(profiles, profile_id)
+        if not targets:
+            return {"armed": False, "already_disarmed": True}
+
+        disarmed = []
+        for target in targets:
+            await self._service.disarm_profile(target["id"])
+            after = await self._v2_profile_after_action(target["id"])
+            if AlarmManager._is_armed_status(after.get("state")):
+                raise ValueError(
+                    f"The controller accepted the disarm request for profile "
+                    f"{target.get('name') or target['id']!r} but it is still {after.get('state')!r}."
+                )
+            disarmed.append(
+                {
+                    "profile_id": target["id"],
+                    "profile_name": target.get("name"),
+                    "state": after.get("state"),
+                    "state_set_at": after.get("state_set_at"),
+                }
+            )
+        return {"armed": False, "profiles": disarmed}
+
+    @staticmethod
+    def _active_v2_profiles(profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [p for p in profiles if AlarmManager._is_armed_status(p.get("state"))]
+
+    @staticmethod
+    def _resolve_v2_profile(profiles: list[dict[str, Any]], profile_id: str | None) -> dict[str, Any]:
+        """Match ``profile_id`` against v2 ids or names; require it when ambiguous."""
+        if not profiles:
+            raise ValueError("No arm profiles found. Configure Alarm Manager in the Protect UI first.")
+        if profile_id:
+            wanted = profile_id.strip()
+            for p in profiles:
+                if p.get("id") == wanted:
+                    return p
+            by_name = [p for p in profiles if (p.get("name") or "").strip().lower() == wanted.lower()]
+            if len(by_name) == 1:
+                return by_name[0]
+            raise UniFiNotFoundError("alarm profile", profile_id)
+        if len(profiles) == 1:
+            return profiles[0]
+        choices = ", ".join(f"{p.get('name') or '?'} ({p.get('id')})" for p in profiles)
+        raise ValueError(f"profile_id is required because this console has several arm profiles: {choices}")
+
+    def _disarm_targets(self, profiles: list[dict[str, Any]], profile_id: str | None) -> list[dict[str, Any]]:
+        if profile_id:
+            target = self._resolve_v2_profile(profiles, profile_id)
+            return [target] if AlarmManager._is_armed_status(target.get("state")) else []
+        return self._active_v2_profiles(profiles)
+
+    async def _v2_profile_after_action(self, profile_id: str) -> dict[str, Any]:
+        raw = await self._service.list_profiles()
+        for p in raw:
+            if isinstance(p, dict) and p.get("id") == profile_id:
+                return {**p, "name": p.get("name") or p.get("title")}
+        raise UniFiNotFoundError("alarm profile", profile_id)
 
     async def get_rule(self, rule_id: str) -> tuple[dict[str, Any], bool]:
         """Return ``(rule, complete)`` for one rule by id.
