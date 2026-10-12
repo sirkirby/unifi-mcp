@@ -150,7 +150,14 @@ async def _record(name, result=None):
 
 m.connection_manager.initialize = lambda *a, **k: _record("initialize", False)
 m.event_manager.start_listening = lambda *a, **k: _record("start_listening")
-transport = mock.AsyncMock()
+
+async def _serve(**kwargs):
+    # The controller connects in the background; serve until that is done.
+    for task in asyncio.all_tasks():
+        if task.get_name().endswith("-startup-connect"):
+            await task
+
+transport = mock.AsyncMock(side_effect=_serve)
 with mock.patch("unifi_mcp_shared.transport.run_transports", transport):
     asyncio.run(m.main_async())
 assert transport.await_count == 1, "transport"

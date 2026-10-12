@@ -284,7 +284,7 @@ Set these variables in the server's process environment (shell exports, the MCP 
 | `UNIFI_API_KEY` | No | UniFi API key for selected capabilities, including firewall policy ordering and some Protect settings updates |
 | `CONFIG_PATH` | No | Absolute path to an operator-controlled custom YAML file; otherwise uses bundled configuration |
 | `UNIFI_SETTINGS_FILE` | No | Absolute path (`~` allowed) to a per-user settings file of `UNIFI_*` variables; see below |
-| `UNIFI_DEFER_CONTROLLER_INIT` | No | Network only: defer controller connection until the first tool call; real-time event listening remains disabled in this mode |
+| `UNIFI_DEFER_CONTROLLER_INIT` | No | Network only: make no controller connection at startup and connect on the first tool call instead. By default every server answers the MCP client at once and connects in the background |
 | `UNIFI_META_TOOLS_ENABLED` | No | Network eager mode only: set `false` to omit indirect meta-tools; requires `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` |
 
 **Startup configuration:** The servers do not automatically load `.env` files or `config/config.yaml` from the working directory. MCP clients may launch servers inside untrusted projects, so project files must not control where credentials are sent or weaken permissions and redaction. If you previously relied on automatic loading, select a trusted env file in your launcher (for example, `uv run --env-file /absolute/path/to/trusted.env --with unifi-network-mcp unifi-network-mcp`) or set an absolute `CONFIG_PATH` for custom YAML. Docker Compose `env_file:` remains supported.

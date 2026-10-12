@@ -7,6 +7,7 @@ actual failure contract reaches the startup code. No network is touched: every
 aiohttp request raises before leaving the process, and retry delays are skipped.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
@@ -30,6 +31,13 @@ def _refuse(*_args, **_kwargs):
     raise aiohttp.ClientConnectionError("connection refused")
 
 
+async def _startup_connect_finished() -> None:
+    """Wait for the background connect that ``main_async`` starts beside the transports."""
+    for task in asyncio.all_tasks():
+        if task.get_name() == "access-startup-connect":
+            await task
+
+
 @pytest.mark.asyncio
 async def test_startup_registers_tools_and_serves_when_controller_unreachable(monkeypatch):
     from unifi_access_mcp import main
@@ -39,6 +47,7 @@ async def test_startup_registers_tools_and_serves_when_controller_unreachable(mo
 
     async def serve(*, server, **_kwargs):
         listed.extend(tool.name for tool in await server.list_tools())
+        await _startup_connect_finished()
 
     transport = AsyncMock(side_effect=serve)
     monkeypatch.setattr(main, "connection_manager", cm)
@@ -58,7 +67,7 @@ async def test_startup_registers_tools_and_serves_when_controller_unreachable(mo
     listener.assert_not_awaited()
     assert "access_tool_index" in listed
     assert cm.is_connected is False
-    assert cm.last_connection_error.startswith("Could not reach or authenticate to UniFi Access at 192.0.2.1")
+    assert cm.last_connection_error.startswith("Could not connect to UniFi Access at 192.0.2.1")
 
 
 @pytest.mark.asyncio
@@ -76,7 +85,7 @@ async def test_read_after_failed_startup_reports_the_connection_error():
         result = await doors.access_list_doors()
 
     assert result["success"] is False
-    assert result["error"].startswith("Failed to list doors: No auth path available for list_doors: Could not reach")
+    assert result["error"].startswith("Failed to list doors: No auth path available for list_doors: Could not connect")
     assert "fake-password" not in result["error"]
     await cm.close()
 
@@ -97,6 +106,7 @@ async def test_reconnect_after_failed_startup_starts_the_event_listener(monkeypa
         cm._csrf_token = "fake-csrf"
 
     async def serve(**_kwargs):
+        await _startup_connect_finished()
         # The controller comes back while the server is serving.
         listener.assert_not_awaited()
         cm._last_attempt_at -= 60

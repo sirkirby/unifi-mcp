@@ -21,6 +21,13 @@ from unifi_access_mcp import main as access_main
 from unifi_access_mcp.runtime import config
 
 
+async def _serve_until_startup_connect_finishes(**_kwargs) -> None:
+    """Stand in for the transports: serve until the background startup connect is done."""
+    for task in asyncio.all_tasks():
+        if task.get_name() == "access-startup-connect":
+            await task
+
+
 @contextmanager
 def _startup(*, connected: bool, websocket_enabled: bool, listener: AsyncMock | None = None):
     """Run `main_async` with its side effects stubbed.
@@ -39,7 +46,10 @@ def _startup(*, connected: bool, websocket_enabled: bool, listener: AsyncMock | 
         patch.object(access_main.event_manager, "start_listening", listener or AsyncMock()) as started,
         patch("unifi_mcp_shared.tool_registration.register_tools_for_mode", AsyncMock()),
         patch("unifi_mcp_shared.transport.resolve_http_config", return_value=(False, "http", "0.0.0.0", 3002)),
-        patch("unifi_mcp_shared.transport.run_transports", AsyncMock()) as transports,
+        patch(
+            "unifi_mcp_shared.transport.run_transports",
+            AsyncMock(side_effect=_serve_until_startup_connect_finishes),
+        ) as transports,
     ):
         asyncio.run(access_main.main_async())
         yield started, transports

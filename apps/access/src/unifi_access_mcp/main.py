@@ -3,9 +3,11 @@
 
 Responsibilities:
 - configure permissions wrappers
-- initialise UniFi Access connection
-- start FastMCP (stdio)
+- start FastMCP (stdio) and connect to UniFi Access in the background
 """
+
+import asyncio
+from contextlib import suppress
 
 from unifi_access_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
@@ -66,6 +68,28 @@ async def _start_event_listener() -> None:
         )
 
 
+async def connect_at_startup() -> bool:
+    """Connect to UniFi Access in the background while the server answers MCP requests.
+
+    Manager operations wait for this connection within a bound.
+    """
+    logger.info("Connecting to UniFi Access in the background...")
+    try:
+        connected = await connection_manager.initialize()
+    except Exception as exc:
+        # Nothing awaits this task's result; a failure must still be reported.
+        logger.error("Unexpected error while connecting at startup: %s", type(exc).__name__)
+        connected = False
+    if not connected:
+        logger.error(
+            "Failed to connect to UniFi Access. Tools report the connection error and try to reconnect on later calls."
+        )
+        return False
+    logger.info("Global Access connection initialized successfully.")
+    await _start_event_listener()
+    return True
+
+
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
@@ -92,17 +116,14 @@ async def main_async():
         )
         return
 
+    startup_connect = None
     try:
-        # Initialize the global Access connection
-        logger.info("Initializing global Access connection from main_async...")
-        if not await connection_manager.initialize():
-            logger.error("Failed to connect to UniFi Access. Tool functionality may be impaired.")
-        else:
-            logger.info("Global Access connection initialized successfully from main_async.")
-            await _start_event_listener()
         # A controller that was down at startup is reconnected on demand by the
         # managers; start the listener then, as a successful startup would.
         connection_manager.add_reconnect_callback(_start_event_listener)
+        # Answer initialize before reaching the controller: clients enforce a
+        # short startup timeout.
+        startup_connect = asyncio.create_task(connect_at_startup(), name="access-startup-connect")
 
         # ---- Register MCP resources ----
         try:
@@ -142,6 +163,10 @@ async def main_async():
             logger=logger,
         )
     finally:
+        if startup_connect is not None and not startup_connect.done():
+            startup_connect.cancel()
+            with suppress(asyncio.CancelledError):
+                await startup_connect
         await connection_manager.close()
 
 

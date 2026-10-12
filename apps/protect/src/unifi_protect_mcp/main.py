@@ -3,9 +3,11 @@
 
 Responsibilities:
 - configure permissions wrappers
-- initialise UniFi Protect connection
-- start FastMCP (stdio)
+- start FastMCP (stdio) and connect to UniFi Protect in the background
 """
+
+import asyncio
+from contextlib import suppress
 
 from unifi_core.policy_gate import PolicyGateChecker
 from unifi_mcp_shared.permissioned_tool import create_permissioned_tool
@@ -74,6 +76,28 @@ async def start_event_listener() -> None:
         )
 
 
+async def connect_at_startup() -> bool:
+    """Connect to UniFi Protect in the background while the server answers MCP requests.
+
+    Domain tools wait for this connection within a bound. The event listener
+    starts from the connect hook, here or on a later automatic reconnect.
+    """
+    logger.info("Connecting to UniFi Protect in the background...")
+    try:
+        connected = await connection_manager.initialize()
+    except Exception as exc:
+        # Nothing awaits this task's result; a failure must still be reported.
+        logger.error("Unexpected error while connecting at startup: %s", type(exc).__name__)
+        connected = False
+    if not connected:
+        logger.error(
+            "Failed to connect to UniFi Protect. Tools report the connection error and try to reconnect on later calls."
+        )
+        return False
+    logger.info("Global Protect connection initialized successfully.")
+    return True
+
+
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
@@ -100,18 +124,13 @@ async def main_async():
         )
         return
 
+    startup_connect = None
     try:
-        # Initialize the global Protect connection. The event listener starts
-        # after this connect, or after a later automatic reconnect.
+        # Answer initialize before reaching the controller: clients enforce a
+        # short startup timeout. The event listener starts after this connect,
+        # or after a later automatic reconnect.
         connection_manager.add_connect_hook(start_event_listener)
-        logger.info("Initializing global Protect connection from main_async...")
-        if not await connection_manager.initialize():
-            logger.error(
-                "Failed to connect to UniFi Protect. Tools report the connection error "
-                "and try to reconnect on later calls."
-            )
-        else:
-            logger.info("Global Protect connection initialized successfully from main_async.")
+        startup_connect = asyncio.create_task(connect_at_startup(), name="protect-startup-connect")
 
         # ---- Register MCP resources ----
         try:
@@ -152,6 +171,10 @@ async def main_async():
             logger=logger,
         )
     finally:
+        if startup_connect is not None and not startup_connect.done():
+            startup_connect.cancel()
+            with suppress(asyncio.CancelledError):
+                await startup_connect
         try:
             await event_manager.stop_listening()
         finally:
