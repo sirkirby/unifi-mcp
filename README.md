@@ -126,7 +126,12 @@ itself register the MCP server.
   file or command provider, and every configuration write is validated and
   atomic.
 - **Plugin versions are independent of server versions.** All plugins are now
-  1.0.0 and keep pinning the current server releases.
+  1.0.0 and pin the current server releases.
+- **Server improvements.** The pinned servers (`unifi-network-mcp` 0.37.1,
+  `unifi-protect-mcp` 0.8.18, `unifi-access-mcp` 0.6.13) reconnect Access and
+  Protect after a failed start, read Codex's settings file, and start in setup
+  mode with a read-only `*_setup_status` tool instead of exiting when
+  unconfigured.
 - **Skills report their coverage** and give no all-clear from missing, partial
   or capped data.
 

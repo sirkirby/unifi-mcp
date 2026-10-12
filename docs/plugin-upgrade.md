@@ -8,11 +8,24 @@ prerequisites and verification status are in the
 ## 1.0.0
 
 Every UniFi plugin (`unifi-network`, `unifi-protect`, `unifi-access` and the
-unlisted `cross-product` bundle) moves to version 1.0.0. The servers they start
-do not change: `unifi-network-mcp` 0.37.0, `unifi-protect-mcp` 0.8.17 and
-`unifi-access-mcp` 0.6.12.
+unlisted `cross-product` bundle) moves to version 1.0.0. The plugins now start
+newer server releases: `unifi-network-mcp` 0.37.1, `unifi-protect-mcp` 0.8.18
+and `unifi-access-mcp` 0.6.13. They bring three things:
 
-What changes:
+- **Access and Protect reconnect.** If the controller was down when the server
+  started, or the first connection was rejected, the Access and Protect servers
+  reconnect on their own before the next tool call instead of staying unusable
+  until the client restarts the server.
+- **A settings file for Codex.** The servers read the private settings file that
+  Codex setup writes, named by `UNIFI_SETTINGS_FILE`. Earlier releases ignore
+  it, so the Codex bundled server needs these releases.
+- **Setup mode instead of a silent failure.** With no controller host
+  configured, a server answers the client and offers only a read-only
+  `unifi_setup_status`, `protect_setup_status` or `access_setup_status` tool that
+  says how to configure it. Earlier releases exited, and the client showed only
+  a failed server.
+
+What else changes:
 
 - **Plugin versions are independent of server versions.** Before 1.0.0 a
   plugin's version matched the server it pinned. From now on the plugin version
@@ -91,9 +104,10 @@ notice like this:
 > /mcp still shows the server as failed.
 
 Claude also offers to run the migration when you next ask about the plugin.
-Until you migrate, the server either fails to start (`/mcp` shows
-`plugin:unifi-network:unifi-network` as failed, because no controller host is
-configured) or, when the project file also holds a shared `UNIFI_HOST`, connects
+Until you migrate, the server either starts in setup mode (`/mcp` shows
+`plugin:unifi-network:unifi-network` connected, but it offers only
+`unifi_setup_status`, because no controller host is configured) or, when the
+project file also holds a shared `UNIFI_HOST`, connects
 with the shared `UNIFI_*` settings, which may name a different controller. In
 that case the port is the plugin option's default, 443, not a shared
 `UNIFI_PORT`.

@@ -103,10 +103,13 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
 2. **Discovery.** `claude plugin list` and `claude plugin details <plugin>`, or
    `codex plugin list`, show the plugin installed and enabled with its skills
    and MCP server. Ask an in-session prompt to list the plugin's skills.
-   Before setup, start one session and confirm the unconfigured server exits
-   with "No controller host configured — refusing to start." and no
-   credential or registration-mode errors. The handshake and tool calls are
-   only required after configuration. With a `userConfig` ref, also record that
+   Before setup, start one session and confirm the unconfigured server
+   answers `initialize` in setup mode, offers only its read-only
+   `<prefix>_setup_status` tool (`unifi_`, `protect_` or `access_`), and logs no
+   credential or registration-mode errors. (Server releases before setup mode
+   exit with "No controller host configured — refusing to start."; expect that
+   only from a prior version that pins one.) Other tool calls are only
+   required after configuration. With a `userConfig` ref, also record that
    `claude plugin install` reports the plugin's options as not yet set, and that
    a fresh project shows no session-start notice from the plugin.
 3. **Configure** with that version's documented setup script for the client
@@ -162,12 +165,15 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       update, run `/reload-plugins` as Claude Code's banner suggests, then ask
       for something that needs the server. `/reload-plugins` runs no
       SessionStart hook of an updated plugin, with any matcher, so no notice
-      appears. Record that `/mcp` shows the server as failed with no reason,
-      that Claude sees only `CONNECTION_CLOSED` and no UniFi tools, what it
-      suggests, and whether it offers the setup skill. If it does, the setup
-      skill's prerequisite check names the leftover settings. The server's own
-      refusal ("No controller host configured — refusing to start.") reaches
-      only the debug log.
+      appears. Record whether `/mcp` shows the server connected or failed, which
+      UniFi tools Claude sees, what it suggests, and whether it offers the setup
+      skill. If it does, the setup skill's prerequisite check names the leftover
+      settings. A server pinned to a release with setup mode connects and offers
+      only its `<prefix>_setup_status` tool, which says how to configure it. A
+      pinned release before setup mode exits instead: `/mcp` shows it as failed
+      with no reason, Claude sees only `CONNECTION_CLOSED` and no UniFi tools,
+      and the server's own refusal ("No controller host configured — refusing to
+      start.") reaches only the debug log.
    2. Start the first session after the update. Record the plugin's session-start notice: a `hook_response` event whose `systemMessage` names
       `set-env.sh --target claude --migrate`. Also record that the server
       says what the server will do. With no shared `UNIFI_HOST` in the project
