@@ -235,7 +235,7 @@ def replace_codex_entry(text, name, entry):
     """Swap one server's tables in the config text; comments and layout elsewhere stay as written."""
     eol = "\r\n" if "\r\n" in text else "\n"
     block = codex_entry_lines(name, entry)
-    # Older setup versions left a pin note above the entry; the pin lives in its args.
+    # Older setup versions left a pin note above the entry; drop it with the entry.
     note = "# unifi-plugin-setup: " + name + " "
     lines, trailing, placed, skipping = [], [], False, False
 
@@ -289,6 +289,46 @@ PEP440_VERSION = (
     r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)*(?:(?:a|b|rc)[0-9]+)?(?:\.post[0-9]+)?(?:\.dev[0-9]+)?"
     r"(?:\+[a-z0-9]+(?:\.[a-z0-9]+)*)?"
 )
+
+
+# Codex installs a plugin at <cache>/<marketplace>/<plugin>/<version> and deletes
+# the previous version on upgrade. The setup entry therefore names the stable
+# plugin directory and runs this stub, which starts the installed version's
+# launcher: "local" first, else the highest version, as Codex chooses. Entries
+# keep the stub they were written with, so it must stay small and compatible.
+CODEX_STUB = (
+    "import pathlib,re,runpy,sys;"
+    "b=pathlib.Path(sys.argv[1]);f='scripts/codex_server.py';"
+    "v=[b] if (b/f).is_file() else sorted((d for d in (b.iterdir() if b.is_dir() else ()) if (d/f).is_file()),"
+    "key=lambda d:(d.name=='local',[int(n) for n in re.findall('[0-9]+',d.name)]));"
+    "v or sys.exit('ERROR: No installed UniFi plugin at '+str(b)+'; reinstall the plugin and rerun its Codex setup.');"
+    "sys.argv=[str(v[-1]/f)];runpy.run_path(sys.argv[0],run_name='__main__')"
+)
+
+
+def codex_launch(base):
+    """The uv arguments of a Codex entry that follows the plugin installed under *base*."""
+    return ["run", "--no-project", "--python", ">=3.11", "python", "-I", "-c", CODEX_STUB, str(base)]
+
+
+def codex_entry_notice(entry, base, name):
+    """Name a Codex entry that does not follow this installation, never its settings."""
+    if not entry or (entry.get("command") == "uv" and entry.get("args") == codex_launch(base)):
+        return None
+    args = entry.get("args") if isinstance(entry.get("args"), list) else []
+    pins = [
+        arg for arg in args if isinstance(arg, str) and re.fullmatch(re.escape(name) + "-mcp==" + PEP440_VERSION, arg)
+    ]
+    held = (
+        "keeps " + pins[-1] + ", which plugin upgrades do not change"
+        if entry.get("command") == "uvx" and pins
+        else "does not start the server this plugin installation pins"
+    )
+    return (
+        "Notice: the Codex MCP entry for " + name + " " + held + ". Run set-env.sh --target codex --refresh "
+        "once (PowerShell: set-env.ps1 -Target codex -Refresh) so the server follows the installed plugin; "
+        "saved settings are kept."
+    )
 
 
 def package_pin(root, name, *, codex=False):
@@ -748,7 +788,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--pairs", action="store_true")
-    parser.add_argument("--refresh", action="store_true", help="Re-pin Codex using the saved environment")
+    parser.add_argument(
+        "--refresh", action="store_true", help="Point the Codex entry at this installation, keeping its environment"
+    )
     parser.add_argument(
         "--migrate", action="store_true", help="Move legacy Claude project settings into plugin options"
     )
@@ -785,8 +827,9 @@ def main():
             or not re.fullmatch(re.escape(name) + "-mcp==" + PEP440_VERSION, pin or "")
         ):
             refuse("The installed plugin version or package pin is missing or malformed; reinstall the plugin.")
-    if not shutil.which("uvx"):
-        refuse("uvx is required; install uv from https://astral.sh/uv/install.sh and rerun.")
+    # The Codex entry starts through uv; uvx, which every server needs, ships with it.
+    if not shutil.which("uvx") or (target == "codex" and not shutil.which("uv")):
+        refuse("uv and uvx are required; install uv from https://astral.sh/uv/install.sh and rerun.")
     if not shutil.which(target):
         refuse("The selected client CLI is missing from PATH; install it and rerun.")
     if target == "claude":
@@ -806,8 +849,13 @@ def main():
         refuse("The existing MCP server must be an object; repair it and rerun.")
     previous_env = prior.get("env", {})
     env_map(previous_env)
+    # Codex installs <plugin>/<version>; a source checkout is the plugin directory itself.
+    base = root if root.name == name else root.parent
+    notice = codex_entry_notice(prior, base, name) if target == "codex" else None
     if args.check:
         merge_env(previous_env, {}, product)
+        if notice:
+            print(notice)
         print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
         return
     if args.refresh and (name not in servers or not previous_env):
@@ -871,12 +919,12 @@ def main():
                 probe.mkdir(mode=0o700)
                 (probe / "config.toml").write_bytes(b"")
                 probe_environment = dict(environment, HOME=str(probe), USERPROFILE=str(probe), CODEX_HOME=str(probe))
-                add = ["codex", "mcp", "add", name, "--", "uvx", "--python-preference", "system", pin]
+                add = ["codex", "mcp", "add", name, "--", "uv", *codex_launch(base)]
                 client(add, probe_environment)
                 entry = dict(prior)
                 for key in ("url", "bearer_token_env_var", "http_headers", "env_http_headers"):
                     entry.pop(key, None)
-                entry.update(command="uvx", args=["--python-preference", "system", pin], env=merged)
+                entry.update(command="uv", args=codex_launch(base), env=merged)
                 expected_data = dict(data)
                 expected_data["mcp_servers"] = dict(servers, **{name: entry})
 
@@ -942,16 +990,21 @@ def main():
     finally:
         lock.rmdir()
     if target == "codex":
-        print("Codex pinned package: " + pin + " (plugin " + plugin_version + ").")
+        print(
+            "Codex starts the server package the installed plugin pins, now "
+            + pin
+            + " (plugin "
+            + plugin_version
+            + "). "
+            "Plugin upgrades update it without rerunning setup."
+        )
+        if notice:
+            print("Updated the Codex MCP entry to follow the installed plugin; saved settings were kept.")
         if rewritten:
             print(
                 "Notice: this config.toml lays out its MCP servers in a form setup cannot edit in place, so "
                 "Codex rewrote it and dropped the comments inside MCP server tables."
             )
-        print(
-            "After every plugin upgrade, rerun the new plugin's set-env.sh --target codex --refresh "
-            "or set-env.ps1 -Target codex -Refresh, then restart Codex."
-        )
     if auto_notice:
         print(auto_notice)
     print("Configuration saved atomically. Restart the selected client to load it. Values are omitted.")
