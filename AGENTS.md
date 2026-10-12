@@ -290,6 +290,13 @@ make pre-commit   # format + lint + sync-skills + test
 - [ ] `.env.example` updated
 - [ ] README.md configuration table updated
 
+### Test Isolation
+
+- Tests MUST NOT reach a real controller. Use loopback stubs or mocks.
+- Every pytest suite's `conftest.py` MUST load `testsupport/unifi_test_guard.py` before importing code under test; unittest suites run through `testsupport/run_unittest.py`.
+- Fixture controller hosts MUST use TEST-NET (`192.0.2.0/24`), never private-range or real gateway addresses.
+- Tests that need a real login or reconnect path MUST opt in with `@pytest.mark.real_reconnect` and mock the transport.
+
 ### Version and Manifest Rules
 
 - Version is derived from git tags via `hatch-vcs`. MUST NOT manually edit version in `pyproject.toml`.
