@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     # Optional meta-tool registration and awaited eager filtering require Shared 0.6.27.
-    "unifi-mcp-shared>=0.6.27,<0.7",
+    # The settings-file startup report and setup mode require Shared 0.6.28.
+    "unifi-mcp-shared>=0.6.28,<0.7",
     # Network managers in unifi-core import aiounifi; the [network] extra
     # declares the compatibility floor for library consumers. This deployable
     # app also pins the auth client exactly so one MCP release always resolves
