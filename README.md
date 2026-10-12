@@ -260,10 +260,13 @@ Set these variables in the server's process environment (shell exports, the MCP 
 | `UNIFI_PASSWORD` | Yes | Password for the local account |
 | `UNIFI_API_KEY` | No | UniFi API key for selected capabilities, including firewall policy ordering and some Protect settings updates |
 | `CONFIG_PATH` | No | Absolute path to an operator-controlled custom YAML file; otherwise uses bundled configuration |
+| `UNIFI_SETTINGS_FILE` | No | Absolute path (`~` allowed) to a per-user settings file of `UNIFI_*` variables; see below |
 | `UNIFI_DEFER_CONTROLLER_INIT` | No | Network only: defer controller connection until the first tool call; real-time event listening remains disabled in this mode |
 | `UNIFI_META_TOOLS_ENABLED` | No | Network eager mode only: set `false` to omit indirect meta-tools; requires `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` |
 
 **Startup configuration:** The servers do not automatically load `.env` files or `config/config.yaml` from the working directory. MCP clients may launch servers inside untrusted projects, so project files must not control where credentials are sent or weaken permissions and redaction. If you previously relied on automatic loading, select a trusted env file in your launcher (for example, `uv run --env-file /absolute/path/to/trusted.env --with unifi-network-mcp unifi-network-mcp`) or set an absolute `CONFIG_PATH` for custom YAML. Docker Compose `env_file:` remains supported.
+
+**Per-user settings file:** `UNIFI_SETTINGS_FILE` names a file the server reads at startup, before anything else reads configuration. The Codex plugin's setup writes `~/.config/unifi-mcp/<product>.env` and points its bundled server at it. The file holds `KEY=VALUE` lines (`#` comments, optional matching quotes; no `export`, interpolation or multi-line values). Only `UNIFI_*` keys are accepted, and each behaves exactly as if exported, including `_FILE` / `_COMMAND` providers and policy gates. Variables already in the process environment win. A missing file is not an error. On POSIX the file must be owned by you and not group- or world-writable (keep it `chmod 600`); Windows has no mode check, so keep it in your user profile.
 
 To keep the secret out of the MCP client's environment (and out of every process the client spawns), set `UNIFI_PASSWORD_FILE` to a path whose contents are the password, or `UNIFI_PASSWORD_COMMAND` to an absolute argv whose stdout is the password ([contract](docs/credential-providers.md)). The same `_FILE` / `_COMMAND` suffixes work on `UNIFI_API_KEY` and on the per-server variables below. Details are in each server's `docs/configuration.md`.
 
