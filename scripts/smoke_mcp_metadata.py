@@ -75,7 +75,7 @@ SERVER_SPECS = {
 }
 
 EXPECTED_ICON_SIZES = [["48x48"], ["96x96"], ["192x192"]]
-OFFLINE_SERVER_NAMES = ("network", "protect")
+OFFLINE_SERVER_NAMES = ("network", "protect", "access")
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -307,6 +307,9 @@ def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[
     """Build the environment used by the metadata smoke server subprocesses."""
     env = os.environ.copy()
     if not use_current_env:
+        # Drop every inherited controller setting, including _FILE/_COMMAND
+        # indirections and ports, so offline servers only see the dummies below.
+        env = {name: value for name, value in env.items() if not name.startswith("UNIFI_")}
         env.update(
             {
                 "UNIFI_HOST": "127.0.0.1",
@@ -335,11 +338,6 @@ def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[
 def selected_server_names(*, server: str, use_current_env: bool) -> list[str]:
     """Return the servers that can be smoke-tested for this invocation."""
     if server != "all":
-        if server == "access" and not use_current_env:
-            raise MetadataSmokeError(
-                "access metadata smoke requires --use-current-env; the Access server exits when controller "
-                "initialization fails, so it cannot run against offline dummy credentials yet"
-            )
         return [server]
 
     if use_current_env:
