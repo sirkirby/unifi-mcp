@@ -139,7 +139,7 @@ categories writable can allow the action server-wide and decline the previews
 they do not want, or keep the action off.
 
 For Codex and OpenClaw, before writing policy values, inspect a sanitized list of the selected client's
-existing `unifi-network` MCP environment variable names (for Codex, the key names in
+existing `unifi-network` MCP environment variable names (for Codex and OpenClaw, the key names in
 `~/.config/unifi-mcp/network.env`).
 Remove every existing category-specific
 `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>` entry by including null deletions
@@ -200,8 +200,10 @@ The script handles the client-specific write:
   `~/.config/unifi-mcp/network.env` (`%USERPROFILE%\.config\unifi-mcp\network.env`
   on Windows), readable by the user only. The plugin's own server reads it through
   `UNIFI_SETTINGS_FILE`; setup writes no `config.toml` entry. Env never enters argv
-- OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
-  then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
+- OpenClaw: writes the same settings file as Codex,
+  `~/.config/unifi-mcp/network.env`, readable by the user only. The plugin's own
+  server reads it through `UNIFI_SETTINGS_FILE`; setup writes no `openclaw.json`
+  entry
 
 For raw values or null deletions, use JSON stdin: `set-env.sh --target <target>
 --input-json` or `set-env.ps1 -Target <target> -InputJson`. Have the user supply
@@ -243,6 +245,30 @@ comment stays as written. If the file lays out its MCP servers in a form setup
 cannot edit in place (dotted or inline `mcp_servers` keys), setup lets Codex
 remove the entry, which drops the comments inside every `[mcp_servers.*]`
 table, and says so in its output.
+
+### OpenClaw upgrades
+
+OpenClaw runs the plugin's own MCP server, which reads the settings file setup
+wrote, so `openclaw plugins update` upgrades the server with nothing to rerun.
+A running Gateway applies the update at the next agent turn.
+
+Setup before plugin 1.0.0 saved an `mcp.servers.unifi-network` entry in
+`openclaw.json` instead. That entry replaces the plugin's server and keeps an
+old server version. Step 0 then prints a notice naming the entry and
+`--refresh`. Relay it and, once the user agrees, run refresh from this skill's
+plugin root:
+
+```bash
+bash <plugin-root>/scripts/set-env.sh --target openclaw --refresh
+```
+
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target openclaw -Refresh`.
+Refresh needs no credential input. It moves the entry's `UNIFI_` settings,
+provider references included, into the settings file, saves a private backup of
+`openclaw.json` beside it, then removes the entry with `openclaw mcp unset` and
+names any other entry settings it did not move. Ordinary setup does the same
+when it finds the entry. It is needed once. If a settings file already exists
+and holds different settings, refresh changes nothing and says which to remove.
 
 ### Claude Code projects set up by an earlier plugin version
 
@@ -292,8 +318,8 @@ On validation, dependency, registration, or write failure the previous file and
 registration remain in place. Repair malformed configuration without discarding
 unrelated settings, install the reported dependency, or correct the provider,
 then rerun. `--dry-run` / `-DryRun` validates the patch without changing files and
-omits values. Automatic OpenClaw setup requires strict JSON; JSON5 configurations
-are refused unchanged and need the client editor. After a forced termination,
+omits values. OpenClaw setup reads `openclaw.json` as strict JSON; a JSON5
+configuration is refused unchanged. After a forced termination,
 remove adjacent `.setup-lock` and `.unifi-setup-*` staging directories only after
 confirming no setup process is running. Staging files are private and may contain
 credentials; delete them without displaying their contents. An interruption at
@@ -311,4 +337,4 @@ For Codex, tell the user:
 
 For OpenClaw, tell the user:
 
-"OpenClaw MCP server `unifi-network` configured. Restart the OpenClaw Gateway so the updated MCP server is loaded."
+"Saved the settings for `unifi-network` to `~/.config/unifi-mcp/network.env`, readable by you only. The plugin's own server reads them and follows plugin updates on its own. OpenClaw starts it with these settings at its next agent turn; the Gateway needs no restart."
