@@ -394,7 +394,27 @@ class ConnectionManager:
 
     def _sanitize_connection_error(self, error: BaseException) -> str:
         """Return safe failure context for later callers, which may log it verbatim."""
-        return f"{type(error).__name__}: check controller connectivity, credentials, and MFA/TOTP configuration."
+        name = type(error).__name__
+        if self._is_terminal_auth_error(error):
+            return f"{name}: check credentials and MFA/TOTP configuration."
+        if self._is_unreachable_error(error):
+            return (
+                f"{name}: cannot reach the controller; "
+                "check the configured host and port and that the controller is reachable."
+            )
+        return f"{name}: check controller connectivity, credentials, and MFA/TOTP configuration."
+
+    @staticmethod
+    def _is_unreachable_error(error: BaseException) -> bool:
+        """True when the error, or anything it was raised from, is a transport failure."""
+        seen: set[int] = set()
+        current: BaseException | None = error
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, (aiohttp.ClientConnectionError, asyncio.TimeoutError, OSError)):
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
     def _sanitize_text(self, text: str, extra_secrets: Mapping[str, bool] | Iterable[str] = ()) -> str:
         """Mask MAC addresses, the configured credentials and *extra_secrets* in *text*.
