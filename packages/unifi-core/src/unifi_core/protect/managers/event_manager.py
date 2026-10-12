@@ -196,8 +196,11 @@ class EventManager:
         """Subscribe to the pyunifiprotect websocket for real-time events.
 
         The ``subscribe_websocket`` method on the API client returns an
-        unsubscribe callable which we store for clean shutdown.
+        unsubscribe callable which we store for clean shutdown. A second call
+        while subscribed keeps the existing subscription.
         """
+        if self._ws_unsub is not None:
+            return
         self._ws_unsub = self._cm.client.subscribe_websocket(self._on_ws_message)
         logger.info("[event-mgr] Websocket subscription started.")
 
