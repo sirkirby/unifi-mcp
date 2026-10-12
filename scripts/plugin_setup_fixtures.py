@@ -1499,10 +1499,7 @@ class Fixtures:
                     shutil.copy2(source, cached / source.name)
             for directory in (".codex-plugin", ".claude-plugin"):
                 shutil.copytree(scripts.parent / directory, cached.parent / directory)
-            for filename in (".mcp.json", ".mcp.codex.json"):
-                source = scripts.parent / filename
-                if source.exists():
-                    shutil.copy2(source, cached.parent / filename)
+            shutil.copy2(scripts.parent / ".mcp.codex.json", cached.parent / ".mcp.codex.json")
             suffix = "set-env.ps1" if self.powershell else "set-env.sh"
             command[command.index(str(scripts / suffix))] = str(cached / suffix)
             invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})

@@ -321,7 +321,7 @@ def shadow_notice(name, path):
 
 
 def package_pin(root, name, *, codex=False):
-    files = (root / ".claude-plugin/plugin.json", root / ".mcp.json")
+    files = (root / ".claude-plugin/plugin.json",)
     if codex:
         files = (root / ".mcp.codex.json", *files)
     for filename in files:
@@ -335,7 +335,7 @@ def package_pin(root, name, *, codex=False):
 
 
 # Claude Code stores plugin options itself (user settings, sensitive values in the
-# system keychain); the shipped .mcp.json maps each option onto one variable.
+# system keychain); the manifest's inline mcpServers maps each option onto one variable.
 # A configured sensitive option whose value Claude never reveals. NUL cannot occur
 # in a real value: patches refuse it.
 KEYCHAIN = "\0claude-keychain\0"
@@ -346,8 +346,8 @@ FALSY = ("false", "0", "no", "off")
 def claude_options(root):
     """Return {variable: option} and the option schema from the installed plugin."""
     try:
-        schema = json_object((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8")).get("userConfig")
-        servers = json_object((root / ".mcp.json").read_text(encoding="utf-8")).get("mcpServers")
+        manifest = json_object((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+        schema, servers = manifest.get("userConfig"), manifest.get("mcpServers")
     except (OSError, ValueError):
         schema = servers = None
     if not isinstance(schema, dict) or not isinstance(servers, dict) or len(servers) != 1:

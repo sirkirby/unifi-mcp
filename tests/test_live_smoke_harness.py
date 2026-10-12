@@ -424,7 +424,9 @@ def test_support_plugin_launcher_includes_skill_and_matching_pins(product):
     assert arguments[-1] == f"unifi-{product}-mcp=={version}"
 
 
-@pytest.mark.parametrize("defect", ["missing_skill", "modified_skill", "version", "launcher", "codex_launcher"])
+@pytest.mark.parametrize(
+    "defect", ["missing_skill", "modified_skill", "version", "launcher", "codex_launcher", "root_mcp_json"]
+)
 def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
     import shutil
 
@@ -443,8 +445,11 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
         data = json.loads(path.read_text())
         data["version"] = "999.0.0"
         path.write_text(json.dumps(data))
+    elif defect == "root_mcp_json":
+        # OpenClaw would merge a root .mcp.json into the bundled server it runs.
+        (target / ".mcp.json").write_text(json.dumps({"mcpServers": {}}))
     else:
-        path = target / (".mcp.codex.json" if defect == "codex_launcher" else ".mcp.json")
+        path = target / (".mcp.codex.json" if defect == "codex_launcher" else ".claude-plugin/plugin.json")
         data = json.loads(path.read_text())
         data["mcpServers"]["unifi-network"]["command"] = "arbitrary-command"
         path.write_text(json.dumps(data))
@@ -453,7 +458,7 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
 
 
 @pytest.mark.parametrize("key", ["PATH", "PYTHONPATH", "UV_INDEX_URL", "UNIFI_TOOL_PERMISSION_MODE", "UNIFI_HOST"])
-@pytest.mark.parametrize("manifest", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json", "both"])
+@pytest.mark.parametrize("manifest", [".mcp.codex.json", ".claude-plugin/plugin.json", "both"])
 def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_path, key, manifest):
     import shutil
 
@@ -461,7 +466,7 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
 
     target = tmp_path / "plugins/unifi-network"
     shutil.copytree(Path(__file__).resolve().parents[1] / "plugins/unifi-network", target)
-    for filename in [".mcp.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
+    for filename in [".mcp.codex.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
         path = target / filename
         data = json.loads(path.read_text())
         data["mcpServers"]["unifi-network"].setdefault("env", {})[key] = "${ATTACKER_CONTROLLED:-evil}"
@@ -473,7 +478,7 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
     assert env == before
 
 
-@pytest.mark.parametrize("manifest", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
+@pytest.mark.parametrize("manifest", [".mcp.codex.json", ".claude-plugin/plugin.json"])
 @pytest.mark.parametrize("defect", ["extra_server", "transport", "url", "cwd", "hooks"])
 def test_support_plugin_rejects_additional_host_behavior(tmp_path, manifest, defect):
     import shutil
@@ -1100,7 +1105,7 @@ def test_support_plugin_launches_server_pin_independently_of_plugin_version(tmp_
         data = json.loads(path.read_text())
         data["version"] = plugin_version
         path.write_text(json.dumps(data))
-    for config in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+    for config in (".mcp.codex.json", ".claude-plugin/plugin.json"):
         path = target / config
         data = json.loads(path.read_text())
         data["mcpServers"][name]["args"][-1] = f"{name}-mcp==0.30.7"

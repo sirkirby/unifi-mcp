@@ -37,7 +37,7 @@ def manifests(root: Path, version: str) -> None:
 
 
 def pins(root: Path, version: str) -> None:
-    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
         edit(
             root,
             f"plugins/unifi-network/{filename}",
@@ -110,7 +110,7 @@ def test_inline_pin_mismatch_fails(repo: Path) -> None:
         "plugins/unifi-network/.claude-plugin/plugin.json",
         mcpServers={"network": {"args": ["unifi-network-mcp==0.38.0"]}},
     )
-    with pytest.raises(ValueError, match="mismatched pins in inline"):
+    with pytest.raises(ValueError, match="mismatched pins between Claude and Codex"):
         versions.check(repo, "base")
 
 
@@ -253,9 +253,9 @@ def test_semver_precedence_orders_numeric_prereleases_and_ignores_build_metadata
 
 @pytest.mark.parametrize("stage", [False, True])
 def test_tracked_plugin_edits_require_bump(repo: Path, stage: bool) -> None:
-    config = json.loads((repo / "plugins/unifi-network/.mcp.json").read_text())
-    config["mcpServers"]["unifi-network"]["env"] = {"UNIFI_TOOL_REGISTRATION_MODE": "eager"}
-    write(repo, "plugins/unifi-network/.mcp.json", config)
+    config = json.loads((repo / "plugins/unifi-network/.mcp.codex.json").read_text())
+    config["mcpServers"]["unifi-network"]["env"] = {"UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/network.env"}
+    write(repo, "plugins/unifi-network/.mcp.codex.json", config)
     if stage:
         versions.git(repo, "add", ".")
     with pytest.raises(ValueError, match="strictly greater"):
@@ -267,10 +267,17 @@ def test_update_pin_keeps_each_product_and_other_arguments(tmp_path: Path, produ
     bundle = tmp_path / f"unifi-{product}"
     for filename in versions.MANIFESTS:
         write(bundle, filename, {"name": bundle.name, "version": "1.3.7"})
-    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
         edit(bundle, filename, mcpServers={bundle.name: {"args": ["--from", f"{bundle.name}-mcp==0.3.0", "--extra"]}})
     assert versions.update_pin(bundle, "0.4.0")
     assert versions.plugin_state(bundle) == ("1.4.0", {f"{bundle.name}-mcp": "0.4.0"})
-    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
         args = json.loads((bundle / filename).read_text())["mcpServers"][bundle.name]["args"]
         assert args == ["--from", f"{bundle.name}-mcp==0.4.0", "--extra"]
+
+
+def test_root_mcp_json_is_rejected(repo: Path) -> None:
+    # OpenClaw would merge it into the bundled Codex server; Claude Code's servers are inline.
+    edit(repo, "plugins/unifi-network/.mcp.json", mcpServers={})
+    with pytest.raises(ValueError, match="root .mcp.json is unsupported"):
+        versions.plugin_state(repo / "plugins/unifi-network")
