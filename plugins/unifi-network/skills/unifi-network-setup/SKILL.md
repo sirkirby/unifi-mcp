@@ -116,7 +116,9 @@ command provider, never the raw key.
 
 Ask whether to use defaults or customize:
 - Defaults: port `443`, site `default`, SSL verification `false`, lazy tool loading
-- Customize: ask for port, site, SSL verification, and tool registration mode
+- Customize: ask for port (`UNIFI_NETWORK_PORT`), site (`UNIFI_NETWORK_SITE`), SSL
+  verification (`UNIFI_NETWORK_VERIFY_SSL`), and tool registration mode (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy`, `eager` or
+  `meta_only`; the Claude Code option is `registration_mode`)
 
 ## Step 4: Permission Configuration
 
@@ -270,12 +272,16 @@ settings the options for every project, or remove this plugin's leftover
 `UNIFI_NETWORK_*` keys from the project file to keep the saved options. A
 session-start notice also fires in a project that still holds its own
 `UNIFI_NETWORK_*` keys while options from another project are in use; offer the
-same choice there.
+same choice there. When the project's host, username, port and site equal the saved
+options, the notice says nothing changes instead; offer to remove the leftover
+keys, or to tidy up with `--migrate`, which also copies the project's other
+settings, such as its credential source, into the options.
 
-After the migration, in a session that was already open, run `/reload-plugins`,
-then check `/mcp`; if `plugin:unifi-network:unifi-network` still shows as failed, run
-`/mcp reconnect plugin:unifi-network:unifi-network`. A new session also loads the migrated
-options. Once no UniFi plugin keys remain in the project file, the prerequisite
+After the migration, in a session that was already open, run `/reload-plugins`
+or start a new session. `/mcp reconnect` alone keeps the options the session
+started with: it reports success, but the server stays in setup mode. Use
+`/mcp reconnect plugin:unifi-network:unifi-network` only if `/mcp` shows the server as
+failed. Once no UniFi plugin keys remain in the project file, the prerequisite
 check names any shared `UNIFI_*` keys still there: Claude Code exports them into
 every process in that project, so suggest removing them once nothing else needs
 them.
@@ -297,7 +303,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Saved as the unifi-network plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options), then run `/mcp` and check that `plugin:unifi-network:unifi-network` is connected. If it still shows as failed, run `/mcp reconnect plugin:unifi-network:unifi-network`: Claude Code skips a server that failed to start in the last 15 minutes, while its options are unchanged, until you reconnect it. Review or change the options with `/plugin`, then `unifi-network`, then Configure options."
+"Saved as the unifi-network plugin's Claude Code options (a raw password or API key goes to the system keychain). In this session, run `/reload-plugins` (a new session also loads the options); `/mcp reconnect` alone keeps the options the session started with, so the server would stay in setup mode. Then run `/mcp` and check that `plugin:unifi-network:unifi-network` offers more than one tool: a server offering only `unifi_setup_status` is still unconfigured. Use `/mcp reconnect plugin:unifi-network:unifi-network` only if `/mcp` shows the server as failed. Review or change the options with `/plugin`, then `unifi-network`, then Configure options."
 
 For Codex, tell the user:
 
