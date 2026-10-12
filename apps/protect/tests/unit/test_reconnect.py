@@ -96,7 +96,7 @@ def test_meta_tools_use_the_plain_decorator():
     assert main._original_tool_decorator is server._original_tool
 
 
-@pytest.mark.controller_reconnect
+@pytest.mark.real_reconnect
 @pytest.mark.asyncio
 async def test_down_at_start_then_up_the_next_tool_call_starts_the_listener(scratch_tool, monkeypatch):
     """End to end over the runtime singletons, with the SDK client mocked."""

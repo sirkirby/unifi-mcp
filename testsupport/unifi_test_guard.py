@@ -20,8 +20,8 @@ Three layers keep tests away from real controllers:
   at teardown, even when the code under test swallowed the refusal.
 * ``connect_stub(...)`` builds an autouse fixture that replaces the
   self-initiated login and reconnect paths of a suite's environment-built
-  runtime connection manager, and Access's on-demand reconnect, unless a test
-  opts in with ``@pytest.mark.real_reconnect``.
+  runtime connection manager, and Access's and Protect's on-demand reconnects,
+  unless a test opts in with ``@pytest.mark.real_reconnect``.
 
 Fixture controller hosts should use TEST-NET addresses (``192.0.2.0/24``).
 """
@@ -146,8 +146,10 @@ def connect_stub(*runtime_modules: str):
     Each named runtime module's ``connection_manager`` singleton, the one built
     from the environment, has its login and reconnect paths replaced on the
     instance, so connection managers that tests build themselves keep their
-    real (mocked) logic. Access's on-demand reconnect is also stubbed for every
-    instance. A test opts out with ``@pytest.mark.real_reconnect``.
+    real (mocked) logic. Access's and Protect's on-demand reconnects are also
+    stubbed for every instance: Protect's domain tools call ``ensure_connected``
+    before they run, so any tool test could otherwise attempt a login. A test
+    opts out with ``@pytest.mark.real_reconnect``.
     """
 
     @pytest.fixture(autouse=True)
@@ -161,15 +163,33 @@ def connect_stub(*runtime_modules: str):
             for name in _SELF_INITIATED_CONNECTS:
                 if hasattr(manager, name):
                     monkeypatch.setattr(manager, name, _not_connected)
-        try:
-            from unifi_core.access.managers.connection_manager import AccessConnectionManager
-        except ImportError:
-            return
-        if hasattr(AccessConnectionManager, "reconnect"):
-
-            async def _access_reconnect_stub(self) -> bool:
-                return self.is_connected
-
-            monkeypatch.setattr(AccessConnectionManager, "reconnect", _access_reconnect_stub)
+        _stub_access_reconnect(monkeypatch)
+        _stub_protect_reconnect(monkeypatch)
 
     return stub_automatic_controller_connects
+
+
+def _stub_access_reconnect(monkeypatch) -> None:
+    try:
+        from unifi_core.access.managers.connection_manager import AccessConnectionManager
+    except ImportError:
+        return
+    if hasattr(AccessConnectionManager, "reconnect"):
+
+        async def _access_reconnect_stub(self) -> bool:
+            return self.is_connected
+
+        monkeypatch.setattr(AccessConnectionManager, "reconnect", _access_reconnect_stub)
+
+
+def _stub_protect_reconnect(monkeypatch) -> None:
+    try:
+        from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+    except ImportError:
+        return
+    if hasattr(ProtectConnectionManager, "ensure_connected"):
+
+        async def _protect_ensure_connected_stub(self) -> bool:
+            return self._initialized and self._client is not None
+
+        monkeypatch.setattr(ProtectConnectionManager, "ensure_connected", _protect_ensure_connected_stub)

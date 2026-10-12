@@ -3,34 +3,16 @@
 import sys
 from pathlib import Path
 
-import pytest
+# Scrub inherited controller settings and block outbound network access before
+# anything imports the app; see testsupport/unifi_test_guard.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "testsupport"))
+import unifi_test_guard  # noqa: E402
+
+unifi_test_guard.protect_test_session()
+
+from unifi_test_guard import fail_on_outbound_network_access, pytest_configure  # noqa: E402,F401
+
+stub_automatic_controller_connects = unifi_test_guard.connect_stub("unifi_protect_mcp.runtime")
 
 # Add the protect app's src directory to path so unifi_protect_mcp is importable
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-
-def pytest_configure(config):
-    config.addinivalue_line(
-        "markers",
-        "controller_reconnect: let ProtectConnectionManager.ensure_connected run; the test must mock the SDK client",
-    )
-
-
-@pytest.fixture(autouse=True)
-def _no_automatic_reconnect(request, monkeypatch):
-    """Keep unit tests from opening a controller connection.
-
-    Domain tools ensure a connection before they run, and the runtime
-    connection manager is built from the developer's environment, so a real
-    reconnect attempt could reach a real controller. Tests that exercise the
-    reconnect opt in with the ``controller_reconnect`` marker and mock the
-    SDK client.
-    """
-    if request.node.get_closest_marker("controller_reconnect"):
-        return
-    from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
-
-    async def _no_reconnect(self):
-        return self._initialized and self._client is not None
-
-    monkeypatch.setattr(ProtectConnectionManager, "ensure_connected", _no_reconnect)
