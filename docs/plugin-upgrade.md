@@ -148,7 +148,9 @@ project. Its output names variables only, never values:
   them by hand once nothing else needs them.
 
 Then, in the session that was already open, run `/reload-plugins`, or start a
-new session. Repeat the migration for each UniFi plugin you use.
+new session. If you ran the migration in a terminal, Claude in that session may
+still suggest migrating from the notice it saw at the start; a new session
+clears it. Repeat the migration for each UniFi plugin you use.
 
 `/mcp reconnect` alone keeps the options the session started with. It reports
 success, but the server stays in setup mode, so use `/reload-plugins` or a new

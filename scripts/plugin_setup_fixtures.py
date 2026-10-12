@@ -994,9 +994,47 @@ class Fixtures:
                 )
             unset_username = {k: v for k, v in options.items() if k != "CLAUDE_PLUGIN_OPTION_USERNAME"}
             self.check("another project" in notice(values, unset_username, shell), "an unset option differs")
+
+            def named(text):
+                return {field for field in ("HOST", "USERNAME", "PORT", "SITE") if f"UNIFI_{upper}_{field}" in text}
+
+            self.check(
+                named(notice(dict(values, **{f"UNIFI_{upper}_PORT": "8444"}), options, shell)) == {"PORT"},
+                "a port-only difference names only the port variable",
+            )
+            self.check(
+                named(notice(dict(values, **{f"UNIFI_{upper}_PORT": "port"}), options, shell)) == {"PORT"},
+                "a port that is not a number is named",
+            )
+            self.check(
+                named(notice(values, unset_username, shell)) == {"USERNAME"},
+                "an unset option is named as the differing variable",
+            )
+            self.check(
+                named(notice({k: v for k, v in values.items() if k != f"UNIFI_{upper}_HOST"}, options, shell))
+                == {"HOST"},
+                "a project without a host names the host variable",
+            )
+            several = dict(
+                values,
+                **{
+                    f"UNIFI_{upper}_HOST": "192.0.2.71",
+                    f"UNIFI_{upper}_USERNAME": "other-user",
+                    f"UNIFI_{upper}_PORT": "8444",
+                },
+            )
+            several_text = notice(several, options, shell)
+            self.check(
+                named(several_text) == {"HOST", "USERNAME", "PORT"}, "several differences name every differing variable"
+            )
+            self.check(
+                f"UNIFI_{upper}_HOST, UNIFI_{upper}_USERNAME, UNIFI_{upper}_PORT" in several_text,
+                "differing variables are listed in a fixed order",
+            )
             if product == "network":
                 site = dict(values, UNIFI_NETWORK_SITE="branch")
                 self.check("another project" in notice(site, options, shell), "a differing site keeps the other notice")
+                self.check(named(notice(site, options, shell)) == {"SITE"}, "a differing site is named alone")
                 self.check(
                     gentle(notice(site, dict(options, CLAUDE_PLUGIN_OPTION_SITE="branch"), shell)),
                     "a matching site gets the gentle notice",
@@ -1290,7 +1328,10 @@ class Fixtures:
             "conversion names what it did not move",
         )
         self.check(pin.encode() in result.stdout, "conversion names the bundled server's pin")
-        self.check(b"at its next agent turn" in result.stdout, "conversion says when OpenClaw loads it")
+        self.check(
+            b"at its next agent turn" in result.stdout and b"gateway restart" not in result.stdout,
+            "conversion says the running gateway loads it at the next agent turn",
+        )
         self.check(secret.encode() not in result.stdout + result.stderr, "conversion output omits values")
         self.check(secret not in argv_path.read_text(encoding="utf-8"), "conversion argv omits values")
         checked = run(prerequisite)
@@ -1641,11 +1682,19 @@ class Fixtures:
         shutil.copy2(scripts.parent / ".mcp.codex.json", cached.parent / ".mcp.codex.json")
         suffix = "set-env.ps1" if self.powershell else "set-env.sh"
         command[command.index(str(scripts / suffix))] = str(cached / suffix)
-        invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
+        first = invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
         self.check(
             get_env(load())[f"UNIFI_{product.upper()}_HOST"] == "192.0.2.99",
             "versioned plugin cache uses the product's settings file",
         )
+        if target == "openclaw":
+            self.check(
+                b"new OpenClaw session" in first.stdout
+                and b"openclaw gateway restart" in first.stdout
+                and b"already open keeps the unconfigured server" in first.stdout
+                and b"next agent turn" not in first.stdout,
+                "ordinary OpenClaw setup says an open session keeps the unconfigured server",
+            )
         if target == "codex":
             self.check(not (workspace / "codex/config.toml").exists(), "Codex setup writes no config.toml entry")
             self.codex_conversion_scenario(workspace, environment, command, cached, path, product, setup)
