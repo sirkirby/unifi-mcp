@@ -55,22 +55,29 @@ def blocked_network_access() -> list[str]:
     return _blocked
 
 
+def _bare_host(host: str) -> str:
+    return host.strip("[]").split("%", 1)[0]
+
+
 def _is_loopback(host: object) -> bool:
     if isinstance(host, bytes):
-        host = host.decode()
+        host = host.decode(errors="replace")
     if not isinstance(host, str):
         return False
-    if host == "localhost":
+    host = _bare_host(host)
+    if host.lower() in ("localhost", "localhost.localdomain"):
         return True
     try:
-        return ipaddress.ip_address(host.split("%", 1)[0]).is_loopback
+        address = ipaddress.ip_address(host)
     except ValueError:
         return False
+    mapped = getattr(address, "ipv4_mapped", None)
+    return address.is_loopback or (mapped is not None and mapped.is_loopback)
 
 
 def _is_ip_literal(host: str) -> bool:
     try:
-        ipaddress.ip_address(host.split("%", 1)[0])
+        ipaddress.ip_address(_bare_host(host))
     except ValueError:
         return False
     return True

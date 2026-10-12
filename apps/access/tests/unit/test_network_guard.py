@@ -42,6 +42,18 @@ def test_loopback_stays_available():
     assert _take_blocked() == []
 
 
+@pytest.mark.parametrize(
+    "host", ["127.0.0.1", "::1", "::ffff:127.0.0.1", "[::1]", "localhost", "localhost.localdomain"]
+)
+def test_loopback_spellings_are_allowed(host):
+    assert unifi_test_guard._is_loopback(host)
+
+
+@pytest.mark.parametrize("host", ["192.0.2.1", "::ffff:192.0.2.1", "10.0.0.1", "example.invalid", None])
+def test_non_loopback_hosts_are_not(host):
+    assert not unifi_test_guard._is_loopback(host)
+
+
 def test_only_loopback_access_hosts_are_ever_configured():
     import os
 
