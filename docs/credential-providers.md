@@ -53,7 +53,8 @@ rather than environment settings:
 Setup saves the options with `claude plugin configure --values-stdin`. They can
 also be edited from `/plugin`, then the plugin, then Configure options.
 
-The plugin's `.mcp.json` maps each option onto its product-specific variable,
+The server declared in the plugin's `.claude-plugin/plugin.json` maps each
+option onto its product-specific variable,
 for example `UNIFI_NETWORK_PASSWORD_FILE`. It always sets all three spellings
 of each secret, and an unset option arrives as an empty value, which counts as
 unset. So a product-level spelling can come only from the plugin's options:

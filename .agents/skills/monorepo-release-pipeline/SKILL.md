@@ -165,7 +165,7 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
-- Corresponding `.codex-plugin/plugin.json`, `.mcp.json`, and `.mcp.codex.json`
+- Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
 - `apps/*/server.json` (server package version)
 
@@ -270,7 +270,7 @@ packages and the Worker still release only by tag.
 |---|---|---|---|
 | Claude Code | Marketplace on the default branch unless added as `owner/repo#ref` | Manifest `version`; the cache is keyed by it | `claude plugin marketplace update unifi-plugins`, then `claude plugin update <plugin>@unifi-plugins` (or `/plugin` → Installed → Update now), then a new session: the SessionStart notice does not run on `/reload-plugins`. Auto-update is off by default for our marketplace; a user can turn it on under `/plugin` → Marketplaces, and it then installs releases in the background during a session and prompts for `/reload-plugins`, which also skips the notice. |
 | Codex | `.agents/plugins/marketplace.json` on remote HEAD unless added as `owner/repo@ref` | Manifest `version`: Codex re-clones configured Git marketplaces at the start of every session (and on `codex plugin marketplace upgrade`) and reinstalls a plugin only on a version change | Nothing: Codex runs the bundled server, which reads the per-user settings file setup writes (`UNIFI_SETTINGS_FILE`), so a pin bump starts in the session after the one that installs the release. A `[mcp_servers.<plugin>]` entry from setup before plugin 1.0.0 shadows the bundled server until the user runs setup with `--refresh` once |
-| OpenClaw | `git:owner/repo[@ref]` or our Claude-format marketplace; reads the `.claude-plugin`/`.codex-plugin` bundle and its `.mcp.json` | Commits, not `version` | `openclaw plugins update <id>` or `openclaw plugins update --all`; it asks for capability consent, or needs `--accept-capabilities` without a terminal |
+| OpenClaw | `git:owner/repo[@ref]` or our Claude-format marketplace; treats the bundle as a Codex bundle and runs the server in `.mcp.codex.json`, merging in a root `.mcp.json` if one ships (so none does) | Commits, not `version` | `openclaw plugins update <id>` or `openclaw plugins update --all`; it asks for capability consent, or needs `--accept-capabilities` without a terminal. The bundled server reads the per-user settings file setup writes, so the pin moves at the next agent turn, without a Gateway restart. An `mcp.servers.<plugin>` entry from setup before plugin 1.0.0 replaces the bundled server until the user runs setup with `--target openclaw --refresh` once |
 | Hermes Agent | Cannot load the current layout (needs a root `plugin.json`, `skills/` and `mcp.json`) | Commits | Not supported |
 
 Sources: [Claude Code host a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace.md),
@@ -311,11 +311,12 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
   skills/capabilities, and minor server pin moves. Major: breaking setup/configuration,
   and major server pin moves. Before 1.0, breaking changes advance minor and additive
   changes advance patch (SemVer 0.x).
-- Keep the server pin identical in `.mcp.json`, `.mcp.codex.json` and any inline Claude
-  `mcpServers`; it must name a release tag.
+- Keep the server pin identical in the inline Claude `mcpServers` of
+  `.claude-plugin/plugin.json` and in `.mcp.codex.json`; it must name a release tag.
+  Never ship a root `.mcp.json`: OpenClaw would merge it into the server it runs.
 - Writeback: `bump-plugin-versions.yml` runs
-  `python3 scripts/plugin_versions.py sync --releasing <package-tag>`. It moves both
-  client pins and any inline Claude pin, bumps the plugin by the size of the server move,
+  `python3 scripts/plugin_versions.py sync --releasing <package-tag>`. It moves the inline
+  Claude pin and the `.mcp.codex.json` pin, bumps the plugin by the size of the server move,
   and regenerates `apps/<product>/server.json` with the **server** version. Retrying an
   already-synced pin does not bump again. Core, Shared and Relay triggers only coalesce
   outstanding product tags, otherwise they write nothing.

@@ -16,8 +16,8 @@ and `unifi-access-mcp` 0.6.13. They bring three things:
   started, or the first connection was rejected, the Access and Protect servers
   reconnect on their own before the next tool call instead of staying unusable
   until the client restarts the server.
-- **A settings file for Codex.** The servers read the private settings file that
-  Codex setup writes, named by `UNIFI_SETTINGS_FILE`. Reading it is implemented
+- **A settings file for Codex and OpenClaw.** The servers read the private
+  settings file that Codex and OpenClaw setup write, named by `UNIFI_SETTINGS_FILE`. Reading it is implemented
   in `unifi-mcp-shared` 0.6.28, and the 1.0.0 plugins pin server releases that
   require it.
 - **Setup mode instead of a silent failure.** With no controller host
@@ -43,6 +43,9 @@ What else changes:
   a private file that the plugin's bundled server reads, instead of a separate
   `config.toml` entry, so plugin upgrades upgrade the server. If you ran Codex
   setup before 1.0.0, run one command once; see [Codex](#codex).
+- **OpenClaw runs the plugin's own server too.** OpenClaw setup writes the same
+  settings file and no `openclaw.json` entry. If you ran OpenClaw setup before
+  1.0.0, run one command once; see [OpenClaw](#openclaw).
 - **Setup is transactional.** Setup validates every change before writing it and
   replaces the client configuration atomically. If anything fails, the previous
   configuration stays in place and usable.
@@ -232,16 +235,49 @@ setup skill again. To remove the settings, delete the file.
 
 ```bash
 openclaw plugins update unifi-network
-openclaw gateway restart
 ```
 
-OpenClaw asks you to accept the plugin's capabilities before it updates
+A running Gateway applies the update without a restart. OpenClaw asks you to accept the plugin's capabilities before it updates
 (`Accept these capabilities and update "unifi-network"? [y/N]`). In a script,
 or anywhere without a terminal, add `--accept-capabilities`; without it the
 update is refused. Use `openclaw plugins update --all` to update every plugin.
 OpenClaw tracks commits rather than versions, and changes nothing until you run
-this command. The MCP entry that setup writes pins the server package; 1.0.0
-keeps the same server versions, so that entry needs no change.
+this command.
+
+#### One-time step if you ran OpenClaw setup before 1.0.0
+
+Earlier setup saved your settings in an `mcp.servers.unifi-network` entry (or
+`unifi-protect`, `unifi-access`) in `openclaw.json`. That entry replaces the
+plugin's own server and pins the server version it names, so plugin updates
+never reach the server. Updating the plugin leaves the entry as it is. Once 1.0.0
+is installed, run this once for each plugin you set up:
+
+```bash
+bash <plugin-root>/scripts/set-env.sh --target openclaw --refresh
+```
+
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target openclaw -Refresh`.
+`<plugin-root>` is the installed plugin, for example
+`~/.openclaw/extensions/unifi-network`. You can also ask OpenClaw to run the
+plugin's setup skill: its prerequisite check names the entry and this command.
+
+The command asks for no credentials. It moves the entry's settings, provider
+references and per-category policy overrides included, into
+`~/.config/unifi-mcp/<product>.env` (`%USERPROFILE%\.config\unifi-mcp\<product>.env`
+on Windows), readable by you only. It saves the previous file beside it as
+`openclaw.json.bak-unifi-<product>-<time>`, readable by you only, then removes
+the entry with `openclaw mcp unset`. If the entry held anything other than
+`UNIFI_` settings, the command names it (never its value); it stays in the
+backup. Running the command again changes nothing. A running Gateway picks up
+the change at the next agent turn; it needs no restart.
+
+#### After that
+
+OpenClaw runs the plugin's own server, which reads that file, so each
+`openclaw plugins update` brings the server version the plugin pins, with
+nothing to rerun. A running Gateway applies the update at the next agent turn.
+To change a setting, run the setup skill again. To remove the settings, delete
+the file.
 
 ### Moving a raw secret to a provider
 
@@ -290,7 +326,9 @@ What happens when a release lands, and how to stay on your current plugins:
   Codex setup before 1.0.0, your `config.toml` entry keeps its server until you
   run the [one-time step](#one-time-step-if-you-ran-codex-setup-before-100).
 - **OpenClaw:** nothing until you run `openclaw plugins update`. To hold off,
-  don't run it.
+  don't run it. If you ran OpenClaw setup before 1.0.0, your `openclaw.json`
+  entry keeps its server until you run the
+  [one-time step](#one-time-step-if-you-ran-openclaw-setup-before-100).
 
 If a release breaks something for you, open an issue. A bad plugin release is
 rolled back by publishing a higher version with the fix or the revert, which

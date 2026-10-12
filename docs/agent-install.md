@@ -165,7 +165,10 @@ openclaw gateway restart
 Without a terminal, as when an agent runs it, OpenClaw refuses the install
 until it gets `--force` (confirming a source outside ClawHub) and
 `--accept-capabilities`; ask the user before adding them. Run the matching setup
-skill after restart. Repeat only for other UniFi products the user selected.
+skill after restart. Setup saves the settings in a private per-user file that the
+plugin's own server reads and writes no `openclaw.json` entry, so a later
+`openclaw plugins update` brings the new server with nothing to rerun. Repeat
+only for other UniFi products the user selected.
 
 ## Standalone skills through npm
 
