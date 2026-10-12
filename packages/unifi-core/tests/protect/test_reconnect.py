@@ -276,9 +276,11 @@ async def test_close_stops_automatic_reconnects(make_manager, clock):
 @pytest.mark.asyncio
 async def test_close_during_an_attempt_releases_the_new_client(make_manager, clock):
     gate = asyncio.Event()
+    updating = asyncio.Event()
     late = _client()
 
     async def slow_update():
+        updating.set()
         await gate.wait()
 
     late.update.side_effect = slow_update
@@ -287,7 +289,7 @@ async def test_close_during_an_attempt_releases_the_new_client(make_manager, clo
     clock.advance(module.RECONNECT_MIN_INTERVAL_SECONDS)
 
     attempt = asyncio.create_task(manager.ensure_connected())
-    await asyncio.sleep(0)
+    await updating.wait()
     await manager.close()
     gate.set()
     assert await attempt is False

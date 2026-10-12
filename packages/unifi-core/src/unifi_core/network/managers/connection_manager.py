@@ -23,6 +23,7 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
 from unifi_core.auth import AuthenticationStatus, UniFiAuth
+from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
 from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
@@ -70,6 +71,15 @@ def _silence_aiounifi_logs() -> None:
 _RECONNECT_BLOCK_BASE_SECONDS = 60.0
 _RECONNECT_BLOCK_MAX_SECONDS = 900.0
 _REAUTHENTICATION_MIN_INTERVAL_SECONDS = 60.0
+
+# Automatic reconnect after a failed connection attempt waits at least this
+# long, so a controller that stays down costs one attempt per interval rather
+# than one per call. The explicit start-up initialize() ignores it.
+_RECONNECT_MIN_INTERVAL_SECONDS = 30.0
+
+# aiounifi reports a transport failure as a RequestError with this prefix and
+# drops the original exception.
+_UNREACHABLE_REQUEST_PREFIX = "Error requesting data from "
 
 # aiounifi's ResponseError carries no status attribute. Its message is built as
 # ``Call <url> received <status>[ <reason>|: <body>]`` (interfaces/connectivity.py),
@@ -362,6 +372,8 @@ class ConnectionManager:
         self._integration_prefix: str | None = None
         self._initialize_lock = asyncio.Lock()
         self._connected_event = asyncio.Event()
+        self._attempt = ConnectAttempt()
+        self._last_failed_connect_at: float | None = None
         self.controller: Optional[Controller] = None
         self._aiohttp_session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
@@ -412,6 +424,9 @@ class ConnectionManager:
         while current is not None and id(current) not in seen:
             seen.add(id(current))
             if isinstance(current, (aiohttp.ClientConnectionError, asyncio.TimeoutError, OSError)):
+                return True
+            # aiounifi wraps a transport failure in a RequestError raised ``from None``.
+            if isinstance(current, RequestError) and str(current).startswith(_UNREACHABLE_REQUEST_PREFIX):
                 return True
             current = current.__cause__ or current.__context__
         return False
@@ -487,11 +502,29 @@ class ConnectionManager:
         return self._last_connection_error
 
     def _not_connected_error(self) -> ConnectionError:
-        if self._last_connection_error:
-            return ConnectionError(
-                f"Not connected to controller: last connection attempt failed: {self._last_connection_error}"
+        return ConnectionError(self.not_connected_message())
+
+    def not_connected_message(self) -> str:
+        """Why no controller connection is available: fixed text and exception class only."""
+        if self._attempt.in_progress:
+            return (
+                "Not connected to controller: still connecting, and the controller has not answered yet. "
+                "Check the configured host and port and that the controller is reachable; the attempt "
+                "continues in the background and a later call uses the connection once it succeeds."
             )
-        return ConnectionError("Not connected to controller")
+        if self._last_connection_error:
+            message = f"Not connected to controller: last connection attempt failed: {self._last_connection_error}"
+            blocked = self._reconnect_block_active() is not None
+            remaining = self._reconnect_interval_remaining()
+            if not blocked and remaining > 0:
+                message += f" The next connection attempt is allowed in {remaining:.0f}s."
+            return message
+        return "Not connected to controller"
+
+    def _reconnect_interval_remaining(self) -> float:
+        if self._last_failed_connect_at is None:
+            return 0.0
+        return max(0.0, self._last_failed_connect_at + _RECONNECT_MIN_INTERVAL_SECONDS - _time.monotonic())
 
     @staticmethod
     def _is_terminal_auth_error(error: BaseException) -> bool:
@@ -629,6 +662,11 @@ class ConnectionManager:
         )
         return result
 
+    def _route_available(self) -> bool:
+        return self.integration_inventory_only or bool(
+            self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed
+        )
+
     async def _discard_connection(self) -> None:
         self._connected_event.clear()
         if self._aiohttp_session and not self._aiohttp_session.closed:
@@ -642,7 +680,27 @@ class ConnectionManager:
 
         Preserve session behavior when it works. Only negotiate a key route at
         initialization, never as a retry of an operation that may have mutated.
+
+        This is the explicit start, so it ignores the reconnect interval. It
+        runs as the manager's one connection attempt, so a server can call it
+        in the background while tool calls wait on it within a bound.
         """
+        if self._route_available():
+            self._connected_event.set()
+            return True
+        if self._attempt.in_progress:
+            # Let an automatic reconnect finish rather than run a second attempt.
+            if await self._attempt.join():
+                return True
+        self._attempt.start(self._connect_attempt, name="network-connect")
+        return await self._attempt.join()
+
+    async def _connect_attempt(self) -> bool:
+        connected = await self._initialize_routes()
+        self._last_failed_connect_at = None if connected else _time.monotonic()
+        return connected
+
+    async def _initialize_routes(self) -> bool:
         if not self._key_inventory_enabled or not self.unifi_auth.has_api_key:
             connected = await self._initialize_session()
             if connected:
@@ -1080,8 +1138,7 @@ class ConnectionManager:
             )
 
         if not self._initialized or not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
-            logger.warning("Controller not initialized or session lost/closed, attempting to reconnect...")
-            connected = await self.initialize()
+            connected = await self._reconnect()
             if self.integration_inventory_only:
                 return await self.ensure_connected()
             return connected
@@ -1092,11 +1149,25 @@ class ConnectionManager:
                 logger.warning(
                     "Controller session found closed (via connectivity.config.session), attempting to reconnect..."
                 )
-                return await self.initialize()
+                return await self._reconnect()
         except AttributeError:
             logger.debug("connectivity.config.session attribute not found – skipping additional session check.")
 
         return True
+
+    async def _reconnect(self) -> bool:
+        """Join or start the one connection attempt and wait for it within its bound.
+
+        A new attempt starts only once the reconnect interval after a failed
+        attempt has passed; the auth circuit is enforced inside the attempt.
+        """
+        if not self._attempt.in_progress:
+            if self._reconnect_interval_remaining() > 0:
+                return False
+            logger.warning("Controller not initialized or session lost/closed, attempting to reconnect...")
+            self._attempt.start(self._connect_attempt, name="network-reconnect")
+        await self._attempt.wait()
+        return self._route_available()
 
     async def wait_until_connected(self) -> None:
         """Wait until a controller authentication route initializes successfully."""
@@ -1186,6 +1257,8 @@ class ConnectionManager:
 
     async def cleanup(self):
         """Clean up resources without racing initialization or reauthentication."""
+        await self._attempt.cancel()
+        self._last_failed_connect_at = None
         async with self._initialize_lock, self._connect_lock:
             had_open_session = bool(self._aiohttp_session and not self._aiohttp_session.closed)
             await self._discard_connection()
