@@ -49,7 +49,7 @@ async def _create_controller(client, headers, product_kinds: list[str]) -> str:
         headers=headers,
         json={
             "name": "Home",
-            "base_url": "https://10.0.0.1",
+            "base_url": "https://192.0.2.1",
             "username": "root",
             "password": "hunter2",
             "product_kinds": product_kinds,

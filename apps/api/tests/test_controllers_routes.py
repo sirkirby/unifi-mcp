@@ -171,7 +171,7 @@ async def test_create_list_get_delete(tmp_path: Path, monkeypatch) -> None:
             headers=headers,
             json={
                 "name": "Home",
-                "base_url": "https://10.0.0.1",
+                "base_url": "https://192.0.2.1",
                 "username": "root",
                 "password": "hunter2",
                 "product_kinds": ["network"],

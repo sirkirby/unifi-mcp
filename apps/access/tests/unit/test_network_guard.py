@@ -3,13 +3,12 @@
 import socket
 
 import pytest
-
-from tests import conftest
+import unifi_test_guard
 
 
 def _take_blocked() -> list[str]:
-    blocked = list(conftest._blocked_network_access)
-    conftest._blocked_network_access.clear()
+    blocked = list(unifi_test_guard.blocked_network_access())
+    unifi_test_guard.blocked_network_access().clear()
     return blocked
 
 
