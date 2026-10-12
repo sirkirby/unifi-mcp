@@ -4,6 +4,10 @@ Reads the modern UniFi-OS alarm surface via ``uiprotect``'s ``api_request`` with
 an ``api_path`` override (lib-native; no bespoke client). This is the AI-capable
 Alarm Manager, distinct from the legacy Protect automations in ``alarm_manager``.
 
+Arm/disarm goes through ``profiles/{uuid}/actions/{arm,disarm}`` -- the only
+control surface that works once a console runs the Alarm Manager in Global mode
+(adopting USL sensors, fobs, relays or an Alarm Hub forces that mode).
+
 A Protect-scoped account receives 403 Forbidden, surfaced as
 :class:`AlarmManagerPermissionError` with actionable guidance. An adequate
 (e.g. SuperAdmin) credential is necessary but not sufficient: on a console where
@@ -37,7 +41,7 @@ class AlarmManagerPermissionError(PermissionError):
 
 
 class AlarmManagerService:
-    """Reads UniFi OS Alarm Manager rules, profiles, and activity."""
+    """Reads UniFi OS Alarm Manager rules and profiles, and arms/disarms profiles."""
 
     def __init__(self, connection_manager: ProtectConnectionManager):
         self._cm = connection_manager
@@ -92,6 +96,27 @@ class AlarmManagerService:
         """Return UniFi OS alarm arm profiles (raw; empty when none configured)."""
         data = await self._api_get("profiles")
         return data if isinstance(data, list) else []
+
+    async def arm_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Arm one profile via ``POST /api/v2/alarms/profiles/{uuid}/actions/arm``.
+
+        This is the call the Protect web app makes when the Alarm Manager runs in
+        Global mode (``nvr.featureFlags.useExternalAlarmManager``), where the
+        legacy ``arm/enable`` endpoint is a silent no-op. The controller answers
+        with the profile; its ``state`` is ``arming`` while the activation delay
+        runs and ``armed`` once it elapses.
+        """
+        return await self._profile_action(profile_id, "arm")
+
+    async def disarm_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Disarm one profile via ``POST /api/v2/alarms/profiles/{uuid}/actions/disarm``."""
+        return await self._profile_action(profile_id, "disarm")
+
+    async def _profile_action(self, profile_id: str, action: str) -> Dict[str, Any]:
+        if not profile_id:
+            raise ValueError("profile_id is required")
+        data = await self._api_request(f"profiles/{profile_id}/actions/{action}", method="post")
+        return data if isinstance(data, dict) else {}
 
     async def create_rule(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Create an alarm rule via ``POST /api/v2/alarms/protect``."""

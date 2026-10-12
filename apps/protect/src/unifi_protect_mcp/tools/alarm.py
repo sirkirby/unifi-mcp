@@ -17,6 +17,7 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import delete_preview, preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError
 from unifi_core.protect.models._actions import (
     AlarmArmInput,
     AlarmCreateRuleInput,
@@ -31,7 +32,7 @@ from unifi_core.protect.models.alarms import (
     profile_list_from_controller,
     status_from_controller,
 )
-from unifi_protect_mcp.runtime import alarm_facade, alarm_manager, server
+from unifi_protect_mcp.runtime import alarm_facade, server
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +127,13 @@ async def protect_alarm_get_status() -> Dict[str, Any]:
 @server.tool(
     name="protect_alarm_arm",
     description=(
-        "Arms the UniFi Protect Alarm Manager. When profile_id is provided, "
-        "the system first selects that profile (PATCH arm) and then activates "
-        "it (POST arm/enable). When omitted, the currently selected profile is "
-        "used. Requires confirm=True to apply — otherwise returns a preview."
+        "Arms a UniFi Protect Alarm Manager profile. On consoles running the "
+        "UniFi OS Alarm Manager (Global mode) the profile is armed through its "
+        "v2 action endpoint and the result is verified against the controller "
+        "state (arming/armed); legacy consoles use PATCH arm + POST arm/enable. "
+        "profile_id accepts a profile id or name from protect_alarm_list_profiles; "
+        "omit it when there is a single profile (legacy: the selected profile). "
+        "Requires confirm=True to apply — otherwise returns a preview."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="alarm",
@@ -140,8 +144,9 @@ async def protect_alarm_arm(
         Optional[str],
         Field(
             description=(
-                "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs "
-                "from protect_alarm_list_profiles; omit to use the currently selected legacy profile."
+                "Arm profile id or name as returned by protect_alarm_list_profiles. "
+                "Required when the console has several profiles; omit for the only profile "
+                "(legacy consoles: the currently selected profile)."
             )
         ),
     ] = None,
@@ -158,7 +163,7 @@ async def protect_alarm_arm(
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
-            preview_data = await alarm_manager.preview_arm(profile_id)
+            preview_data = await alarm_facade.preview_arm(profile_id)
             return preview_response(
                 action="update",
                 resource_type="alarm_system",
@@ -168,9 +173,9 @@ async def protect_alarm_arm(
                 resource_name=preview_data["target_profile_name"] or preview_data["target_profile_id"],
             )
 
-        result = await alarm_manager.arm(profile_id)
+        result = await alarm_facade.arm(profile_id)
         return {"success": True, "data": result}
-    except (UniFiNotFoundError, ValueError) as e:
+    except (UniFiNotFoundError, ValueError, AlarmManagerPermissionError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.error("Error arming alarm: %s", e, exc_info=True)
@@ -180,26 +185,37 @@ async def protect_alarm_arm(
 @server.tool(
     name="protect_alarm_disarm",
     description=(
-        "Disarms the UniFi Protect Alarm Manager system-wide via POST "
-        "arm/disable. No profile id is required (or accepted) by the disarm "
-        "endpoint. Requires confirm=True to apply — otherwise returns a preview."
+        "Disarms the UniFi Protect Alarm Manager. On consoles running the UniFi "
+        "OS Alarm Manager (Global mode) every active profile is disarmed through "
+        "its v2 action endpoint (or only profile_id when given) and the result is "
+        "verified against the controller state; legacy consoles use POST "
+        "arm/disable. Requires confirm=True to apply — otherwise returns a preview."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="alarm",
     permission_action="update",
 )
 async def protect_alarm_disarm(
+    profile_id: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Arm profile id or name to disarm. Omit to disarm every active profile "
+                "(legacy consoles disarm system-wide and ignore this)."
+            )
+        ),
+    ] = None,
     confirm: Annotated[
         bool,
         Field(description="When true, disarms the system. When false (default), returns a preview."),
     ] = False,
 ) -> Dict[str, Any]:
     """Disarm the Protect Alarm Manager."""
-    logger.info("protect_alarm_disarm tool called (confirm=%s)", confirm)
+    logger.info("protect_alarm_disarm tool called (profile_id=%s, confirm=%s)", profile_id, confirm)
     try:
         AlarmDisarmInput()
         if not confirm:
-            preview_data = await alarm_manager.preview_disarm()
+            preview_data = await alarm_facade.preview_disarm(profile_id)
             return preview_response(
                 action="update",
                 resource_type="alarm_system",
@@ -209,9 +225,9 @@ async def protect_alarm_disarm(
                 resource_name=preview_data["active_profile_name"] or "alarm system",
             )
 
-        result = await alarm_manager.disarm()
+        result = await alarm_facade.disarm(profile_id)
         return {"success": True, "data": result}
-    except (UniFiNotFoundError, ValueError) as e:
+    except (UniFiNotFoundError, ValueError, AlarmManagerPermissionError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.error("Error disarming alarm: %s", e, exc_info=True)

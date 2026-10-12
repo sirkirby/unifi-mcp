@@ -84,7 +84,7 @@ class AlarmArmInput(BaseModel):
 
     profile_id: Optional[str] = Field(
         default=None,
-        description="Arm profile UUID; omit to use the currently selected profile",
+        description="Arm profile id or name; omit for the only profile (legacy: the selected profile)",
     )
 
 

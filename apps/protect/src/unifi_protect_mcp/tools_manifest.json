@@ -169,7 +169,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Arms the UniFi Protect Alarm Manager. When profile_id is provided, the system first selects that profile (PATCH arm) and then activates it (POST arm/enable). When omitted, the currently selected profile is used. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Arms a UniFi Protect Alarm Manager profile. On consoles running the UniFi OS Alarm Manager (Global mode) the profile is armed through its v2 action endpoint and the result is verified against the controller state (arming/armed); legacy consoles use PATCH arm + POST arm/enable. profile_id accepts a profile id or name from protect_alarm_list_profiles; omit it when there is a single profile (legacy: the selected profile). Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_arm",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -181,7 +181,7 @@
               "type": "boolean"
             },
             "profile_id": {
-              "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
+              "description": "Arm profile id or name as returned by protect_alarm_list_profiles. Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile).",
               "type": "string"
             }
           },
@@ -469,7 +469,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Disarms the UniFi Protect Alarm Manager system-wide via POST arm/disable. No profile id is required (or accepted) by the disarm endpoint. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Disarms the UniFi Protect Alarm Manager. On consoles running the UniFi OS Alarm Manager (Global mode) every active profile is disarmed through its v2 action endpoint (or only profile_id when given) and the result is verified against the controller state; legacy consoles use POST arm/disable. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_disarm",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -479,6 +479,10 @@
             "confirm": {
               "description": "When true, disarms the system. When false (default), returns a preview.",
               "type": "boolean"
+            },
+            "profile_id": {
+              "description": "Arm profile id or name to disarm. Omit to disarm every active profile (legacy consoles disarm system-wide and ignore this).",
+              "type": "string"
             }
           },
           "type": "object"
