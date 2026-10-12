@@ -117,9 +117,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    only the option key names listed under `pluginConfigs` there.
 4. **Handshake.** In a session, call the product's `*_tool_index` tool and
    confirm the server's tools are listed. Record the server version: the
-   package pin from `claude mcp list`, or for Codex from the installed plugin's
-   `.mcp.codex.json` (`codex mcp list` shows only `config.toml` entries), and for
-   Codex the `serverInfo` version visible with `RUST_LOG=rmcp=info`. With Claude Code
+   package pin from `claude mcp list` or `codex mcp list` (which lists only the
+   `config.toml` entry while one shadows the plugin's server), and for Codex the
+   `serverInfo` version visible with `RUST_LOG=rmcp=info`. With Claude Code
    plugin options, `claude mcp list` must also report the server as connected.
 5. **Harmless read.** In a session, have the model call
    `unifi_get_system_info`, `protect_get_system_info` or
