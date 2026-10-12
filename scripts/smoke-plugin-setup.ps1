@@ -299,11 +299,23 @@ try {
 
     Write-Host '== Dry run and delete =='
     $before = Get-ClaudeState
-    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson', '-DryRun') '{"UNIFI_NETWORK_PASSWORD":null}'
+    $result = Invoke-PluginScript $workspace $networkScript @('-InputJson', '-DryRun') '{"UNIFI_NETWORK_HOST":"192.0.2.3"}'
     Assert-Equal $result.ExitCode 0 'dry run succeeds'
     Assert-Equal (Get-ClaudeState) $before 'dry run preserves options'
+    # The fake client keeps a keychain value sent empty, as Claude Code does.
     $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_PASSWORD":null}'
-    Assert-Equal $result.ExitCode 0 'null patch succeeds'
+    Assert-True ($result.ExitCode -ne 0) 'null patch of a keychain value is refused'
+    Assert-Equal (Get-ClaudeState) $before 'refused keychain deletion preserves options'
+    Assert-True ($result.Output -like '*UNIFI_NETWORK_PASSWORD*' -and $result.Output -like "*claude plugin uninstall $pluginId*") 'refusal names the variable and the uninstall route'
+    Assert-True ($result.Output -notlike "*$secret*") 'refusal omits the secret'
+    $env:FIXTURE_CLAUDE_VERSION = '2.2.0 (Claude Code)'
+    $env:FIXTURE_CLAUDE_CLEARS = '1'
+    try {
+        $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_PASSWORD":null}'
+    } finally {
+        Remove-Item Env:FIXTURE_CLAUDE_VERSION, Env:FIXTURE_CLAUDE_CLEARS
+    }
+    Assert-Equal $result.ExitCode 0 'null patch succeeds on a client that clears keychain values'
     Assert-True (-not (Get-ClaudeOptions $pluginId).ContainsKey('password')) 'null removes the keychain value'
 
     Write-Host '== Positional credential refusal =='

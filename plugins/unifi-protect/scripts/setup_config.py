@@ -346,6 +346,9 @@ def package_pin(root, name, *, bundled=False):
 KEYCHAIN = "\0claude-keychain\0"
 TRUTHY = ("true", "1", "yes", "on")
 FALSY = ("false", "0", "no", "off")
+# The newest Claude Code known to keep a keychain-held option when sent an empty
+# value; configure and the options dialog cannot clear it, only uninstalling can.
+KEEPS_KEYCHAIN_SECRETS = (2, 1, 296)
 
 
 def claude_options(root):
@@ -441,6 +444,40 @@ def claude_values(variables, mapping, schema):
         value = variables.get(variable, "")
         values[option] = value if value == KEYCHAIN else option_text(schema[option], value)
     return values
+
+
+def claude_version(environment):
+    """Claude Code's release as a tuple, or None when its output is unrecognized."""
+    output = client(["claude", "--version"], environment).decode("utf-8", "replace")
+    match = re.match(r"\s*([0-9]+)\.([0-9]+)\.([0-9]+)", output)
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def keychain_cleared(saved, changes, mapping, schema):
+    """Variables held in the keychain that *changes* would clear."""
+    return sorted(
+        variable
+        for variable, option in mapping.items()
+        if schema[option].get("sensitive") and saved.get(variable) == KEYCHAIN and changes.get(option) == ""
+    )
+
+
+def keychain_choices(plugin_id, saved, patch, mapping, schema, cleared):
+    """The working choices, naming the options an uninstall would also clear."""
+    reenter = sorted(
+        variable
+        for variable, value in saved.items()
+        if variable not in cleared and variable not in patch and value != option_default(schema[mapping[variable]])
+    )
+    return (
+        "Keep the saved secret by not switching, or run claude plugin uninstall "
+        + plugin_id
+        + " and claude plugin install "
+        + plugin_id
+        + ", then rerun setup with the provider. Uninstalling clears every option of the plugin"
+        + ("; set these again too: " + ", ".join(reenter) if reenter else "")
+        + ". Values are omitted."
+    )
 
 
 def auto_confirm_notice(env, product, deprecated_client=False):
@@ -697,6 +734,28 @@ def claude_main(args, root, name, product):
     wanted = claude_values(merged, mapping, schema)
     before = claude_values(saved, mapping, schema)
     changes = {option: value for option, value in wanted.items() if value != KEYCHAIN and value != before[option]}
+    cleared = keychain_cleared(saved, changes, mapping, schema)
+    choices = keychain_choices(plugin_id, saved, patch, mapping, schema, cleared)
+
+    def kept_message(kept, outcome):
+        return (
+            "Claude Code kept " + ", ".join(kept) + " in the system keychain instead of clearing it; this Claude "
+            "Code version cannot clear a saved secret through claude plugin configure or the /plugin options "
+            "dialog. " + outcome + " " + choices
+        )
+
+    # Clear a keychain secret alone first on a release newer than the newest known
+    # to keep it: where Claude Code ignores the empty value, nothing changes.
+    probe = False
+    if cleared:
+        version = claude_version(environment)
+        probe = version is None or version > KEEPS_KEYCHAIN_SECRETS
+        if not probe:
+            refuse(
+                "Claude Code holds " + ", ".join(cleared) + " in the system keychain, and this Claude Code version "
+                "cannot clear a saved secret: claude plugin configure and the /plugin options dialog ignore an "
+                "empty value. No settings were changed. " + choices
+            )
     if args.dry_run:
         print("Validation passed; dry run made no changes. Values are omitted.")
         if auto_notice:
@@ -714,12 +773,32 @@ def claude_main(args, root, name, product):
         original = legacy_path.read_bytes()
     if claude_saved(plugin_id, environment, mapping, schema) != saved:
         refuse("The plugin's options changed during setup; rerun against the latest options.")
-    if changes:
+
+    def configure(values):
         client(
             ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
             environment,
-            json.dumps(changes, ensure_ascii=False).encode("utf-8"),
+            json.dumps(values, ensure_ascii=False).encode("utf-8"),
         )
+
+    if changes:
+        cleared_note = ""
+        if probe:
+            configure({mapping[variable]: "" for variable in cleared})
+            current = claude_saved(plugin_id, environment, mapping, schema)
+            kept = [variable for variable in cleared if current.get(variable) == KEYCHAIN]
+            if kept:
+                refuse(kept_message(kept, "No settings were changed."))
+            cleared_note = (
+                " " + ", ".join(cleared) + (" was" if len(cleared) == 1 else " were") + " cleared from the system "
+                "keychain; rerun setup to finish."
+            )
+        try:
+            configure(changes)
+        except SetupError:
+            if probe:
+                refuse("Claude Code did not save the requested options." + cleared_note)
+            raise
         after = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
         retained = all(
             (after[option] == KEYCHAIN) == bool(value) if schema[option].get("sensitive") else after[option] == value
@@ -728,12 +807,18 @@ def claude_main(args, root, name, product):
         if not retained:
             restore = {o: before[o] for o in changes if before[o] != KEYCHAIN and not schema[o].get("sensitive")}
             if restore:
-                client(
-                    ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
-                    environment,
-                    json.dumps(restore, ensure_ascii=False).encode("utf-8"),
-                )
-            refuse("Claude Code did not retain the requested options; previous non-secret options were restored.")
+                configure(restore)
+            kept = sorted(
+                variable
+                for variable, option in mapping.items()
+                if schema[option].get("sensitive") and changes.get(option) == "" and after[option] == KEYCHAIN
+            )
+            if kept:
+                refuse(kept_message(kept, "Previous non-secret options were restored."))
+            refuse(
+                "Claude Code did not retain the requested options; previous non-secret options were restored."
+                + cleared_note
+            )
     if remaining is not None:
         replace_project_settings(legacy_path, original, remaining)
     if args.migrate:

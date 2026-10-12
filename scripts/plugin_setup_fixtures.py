@@ -118,7 +118,15 @@ def forward_runtime(args):
 
 
 def fake_claude(args):
-    """Model `claude plugin list/configure`: options in settings.json, keychain_values in a fake keychain."""
+    """Model `claude plugin list/configure` as Claude Code 2.1.296 behaves.
+
+    Options live in settings.json and sensitive values in a fake keychain, which keeps
+    a value sent empty. FIXTURE_CLAUDE_VERSION and FIXTURE_CLAUDE_CLEARS model a later
+    release, one that clears it.
+    """
+    if args == ["--version"]:
+        print(os.environ.get("FIXTURE_CLAUDE_VERSION", "2.1.296 (Claude Code)"))
+        return
     root = Path(os.environ["FIXTURE_PLUGIN_ROOT"])
     plugin_id = root.name + "@fixture-market"
     config = Path(os.environ["CLAUDE_CONFIG_DIR"])
@@ -182,7 +190,7 @@ def fake_claude(args):
         if entry.get("sensitive"):
             if value:
                 keychain_values[key] = value
-            else:
+            elif os.environ.get("FIXTURE_CLAUDE_CLEARS"):
                 keychain_values.pop(key, None)
         elif entry["type"] == "boolean" and value in ("true", "false"):
             options[key] = value == "true"
@@ -532,12 +540,87 @@ class Fixtures:
                 (result.stdout, result.stderr) == (baseline_output.stdout, baseline_output.stderr),
                 "output is invariant even for short/boolean-like credentials",
             )
-        # Provider switching clears the sibling options, keychain included.
+        # Claude Code keeps a keychain-held secret sent an empty value, so every change
+        # that would clear one is refused before any write, naming the working route.
         filename = str(workspace / "credential-Ω")
         Path(filename).write_text("FAKE-file-provider", encoding="utf-8")
+        api_key = f"UNIFI_{upper}_API_KEY"
+        invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", api_key: "FAKE-api-key-value"})
+        self.check(options()["password"] == "1234" and options()["api_key"] == "FAKE-api-key-value", "keychain seeded")
+
+        def writes():
+            lines = (workspace / "argv.jsonl").read_text(encoding="utf-8").splitlines()
+            return sum("--values-stdin" in json.loads(line) for line in lines)
+
+        def refused_clear(result, variable, other, label):
+            message = result.stderr.decode("utf-8", "replace")
+            self.check(
+                variable in message
+                and "cannot clear a saved secret" in message
+                and f"claude plugin uninstall {plugin_id}" in message
+                and f"claude plugin install {plugin_id}" in message,
+                label + " names the variable and the uninstall route",
+            )
+            self.check(
+                f"UNIFI_{upper}_HOST" in message and f"UNIFI_{upper}_USERNAME" in message and other in message,
+                label + " names the options to set again",
+            )
+            self.check(
+                all(value not in message for value in ("1234", "FAKE-api-key-value", "192.0.2.1", "fixture-user")),
+                label + " omits values",
+            )
+
+        for variable, other in ((base, api_key), (api_key, base)):
+            for patch in (
+                {variable + "_FILE": filename},
+                {variable + "_COMMAND": "fixture-provider --no-prompt"},
+                {variable: None},
+                {variable: None, variable + "_FILE": None, variable + "_COMMAND": None},
+                {variable: ""},
+            ):
+                snapshot, count = state(), writes()
+                result = invoke(patch, 1)
+                self.check(state() == snapshot and writes() == count, "keychain clear refused before any write")
+                refused_clear(result, variable, other, "keychain clear refusal")
+        snapshot, count = state(), writes()
+        result = run(
+            wrapper(
+                "set-env",
+                "-DryRun" if self.powershell else "--dry-run",
+                *(["-InputJson"] if self.powershell else ["--input-json"]),
+            ),
+            {base + "_FILE": filename},
+            1,
+        )
+        self.check(state() == snapshot and writes() == count, "dry run refuses a keychain clear")
+        # A release newer than the newest known one: clearing is tried alone first, so
+        # one that ignores the empty value changes nothing, and one that honours it works.
+        for variable, other in ((base, api_key), (api_key, base)):
+            for version in ("2.2.0 (Claude Code)", "unrecognized"):
+                snapshot, count = state(), writes()
+                result = invoke({variable + "_FILE": filename}, 1, {"FIXTURE_CLAUDE_VERSION": version})
+                self.check(state() == snapshot and writes() == count + 1, "a kept secret changes nothing")
+                self.check(
+                    b"kept " + variable.encode() + b" in the system keychain" in result.stderr
+                    and b"No settings were changed" in result.stderr,
+                    "the post-write refusal names the secret Claude Code kept",
+                )
+                refused_clear(result, variable, other, "kept secret refusal")
+        newer = {"FIXTURE_CLAUDE_VERSION": "2.2.0 (Claude Code)", "FIXTURE_CLAUDE_CLEARS": "1"}
+        count = writes()
+        invoke({api_key + "_FILE": filename}, extra=newer)
+        saved = options()
+        self.check(
+            "api_key" not in saved and saved["api_key_file"] == filename and saved["password"] == "1234",
+            "a release that clears keychain values switches to a provider",
+        )
+        self.check(writes() == count + 2, "the keychain value is cleared alone, before the provider is saved")
+        invoke({api_key + "_FILE": None})
+        # Stand-in for uninstalling and reinstalling the plugin: every option cleared.
+        seed()
         invoke({base + "_FILE": filename})
         saved = options()
-        self.check("password" not in saved and saved["password_file"] == filename, "keychain-to-file switching")
+        self.check("password" not in saved and saved["password_file"] == filename, "switching without a keychain value")
         invoke({base + "_COMMAND": "fixture-provider --no-prompt"})
         saved = options()
         self.check(
@@ -678,6 +761,21 @@ class Fixtures:
             )
             self.check(quiet.stdout == b"" and quiet.returncode == 0, "configured plugin ignores shared-only settings")
             self.check_same_connection_notice(hook, product, workspace, environment)
+        # Migrating a provider over a keychain-held password is refused before any write,
+        # with or without --replace.
+        invoke({base: "FAKE-keychain-password"})
+        same_host = json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.1", f"{base}_FILE": str(provider)}})
+        for text, replace in ((same_host, False), (legacy_bytes.decode("utf-8"), True)):
+            legacy_path.write_text(text, encoding="utf-8")
+            snapshot, count = state(), writes()
+            result = migrate(1, replace=replace)
+            self.check(state() == snapshot and writes() == count, "migration refuses a keychain clear before writing")
+            self.check(
+                base.encode() in result.stderr and b"claude plugin uninstall" in result.stderr,
+                "migration refusal names the variable and the uninstall route",
+            )
+        legacy_path.write_bytes(legacy_bytes)
+        keychain_path.unlink()
         snapshot = state()
         migrate(1, {"FIXTURE_FAIL": "register"})
         self.check(state() == snapshot, "failed migration preserves options and project settings")
