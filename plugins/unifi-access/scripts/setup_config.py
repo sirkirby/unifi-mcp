@@ -266,7 +266,8 @@ def read_settings(path):
     except (OSError, UnicodeDecodeError):
         refuse("The settings file cannot be read as UTF-8; repair or remove it and rerun.")
     settings = {}
-    for number, line in enumerate(text.splitlines(), 1):
+    # Split on "\n" only, as the server does; settings_text refuses other line boundaries.
+    for number, line in enumerate(text.split("\n"), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
