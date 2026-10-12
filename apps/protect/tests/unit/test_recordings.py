@@ -63,7 +63,7 @@ def _make_bootstrap(cameras=None):
 def mock_cm():
     """Create a mock ProtectConnectionManager."""
     cm = MagicMock()
-    cm.host = "192.168.1.1"
+    cm.host = "192.0.2.1"
     cam = _make_camera()
     cm.client.bootstrap = _make_bootstrap(cameras={"cam-001": cam})
     return cm
@@ -73,7 +73,7 @@ def mock_cm():
 def mock_cm_multi():
     """CM with multiple cameras."""
     cm = MagicMock()
-    cm.host = "192.168.1.1"
+    cm.host = "192.0.2.1"
     cam1 = _make_camera(id="cam-001", name="Front Door")
     cam2 = _make_camera(
         id="cam-002",

@@ -63,7 +63,7 @@ async def _seed_controller(
             Controller(
                 id=cid,
                 name=name,
-                base_url="https://10.0.0.1:443",
+                base_url="https://192.0.2.1:443",
                 product_kinds=products,
                 credentials_blob=cred_blob,
                 verify_tls=False,
@@ -102,7 +102,7 @@ async def test_controllers_page_shell_renders_unauth_and_table_fragment_lists_ro
         r = await c.get("/admin/controllers/_table", headers={"Authorization": f"Bearer {key}"})
         assert r.status_code == 200
         assert "home-net" in r.text
-        assert "https://10.0.0.1:443" in r.text
+        assert "https://192.0.2.1:443" in r.text
         assert "hunter2" not in r.text
 
 
@@ -117,7 +117,7 @@ async def test_controllers_create_round_trips(tmp_path: Path, monkeypatch) -> No
             headers=headers,
             data={
                 "name": "added-via-ui",
-                "base_url": "https://10.1.1.1:443",
+                "base_url": "https://192.0.2.2:443",
                 "username": "u",
                 "password": "p",
                 "api_token": "",
@@ -198,7 +198,7 @@ async def test_controllers_edit_with_blank_password_preserves_creds(tmp_path: Pa
             headers=headers,
             data={
                 "name": "home-renamed",
-                "base_url": "https://10.0.0.1:443",
+                "base_url": "https://192.0.2.1:443",
                 "username": "",
                 "password": "",
                 "api_token": "",

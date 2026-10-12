@@ -17,7 +17,7 @@ from unifi_core.exceptions import UniFiConnectionError
 
 @pytest.fixture
 def cm_proxy():
-    cm = AccessConnectionManager(host="192.168.1.1", username="admin", password="secret")
+    cm = AccessConnectionManager(host="192.0.2.1", username="admin", password="secret")
     cm._proxy_available = True
     cm._proxy_session = MagicMock()
     return cm
@@ -25,7 +25,7 @@ def cm_proxy():
 
 @pytest.fixture
 def cm_none():
-    return AccessConnectionManager(host="192.168.1.1", username="", password="")
+    return AccessConnectionManager(host="192.0.2.1", username="", password="")
 
 
 @pytest.fixture

@@ -39,7 +39,7 @@ class TestPathInterception:
         - Request should complete successfully
         """
         manager = ConnectionManager(
-            host="192.168.1.1",
+            host="192.0.2.1",
             username="test_user",
             password="test_password",
             port=443,
@@ -108,7 +108,7 @@ class TestPathInterception:
         - Request should complete successfully
         """
         manager = ConnectionManager(
-            host="192.168.1.1",
+            host="192.0.2.1",
             username="test_user",
             password="test_password",
             port=443,
@@ -179,7 +179,7 @@ class TestPathInterception:
         with aioresponses() as mock:
             # Mock successful login
             mock.post(
-                "https://192.168.1.1:443/api/auth/login",
+                "https://192.0.2.1:443/api/auth/login",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -202,7 +202,7 @@ class TestPathInterception:
                     mock_detect,
                 ):
                     manager = ConnectionManager(
-                        host="192.168.1.1",
+                        host="192.0.2.1",
                         username="test_user",
                         password="test_password",
                         port=443,
@@ -246,7 +246,7 @@ class TestPathInterception:
         with aioresponses() as mock:
             # Mock successful login
             mock.post(
-                "https://192.168.1.1:443/api/login",
+                "https://192.0.2.1:443/api/login",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -266,7 +266,7 @@ class TestPathInterception:
                     mock_detect,
                 ):
                     manager = ConnectionManager(
-                        host="192.168.1.1",
+                        host="192.0.2.1",
                         username="test_user",
                         password="test_password",
                         port=443,
@@ -310,7 +310,7 @@ class TestPathInterception:
         - Override restoration should work correctly
         """
         manager = ConnectionManager(
-            host="192.168.1.1",
+            host="192.0.2.1",
             username="test_user",
             password="test_password",
             port=443,

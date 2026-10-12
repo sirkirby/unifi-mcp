@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 import aiohttp
 from uiprotect import ProtectApiClient
 from uiprotect.data import WSSubscriptionMessage
+from uiprotect.exceptions import NotAuthorized, NvrError
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.exceptions import UniFiConnectionError
@@ -40,6 +42,32 @@ logger = logging.getLogger(__name__)
 # from connect time - across a UniFi OS update and reboot of the console.
 # Home Assistant's Protect integration re-fetches on the same order.
 BOOTSTRAP_REFRESH_SECONDS = 60.0
+
+# Automatic reconnect: when a call finds no client (the controller was down or
+# rejected the login at start-up), one connection attempt is made, without the
+# start-up back-off. Attempts are spaced at least this far apart, so a
+# controller that stays down costs one bounded wait per window rather than one
+# per call, and each attempt is cut off after the timeout.
+RECONNECT_MIN_INTERVAL_SECONDS = 30.0
+RECONNECT_ATTEMPT_TIMEOUT_SECONDS = 30.0
+
+# Auth-circuit cool-down, as in Network: a rejected or rate-limited login
+# blocks automatic reconnects for the base interval, doubling per consecutive
+# failure up to the cap, so repeated calls cannot lock the account out. The
+# circuit half-opens on the timer instead of requiring a process restart.
+_RECONNECT_BLOCK_BASE_SECONDS = 60.0
+_RECONNECT_BLOCK_MAX_SECONDS = 900.0
+
+# uiprotect reports a rate-limited login as NvrError with the status in its
+# message ("... - Status: 429 - Reason: ...").
+_RATE_LIMITED_STATUS_RE = re.compile(r"Status: 429(?!\d)")
+
+
+def _is_terminal_auth_error(error: BaseException) -> bool:
+    """A login the controller rejected or rate-limited; retrying it risks a lockout."""
+    if isinstance(error, NotAuthorized):
+        return True
+    return isinstance(error, NvrError) and _RATE_LIMITED_STATUS_RE.search(str(error)) is not None
 
 
 class ProtectConnectionManager:
@@ -92,6 +120,18 @@ class ProtectConnectionManager:
         self._bootstrap_refresh_seconds = bootstrap_refresh_seconds
         self._refresh_task: asyncio.Task[None] | None = None
 
+        self._connect_lock = asyncio.Lock()
+        self._connect_hooks: list[Callable[[], Awaitable[None]]] = []
+        self._closed = False
+        self._clock: Callable[[], float] = time.monotonic
+        self._reconnect_min_interval = RECONNECT_MIN_INTERVAL_SECONDS
+        self._reconnect_attempt_timeout = RECONNECT_ATTEMPT_TIMEOUT_SECONDS
+        self._last_connect_attempt_at: float | None = None
+        self._last_failure_class: str | None = None
+        self._reconnect_block_class: str | None = None
+        self._reconnect_block_until = 0.0
+        self._reconnect_block_count = 0
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -101,6 +141,11 @@ class ProtectConnectionManager:
 
         Uses ``retry_with_backoff`` from :mod:`unifi_core.retry` so transient
         network errors during startup are retried with exponential back-off.
+        A login the controller rejects is not retried: it opens the auth
+        circuit, which holds automatic reconnects back for the cool-down.
+
+        This is an explicit start, so it ignores the reconnect window and the
+        auth circuit; :meth:`ensure_connected` is the automatic path.
 
         Returns ``True`` on success, ``False`` on failure.
         """
@@ -113,49 +158,195 @@ class ProtectConnectionManager:
             max_delay=30.0,
             retryable_exceptions=(Exception,),
         )
+        rejected: list[Exception] = []
 
         async def _connect() -> None:
-            client = ProtectApiClient(
-                host=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                api_key=self._api_key,
-                verify_ssl=self.verify_ssl,
-            )
-            # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
             try:
-                await client.update()
-            except BaseException:
-                # A failed or cancelled bootstrap must not orphan the SDK's
-                # session when a later retry creates another client.
-                await self._dispose_client(client)
+                await self._connect_once()
+            except Exception as exc:
+                if _is_terminal_auth_error(exc):
+                    # Returning ends the back-off: retrying a rejected login
+                    # only brings a controller lockout closer.
+                    rejected.append(exc)
+                    return
                 raise
-            self._client = client
 
-        self._support_attempt = connection_attempt_started()
-        try:
-            await retry_with_backoff(_connect, policy=policy)
-            self._initialized = True
-            self._support_attempt = connection_attempt_succeeded()
-            self._start_bootstrap_refresh()
+        async with self._connect_lock:
+            if self._initialized and self._client is not None:
+                return True
+            self._closed = False
+            self._support_attempt = connection_attempt_started()
+            try:
+                await retry_with_backoff(_connect, policy=policy)
+            except Exception as exc:
+                self._connection_failed(exc)
+                # Class only: SDK and transport messages can carry controller text.
+                logger.error(
+                    "[protect-cm] Failed to connect to UniFi Protect at %s:%s: %s",
+                    self.host,
+                    self.port,
+                    type(exc).__name__,
+                )
+                return False
+            if rejected:
+                self._connection_failed(rejected[-1])
+                return False
+            await self._connection_succeeded()
             logger.info(
                 "[protect-cm] Connected to UniFi Protect at %s:%s",
                 self.host,
                 self.port,
             )
             return True
-        except Exception as exc:
-            self._support_attempt = connection_attempt_failed(exc)
-            logger.error(
-                "[protect-cm] Failed to connect to UniFi Protect at %s:%s: %s",
-                self.host,
-                self.port,
-                exc,
-                exc_info=True,
-            )
-            self._initialized = False
+
+    async def ensure_connected(self) -> bool:
+        """Make one connection attempt when no client is available.
+
+        The automatic counterpart of :meth:`initialize`, for callers that find
+        no client because the controller was unreachable or rejected the
+        login when the server started. It makes a single attempt with no
+        back-off, at most once per reconnect window, and none at all while
+        the auth circuit's cool-down runs or after :meth:`close`. Concurrent
+        callers share one attempt.
+
+        Returns ``True`` when a client is available afterwards.
+        """
+        if self._initialized and self._client is not None:
+            return True
+        if not self._reconnect_allowed():
             return False
+        async with self._connect_lock:
+            if self._initialized and self._client is not None:
+                return True
+            if not self._reconnect_allowed():
+                return False
+            logger.info("[protect-cm] Not connected to UniFi Protect; attempting to reconnect.")
+            self._support_attempt = connection_attempt_started()
+            try:
+                async with asyncio.timeout(self._reconnect_attempt_timeout):
+                    await self._connect_once()
+            except Exception as exc:
+                self._connection_failed(exc)
+                if not _is_terminal_auth_error(exc):
+                    logger.warning(
+                        "[protect-cm] Reconnect to UniFi Protect failed: %s. "
+                        "The next attempt is allowed in %.0f seconds.",
+                        type(exc).__name__,
+                        self._reconnect_min_interval,
+                    )
+                return False
+            if self._closed:
+                # close() ran while the attempt was in flight.
+                client, self._client = self._client, None
+                if client is not None:
+                    await self._dispose_client(client)
+                return False
+            await self._connection_succeeded()
+            logger.info("[protect-cm] Reconnected to UniFi Protect at %s:%s", self.host, self.port)
+            return True
+
+    def add_connect_hook(self, hook: Callable[[], Awaitable[None]]) -> None:
+        """Run ``hook`` after every successful connect, at start-up or on reconnect.
+
+        For what a normal start brings up beyond the connection itself, such
+        as the event websocket listener. A failing hook is logged and does
+        not undo the connection.
+        """
+        self._connect_hooks.append(hook)
+
+    async def _connect_once(self) -> None:
+        client = ProtectApiClient(
+            host=self.host,
+            port=self.port,
+            username=self.username,
+            password=self.password,
+            api_key=self._api_key,
+            verify_ssl=self.verify_ssl,
+        )
+        # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
+        try:
+            await client.update()
+        except BaseException:
+            # A failed, timed-out or cancelled bootstrap must not orphan the
+            # SDK's session when a later attempt creates another client.
+            await self._dispose_client(client)
+            raise
+        self._client = client
+
+    async def _connection_succeeded(self) -> None:
+        self._initialized = True
+        self._support_attempt = connection_attempt_succeeded()
+        self._last_failure_class = None
+        self._clear_reconnect_block()
+        self._start_bootstrap_refresh()
+        for hook in list(self._connect_hooks):
+            try:
+                await hook()
+            except Exception as exc:
+                logger.error("[protect-cm] Post-connect step failed: %s", type(exc).__name__)
+
+    def _connection_failed(self, error: BaseException) -> None:
+        self._initialized = False
+        self._support_attempt = connection_attempt_failed(error)
+        self._last_failure_class = type(error).__name__
+        self._last_connect_attempt_at = self._clock()
+        if _is_terminal_auth_error(error):
+            self._block_automatic_reconnect(error)
+
+    def _reconnect_allowed(self) -> bool:
+        if self._closed or self._reconnect_block_active():
+            return False
+        last = self._last_connect_attempt_at
+        return last is None or self._clock() - last >= self._reconnect_min_interval
+
+    def _block_automatic_reconnect(self, error: BaseException) -> None:
+        """Open the auth circuit with an escalating cool-down (half-open after expiry)."""
+        self._reconnect_block_class = type(error).__name__
+        self._reconnect_block_count += 1
+        cooldown = min(
+            _RECONNECT_BLOCK_BASE_SECONDS * (2 ** (self._reconnect_block_count - 1)),
+            _RECONNECT_BLOCK_MAX_SECONDS,
+        )
+        self._reconnect_block_until = self._clock() + cooldown
+        logger.error(
+            "[protect-cm] Automatic reconnect blocked after the UniFi Protect login was rejected: %s. "
+            "Correct the credentials or wait for the controller lockout to clear; "
+            "the next reconnect attempt is allowed in %.0f seconds.",
+            type(error).__name__,
+            cooldown,
+        )
+
+    def _reconnect_block_active(self) -> bool:
+        return self._reconnect_block_class is not None and self._clock() < self._reconnect_block_until
+
+    def _clear_reconnect_block(self) -> None:
+        self._reconnect_block_class = None
+        self._reconnect_block_until = 0.0
+        self._reconnect_block_count = 0
+
+    @property
+    def reconnect_cooldown_active(self) -> bool:
+        """True while the auth circuit holds automatic reconnects back."""
+        return self._reconnect_block_active()
+
+    def _not_connected_message(self) -> str:
+        """Why no client is available: exception class and fixed guidance only."""
+        if self._closed:
+            return "UniFi Protect connection is not initialized: the connection was closed."
+        if self._reconnect_block_active():
+            remaining = max(0.0, self._reconnect_block_until - self._clock())
+            return (
+                "UniFi Protect connection is not initialized: the controller rejected the login "
+                f"({self._reconnect_block_class}). Automatic reconnect is paused for about {remaining:.0f} seconds; "
+                "check the Protect username and password, or wait for a login lockout to clear."
+            )
+        if self._last_failure_class is not None:
+            return (
+                "UniFi Protect connection is not initialized: the last connection attempt failed "
+                f"({self._last_failure_class}). Check that the controller is reachable; "
+                "a later call tries to connect again."
+            )
+        return "ProtectConnectionManager is not initialized. Call initialize() first."
 
     @staticmethod
     async def _dispose_client(client: ProtectApiClient) -> None:
@@ -214,6 +405,10 @@ class ProtectConnectionManager:
             self._client = None
 
         self._initialized = False
+        self._closed = True
+        self._last_connect_attempt_at = None
+        self._last_failure_class = None
+        self._clear_reconnect_block()
         logger.info("[protect-cm] Connection closed.")
 
     # ------------------------------------------------------------------
@@ -328,7 +523,7 @@ class ProtectConnectionManager:
         Raises :class:`UniFiConnectionError` if not yet initialized.
         """
         if self._client is None or not self._initialized:
-            raise UniFiConnectionError("ProtectConnectionManager is not initialized. Call initialize() first.")
+            raise UniFiConnectionError(self._not_connected_message())
         return self._client
 
     @property

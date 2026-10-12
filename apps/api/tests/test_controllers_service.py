@@ -33,7 +33,7 @@ async def test_create_round_trip(tmp_path: Path) -> None:
     engine, sm, cipher = await _setup(tmp_path)
     payload = CreateControllerPayload(
         name="Home",
-        base_url="https://10.0.0.1",
+        base_url="https://192.0.2.1",
         username="root",
         password="hunter2",
         api_token=None,

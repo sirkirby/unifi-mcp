@@ -50,7 +50,7 @@ UniFi MCP is designed with a **secure-by-default** posture:
 - Credentials (username/password) are used to authenticate directly with your local UniFi controller
 - Credentials are sent to the controller explicitly configured by the operator; the launcher and its configuration must be trusted
 - Credentials can be kept out of the MCP client's environment with `UNIFI_<SERVER>_PASSWORD_FILE` or `UNIFI_<SERVER>_PASSWORD_COMMAND`; both indirections are honoured only for variables present in the environment the server was started with. The command provider's platform, executable-resolution and process-lifecycle contract is in [docs/credential-providers.md](docs/credential-providers.md)
-- MCP servers never automatically load `.env` files or working-directory YAML. Custom YAML requires an explicit absolute `CONFIG_PATH` in the process environment. Load any trusted env file explicitly in the launcher; Docker Compose `env_file:` continues to work.
+- MCP servers never automatically load `.env` files or working-directory YAML. Custom YAML requires an explicit absolute `CONFIG_PATH` in the process environment. The only settings file read is the one named by `UNIFI_SETTINGS_FILE` in the process environment: it must be an absolute path, owned by the current user and not group- or world-writable (POSIX), and only its `UNIFI_*` keys are used. Load any trusted env file explicitly in the launcher; Docker Compose `env_file:` continues to work.
 - API key authentication is supported as an experimental additive option
 - The relay sidecar connects to a Cloudflare Worker via token-scoped WebSocket — no inbound ports are exposed
 

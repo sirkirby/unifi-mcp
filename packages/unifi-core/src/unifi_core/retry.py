@@ -31,11 +31,13 @@ async def retry_with_backoff(operation, policy: RetryPolicy | None = None):
             last_error = e
             if attempt < policy.max_retries:
                 delay = min(policy.base_delay * (policy.backoff_factor**attempt), policy.max_delay)
+                # Error messages often end in a full stop already; strip it so
+                # the log line does not read "...valid.. Retrying".
                 logger.warning(
                     "[retry] Attempt %d/%d failed: %s. Retrying in %.1fs",
                     attempt + 1,
-                    policy.max_retries,
-                    e,
+                    policy.max_retries + 1,
+                    str(e).rstrip("."),
                     delay,
                 )
                 await asyncio.sleep(delay)

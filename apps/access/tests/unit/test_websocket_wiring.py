@@ -33,7 +33,7 @@ def _startup(*, connected: bool, websocket_enabled: bool, listener: AsyncMock | 
     events["websocket_enabled"] = websocket_enabled
     with (
         patch.object(config.access, "events", events),
-        patch("unifi_mcp_shared.bootstrap.assert_credentials_configured"),
+        patch("unifi_mcp_shared.setup_required.controller_host_configured", return_value=True),
         patch.object(access_main.connection_manager, "initialize", AsyncMock(return_value=connected)),
         patch.object(access_main.event_manager, "set_server"),
         patch.object(access_main.event_manager, "start_listening", listener or AsyncMock()) as started,

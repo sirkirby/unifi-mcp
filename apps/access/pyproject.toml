@@ -5,7 +5,8 @@ description = "UniFi Access MCP Server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "unifi-mcp-shared>=0.6.23,<0.7",
+    # The settings-file startup report and setup mode require Shared 0.6.28.
+    "unifi-mcp-shared>=0.6.28,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
@@ -14,7 +15,9 @@ dependencies = [
     # Operation-metadata-only diagnostics require Core 0.4.48.
     # Align with the Core 0.4.49 event and session-cleanup release baseline.
     # Controller credential redaction requires Core 0.4.51.
-    "unifi-core[access]>=0.4.58,<0.5",
+    # Startup with an unreachable controller relies on initialize() returning
+    # False rather than raising, which requires Core 0.4.69.
+    "unifi-core[access]>=0.4.69,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

@@ -17,12 +17,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
+@reconnects_on_demand
 class CredentialManager:
     """Reads and mutates credential data from the Access controller."""
 
@@ -40,7 +41,7 @@ class CredentialManager:
         (404), since the exact credential API path has not been confirmed.
         """
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for list_credentials")
+            raise self._cm.unavailable_error("No proxy session available for list_credentials")
         try:
             data = await self._cm.proxy_request("GET", "credentials")
             return self._cm.extract_data(data)
@@ -64,7 +65,7 @@ class CredentialManager:
         if not credential_id:
             raise ValueError("credential_id is required")
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for get_credential")
+            raise self._cm.unavailable_error("No proxy session available for get_credential")
         try:
             data = await self._cm.proxy_request("GET", f"credentials/{credential_id}")
             return self._cm.extract_data(data)
@@ -117,7 +118,7 @@ class CredentialManager:
     async def apply_create_credential(self, credential_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the credential creation on the controller."""
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for create_credential")
+            raise self._cm.unavailable_error("No proxy session available for create_credential")
         try:
             payload = {"type": credential_type, **data}
             result = await self._cm.proxy_request("POST", "credentials", json=payload)
@@ -150,7 +151,7 @@ class CredentialManager:
     async def apply_revoke_credential(self, credential_id: str) -> Dict[str, Any]:
         """Execute the credential revocation on the controller."""
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for revoke_credential")
+            raise self._cm.unavailable_error("No proxy session available for revoke_credential")
         try:
             await self._cm.proxy_request("DELETE", f"credentials/{credential_id}")
             return {

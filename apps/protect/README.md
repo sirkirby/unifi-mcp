@@ -88,6 +88,8 @@ All camera and event queries are read-only by default. Mutations (camera setting
 
 Set these variables in the server's process environment. The plugin setup skill already does this for Codex and OpenClaw; in Claude Code the plugin maps its options onto these variables. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
 
+With no controller host configured, the server still starts in setup mode: it tells the client how to configure it, offers only the read-only `protect_setup_status` tool, and makes no controller connections.
+
 ```bash
 # Server-specific variables (recommended)
 UNIFI_PROTECT_HOST=192.168.1.1      # Controller IP or hostname

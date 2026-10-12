@@ -83,7 +83,7 @@ def _make_camera(**overrides):
     cam.last_seen = overrides.get("last_seen", datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc))
     cam.is_recording = overrides.get("is_recording", True)
     cam.firmware_version = overrides.get("firmware_version", "4.69.55")
-    cam.host = overrides.get("host", "192.168.1.100")
+    cam.host = overrides.get("host", "192.0.2.100")
     cam.mac = overrides.get("mac", "AA:BB:CC:DD:EE:01")
     cam.up_since = overrides.get("up_since", datetime(2026, 3, 15, tzinfo=timezone.utc))
     cam.uptime = overrides.get("uptime", timedelta(hours=36))
@@ -189,7 +189,7 @@ def _make_camera(**overrides):
 
 def _make_nvr(**overrides):
     nvr = MagicMock()
-    nvr.host = overrides.get("host", "192.168.1.1")
+    nvr.host = overrides.get("host", "192.0.2.1")
     return nvr
 
 
@@ -204,7 +204,7 @@ def _make_bootstrap(cameras=None, nvr=None):
 def mock_cm():
     """Create a mock ProtectConnectionManager with a mocked client.bootstrap."""
     cm = MagicMock()
-    cm.host = "192.168.1.1"
+    cm.host = "192.0.2.1"
     cm.validate_public_id_portability = AsyncMock()
     cam = _make_camera()
     cm.client.bootstrap = _make_bootstrap(cameras={"cam-001": cam})
@@ -216,7 +216,7 @@ def mock_cm():
 def mock_cm_multiple_cameras():
     """CM with multiple cameras."""
     cm = MagicMock()
-    cm.host = "192.168.1.1"
+    cm.host = "192.0.2.1"
     cm.validate_public_id_portability = AsyncMock()
     cam1 = _make_camera(id="cam-001", name="Front Door")
     cam2 = _make_camera(id="cam-002", name="Back Yard", is_recording=False, recording_mode=_FakeRecordingMode.NEVER)
@@ -280,7 +280,7 @@ class TestCameraManagerGetCamera:
         assert detail["id"] == "cam-001"
         assert detail["name"] == "Front Door"
         assert detail["firmware_version"] == "4.69.55"
-        assert detail["ip_address"] == "192.168.1.100"
+        assert detail["ip_address"] == "192.0.2.100"
         assert detail["mac"] == "AA:BB:CC:DD:EE:01"
         assert detail["mic_enabled"] is True
         assert detail["mic_volume"] == 100

@@ -30,7 +30,7 @@ class TestAllowedHostsParsing:
 
         # Set up environment with required config vars + test vars
         test_env = {
-            "UNIFI_HOST": "192.168.1.1",
+            "UNIFI_HOST": "192.0.2.1",
             "UNIFI_USERNAME": "admin",
             "UNIFI_PASSWORD": "password",
             **env_vars,
@@ -160,7 +160,7 @@ class TestDnsRebindingProtection:
 
         # Set up environment with required config vars + test vars
         test_env = {
-            "UNIFI_HOST": "192.168.1.1",
+            "UNIFI_HOST": "192.0.2.1",
             "UNIFI_USERNAME": "admin",
             "UNIFI_PASSWORD": "password",
             **env_vars,

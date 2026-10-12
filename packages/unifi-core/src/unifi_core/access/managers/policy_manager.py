@@ -17,12 +17,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.exceptions import UniFiConnectionError
 
 logger = logging.getLogger(__name__)
 
 
+@reconnects_on_demand
 class PolicyManager:
     """Reads and mutates access policy data from the Access controller."""
 
@@ -36,7 +37,7 @@ class PolicyManager:
     async def list_policies(self) -> List[Dict[str, Any]]:
         """Return all access policies as summary dicts."""
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for list_policies")
+            raise self._cm.unavailable_error("No proxy session available for list_policies")
         try:
             data = await self._cm.proxy_request("GET", "access_policies?expand[]=schedule")
             return self._cm.extract_data(data)
@@ -55,7 +56,7 @@ class PolicyManager:
         if not policy_id:
             raise ValueError("policy_id is required")
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for get_policy")
+            raise self._cm.unavailable_error("No proxy session available for get_policy")
         try:
             data = await self._cm.proxy_request("GET", f"access_policy/{policy_id}")
             return self._cm.extract_data(data)
@@ -68,7 +69,7 @@ class PolicyManager:
     async def list_schedules(self) -> List[Dict[str, Any]]:
         """Return all access schedules."""
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for list_schedules")
+            raise self._cm.unavailable_error("No proxy session available for list_schedules")
         try:
             data = await self._cm.proxy_request("GET", "schedules?expand[]=week_schedule")
             return self._cm.extract_data(data)
@@ -108,7 +109,7 @@ class PolicyManager:
     async def apply_update_policy(self, policy_id: str, changes: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the policy update on the controller."""
         if not self._cm.has_proxy:
-            raise UniFiConnectionError("No proxy session available for update_policy")
+            raise self._cm.unavailable_error("No proxy session available for update_policy")
         try:
             await self._cm.proxy_request("PUT", f"access_policy/{policy_id}", json=changes)
             return {
