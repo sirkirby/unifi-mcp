@@ -114,6 +114,22 @@ OpenCode's built-in MCP support, and the current manual paths for Antigravity,
 Cursor, and Devin Desktop. A skills install adds agent guidance; it does not by
 itself register the MCP server.
 
+### What's new in the 1.0.1 plugins
+
+- **A down controller no longer fails the plugin.** The servers answer the
+  client before the controller connects. While it is unreachable, tools say the
+  server is still connecting or cannot reach the controller, and recover on
+  their own once it is back.
+- **Connection errors name the real cause.** A network failure says the
+  controller is unreachable instead of asking you to check your credentials.
+- **Claude Code setup protects a keychain-held secret.** Claude Code cannot
+  clear a password or API key it holds in the system keychain, so setup refuses,
+  before writing, a change that would clear one. It says how to switch:
+  uninstall and reinstall the plugin, then run setup with the provider and the
+  options it lists.
+- The plugins pin `unifi-network-mcp` 0.37.2, `unifi-protect-mcp` 0.8.19 and
+  `unifi-access-mcp` 0.6.14.
+
 ### What's new in the 1.0.0 plugins
 
 - **Claude Code keeps settings as plugin options.** The plugins no longer read

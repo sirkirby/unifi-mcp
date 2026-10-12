@@ -5,6 +5,24 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## 1.0.1
+
+`unifi-network`, `unifi-protect` and `unifi-access` move to 1.0.1 and start
+`unifi-network-mcp` 0.37.2, `unifi-protect-mcp` 0.8.19 and `unifi-access-mcp`
+0.6.14. Update as for any release; there is nothing to rerun.
+
+- **A down controller no longer fails the plugin.** The servers answer the
+  client at once and connect to the controller in the background. Before, a
+  controller that was down or slow kept the server from answering until the
+  client gave up and marked it failed. Tools now say the server is still
+  connecting or cannot reach the controller, and work again once it is back.
+- **Connection errors name the real cause.** A network failure says the
+  controller is unreachable; only a rejected login points at your credentials.
+- **Claude Code setup refuses to clear a keychain-held secret.** Setup refuses,
+  before writing, a change that would clear a password or API key Claude Code
+  holds in the system keychain, and says how to switch. See
+  [Moving a raw secret to a provider](#moving-a-raw-secret-to-a-provider).
+
 ## 1.0.0
 
 Every UniFi plugin (`unifi-network`, `unifi-protect`, `unifi-access` and the

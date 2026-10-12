@@ -6,7 +6,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-protect-mcp==0.8.18"
+        "unifi-protect-mcp==0.8.19"
       ],
       "env": {
         "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/protect.env"
