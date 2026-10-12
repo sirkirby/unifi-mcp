@@ -31,7 +31,7 @@ The plugin installs the MCP server, an agent skill for tool discovery, and a gui
 Then run the interactive setup to configure your controller connection:
 
 ```
-/unifi-access:setup
+/unifi-access:unifi-access-setup
 ```
 
 This walks you through connecting to your Access controller, explains the dual-auth system (API key for reads, username/password for mutations), and configures permissions — then writes everything to `.claude/settings.local.json`. If you already have other UniFi plugins configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
@@ -81,7 +81,9 @@ All queries are read-only by default. Mutations (visitor passes, credential chan
 
 ## Configure
 
-Set these variables in the server's process environment. If you used `/unifi-access:setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+Set these variables in the server's process environment. If you used `/unifi-access:unifi-access-setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+
+With no controller host configured, the server still starts in setup mode: it tells the client how to configure it, offers only the read-only `access_setup_status` tool, and makes no controller connections.
 
 ```bash
 # Server-specific variables (recommended)

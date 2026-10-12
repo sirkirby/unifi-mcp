@@ -31,7 +31,7 @@ The plugin installs the MCP server, an agent skill for tool discovery, and a gui
 Then run the interactive setup to configure your controller connection:
 
 ```
-/unifi-network:setup
+/unifi-network:unifi-network-setup
 ```
 
 This walks you through entering your controller host, credentials, and permission preferences — then writes everything to `.claude/settings.local.json` so it persists across sessions. Restart Claude Code after setup to connect.
@@ -116,7 +116,9 @@ For an approved packet test, use the [IPv4 DNS redirect recipe](../../plugins/un
 
 ## Configure
 
-Set these variables in the server's process environment. If you used `/unifi-network:setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+Set these variables in the server's process environment. If you used `/unifi-network:unifi-network-setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+
+With no controller host configured, the server still starts in setup mode: it tells the client how to configure it, offers only the read-only `unifi_setup_status` tool, and makes no controller connections.
 
 ```bash
 # Server-specific variables (recommended)

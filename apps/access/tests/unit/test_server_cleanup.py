@@ -19,7 +19,7 @@ async def test_server_always_closes_its_connection(monkeypatch, failure):
         stages[failure].side_effect = RuntimeError("startup failure")
     monkeypatch.setattr(main.connection_manager, "initialize", initialize)
     monkeypatch.setattr(main.connection_manager, "close", close)
-    monkeypatch.setattr("unifi_mcp_shared.bootstrap.assert_credentials_configured", lambda *a, **kw: None)
+    monkeypatch.setattr("unifi_mcp_shared.setup_required.controller_host_configured", lambda *a, **kw: True)
     monkeypatch.setattr("unifi_mcp_shared.tool_registration.register_tools_for_mode", registration)
     monkeypatch.setattr("unifi_mcp_shared.transport.run_transports", transport)
     monkeypatch.setattr(

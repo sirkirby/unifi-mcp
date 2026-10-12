@@ -77,8 +77,8 @@ async def start_event_listener() -> None:
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
-    from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
+    from unifi_mcp_shared.setup_required import controller_host_configured, serve_setup_required
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.transport import resolve_http_config, run_transports
 
@@ -86,7 +86,19 @@ async def main_async():
     apply_log_level(config, "unifi-protect-mcp")
     check_deprecated_env_vars("protect", logger)
     check_unknown_policy_env_vars("protect", logger, policy_gates(), PROTECT_CATEGORY_MAP)
-    assert_credentials_configured(config, plugin_name="unifi-protect", env_prefix="PROTECT", logger=logger)
+    if not controller_host_configured(config):
+        # Answer initialize and explain setup instead of exiting; register no
+        # controller tools and open no controller connection.
+        await serve_setup_required(
+            server=server,
+            config=config,
+            plugin_name="unifi-protect",
+            env_prefix="PROTECT",
+            tool_prefix="protect",
+            default_port=3001,
+            logger=logger,
+        )
+        return
 
     try:
         # Initialize the global Protect connection. The event listener starts
