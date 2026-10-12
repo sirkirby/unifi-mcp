@@ -95,6 +95,15 @@ In Claude Code:
 ```
 
 Replace `unifi-network` with `unifi-protect` or `unifi-access` as needed.
+`/plugin install` opens the plugin's options dialog straight away. Fill it in
+there, or press Esc and run the setup skill, which asks for each setting and
+never needs a password or API key typed into the chat. From a shell,
+`claude plugin install` instead reports the options as not yet set and suggests
+`--config KEY=VALUE`; those keys are the option names (`host`, `username`,
+`password_file`, `registration_mode` and so on), not the `UNIFI_*` variables.
+Pass only non-secret options that way, since command arguments reach your shell
+history; the setup skill saves the same options and validates them first.
+
 The setup skill checks prerequisites and guides credential and permission
 configuration, then saves the plugin's Claude Code options with
 `claude plugin configure`. Options apply in every project; a raw password or

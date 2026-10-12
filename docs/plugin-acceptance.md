@@ -123,7 +123,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    package pin from `claude mcp list` or `codex mcp list` (which lists only the
    `config.toml` entry while one shadows the plugin's server), and for Codex the
    `serverInfo` version visible with `RUST_LOG=rmcp=info`. With Claude Code
-   plugin options, `claude mcp list` must also report the server as connected.
+   plugin options, `claude mcp list` must also report the server as connected;
+   that alone does not prove configuration, because a server in setup mode is
+   connected too.
 5. **Harmless read.** In a session, have the model call
    `unifi_get_system_info`, `protect_get_system_info` or
    `access_get_system_info`, and confirm `success: true`. For Claude Code with
@@ -152,8 +154,11 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    key names (names only) with mode 600, that `config.toml` differs from the
    saved `config.toml.bak-<plugin>-<time>` only by the entry's tables, and that a
    second refresh reports nothing to convert. When Codex installs the upgrade
-   itself at a session start, that session keeps the server it already started;
-   read `serverInfo` from the next session.
+   itself at a session start, it then restarts the plugin's servers on the new
+   version, typically 2 to 6 seconds in and before the first request; record the
+   `serverInfo` that session's first request sees. Skill files at the old
+   version's cache path are removed during that session, so read skills from a
+   new session.
    Confirm the new plugin version is installed, the saved environment is
    unchanged, the running server is the candidate's package version (for Codex,
    from `serverInfo`), and repeat steps 4 and 5.
@@ -197,15 +202,20 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       `check-prereqs` names the remaining shared keys once no plugin keys are
       left, and remove them by hand only after checking each consumer.
    5. In an interactive session that was open before the migration, record that
-      `/reload-plugins` brings the servers up (then `/mcp reconnect` if `/mcp`
-      still shows one failed). Repeat steps 4 and 5 in fresh sessions. Confirm
-      the notice no longer appears.
+      `/mcp reconnect` alone reports success but leaves the server in setup
+      mode (only `<prefix>_setup_status`), and that `/reload-plugins` brings the
+      server up with its full tool list. Repeat steps 4 and 5 in fresh sessions.
+      Confirm the notice no longer appears.
    6. **Second project.** Configure another scratch project the prior way, with
       a different host for one product (an unroutable loopback port), after the
       first project is migrated. Record that its first session shows the
       other-project notice (the server is using options saved from another
       project), that `--migrate` refuses and names the differing variables, and
-      that `--migrate --replace` replaces the options for every project.
+      that `--migrate --replace` replaces the options for every project. In a
+      third scratch project whose legacy host, username, port and site equal the
+      saved options, record that the first session shows the gentler notice
+      (nothing changes; remove the leftover keys or run `--migrate`) and no
+      other-project notice.
 7. **Failure recovery.** Run the candidate's setup with an invalid provider
    path, a missing provider command and an invalid key. Each must exit non-zero
    with a fixed message, leave the configuration byte-identical and leave no
@@ -235,8 +245,10 @@ was given.
   new session nor `/reload-plugins` retries it; users recover with an
   interactive `/mcp reconnect plugin:<plugin>:<server>`, and `-p` sessions
   cannot reconnect. A session that was open when plugin options changed keeps
-  its old copy: there `/mcp reconnect` fails until `/reload-plugins` loads the
-  new options. In the isolated profile only, remove that
+  its old copy: there `/mcp reconnect` restarts the server with the old options
+  (a server pinned to a release with setup mode reports success but stays in
+  setup mode) until `/reload-plugins` loads the new options. In the isolated
+  profile only, remove that
   server's entry from `$ACC/claude-home/.claude/mcp-needs-auth-cache.json`
   before retrying, and record that you did. Saving plugin options changes the
   expanded configuration, so a session after setup is not skipped by a failure
