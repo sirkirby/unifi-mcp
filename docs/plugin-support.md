@@ -163,6 +163,43 @@ provides, through a connected [relay](../packages/unifi-mcp-relay/); local stdio
 servers do not expose it. The timeline reports Access as unsupported, so those
 skills read Access events separately.
 
+## Codex: tools on the first turn
+
+Codex 0.162.0 waits `mcp_optional_startup_grace_ms` (default 1000 ms) for
+plugin MCP servers when it builds a session's first tool list. A server still
+starting is left out of that model request and is added from a later request,
+once it is ready.
+
+- **Warm `uv` cache:** the servers answer in about 0.5 s in lazy mode and 0.9 s
+  in eager mode, and are in the first request.
+- **First launch of a server version** (after install or a plugin upgrade, or
+  with an empty cache): `uvx` creates a new environment, Python compiles every
+  module it imports, and Protect loads PyAV's native libraries for the first
+  time. This takes about 2 s for Network and 4.5 s for Protect when the
+  dependencies are already cached, and 3 to 10 s with an empty cache. The
+  first request of that session then has no UniFi tools. Later launches of the
+  same version are warm.
+
+`codex exec` sends its prompt at once, so a one-step task can answer without
+the UniFi tools. A short `codex exec` run can also end before a first launch
+finishes, so the next run may start slowly too. In an interactive session the
+servers usually finish starting while you type the first message.
+
+To make the first request wait for the servers, use either of these:
+
+- Set `mcp_optional_startup_grace_ms = 15000` at the top level of
+  `~/.codex/config.toml`, or pass `-c mcp_optional_startup_grace_ms=15000` to
+  `codex exec`. This applies to every optional MCP server, and only to the
+  first tool list of a session. `0` waits up to each server's own start-up
+  timeout instead.
+- Name the plugin in the prompt, for example
+  `[@unifi-network](plugin://unifi-network@unifi-plugins)`. Codex then waits
+  for that plugin's server for that turn.
+
+The plugins cannot set this for you. Codex reads the grace only from
+`config.toml`. The per-server key that would make Codex wait, `required`,
+also fails every Codex session in which the server cannot start.
+
 ## Client matrix
 
 Each cell is labelled:

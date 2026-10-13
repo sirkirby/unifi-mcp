@@ -141,6 +141,11 @@ Codex setup before plugin 1.0.0, run its one-time `--refresh` (see the
 [plugin upgrade guide](plugin-upgrade.md#one-time-step-if-you-ran-codex-setup-before-100)).
 Roll back by uninstalling the selected plugin and deleting its settings file.
 
+The first launch of each server version takes a few seconds, and Codex builds a
+session's first tool list after waiting 1 s. A `codex exec` prompt sent then
+can run without the UniFi tools. To make it wait, see
+[Codex: tools on the first turn](plugin-support.md#codex-tools-on-the-first-turn).
+
 ### GitHub Copilot CLI
 
 The existing marketplace can be discovered and installed by Copilot CLI:
