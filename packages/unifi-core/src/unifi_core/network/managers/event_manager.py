@@ -936,7 +936,7 @@ class EventManager:
                 page = _v2_page(response, endpoint)
                 return SourcePage(
                     rows=page.rows,
-                    has_more=False if len(page.rows) < limit and page.total_elements is None else None,
+                    has_more=_v2_has_more(page, offset // limit, limit),
                     total_reported=page.total_elements,
                     offset=offset,
                     cap=limit,

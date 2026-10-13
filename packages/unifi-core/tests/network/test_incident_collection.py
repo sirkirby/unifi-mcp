@@ -291,3 +291,43 @@ async def test_the_legacy_path_keeps_its_lookback() -> None:
     assert set(sent) == {"within", "_limit", "_start"} and sent["_limit"] == 100
     (source,) = evidence.sources
     assert source.query["within_hours"] == sent["within"] and "timestamp_from_ms" not in source.query
+
+
+EVENT = RESPONSES["network"]["events"]["responses"][0]["data"][0]
+
+
+def _data_requests(manager) -> list:
+    return [request for request in manager.sent_requests if request.path == "/system-log/all"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_page_with_more_pages_is_not_an_all_clear() -> None:
+    manager = sdk_event_manager({"data": [], "total_page_count": 2})
+    evidence = await collect(manager)
+    contract_json(evidence)
+    (source,) = evidence.sources
+    assert source.coverage.truncation is Truncation.TRUNCATED
+    assert source.outcome is SourceOutcome.PARTIAL and evidence.coverage_complete is False
+
+
+@pytest.mark.asyncio
+async def test_a_short_page_with_more_pages_is_not_complete() -> None:
+    manager = sdk_event_manager({"data": [EVENT], "total_page_count": 2}, {"data": [], "total_page_count": 2})
+    evidence = await collect(manager)
+    contract_json(evidence)
+    (source,) = evidence.sources
+    # The page count said a second page followed, so the collector read on.
+    assert len(_data_requests(manager)) == 2
+    assert source.outcome is SourceOutcome.PARTIAL and evidence.coverage_complete is False
+
+
+@pytest.mark.asyncio
+async def test_a_full_final_page_ends_the_read_without_spending_the_budget() -> None:
+    rows = [dict(EVENT, id=f"evt-net-full-{i:03d}") for i in range(100)]
+    manager = sdk_event_manager({"data": rows, "total_page_count": 1})
+    evidence = await collect(manager)
+    contract_json(evidence)
+    (source,) = evidence.sources
+    assert len(_data_requests(manager)) == 1
+    assert source.outcome is SourceOutcome.COMPLETE and evidence.coverage_complete is True
+    assert evidence.budgets.exhausted == ()
