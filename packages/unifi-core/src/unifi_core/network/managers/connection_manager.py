@@ -36,6 +36,7 @@ from unifi_core.request_budget import (
 )
 from unifi_core.support_bundle import (
     ConnectivityProbe,
+    ErrorCategory,
     SafeConnectionAttempt,
     connection_attempt_failed,
     connection_attempt_started,
@@ -511,7 +512,11 @@ class ConnectionManager:
         self._last_connection_error = self._sanitize_connection_error(error)
         self._last_connection_failure = (
             self._last_connection_error,
-            connection_failure("Connecting to the Network controller failed.", error),
+            connection_failure(
+                "Connecting to the Network controller failed.",
+                error,
+                category=ErrorCategory.AUTHENTICATION if self._is_mfa_required_error(error) else None,
+            ),
         )
         return self._last_connection_error
 
@@ -571,12 +576,19 @@ class ConnectionManager:
             ),
         ):
             return True
-        message = str(error).lower()
-        if isinstance(error, RequestError):
-            return "mfa" in message or "totp" in message
+        if ConnectionManager._is_mfa_required_error(error):
+            return True
         if isinstance(error, ResponseError):
             return response_status(error) == 429
         return False
+
+    @staticmethod
+    def _is_mfa_required_error(error: BaseException) -> bool:
+        """aiounifi reports an MFA challenge it cannot answer as a plain ``RequestError``."""
+        if not isinstance(error, RequestError):
+            return False
+        message = str(error).lower()
+        return "mfa" in message or "totp" in message
 
     def _block_automatic_reconnect(self, error: BaseException) -> str:
         """Open the auth circuit with an escalating cool-down (half-open after expiry).

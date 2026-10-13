@@ -46,16 +46,25 @@ def _valid(status: object) -> int | None:
     return status if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599 else None
 
 
-def connection_failure(message: str, error: BaseException, *, status: int | None = None) -> ControllerConnectionFailed:
+def connection_failure(
+    message: str,
+    error: BaseException,
+    *,
+    status: int | None = None,
+    category: ErrorCategory | None = None,
+) -> ControllerConnectionFailed:
     """A fixed-text failure carrying ``error``'s category and status, never its message.
 
-    ``status`` overrides the status read from ``error`` when the caller knows
-    it more precisely (uiprotect folds it into the message).
+    ``status`` and ``category`` override what is read from ``error`` when the
+    caller knows them more precisely (uiprotect folds the status into the
+    message; aiounifi reports an unanswerable MFA challenge as a plain
+    ``RequestError``).
     """
     try:
-        category, classified, _ = classify_error(error)
+        classified_category, classified, _ = classify_error(error)
     except Exception:
-        category, classified = ErrorCategory.UNKNOWN, None
+        classified_category, classified = ErrorCategory.UNKNOWN, None
+    category = category or classified_category
     status = _valid(status) or _valid(classified)
     if status is None:
         try:

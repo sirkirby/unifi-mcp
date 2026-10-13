@@ -94,7 +94,7 @@ class Controller:
         return [line for line in self.seen if not line.split(" ", 1)[1].endswith(LOGIN_PATHS)]
 
 
-async def _collect(tmp_path: Path, login_status: int = 200, **budget):
+async def _collect(tmp_path: Path, login_status: int = 200, *, connection_state=None, **budget):
     controller = Controller(login_status)
     server = TestServer(controller.app)
     await server.start_server(ssl=_tls_context(tmp_path))
@@ -107,6 +107,8 @@ async def _collect(tmp_path: Path, login_status: int = 200, **budget):
 
     try:
         evidence = await collect_network_incident_evidence(acquire, NetworkIncidentRequest(**WINDOW, **budget))
+        if connection_state is not None:
+            connection_state(connection)
     finally:
         await connection.cleanup()
         await server.close()
@@ -145,5 +147,25 @@ async def test_a_refused_login_keeps_its_category_and_no_controller_text(tmp_pat
         evidence, _ = await _collect(tmp_path, login_status=status, max_calls=20)
     (source,) = evidence.sources
     assert source.outcome.value == outcome
+    assert PRIVATE not in json.dumps(evidence.model_dump(mode="json"))
+    assert all(PRIVATE not in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_an_mfa_challenge_without_a_totp_secret_is_an_auth_failure(tmp_path, caplog) -> None:
+    # HTTP 499 is the UniFi OS MFA challenge; with no TOTP secret configured
+    # aiounifi raises a plain RequestError.
+    blocked: list[str | None] = []
+    with caplog.at_level("DEBUG"):
+        evidence, controller = await _collect(
+            tmp_path,
+            login_status=499,
+            max_calls=20,
+            connection_state=lambda connection: blocked.append(connection._reconnect_block_active()),
+        )
+    (source,) = evidence.sources
+    assert source.outcome is SourceOutcome.AUTH_FAILED
+    assert blocked and blocked[0] is not None, "the authentication cool-down stays open"
+    assert sum(line.endswith("/api/auth/login") for line in controller.seen) == 1
     assert PRIVATE not in json.dumps(evidence.model_dump(mode="json"))
     assert all(PRIVATE not in record.getMessage() for record in caplog.records)
