@@ -162,12 +162,17 @@ exactly two sources:
 - `product_inventory`: read-only lookups show an exact-identifier relationship.
   Read the camera's `mac` with `protect_get_camera(camera_id="<id>")`, then
   read that MAC as a Network client with
-  `unifi_get_client_details(mac_address="<camera mac>")`. Leave `summary` at
-  its default, `false`: the summary form drops `sw_mac` and `sw_port` and keeps
-  `ap_mac` only for wireless clients. The mapping holds when the client's
-  uplink identifier (`ap_mac` for wireless, `sw_mac`, plus `sw_port` for a
-  port, when wired) equals the incident device MAC. A client record that
-  states no uplink identifier gives no mapping. These are current-state reads;
+  `unifi_get_client_details(mac_address="<camera mac>")`. Protect returns the
+  MAC as 12 bare hex digits, and the Network lookup matches only the
+  controller's colon form, so a bare MAC finds nothing: write the camera MAC as
+  six lowercase colon-separated pairs (`a1b2c3d4e5f6` becomes
+  `a1:b2:c3:d4:e5:f6`) before the lookup. Leave `summary` at its default,
+  `false`: the summary form drops `sw_mac` and `sw_port` and keeps `ap_mac`
+  only for wireless clients. The mapping holds when the client's uplink
+  identifier (`ap_mac` for wireless, `sw_mac`, plus `sw_port` for a port, when
+  wired) equals the incident device MAC, with both written in that same
+  lowercase colon form before comparing. A client record that states no uplink
+  identifier gives no mapping. These are current-state reads;
   say so, because the camera may have been elsewhere during the window.
 
 When both lookups are listed directly with `readOnlyHint: true`, run them

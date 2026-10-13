@@ -33,6 +33,8 @@ LOOKUP_RULES = (
     "never reach a lookup through `*_execute`",
     "Ask the user for the mapping only when there is no proof",
     "Leave `summary` at its default, `false`",
+    "write the camera MAC as six lowercase colon-separated pairs",
+    "with both written in that same lowercase colon form before comparing",
     "`unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later list them directly",
 )
 # A described camera needs its ID or exact-identifier proof; nothing resolves it from a description.
@@ -481,7 +483,17 @@ def test_skill_maps_cameras_with_the_lookups_itself() -> None:
             '`unifi_get_client_details(mac_address="<camera mac>", summary=True)`',
             "summary=false",
         ),
-        ("Leave `summary` at\n  its default, `false`", "Pass `summary`", "missing mapping rule"),
+        ("Leave `summary` at its default,\n  `false`", "Pass `summary`", "missing mapping rule"),
+        (
+            "write the camera MAC as\n  six lowercase colon-separated pairs",
+            "pass the camera MAC as Protect returns it",
+            "missing mapping rule",
+        ),
+        (
+            "with both written in that same\n  lowercase colon form before comparing",
+            "as returned",
+            "missing mapping rule",
+        ),
     ],
 )
 def test_mapping_step_mutations_are_rejected(old: str, new: str, expected: str) -> None:
