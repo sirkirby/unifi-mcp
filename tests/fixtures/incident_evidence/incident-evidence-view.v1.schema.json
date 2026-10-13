@@ -1067,8 +1067,35 @@
     },
     "ViewRecord": {
       "additionalProperties": false,
-      "description": "One record in citation form; ``evidence_id`` begins with its source ID.\n\n``truncated`` names each free-text field cut to a prefix, with its full\nlength in characters; identifiers are never cut.",
+      "description": "One record in citation form; ``evidence_id`` begins with its source ID.\n\n``conflict_group`` is present on every version of one identity, as in the\nfull document, and absent otherwise: records sharing it are differing\nversions, never distinct events. It is the evidence ID without its\n``|version|<digest>`` suffix, so it is always shorter than the cited ID.\n``truncated`` names each free-text field cut to a prefix, with its full\nlength in characters; identifiers are never cut.",
+      "else": {
+        "not": {
+          "required": [
+            "conflict_group"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "evidence_id": {
+            "pattern": "\\|version\\|[0-9a-f]{24}$"
+          }
+        }
+      },
       "properties": {
+        "conflict_group": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:int|str)\\|[A-Za-z0-9%._~-]+|fields\\|[0-9a-f]{24})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Group"
+        },
         "entity_ids": {
           "items": {
             "type": "string"
@@ -1164,6 +1191,16 @@
         "mapping",
         "truncated"
       ],
+      "then": {
+        "properties": {
+          "conflict_group": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "conflict_group"
+        ]
+      },
       "title": "ViewRecord",
       "type": "object"
     },

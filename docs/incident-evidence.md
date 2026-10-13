@@ -150,7 +150,7 @@ calls.
 |-------|---------|
 | `requested_window`, `overall`, `coverage_complete`, `budgets`, `mappings` | Copied unchanged. |
 | `sources[]` | Each source's `source_id`, `product`, `source_tool`, `scope`, `outcome`, `failure`, `partial_reasons` and whole `coverage`, unchanged apart from cut labels, and `truncated`. API family, endpoint, query and collection time stay in the full document. |
-| `records[]` | Citations: `evidence_id`, `product`, `source_tool`, `source_record_id`, `time` (`status`, `utc`, `boundary_uncertain` and the original field, type and value), `event_type`, `summary`, `entity_ids`, `mapping` (`status`, `target_ids`, assertion `sources`), and `truncated`. Raw attributes are dropped. |
+| `records[]` | Citations: `evidence_id`, `conflict_group` (versions only, see below), `product`, `source_tool`, `source_record_id`, `time` (`status`, `utc`, `boundary_uncertain` and the original field, type and value), `event_type`, `summary`, `entity_ids`, `mapping` (`status`, `target_ids`, assertion `sources`), and `truncated`. Raw attributes are dropped. |
 | `record_selection` | `max_records_returned`; `omission: "presentation_limit"`; `resume_after`; `collected`, `before_resume`, `returned` and `omitted` tallies (`total`, `in_window`, `out_of_window`, `untimed`); `too_large`; `limited_by`; `next_cursor`. |
 
 **Size.** A view takes at most 20,000 estimated tokens as an MCP tool result
@@ -207,6 +207,20 @@ Identifiers (`evidence_id`, `source_record_id`, `entity_ids`, `target_ids`)
 are never cut. A record whose citation would take more than 2,500 estimated
 tokens, or whose evidence ID is longer than 256 characters, is never returned:
 it is counted in `too_large`, and only the full document shows it.
+
+**Conflict groups.** A record that is one of several differing versions of
+one identity (a `|version|<digest>` evidence ID) carries its `conflict_group`
+exactly as in the full document; every other record omits the key, never
+stating `null`. Records sharing a group are versions of one event, never
+distinct events, whether the identity is a source record ID or a summary-free
+`fields` hash. The group is the evidence ID without its suffix, so it is
+always shorter than the cited ID: it is costed inside the citation's
+2,500-token limit and the view's budget like any other identifier, never cut,
+and ordinary citations cost nothing more. Members of one group can fall on
+different pages; the source's `counts.conflicting` and its
+`conflicting_records` reason say how many versions exist. The schema requires
+the key exactly on versions; that it equals the evidence ID's own base is a
+semantic check consumers must run.
 
 **Selection.** Records are examined in selection order: in-window records
 earliest first, then untimed records, then out-of-window records, records at

@@ -12,6 +12,7 @@ import json
 import os
 import random
 import re
+from datetime import timedelta
 from typing import Any
 
 import pydantic_core
@@ -26,8 +27,16 @@ from unifi_core.incident_collection import (
     describe_validation_error,
     is_label,
 )
-from unifi_core.incident_evidence import IncidentEvidence, TimeStatus
+from unifi_core.incident_evidence import (
+    BudgetLimits,
+    Budgets,
+    IncidentEvidence,
+    TimeStatus,
+    TimeWindow,
+    assemble_incident_evidence,
+)
 from unifi_core.incident_evidence_view import (
+    MAX_CITED_EVIDENCE_ID_LENGTH,
     MAX_RECORDS_RETURNED,
     RECORD_TOKEN_LIMIT,
     SOURCE_LABEL_TOKEN_LIMIT,
@@ -42,8 +51,10 @@ from unifi_core.incident_evidence_view import (
     view_to_json,
 )
 from unifi_core.network.incident_collection import collect_network_incident_evidence
+from unifi_core.network.incident_evidence import network_events_context, normalize_network_page
 from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
+from unifi_core.source_page import SourcePage
 
 from . import test_incident_evidence_golden as golden
 from .incident_evidence_adversarial import (
@@ -552,3 +563,41 @@ async def test_bounded_view_fixtures_match_the_projection() -> None:
 @pytest.mark.parametrize("path", sorted(BOUNDS_DIR.glob("*.json")), ids=lambda path: path.stem)
 def test_bounded_view_fixtures_contain_only_synthetic_identifiers(path) -> None:
     golden.test_fixture_contains_only_synthetic_identifiers(path)
+
+
+def _versioned_document(pairs: int, id_length: int) -> IncidentEvidence:
+    """``pairs`` conflict groups of two versions each, under long source record IDs."""
+    window = TimeWindow.from_datetimes(
+        WORST_CASE_NOW - timedelta(hours=24, minutes=5), WORST_CASE_NOW - timedelta(minutes=5)
+    )
+    rows = []
+    for index in range(pairs):
+        row = dict(_network_row(index), id=f"{index:04d}".ljust(id_length, "x"))
+        rows += [dict(row, severity="LOW"), dict(row, severity="HIGH")]
+    page = SourcePage(rows=rows, has_more=False, offset=0, cap=len(rows), api_path="v2")
+    context = network_events_context(
+        requested_window=window,
+        request_started_at=WORST_CASE_NOW - timedelta(seconds=1),
+        collected_at=WORST_CASE_NOW,
+        within_hours=24,
+        limit=len(rows),
+        page=page,
+    )
+    source = normalize_network_page(page, context)
+    budgets = Budgets(limits=BudgetLimits(window_seconds=86_400, events=1_000, calls=10, elapsed_ms=60_000))
+    return assemble_incident_evidence(requested_window=window, budgets=budgets, sources=[source])
+
+
+@pytest.mark.parametrize("limit", LIMITS)
+def test_conflict_groups_on_the_longest_cited_ids_stay_within_the_bounds(limit: int) -> None:
+    # The longest base whose version ID can still be cited: a group is always
+    # shorter than the ID it is cut from, and each citation's cost includes it.
+    evidence = _versioned_document(pairs=60, id_length=MAX_CITED_EVIDENCE_ID_LENGTH - 52)
+    versions = [record for record in evidence.records if record.conflict_group is not None]
+    assert len(versions) == 120
+    assert max(len(record.evidence_id) for record in versions) <= MAX_CITED_EVIDENCE_ID_LENGTH
+    _assert_bounded(evidence, limit)
+    for page in _pages(evidence, limit, most=3):
+        assert page["records"] and all(
+            record["evidence_id"].startswith(record["conflict_group"] + "|version|") for record in page["records"]
+        )

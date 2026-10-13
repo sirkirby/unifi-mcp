@@ -299,3 +299,55 @@ def test_requests_refuse_more_sources_or_assertions_than_a_view_can_state() -> N
     assert NetworkIncidentRequest(**window, mappings=[assertion] * MAX_MAPPINGS).mappings
     with pytest.raises(ValidationError):
         NetworkIncidentRequest(**window, mappings=[assertion] * (MAX_MAPPINGS + 1))
+
+
+# --- conflict groups ---------------------------------------------------------------------------
+
+CONFLICT_CASES = ("conflicting_versions", "tool_response_envelopes")
+
+
+def _conflict_view(case: str) -> tuple[IncidentEvidence, dict[str, Any]]:
+    evidence = _evidence(CORPUS_DIR / "cases" / f"{case}.json")
+    return evidence, view_to_json(client_view(evidence, max_records_returned=MAX_RECORDS_RETURNED))
+
+
+@pytest.mark.parametrize("case", CONFLICT_CASES)
+def test_view_names_the_conflict_group_of_every_cited_version(case: str) -> None:
+    evidence, view = _conflict_view(case)
+    groups = {record.evidence_id: record.conflict_group for record in evidence.records}
+    cited = {record["evidence_id"]: record.get("conflict_group") for record in view["records"]}
+    assert cited == {evidence_id: groups[evidence_id] for evidence_id in cited}
+    members = [evidence_id for evidence_id, group in cited.items() if group is not None]
+    assert len(members) >= 2
+    assert all(evidence_id.startswith(cited[evidence_id] + "|version|") for evidence_id in members)
+    jsonschema.validate(view, json.loads(VIEW_SCHEMA_PATH.read_text()))
+    IncidentEvidenceView.model_validate(view)
+
+
+def _version_index(view: dict[str, Any]) -> int:
+    return next(i for i, record in enumerate(view["records"]) if "conflict_group" in record)
+
+
+def _plain_index(view: dict[str, Any]) -> int:
+    return next(i for i, record in enumerate(view["records"]) if "conflict_group" not in record)
+
+
+@pytest.mark.parametrize(
+    ("change", "schema_rejects"),
+    [
+        # A version without its group, or a group on a record that is no version.
+        (lambda v: v["records"][_version_index(v)].pop("conflict_group"), True),
+        (lambda v: v["records"][_version_index(v)].update(conflict_group=None), True),
+        (lambda v: v["records"][_plain_index(v)].update(conflict_group="network.events|str|fixture-other"), True),
+        (lambda v: v["records"][_plain_index(v)].update(conflict_group=None), True),
+        # A group that is not the version's own base: only the semantic check sees it.
+        (lambda v: v["records"][_version_index(v)].update(conflict_group="network.events|str|fixture-other"), False),
+    ],
+)
+def test_schema_and_python_agree_on_view_conflict_groups(change, schema_rejects: bool) -> None:
+    _, view = _conflict_view("conflicting_versions")
+    change(view)
+    schema_errors = list(jsonschema.Draft202012Validator(json.loads(VIEW_SCHEMA_PATH.read_text())).iter_errors(view))
+    assert bool(schema_errors) is schema_rejects
+    with pytest.raises(ValidationError, match="conflict group"):
+        IncidentEvidenceView.model_validate(view)

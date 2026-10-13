@@ -152,6 +152,7 @@
         "records": [
           {
             "evidence_id": "network.events|str|evt-net-1301|version|310cb9e133e08af3418f5e48",
+            "conflict_group": "network.events|str|evt-net-1301",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": "evt-net-1301",
@@ -177,6 +178,7 @@
           },
           {
             "evidence_id": "network.events|str|evt-net-1301|version|5f6c839a5dfec44c73fcb167",
+            "conflict_group": "network.events|str|evt-net-1301",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": "evt-net-1301",
@@ -432,6 +434,7 @@
         "records": [
           {
             "evidence_id": "network.events|str|evt-net-1301|version|5f6c839a5dfec44c73fcb167",
+            "conflict_group": "network.events|str|evt-net-1301",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": "evt-net-1301",
@@ -664,6 +667,7 @@
         "records": [
           {
             "evidence_id": "network.events|str|evt-net-1301|version|310cb9e133e08af3418f5e48",
+            "conflict_group": "network.events|str|evt-net-1301",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": "evt-net-1301",

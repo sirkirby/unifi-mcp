@@ -293,6 +293,7 @@
           },
           {
             "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc",
+            "conflict_group": "network.events|fields|66ebd38a7bef30e1a860165e",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": null,
@@ -318,6 +319,7 @@
           },
           {
             "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|c56666753f8543f8e93fdd98",
+            "conflict_group": "network.events|fields|66ebd38a7bef30e1a860165e",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": null,
@@ -968,6 +970,7 @@
           },
           {
             "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc",
+            "conflict_group": "network.events|fields|66ebd38a7bef30e1a860165e",
             "product": "network",
             "source_tool": "unifi_list_events",
             "source_record_id": null,

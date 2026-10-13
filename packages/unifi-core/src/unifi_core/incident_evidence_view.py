@@ -10,8 +10,9 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
   every coverage and failure claim reads the same as in the full document.
   A source's labels (its tool and scope) longer than their limit are cut to
   a prefix and named in the source's ``truncated``.
-- Records are compact citations (evidence ID, product, source tool, source
-  record ID, time and placement, type, summary, entities and mapping). Raw
+- Records are compact citations (evidence ID, the conflict group of a
+  version, product, source tool, source record ID, time and placement, type,
+  summary, entities and mapping). Raw
   attributes and repeated provenance are dropped. Free text longer than its
   limit is cut to a prefix and named in the record's ``truncated``;
   identifiers are never cut, so a record whose citation cannot fit is
@@ -50,6 +51,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator, model_validator
 
 from unifi_core.incident_evidence import (
+    CONFLICT_GROUP_PATTERN,
     EVIDENCE_ID_PATTERN,
     INCIDENT_EVIDENCE_SCHEMA_VERSION,
     Budgets,
@@ -115,6 +117,17 @@ SourceTruncatedField = Literal["controller_id", "location_id", "site", "source_t
 _PLACED = (TimeStatus.IN_WINDOW, TimeStatus.OUT_OF_WINDOW)
 _UTC = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
 _EVIDENCE_ID_RE = re.compile(EVIDENCE_ID_PATTERN)
+# A version's evidence ID is its conflict group's base identity plus this suffix.
+_VERSION_SUFFIX = r"\|version\|[0-9a-f]{24}$"
+_VERSION_SUFFIX_RE = re.compile(_VERSION_SUFFIX)
+# One JSON document can state that a version names a group and nothing else
+# does; that the group is the version's own base is a semantic check. Other
+# records omit the key, so ordinary citations cost nothing more.
+_VIEW_RECORD_RULES = {
+    "if": {"properties": {"evidence_id": {"pattern": _VERSION_SUFFIX}}},
+    "then": {"required": ["conflict_group"], "properties": {"conflict_group": {"type": "string"}}},
+    "else": {"not": {"required": ["conflict_group"]}},
+}
 # <rank>|<utc>|<evidence_id>: rank 0 in-window, 1 untimed (no utc), 2 out-of-window.
 _CURSOR_RE = re.compile(rf"^(?:[02]\|{_UTC}|1\|)\|(?P<evidence_id>.+)$")
 MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH
@@ -294,11 +307,20 @@ class ViewMapping(_ClosedModel):
 class ViewRecord(_ClosedModel):
     """One record in citation form; ``evidence_id`` begins with its source ID.
 
+    ``conflict_group`` is present on every version of one identity, as in the
+    full document, and absent otherwise: records sharing it are differing
+    versions, never distinct events. It is the evidence ID without its
+    ``|version|<digest>`` suffix, so it is always shorter than the cited ID.
     ``truncated`` names each free-text field cut to a prefix, with its full
     length in characters; identifiers are never cut.
     """
 
+    model_config = ConfigDict(json_schema_extra=_VIEW_RECORD_RULES)
+
     evidence_id: str
+    conflict_group: str | None = Field(
+        default=None, pattern=CONFLICT_GROUP_PATTERN, exclude_if=lambda group: group is None
+    )
     product: Product
     source_tool: str | None
     source_record_id: StrictStr | StrictInt | None
@@ -315,6 +337,17 @@ class ViewRecord(_ClosedModel):
         if any(length < 1 for length in value.values()):
             raise ValueError("a truncated field states its full length")
         return value
+
+    @model_validator(mode="after")
+    def _conflict_group(self) -> ViewRecord:
+        base = _VERSION_SUFFIX_RE.sub("", self.evidence_id)
+        if (self.conflict_group is None) != (base == self.evidence_id) or (
+            self.conflict_group is not None and self.conflict_group != base
+        ):
+            raise ValueError("a cited version names its own conflict group, and only versions name one")
+        if self.conflict_group is None and "conflict_group" in self.model_fields_set:
+            raise ValueError("a record outside any conflict group omits conflict_group rather than stating null")
+        return self
 
     @property
     def selection_key(self) -> tuple[int, str, str]:
@@ -529,8 +562,10 @@ def _view_record(record: EvidenceRecord) -> dict[str, Any] | None:
     event_type = text("event_type", record.event_type)
     original_value = text("original_value", time.original_value)
     summary = text("summary", record.summary)
-    citation = {
-        "evidence_id": record.evidence_id,
+    citation: dict[str, Any] = {"evidence_id": record.evidence_id}
+    if record.conflict_group is not None:
+        citation["conflict_group"] = record.conflict_group
+    citation |= {
         "product": record.provenance.product.value,
         "source_tool": source_tool,
         "source_record_id": record.provenance.source_record_id,
