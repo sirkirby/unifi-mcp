@@ -721,7 +721,7 @@
           "source_tool": "unifi_list_events"
         },
         "source_id": "network.events",
-        "summary": "fixture-phone has connected to fixture-ap-1.",
+        "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
         "time": {
           "boundary_uncertain": false,
           "clock_uncertainty_ms": null,
@@ -785,7 +785,7 @@
           "source_tool": "unifi_list_events"
         },
         "source_id": "network.events",
-        "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+        "summary": "aa:bb:cc:00:20:02 was blocked from accessing 198.51.100.24 by the {TRIGGER} Firewall Policy.",
         "time": {
           "boundary_uncertain": false,
           "clock_uncertainty_ms": null,
@@ -849,7 +849,7 @@
           "source_tool": "unifi_list_events"
         },
         "source_id": "network.events",
-        "summary": "fixture-ap-2 disconnected.",
+        "summary": "aa:bb:cc:00:10:02 disconnected.",
         "time": {
           "boundary_uncertain": false,
           "clock_uncertainty_ms": null,
@@ -1084,7 +1084,7 @@
             "source_tool": "unifi_list_events"
           },
           "source_id": "network.events",
-          "summary": "fixture-phone has connected to fixture-ap-1.",
+          "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
           "time": {
             "boundary_uncertain": false,
             "clock_uncertainty_ms": null,
@@ -1148,7 +1148,7 @@
             "source_tool": "unifi_list_events"
           },
           "source_id": "network.events",
-          "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+          "summary": "aa:bb:cc:00:20:02 was blocked from accessing 198.51.100.24 by the {TRIGGER} Firewall Policy.",
           "time": {
             "boundary_uncertain": false,
             "clock_uncertainty_ms": null,
@@ -1212,7 +1212,7 @@
             "source_tool": "unifi_list_events"
           },
           "source_id": "network.events",
-          "summary": "fixture-ap-2 disconnected.",
+          "summary": "aa:bb:cc:00:10:02 disconnected.",
           "time": {
             "boundary_uncertain": false,
             "clock_uncertainty_ms": null,
