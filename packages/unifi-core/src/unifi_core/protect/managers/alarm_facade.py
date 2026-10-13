@@ -154,8 +154,8 @@ class AlarmRulesFacade:
 
     async def preview_arm(self, profile_id: str | None = None) -> dict[str, Any]:
         """Return current + proposed state for an arm preview, v2-first."""
-        profiles, complete = await self.list_profiles()
-        if not complete:
+        profiles = await self._profiles_for_mutation()
+        if profiles is None:
             return await self._legacy.preview_arm(profile_id)
         target = self._resolve_v2_profile(profiles, profile_id)
         active = self._active_v2_profiles(profiles)
@@ -178,8 +178,8 @@ class AlarmRulesFacade:
         profiles. The profile is re-read afterwards and the call only reports
         success when the controller shows it ``arming`` or ``armed``.
         """
-        profiles, complete = await self.list_profiles()
-        if not complete:
+        profiles = await self._profiles_for_mutation()
+        if profiles is None:
             return await self._legacy.arm(profile_id)
 
         target = self._resolve_v2_profile(profiles, profile_id)
@@ -211,8 +211,8 @@ class AlarmRulesFacade:
 
     async def preview_disarm(self, profile_id: str | None = None) -> dict[str, Any]:
         """Return current state for a disarm preview, v2-first."""
-        profiles, complete = await self.list_profiles()
-        if not complete:
+        profiles = await self._profiles_for_mutation()
+        if profiles is None:
             return await self._legacy.preview_disarm()
         targets = self._disarm_targets(profiles, profile_id)
         first = targets[0] if targets else None
@@ -232,8 +232,8 @@ class AlarmRulesFacade:
 
         Each disarm is verified by re-reading the profile from the controller.
         """
-        profiles, complete = await self.list_profiles()
-        if not complete:
+        profiles = await self._profiles_for_mutation()
+        if profiles is None:
             return await self._legacy.disarm()
 
         targets = self._disarm_targets(profiles, profile_id)
@@ -258,6 +258,58 @@ class AlarmRulesFacade:
                 }
             )
         return {"armed": False, "profiles": disarmed}
+
+    async def _profiles_for_mutation(self) -> list[dict[str, Any]] | None:
+        """Pick the backend for arm/disarm: v2 profiles, or ``None`` for legacy.
+
+        Unlike :meth:`list_profiles`, this never lets a v2 failure degrade into a
+        legacy mutation on a Global-mode console: there the legacy ``arm/*``
+        endpoints are no-ops, so arming through them would report success while
+        the alarm stays off. The fallback reason is kept and checked against the
+        console's own mode flag:
+
+        - v2 serves profiles -> mutate through v2.
+        - v2 is forbidden (``AlarmManagerPermissionError``) -> re-raise when the
+          console is in Global mode (or its mode cannot be read); fall back to
+          legacy only when the console positively reports Local mode.
+        - v2 is empty or rejects the request -> same mode check.
+        """
+        permission_error: AlarmManagerPermissionError | None = None
+        try:
+            raw = await self._service.list_profiles()
+        except AlarmManagerPermissionError as exc:
+            permission_error = exc
+            raw = None
+        except BadRequest:
+            raw = None
+        if raw:
+            shaped = []
+            for profile in raw:
+                if not isinstance(profile, dict):
+                    continue
+                item = profile_from_controller({**profile, "id_family": "alarm_manager_v2", "arm_compatible": False})
+                shaped.append(item.model_dump(exclude_none=True))
+            return shaped
+
+        try:
+            global_mode = await self._legacy.is_global_alarm_manager()
+        except Exception as exc:  # noqa: BLE001 - any failure to read the mode must fail closed
+            raise ValueError(
+                "Cannot determine whether the Alarm Manager is in Global mode, so arm/disarm was not attempted "
+                "through the legacy endpoints (they are no-ops in Global mode)."
+            ) from exc
+        if global_mode:
+            if permission_error is not None:
+                raise AlarmManagerPermissionError(
+                    "The Alarm Manager is in Global mode and the UniFi OS Alarm Manager API refused this account, "
+                    "so arm/disarm cannot be performed: the legacy Protect arm endpoints are no-ops in Global mode. "
+                    "Grant the account SuperAdmin on the console hosting Protect."
+                ) from permission_error
+            raise ValueError(
+                "The Alarm Manager is in Global mode but the UniFi OS Alarm Manager API returned no profiles; "
+                "arm/disarm was not attempted through the legacy endpoints because they are no-ops in Global mode."
+            )
+        return None
 
     @staticmethod
     def _active_v2_profiles(profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:

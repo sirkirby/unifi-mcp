@@ -114,3 +114,21 @@ class TestLegacyProfileSelection:
 
         assert preview["target_profile_id"] == profile_id
         assert preview["target_profile_name"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "nvr,expected",
+    [
+        ({"featureFlags": {"useExternalAlarmManager": True}}, True),
+        ({"featureFlags": {"useExternalAlarmManager": False}}, False),
+        ({"featureFlags": {}}, False),
+        ({}, False),
+        (None, False),
+    ],
+)
+async def test_is_global_alarm_manager_reads_nvr_feature_flag(nvr, expected):
+    cm = MagicMock()
+    cm.client.api_request = AsyncMock(return_value=nvr)
+    assert await AlarmManager(cm).is_global_alarm_manager() is expected
+    cm.client.api_request.assert_awaited_once_with("nvr", method="get")

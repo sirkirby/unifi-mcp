@@ -90,6 +90,19 @@ class AlarmManager:
 
         return [self._format_profile(p) for p in data if isinstance(p, dict)]
 
+    async def is_global_alarm_manager(self) -> bool:
+        """Return True when the console runs the UniFi OS (Global) Alarm Manager.
+
+        Protect sets ``nvr.featureFlags.useExternalAlarmManager`` once the Alarm
+        Manager is in Global mode (forced when USL sensors, fobs, relays or an
+        Alarm Hub are adopted). In that mode the legacy ``arm/*`` endpoints are
+        detached from the real alarm: ``arm/enable`` returns 204 without arming
+        and ``arm/disable`` fails, so callers must not mutate through them.
+        """
+        nvr_data = await self._cm.client.api_request("nvr", method="get")
+        flags = (nvr_data or {}).get("featureFlags") if isinstance(nvr_data, dict) else None
+        return bool((flags or {}).get("useExternalAlarmManager"))
+
     async def get_arm_state(self) -> Dict[str, Any]:
         """Return the current Alarm Manager state.
 

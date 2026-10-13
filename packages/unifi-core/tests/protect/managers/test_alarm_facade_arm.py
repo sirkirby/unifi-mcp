@@ -3,8 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from uiprotect.exceptions import BadRequest
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.alarm_facade import AlarmRulesFacade
+from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError
 
 _NIGHT_ID = "019e473a-0000-7000-8000-000000000001"
 _ALL_ID = "019e473a-0000-7000-8000-000000000002"
@@ -43,6 +45,7 @@ def _facade(profiles, after=None):
     service.arm_profile = AsyncMock(return_value={})
     service.disarm_profile = AsyncMock(return_value={})
     legacy.list_arm_profiles = AsyncMock(return_value=[])
+    legacy.is_global_alarm_manager = AsyncMock(return_value=False)
     legacy.arm = AsyncMock(return_value={"armed": True, "profile_id": "legacy"})
     legacy.disarm = AsyncMock(return_value={"armed": False})
     legacy.preview_arm = AsyncMock(return_value={"target_profile_id": "legacy"})
@@ -192,3 +195,72 @@ async def test_previews_fall_back_to_legacy_when_v2_unavailable():
     facade = _legacy_facade()
     assert await facade.preview_arm(None) == {"target_profile_id": "legacy"}
     assert await facade.preview_disarm(None) == {"active_profile_id": "legacy"}
+
+
+# ---------------------------------------------------------------------------
+# Backend selection must fail closed on a Global-mode console
+# ---------------------------------------------------------------------------
+
+_PERM = AlarmManagerPermissionError("SuperAdmin is required for Alarm Manager v2")
+
+
+def _blocked_facade(v2_error, global_mode):
+    """v2 profiles unavailable (403 / 4xx / empty), legacy profiles exist, console mode as given."""
+    facade = _facade([])
+    facade._service.list_profiles = AsyncMock(side_effect=v2_error, return_value=[] if v2_error is None else None)
+    facade._legacy.list_arm_profiles = AsyncMock(return_value=[_LEGACY_PROFILE])
+    facade._legacy.is_global_alarm_manager = AsyncMock(
+        side_effect=global_mode if isinstance(global_mode, Exception) else None, return_value=global_mode
+    )
+    return facade
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["arm", "disarm", "preview_arm", "preview_disarm"])
+async def test_v2_forbidden_in_global_mode_never_mutates_legacy(operation):
+    facade = _blocked_facade(_PERM, global_mode=True)
+    with pytest.raises(AlarmManagerPermissionError, match="Global mode"):
+        await getattr(facade, operation)(None)
+    facade._legacy.arm.assert_not_called()
+    facade._legacy.disarm.assert_not_called()
+    facade._legacy.preview_arm.assert_not_called()
+    facade._legacy.preview_disarm.assert_not_called()
+    facade._service.arm_profile.assert_not_called()
+    facade._service.disarm_profile.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("v2_error", [None, BadRequest("unsupported")])
+async def test_v2_empty_or_rejected_in_global_mode_never_mutates_legacy(v2_error):
+    facade = _blocked_facade(v2_error, global_mode=True)
+    with pytest.raises(ValueError, match="Global mode"):
+        await facade.arm("Home")
+    with pytest.raises(ValueError, match="Global mode"):
+        await facade.disarm(None)
+    facade._legacy.arm.assert_not_called()
+    facade._legacy.disarm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_v2_forbidden_in_local_mode_falls_back_to_legacy():
+    facade = _blocked_facade(_PERM, global_mode=False)
+    result = await facade.arm("66a5c92a0022f903e4000401")
+    facade._legacy.arm.assert_awaited_once_with("66a5c92a0022f903e4000401")
+    assert result["profile_id"] == "legacy"
+    await facade.disarm(None)
+    facade._legacy.disarm.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_unreadable_console_mode_fails_closed():
+    facade = _blocked_facade(_PERM, global_mode=RuntimeError("nvr unreachable"))
+    with pytest.raises(ValueError, match="Cannot determine"):
+        await facade.arm(None)
+    facade._legacy.arm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_v2_profiles_served_skips_mode_check():
+    facade = _facade([_V2_ALL], after=[{**_V2_ALL, "state": "armed"}])
+    await facade.arm(None)
+    facade._legacy.is_global_alarm_manager.assert_not_called()
