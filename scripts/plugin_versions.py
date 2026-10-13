@@ -185,7 +185,9 @@ def update_pin(bundle: Path, new_pin: str) -> bool:
         data = load(path)
         if filename in MANIFESTS:
             data["version"] = version
-        for server in data.get("mcpServers", {}).values():
+        servers = data.get("mcpServers", {})
+        # The Codex manifest names its server file by path; that file carries the pin.
+        for server in servers.values() if isinstance(servers, dict) else ():
             server["args"] = [
                 f"{package}=={new_pin}" if arg == f"{package}=={old_pin}" else arg for arg in server["args"]
             ]
@@ -223,6 +225,12 @@ def sync(root: Path, releasing: str | None = None) -> None:
             cwd=root,
             check=True,
         )
+    # Plugin tool references and counts follow the pins just moved.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parent / "generate_skill_references.py"), "--root", str(root)],
+        cwd=root,
+        check=True,
+    )
     check(root, "HEAD", releasing)
 
 

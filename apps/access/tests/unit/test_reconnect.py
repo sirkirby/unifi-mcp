@@ -117,7 +117,7 @@ async def test_calls_within_the_interval_fail_fast_without_an_attempt():
         assert login.calls == startup_attempts
 
         _elapse_rate_limit(cm)
-        with pytest.raises(AccessUnavailableError, match="Could not reach"):
+        with pytest.raises(AccessUnavailableError, match="Could not connect"):
             await DoorManager(cm).list_doors()
         assert login.calls == startup_attempts + 1, "one single attempt, no startup backoff"
 

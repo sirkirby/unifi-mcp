@@ -632,7 +632,7 @@ class TestInitialize:
 
     @pytest.mark.asyncio
     async def test_unreachable_message_names_host_and_tried_paths(self, cm_dual):
-        """Configured credentials that fail blame reachability/auth, not missing config."""
+        """Unreachable paths blame reachability, never missing or wrong credentials."""
         with (
             patch.object(cm_dual, "_try_api_client", AsyncMock()),
             patch.object(cm_dual, "_try_proxy_session", AsyncMock()),
@@ -641,10 +641,10 @@ class TestInitialize:
             assert await cm_dual.initialize() is False
 
         error = cm_dual.last_connection_error
-        assert error.startswith("Could not reach or authenticate to UniFi Access at 192.0.2.1")
+        assert error.startswith("Could not connect to UniFi Access at 192.0.2.1")
         assert "API key on port 12445" in error
         assert "username/password on port 443" in error
-        assert "configured" in error and "No UniFi Access credentials" not in error
+        assert "reachable" in error and "credentials" not in error
         assert "secret" not in error and "test-api-key-123" not in error
 
     @pytest.mark.asyncio
@@ -681,7 +681,7 @@ class TestInitialize:
         ):
             await cm_proxy_only.initialize()
 
-        with pytest.raises(UniFiConnectionError, match="Proxy session is not available: Could not reach"):
+        with pytest.raises(UniFiConnectionError, match="Proxy session is not available: Could not connect"):
             await cm_proxy_only.proxy_request("GET", "doors")
 
     @pytest.mark.asyncio

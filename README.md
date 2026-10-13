@@ -19,8 +19,8 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 209 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Stable | 62 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Network](apps/network/) | Stable | 210 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Protect](apps/protect/) | Stable | 63 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
 ## Choose an integration
@@ -113,6 +113,22 @@ The guide covers native plugins, product-scoped `npx skills add` installs,
 OpenCode's built-in MCP support, and the current manual paths for Antigravity,
 Cursor, and Devin Desktop. A skills install adds agent guidance; it does not by
 itself register the MCP server.
+
+### What's new in the 1.0.1 plugins
+
+- **A down controller no longer fails the plugin.** The servers answer the
+  client before the controller connects. While it is unreachable, tools say the
+  server is still connecting or cannot reach the controller, and recover on
+  their own once it is back.
+- **Connection errors name the real cause.** A network failure says the
+  controller is unreachable instead of asking you to check your credentials.
+- **Claude Code setup protects a keychain-held secret.** Claude Code cannot
+  clear a password or API key it holds in the system keychain, so setup refuses,
+  before writing, a change that would clear one. It says how to switch:
+  uninstall and reinstall the plugin, then run setup with the provider and the
+  options it lists.
+- The plugins pin `unifi-network-mcp` 0.37.2, `unifi-protect-mcp` 0.8.19 and
+  `unifi-access-mcp` 0.6.14.
 
 ### What's new in the 1.0.0 plugins
 
@@ -284,7 +300,7 @@ Set these variables in the server's process environment (shell exports, the MCP 
 | `UNIFI_API_KEY` | No | UniFi API key for selected capabilities, including firewall policy ordering and some Protect settings updates |
 | `CONFIG_PATH` | No | Absolute path to an operator-controlled custom YAML file; otherwise uses bundled configuration |
 | `UNIFI_SETTINGS_FILE` | No | Absolute path (`~` allowed) to a per-user settings file of `UNIFI_*` variables; see below |
-| `UNIFI_DEFER_CONTROLLER_INIT` | No | Network only: defer controller connection until the first tool call; real-time event listening remains disabled in this mode |
+| `UNIFI_DEFER_CONTROLLER_INIT` | No | Network only: make no controller connection at startup and connect on the first tool call instead. By default every server answers the MCP client at once and connects in the background |
 | `UNIFI_META_TOOLS_ENABLED` | No | Network eager mode only: set `false` to omit indirect meta-tools; requires `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` |
 
 **Startup configuration:** The servers do not automatically load `.env` files or `config/config.yaml` from the working directory. MCP clients may launch servers inside untrusted projects, so project files must not control where credentials are sent or weaken permissions and redaction. If you previously relied on automatic loading, select a trusted env file in your launcher (for example, `uv run --env-file /absolute/path/to/trusted.env --with unifi-network-mcp unifi-network-mcp`) or set an absolute `CONFIG_PATH` for custom YAML. Docker Compose `env_file:` remains supported.
@@ -338,8 +354,8 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 209 tools)
-  protect/          # UniFi Protect MCP server (stable, 62 tools)
+  network/          # UniFi Network MCP server (stable, 210 tools)
+  protect/          # UniFi Protect MCP server (stable, 63 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI

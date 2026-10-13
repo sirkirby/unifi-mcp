@@ -15,8 +15,9 @@ MUTABLE_FIELDS = frozenset() (all fields are read-only).
 
 from __future__ import annotations
 
+import ipaddress
 import re
-from typing import Any, Iterator, Optional
+from typing import Any, Callable, Iterator, Optional
 
 from pydantic import BaseModel, Field
 
@@ -229,7 +230,21 @@ def _actor_label(actor: Any) -> Optional[str]:
     return None
 
 
-def _render_message(record: Any) -> Optional[str]:
+def _identifier_label(actor: Any) -> Optional[str]:
+    """An actor's MAC- or IP-shaped ``id``; names, and IDs that are names, stay unfilled."""
+    value = actor.get("id") if isinstance(actor, dict) else None
+    if not isinstance(value, str):
+        return None
+    if _MAC_RE.match(value):
+        return value
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return None
+    return value
+
+
+def _render_message(record: Any, label: Callable[[Any], Optional[str]] = _actor_label) -> Optional[str]:
     """Interpolate a v2 ``message_raw`` template against ``parameters``.
 
     Unknown placeholders are left intact rather than blanked, so an
@@ -247,10 +262,20 @@ def _render_message(record: Any) -> Optional[str]:
     params = _parameters(record)
 
     def _substitute(match: re.Match[str]) -> str:
-        label = _actor_label(params.get(match.group(1)))
-        return label if label is not None else match.group(0)
+        text = label(params.get(match.group(1)))
+        return text if text is not None else match.group(0)
 
     return _PLACEHOLDER_RE.sub(_substitute, template)
+
+
+def identifier_message(record: Any) -> Optional[str]:
+    """A v2 ``message_raw`` with only MAC and IP identifiers filled in.
+
+    Client, device, console and policy names keep their placeholders, so
+    renaming one never changes the text. Evidence identity hashes this
+    instead of the display rendering the tools return.
+    """
+    return _render_message(record, label=_identifier_label)
 
 
 # ---------------------------------------------------------------------------

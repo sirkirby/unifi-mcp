@@ -34,15 +34,16 @@ async def test_failed_retries_close_every_client(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cancelled_bootstrap_closes_client_and_propagates(monkeypatch):
+async def test_cancelled_bootstrap_closes_client_and_fails_the_attempt(monkeypatch):
+    # The connect runs as the manager's shared attempt: cancelling it ends that
+    # attempt, and the caller waiting on it sees a failed connect.
     client = MagicMock()
     client.update = AsyncMock(side_effect=asyncio.CancelledError())
     client.async_disconnect_ws = AsyncMock()
     client.close_session = AsyncMock()
     monkeypatch.setattr(module, "ProtectApiClient", MagicMock(return_value=client))
     manager = module.ProtectConnectionManager(host="controller.invalid", username="test", password="test")
-    with pytest.raises(asyncio.CancelledError):
-        await manager.initialize()
+    assert await manager.initialize() is False
     client.async_disconnect_ws.assert_awaited_once()
     client.close_session.assert_awaited_once()
     assert manager._client is None

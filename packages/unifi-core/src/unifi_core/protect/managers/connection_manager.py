@@ -20,7 +20,10 @@ from uiprotect.data import WSSubscriptionMessage
 from uiprotect.exceptions import NotAuthorized, NvrError
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.connect_attempt import ConnectAttempt
+from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
@@ -47,7 +50,9 @@ BOOTSTRAP_REFRESH_SECONDS = 60.0
 # rejected the login at start-up), one connection attempt is made, without the
 # start-up back-off. Attempts are spaced at least this far apart, so a
 # controller that stays down costs one bounded wait per window rather than one
-# per call, and each attempt is cut off after the timeout.
+# per call. Every attempt, the start-up ones included, is cut off after the
+# timeout: the SDK's own session would otherwise wait minutes on a controller
+# that accepts the connection and never answers.
 RECONNECT_MIN_INTERVAL_SECONDS = 30.0
 RECONNECT_ATTEMPT_TIMEOUT_SECONDS = 30.0
 
@@ -116,11 +121,13 @@ class ProtectConnectionManager:
         self._client: ProtectApiClient | None = None
         self._ws_unsub: Callable[[], None] | None = None
         self._initialized = False
+        self._initialization_failure: ControllerConnectionFailed | None = None
         self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
         self._bootstrap_refresh_seconds = bootstrap_refresh_seconds
         self._refresh_task: asyncio.Task[None] | None = None
 
         self._connect_lock = asyncio.Lock()
+        self._attempt = ConnectAttempt()
         self._connect_hooks: list[Callable[[], Awaitable[None]]] = []
         self._closed = False
         self._clock: Callable[[], float] = time.monotonic
@@ -145,13 +152,22 @@ class ProtectConnectionManager:
         circuit, which holds automatic reconnects back for the cool-down.
 
         This is an explicit start, so it ignores the reconnect window and the
-        auth circuit; :meth:`ensure_connected` is the automatic path.
+        auth circuit; :meth:`ensure_connected` is the automatic path. It runs
+        as the manager's one connection attempt, so a server can call it in
+        the background and tool calls wait on it within a bound.
 
         Returns ``True`` on success, ``False`` on failure.
         """
         if self._initialized and self._client is not None:
             return True
+        if self._attempt.in_progress:
+            # Let an on-demand attempt finish rather than run a second one.
+            if await self._attempt.join():
+                return True
+        self._attempt.start(self._initialize_with_retries, name="protect-connect")
+        return await self._attempt.join()
 
+    async def _initialize_with_retries(self) -> bool:
         policy = RetryPolicy(
             max_retries=3,
             base_delay=2.0,
@@ -162,7 +178,8 @@ class ProtectConnectionManager:
 
         async def _connect() -> None:
             try:
-                await self._connect_once()
+                async with asyncio.timeout(self._reconnect_attempt_timeout):
+                    await self._connect_once()
             except Exception as exc:
                 if _is_terminal_auth_error(exc):
                     # Returning ends the back-off: retrying a rejected login
@@ -207,14 +224,22 @@ class ProtectConnectionManager:
         login when the server started. It makes a single attempt with no
         back-off, at most once per reconnect window, and none at all while
         the auth circuit's cool-down runs or after :meth:`close`. Concurrent
-        callers share one attempt.
+        callers share one attempt, including a start-up :meth:`initialize`
+        still running, and wait for it only within the attempt's wait window;
+        the attempt itself continues in the background.
 
         Returns ``True`` when a client is available afterwards.
         """
         if self._initialized and self._client is not None:
             return True
-        if not self._reconnect_allowed():
-            return False
+        if not self._attempt.in_progress:
+            if not self._reconnect_allowed():
+                return False
+            self._attempt.start(self._reconnect_once, name="protect-reconnect")
+        await self._attempt.wait()
+        return self._initialized and self._client is not None
+
+    async def _reconnect_once(self) -> bool:
         async with self._connect_lock:
             if self._initialized and self._client is not None:
                 return True
@@ -275,6 +300,7 @@ class ProtectConnectionManager:
 
     async def _connection_succeeded(self) -> None:
         self._initialized = True
+        self._initialization_failure = None
         self._support_attempt = connection_attempt_succeeded()
         self._last_failure_class = None
         self._clear_reconnect_block()
@@ -287,8 +313,14 @@ class ProtectConnectionManager:
 
     def _connection_failed(self, error: BaseException) -> None:
         self._initialized = False
-        self._support_attempt = connection_attempt_failed(error)
         self._last_failure_class = type(error).__name__
+        # The exception can quote NVR responses: keep its category and status only.
+        # uiprotect wraps a timed-out request in NvrError; classify it by its cause.
+        cause = error.__cause__ if isinstance(error.__cause__, TimeoutError) else error
+        self._initialization_failure = connection_failure(
+            "Connecting to UniFi Protect failed.", cause, status=nvr_status(error)
+        )
+        self._support_attempt = connection_attempt_failed(self._initialization_failure)
         self._last_connect_attempt_at = self._clock()
         if _is_terminal_auth_error(error):
             self._block_automatic_reconnect(error)
@@ -333,6 +365,12 @@ class ProtectConnectionManager:
         """Why no client is available: exception class and fixed guidance only."""
         if self._closed:
             return "UniFi Protect connection is not initialized: the connection was closed."
+        if self._attempt.in_progress:
+            return (
+                "UniFi Protect connection is not ready: still connecting to the controller, "
+                "which has not answered yet. Check that the controller is reachable from this machine; "
+                "the attempt continues in the background and a later call uses the connection once it succeeds."
+            )
         if self._reconnect_block_active():
             remaining = max(0.0, self._reconnect_block_until - self._clock())
             return (
@@ -347,6 +385,11 @@ class ProtectConnectionManager:
                 "a later call tries to connect again."
             )
         return "ProtectConnectionManager is not initialized. Call initialize() first."
+
+    @property
+    def initialization_failure(self) -> ControllerConnectionFailed | None:
+        """Why the last connection attempt failed, as a fixed-text error keeping its category and status."""
+        return self._initialization_failure
 
     @staticmethod
     async def _dispose_client(client: ProtectApiClient) -> None:
@@ -386,6 +429,7 @@ class ProtectConnectionManager:
 
     async def close(self) -> None:
         """Gracefully shut down websocket, client session, and API session."""
+        await self._attempt.cancel()
         if self._refresh_task is not None:
             self._refresh_task.cancel()
             try:
@@ -523,7 +567,13 @@ class ProtectConnectionManager:
         Raises :class:`UniFiConnectionError` if not yet initialized.
         """
         if self._client is None or not self._initialized:
-            raise UniFiConnectionError(self._not_connected_message())
+            failure = self._initialization_failure
+            if failure is None or self._closed or self._attempt.in_progress:
+                raise UniFiConnectionError(self._not_connected_message())
+            # The same guidance, typed by the failure's category (auth, permission, timeout) and status.
+            error = type(failure)(self._not_connected_message())
+            error.status = failure.status
+            raise error from None
         return self._client
 
     @property

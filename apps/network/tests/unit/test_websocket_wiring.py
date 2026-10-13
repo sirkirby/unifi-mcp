@@ -14,6 +14,13 @@ from unifi_network_mcp import main as network_main
 from unifi_network_mcp.runtime import config
 
 
+async def _serve_until_startup_connect_finishes(**_kwargs) -> None:
+    """Stand in for the transports: serve until the background startup connect is done."""
+    for task in asyncio.all_tasks():
+        if task.get_name() == "network-startup-connect":
+            await task
+
+
 @contextmanager
 def _startup(
     *,
@@ -47,7 +54,10 @@ def _startup(
         patch.object(network_main.event_manager, "stop_listening", AsyncMock()) as stopped,
         patch("unifi_mcp_shared.tool_registration.register_tools_for_mode", registration or AsyncMock()),
         patch("unifi_mcp_shared.transport.resolve_http_config", return_value=(False, "http", "0.0.0.0", 3000)),
-        patch("unifi_mcp_shared.transport.run_transports", transports or AsyncMock()) as ran,
+        patch(
+            "unifi_mcp_shared.transport.run_transports",
+            transports or AsyncMock(side_effect=_serve_until_startup_connect_finishes),
+        ) as ran,
     ):
         yield started, stopped, ran
 

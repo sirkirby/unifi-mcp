@@ -4,6 +4,11 @@ name: "Check: Cross-package pin alignment"
 # upstream when resolved against PyPI. Catches the failure mode where
 # workspace [tool.uv.sources] masks a stale pin in [project.dependencies]
 # (incident #283). Uses no untrusted event inputs — only repo source.
+#
+# The path filters cover every file that ends up in a built wheel (each
+# package's pyproject.toml and src/ tree, plus the API's force-included alembic
+# files), upstream and downstream alike, and the gate's own inputs. A package
+# whose wheel contents change can change what the gate observes.
 
 on:
   push:
@@ -11,8 +16,10 @@ on:
     paths:
       - "apps/*/pyproject.toml"
       - "apps/*/src/**"
+      - "apps/*/alembic/**"
+      - "apps/*/alembic.ini"
       - "packages/*/pyproject.toml"
-      - "packages/unifi-core/src/**"
+      - "packages/*/src/**"
       - "scripts/generate_api_action_catalog.py"
       - "scripts/check_pin_alignment.py"
       - ".github/workflows/check-pin-alignment.yml"
@@ -22,8 +29,10 @@ on:
     paths:
       - "apps/*/pyproject.toml"
       - "apps/*/src/**"
+      - "apps/*/alembic/**"
+      - "apps/*/alembic.ini"
       - "packages/*/pyproject.toml"
-      - "packages/unifi-core/src/**"
+      - "packages/*/src/**"
       - "scripts/generate_api_action_catalog.py"
       - "scripts/check_pin_alignment.py"
       - ".github/workflows/check-pin-alignment.yml"

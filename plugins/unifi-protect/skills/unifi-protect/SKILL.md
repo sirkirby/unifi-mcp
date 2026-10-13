@@ -36,7 +36,7 @@ similar names, proximity, or absence of a matching event alone proves neither
 identity nor cause. A credential event identifies the recorded account, not who
 physically used it. Missing mappings or clock uncertainty limit correlations.
 
-You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 62 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
+You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 63 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
 
 ## Tool Discovery
 
@@ -121,4 +121,4 @@ Cameras are network clients — if a camera appears offline, the Network server 
 
 ## Tool Reference
 
-For the complete list of all 62 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.
+For the complete list of all 63 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.

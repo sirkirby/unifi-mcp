@@ -36,7 +36,7 @@ similar names, proximity, or absence of a matching event alone proves neither
 identity nor cause. A credential event identifies the recorded account, not who
 physically used it. Missing mappings or clock uncertainty limit correlations.
 
-You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 209 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
+You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 210 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
 
 ## Tool Discovery
 

@@ -130,7 +130,23 @@ The relay always exposes these meta-tools regardless of registration mode:
 | `unifi_tool_index` | List all available UniFi tools with optional category or search filter |
 | `unifi_execute` | Execute any UniFi tool by name; use `__location` to target a specific site |
 | `unifi_batch` | Execute multiple UniFi tools in a single request |
-| `unifi_location_timeline` | Query a unified event timeline across connected locations and products |
+| `unifi_location_timeline` | Collect bounded Network and Protect incident evidence with explicit per-source failures |
+
+The timeline tool accepts `start`/`end` with UTC offsets, exact `device_macs`
+and `camera_ids`, explicit `mappings`, and `max_window_seconds`, `max_events`,
+`max_calls`, `max_elapsed_ms`. `products` defaults to Network and Protect;
+requested Access collection is unsupported. `location_id` selects one location by
+its UUID (from the location list, not its name) and an unknown one is refused before any read;
+a call reads at most 7 sources (locations × products, one Protect source per
+camera ID) and refuses a larger selection before any read.
+It returns `data` as the [client view](../../docs/incident-evidence.md#client-view) of one combined
+[incident evidence document](../../docs/incident-evidence.md#relay-and-worker-consumers), or the whole
+document with `detail: "full"`; `max_records_returned` (1 to 50, default 25) sets the citations in the view,
+which fits one tool result, and `resume_after` (the view's `record_selection.next_cursor`) reads the records after it.
+Check `overall`, `coverage_complete`, source outcomes and exhausted budgets;
+missing or failed sources are retained. Conflicting source IDs fail combination,
+including across locations. Legacy area/name filters and `start_time`/`end_time`
+are no longer supported.
 
 ---
 

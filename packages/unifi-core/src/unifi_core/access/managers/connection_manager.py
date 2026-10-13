@@ -33,6 +33,7 @@ from typing import Any, Awaitable, Callable, Dict, TypeVar
 import aiohttp
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiRateLimitError
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
@@ -125,6 +126,7 @@ class AccessConnectionManager:
         self._path_failures: list[BaseException] = []
         self._last_attempt_at: float | None = None
         self._reconnect_lock = asyncio.Lock()
+        self._attempt = ConnectAttempt()
         self._reconnect_block_until = 0.0
         self._reconnect_block_count = 0
         self._reconnect_callbacks: list[Callable[[], Awaitable[None]]] = []
@@ -173,12 +175,22 @@ class AccessConnectionManager:
         Returns ``True`` when at least one path succeeds, ``False`` otherwise.
         On failure :attr:`last_connection_error` says whether credentials are
         missing, the controller rejected them, or it could not be reached.
+
+        It runs as the manager's one connection attempt, so a server can call
+        it in the background and operations wait on it within a bound.
         """
         self._closed = False
         self._initialize_attempted = True
         if self._initialized and (self._api_client_available or self._proxy_available):
             return True
+        if self._attempt.in_progress:
+            # Let an automatic reconnect finish rather than run a second attempt.
+            if await self._attempt.join():
+                return True
+        self._attempt.start(self._initialize_with_retries, name="access-connect")
+        return await self._attempt.join()
 
+    async def _initialize_with_retries(self) -> bool:
         self._support_attempt = connection_attempt_started()
         if not self._credentials_configured():
             error = UniFiConnectionError(
@@ -210,9 +222,19 @@ class AccessConnectionManager:
         connected, after :meth:`close`, during the auth cool-down, or within
         the minimum interval since the last attempt.  Registered reconnect
         callbacks run after a successful attempt.
+
+        Callers share one attempt, including a start-up :meth:`initialize`
+        still running, and wait for it only within the attempt's wait window;
+        the attempt itself continues in the background.
         """
-        if not self.reconnect_due:
-            return self.is_connected
+        if not self._attempt.in_progress:
+            if not self.reconnect_due:
+                return self.is_connected
+            self._attempt.start(self._reconnect_once, name="access-reconnect")
+        await self._attempt.wait()
+        return self.is_connected
+
+    async def _reconnect_once(self) -> bool:
         async with self._reconnect_lock:
             if not self.reconnect_due:
                 return self.is_connected
@@ -228,6 +250,11 @@ class AccessConnectionManager:
             self._mark_connected()
         await self._run_reconnect_callbacks()
         return True
+
+    @property
+    def connect_in_progress(self) -> bool:
+        """Whether a connection attempt, at start-up or automatic, is running."""
+        return self._attempt.in_progress
 
     @property
     def reconnect_due(self) -> bool:
@@ -359,10 +386,11 @@ class AccessConnectionManager:
         return paths
 
     def _unreachable_message(self) -> str:
+        # A rejected login has its own message; this one never blames the credentials.
         return (
-            f"Could not reach or authenticate to UniFi Access at {self.host} "
+            f"Could not connect to UniFi Access at {self.host} "
             f"(tried {' and '.join(self._configured_paths())}). Check that the controller is reachable "
-            "and the configured credentials are valid."
+            "from this machine and that UniFi Access is running on it."
         )
 
     def _rejected_message(self) -> str:
@@ -383,6 +411,12 @@ class AccessConnectionManager:
         callers see why Access is unavailable, plus when the next automatic
         reconnect may run.
         """
+        if self._attempt.in_progress:
+            return AccessUnavailableError(
+                f"{message}: still connecting to UniFi Access at {self.host}, which has not answered yet. "
+                "Check that the controller is reachable from this machine; the attempt continues in the "
+                "background and a later call uses the connection once it succeeds."
+            )
         if not self._last_connection_error:
             return AccessUnavailableError(message)
         detail = f"{message}: {self._last_connection_error}"
@@ -905,6 +939,7 @@ class AccessConnectionManager:
     async def close(self) -> None:
         """Gracefully shut down both sessions and stop automatic reconnects."""
         self._closed = True
+        await self._attempt.cancel()
         if self._api_client is not None:
             try:
                 await self._api_client.close()
@@ -941,8 +976,9 @@ def reconnects_on_demand(cls: _ManagerT) -> _ManagerT:
     Every public coroutine method first asks the manager's connection
     manager (``self._cm``) to reconnect when it has no auth path and an
     attempt is due, so a controller that was down at startup is picked up
-    without restarting the server.  The attempt runs before the operation
-    sends anything, so no request is ever replayed.
+    without restarting the server.  While an attempt is already running the
+    method waits on it within the attempt's bound instead.  The attempt runs
+    before the operation sends anything, so no request is ever replayed.
     """
     for name, member in list(vars(cls).items()):
         if name.startswith("_") or not inspect.iscoroutinefunction(member):
@@ -956,7 +992,7 @@ def _with_reconnect(method: Callable[..., Awaitable[Any]]) -> Callable[..., Awai
     async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         cm = getattr(self, "_cm", None)
         # ``is True`` keeps test doubles, whose attributes are mocks, inert.
-        if getattr(cm, "reconnect_due", None) is True:
+        if getattr(cm, "reconnect_due", None) is True or getattr(cm, "connect_in_progress", None) is True:
             await cm.reconnect()
         return await method(self, *args, **kwargs)
 

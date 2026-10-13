@@ -5,6 +5,24 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## 1.0.1
+
+`unifi-network`, `unifi-protect` and `unifi-access` move to 1.0.1 and start
+`unifi-network-mcp` 0.37.2, `unifi-protect-mcp` 0.8.19 and `unifi-access-mcp`
+0.6.14. Update as for any release; there is nothing to rerun.
+
+- **A down controller no longer fails the plugin.** The servers answer the
+  client at once and connect to the controller in the background. Before, a
+  controller that was down or slow kept the server from answering until the
+  client gave up and marked it failed. Tools now say the server is still
+  connecting or cannot reach the controller, and work again once it is back.
+- **Connection errors name the real cause.** A network failure says the
+  controller is unreachable; only a rejected login points at your credentials.
+- **Claude Code setup refuses to clear a keychain-held secret.** Setup refuses,
+  before writing, a change that would clear a password or API key Claude Code
+  holds in the system keychain, and says how to switch. See
+  [Moving a raw secret to a provider](#moving-a-raw-secret-to-a-provider).
+
 ## 1.0.0
 
 Every UniFi plugin (`unifi-network`, `unifi-protect`, `unifi-access` and the
@@ -303,12 +321,27 @@ password or API key on the command line.
    `UNIFI_NETWORK_API_KEY_COMMAND` the same way, with the matching
    `UNIFI_PROTECT_*` or `UNIFI_ACCESS_*` names for the other plugins.
 
-Selecting a spelling removes the other saved spellings of that secret, so the
-old raw value is removed in the same change. In Claude Code a migrated raw
-password or API key lands in the system keychain; the steps above replace it
-with a provider. You can also enter it in the masked password or API key field
-under `/plugin`, then the plugin, then **Configure options**, which keeps it in
-the keychain.
+In Codex and OpenClaw, selecting a spelling removes the other saved spellings of
+that secret, so the old raw value is removed in the same change.
+
+In Claude Code, a raw password or API key saved as an option (typed into the
+options, or moved there by `--migrate`) is held in the system keychain, and
+Claude Code cannot clear it: `claude plugin configure` and the options dialog
+ignore an empty value. Setup refuses the switch, names the variable and changes
+nothing. Either keep the saved secret, or uninstall and reinstall the plugin and
+then run setup with the provider:
+
+```bash
+claude plugin uninstall unifi-network@unifi-plugins
+claude plugin install unifi-network@unifi-plugins
+```
+
+Use `unifi-protect@unifi-plugins` or `unifi-access@unifi-plugins` for the other
+plugins. Uninstalling clears every option of the plugin, so set the host,
+username and your other options again; setup's message lists them. To replace
+the raw value with another one instead, enter it in the masked password or API
+key field under `/plugin`, then the plugin, then **Configure options**, which
+keeps it in the keychain.
 
 To supply a raw value deliberately, pipe a JSON patch from a private file:
 `set-env.sh --target <target> --input-json < private.json`

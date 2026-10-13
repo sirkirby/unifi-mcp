@@ -91,6 +91,16 @@ The relay + worker architecture supports multiple locations. Each location runs 
 - **Write tools** require an explicit `__location` argument to target a specific location
 - **Tool discovery** is deduplicated across locations in the worker's tool index
 
+## Incident evidence
+
+The cloud worker provides `unifi_location_timeline` when a relay is connected;
+the relay does not register or handle it. The relay forwards the product
+evidence tools, `unifi_get_incident_evidence` and
+`protect_get_incident_evidence`, like any other read-only tool, and the worker
+validates and combines what each location returns. Local product servers
+serve the evidence tools directly. See the
+[contract and combine rules](../../docs/incident-evidence.md#relay-and-worker-consumers).
+
 ## Architecture
 
 The relay is a standalone Python package with no dependency on the MCP server packages. It communicates with local servers purely via the MCP HTTP transport protocol.

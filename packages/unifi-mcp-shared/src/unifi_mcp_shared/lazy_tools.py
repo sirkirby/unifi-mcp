@@ -12,7 +12,7 @@ import logging
 import re
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Dict, Set
+from typing import Any, Callable, Dict, List, Sequence, Set
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,8 @@ class LazyToolLoader:
         self.tool_module_map = tool_module_map
         self.loaded_modules: Set[str] = set()
         self.loaded_tools: Set[str] = set()
+        # Registrations deferred by load_only, by tool name.
+        self._held: Dict[str, Callable[[], Any]] = {}
         self._loading = False
 
         logger.info("Lazy tool loader initialized")
@@ -164,7 +166,11 @@ class LazyToolLoader:
             logger.info("Lazy-loading tool '%s' from '%s'", tool_name, module_path)
 
             # Import the module (this will trigger @server.tool decorators)
-            if module_path not in self.loaded_modules:
+            register_held = self._held.get(tool_name)
+            if register_held is not None:
+                register_held()
+                del self._held[tool_name]
+            elif module_path not in self.loaded_modules:
                 importlib.import_module(module_path)
                 self.loaded_modules.add(module_path)
 
@@ -179,6 +185,36 @@ class LazyToolLoader:
             return False
         finally:
             self._loading = False
+
+    async def load_only(self, tool_names: Sequence[str]) -> List[str]:
+        """Load *tool_names* without registering the other tools their modules declare.
+
+        While the modules import, ``server.tool`` registers only the named
+        tools. Each other declaration is held, unregistered, and registers the
+        first time that tool is loaded, exactly as importing it would have.
+        Returns the names that could not be loaded.
+        """
+        wanted = set(tool_names)
+        register = self.server.tool
+
+        def register_named(*d_args, **d_kwargs):
+            name = d_kwargs.get("name") or (d_args[0] if d_args else None)
+            # Anything not naming a tool by string registers as usual, so the
+            # caller's check of what was registered still sees it.
+            if not isinstance(name, str) or name in wanted:
+                return register(*d_args, **d_kwargs)
+
+            def hold(func):
+                self._held[name] = lambda: register(*d_args, **d_kwargs)(func)
+                return func
+
+            return hold
+
+        self.server.tool = register_named
+        try:
+            return [name for name in tool_names if not await self.load_tool(name)]
+        finally:
+            self.server.tool = register
 
     async def intercept_call_tool(
         self,

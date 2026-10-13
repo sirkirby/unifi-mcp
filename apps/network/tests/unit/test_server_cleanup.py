@@ -1,5 +1,6 @@
 """Server teardown releases the controller after normal and failed startup."""
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,8 +13,15 @@ async def test_server_always_closes_its_connection(monkeypatch, failure):
 
     initialize = AsyncMock(return_value=False)
     registration = AsyncMock()
-    transport = AsyncMock()
     close = AsyncMock()
+
+    async def serve(**_kwargs) -> None:
+        # The controller connects in the background; serve until that is done.
+        for task in asyncio.all_tasks():
+            if task.get_name() == "network-startup-connect":
+                await task
+
+    transport = AsyncMock(side_effect=serve)
     stages = {"initialize": initialize, "registration": registration, "transport": transport}
     if failure:
         stages[failure].side_effect = RuntimeError("startup failure")
@@ -26,9 +34,11 @@ async def test_server_always_closes_its_connection(monkeypatch, failure):
     monkeypatch.setattr(
         "unifi_mcp_shared.transport.resolve_http_config", lambda *a, **kw: (False, "http", "127.0.0.1", 3000)
     )
-    if failure:
+    if failure in ("registration", "transport"):
         with pytest.raises(RuntimeError, match="startup failure"):
             await main.main_async()
     else:
+        # A failed controller connect runs in the background and must not stop the server.
         await main.main_async()
+        initialize.assert_awaited_once()
     close.assert_awaited_once()
