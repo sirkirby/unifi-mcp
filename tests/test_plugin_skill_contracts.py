@@ -26,7 +26,7 @@ refs = sys.modules["plugin_tool_refs"]
 TOOL = r"(?:unifi|protect|access)_[a-z][a-z0-9_]+"
 # These are event/response field names and contract values, not tools (including in generated prose).
 DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
-SERVERS = {"network", "protect", "access", "relay"}
+SERVERS = {"network", "protect", "access", "worker"}
 TIMELINE_TOOL = "apps/worker/worker/src/location-timeline-tool.json"
 
 
@@ -44,7 +44,7 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
             result[tool["name"]] = (product, tool["schema"]["input"])
     # The cloud worker serves this definition; skills reach it through a connected relay.
     timeline = json.loads((ROOT / TIMELINE_TOOL).read_text(encoding="utf-8"))
-    result[timeline["name"]] = ("relay", timeline["inputSchema"])
+    result[timeline["name"]] = ("worker", timeline["inputSchema"])
     return result
 
 
@@ -134,6 +134,44 @@ def structure_errors(text: str) -> list[str]:
     ):
         errors.append(f"legacy dependency section: {match[1]}")
     return errors
+
+
+def worker_skill_errors(text: str) -> list[str]:
+    """A skill that calls the worker's timeline requires it, says so plainly and never asks it for Access."""
+    if not re.search(r"\bunifi_location_timeline\(", text):
+        return []
+    errors = []
+    requires = re.search(r"^Requires: (.+)$", text, re.MULTILINE)
+    if not requires or "worker" not in requires[1].split(", "):
+        errors.append("timeline skill must require worker")
+    if "This skill needs the cloud worker." not in text:
+        errors.append("timeline skill must say it needs the cloud worker")
+    # The worker reports Access as unsupported; Access comes from its own read.
+    if any("access" in products for products in re.findall(r"\bproducts=\[([^\]]*)\]", text)):
+        errors.append("timeline skill must not request Access from the timeline")
+    return errors
+
+
+TIMELINE_SKILLS = [p for p in skills() if re.search(r"\bunifi_location_timeline\(", p.read_text())]
+
+
+@pytest.mark.parametrize("path", TIMELINE_SKILLS, ids=lambda p: p.parent.name)
+def test_timeline_skills_need_the_worker_and_read_access_separately(path: Path) -> None:
+    assert not worker_skill_errors(path.read_text()), worker_skill_errors(path.read_text())
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        ("Requires: worker", "Requires: network", "must require worker"),
+        ("This skill needs the cloud worker.", "", "must say it needs the cloud worker"),
+        ("device_macs=[", 'products=["network", "access"], device_macs=[', "must not request Access"),
+    ],
+)
+def test_timeline_skill_mutations_are_rejected(old: str, new: str, expected: str) -> None:
+    text = (ROOT / "plugins/unifi-intelligence/skills/security-patrol/SKILL.md").read_text()
+    assert old in text
+    assert any(expected in error for error in worker_skill_errors(text.replace(old, new, 1)))
 
 
 @pytest.mark.parametrize("path", skills(), ids=lambda p: p.parent.name)

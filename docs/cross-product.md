@@ -105,9 +105,9 @@ The `unifi-intelligence` plugin ships three cross-product skills:
 
 | Skill | Use Case | Products |
 |-------|----------|----------|
-| **Security Patrol** | "What happened at the front entrance?" | Network + Protect + Access |
-| **Incident Investigation** | "A switch went offline — what happened?" | Network + Protect |
-| **Visitor Audit** | "Which access and network activity was observed today?" | Access + Network |
+| **Security Patrol** | "What happened at the front entrance?" | Network + Protect through the cloud worker; Access read separately |
+| **Incident Investigation** | "A switch went offline — what happened?" | Network + Protect, local |
+| **Visitor Audit** | "Which access and network activity was observed today?" | Access read separately + Network through the cloud worker |
 
 The plugin is listed in the Claude Code and Codex marketplaces and ships skills
 only, no MCP server. It requires the `unifi-network` and `unifi-protect`
@@ -119,13 +119,18 @@ from `plugins/unifi-intelligence`. Each skill declares required and optional
 servers in its Dependencies section.
 
 Incident Investigation requires the local Network and Protect servers and uses
-their incident evidence tools; the relay is optional and unused. Security Patrol
-and Visitor Audit are merged-timeline workflows that require
+their incident evidence tools; it needs neither the cloud worker nor the relay.
+Security Patrol and Visitor Audit need the cloud worker: they call
 `unifi_location_timeline`, which the cloud worker provides through a connected
-relay. Visitor Audit also requires Access and optionally Network; Security
-Patrol needs at least one product (two for a multi-product correlation).
-Without it, those two stop the merged workflow and offer
-separate local reads, explicitly stating that no merged timeline is available.
+relay. The timeline covers Network and Protect and reports Access as
+unsupported, so both skills read door events separately with
+`access_list_events` and report that read's coverage apart from the
+timeline's. Both turn an area or door into exact device MACs and camera IDs
+before calling the timeline, which never matches names. Visitor Audit also
+requires Access; Security Patrol needs at least one product (two for a
+multi-product correlation). Without the cloud worker, those two stop the merged
+workflow and offer separate local reads, explicitly stating that no merged
+timeline is available.
 
 Reports include Coverage and Limitations: requested interval, source availability,
 filters, returned counts, caps and failures. A sorted timeline does not establish

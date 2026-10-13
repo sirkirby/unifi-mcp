@@ -18,7 +18,9 @@ ships skills only: Incident Investigation, Security Patrol and Visitor Audit.
   [install guide](agent-install.md#unifi-intelligence).
 - **Security Patrol and Visitor Audit need the cloud worker.** They call
   `unifi_location_timeline`, which only the cloud worker provides, through a
-  connected relay; local servers do not.
+  connected relay; local servers do not. Both now read Access door events
+  separately, because the timeline reports Access as unsupported, and turn an
+  area into exact device MACs and camera IDs instead of passing an area name.
 - **If you installed the old bundle's skills** with
   `npx skills add .../plugins/cross-product`, that path no longer exists. Remove
   those skills with the skills CLI and install the plugin, or add the skills

@@ -103,12 +103,12 @@ def evidence_call_errors(text: str, lazy: set[str]) -> list[str]:
 
 
 def dependency_errors(text: str) -> list[str]:
-    """Network and Protect are required; the relay is optional and never needed."""
+    """Network and Protect are required; the cloud worker is optional and never needed."""
     errors = structure_errors(text)
     if not re.search(r"^Requires: network, protect$", text, re.M):
         errors.append("Requires must be exactly network, protect")
-    if not re.search(r"^Optional: relay$", text, re.M):
-        errors.append("Optional must be exactly relay")
+    if not re.search(r"^Optional: worker$", text, re.M):
+        errors.append("Optional must be exactly worker")
     return errors
 
 
@@ -432,9 +432,9 @@ def test_missing_skill_section_is_rejected(section: str) -> None:
 @pytest.mark.parametrize(
     ("old", "new", "expected"),
     [
-        ("Requires: network, protect", "Requires: network, relay", "Requires must be"),
+        ("Requires: network, protect", "Requires: network, worker", "Requires must be"),
         ("Requires: network, protect", "Requires: network", "Requires must be"),
-        ("Optional: relay", "Optional: none", "Optional must be"),
+        ("Optional: worker", "Optional: none", "Optional must be"),
     ],
 )
 def test_wrong_dependency_declaration_is_rejected(old: str, new: str, expected: str) -> None:

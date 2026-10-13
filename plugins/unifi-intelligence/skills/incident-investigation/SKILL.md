@@ -12,12 +12,12 @@ evidence document (`schema: "unifi-incident-evidence-view"`) that fits in one
 tool result: every source's outcome, failure and coverage, plus the record
 citations that fit (at most `max_records_returned`), with omitted records
 counted and a cursor to read the rest. The local product servers are the whole
-transport; nothing here needs the relay.
+transport; nothing here needs the cloud worker or the relay.
 
 ## Dependencies
 
 Requires: network, protect
-Optional: relay
+Optional: worker
 
 The investigation needs `unifi_get_incident_evidence` (Network) and
 `protect_get_incident_evidence` (Protect). Discovery shows a tool is listed, not
@@ -31,11 +31,11 @@ that per source.
   never reaches complete coverage of the incident.
 - **Network not connected.** Stop and report Network unavailable. There is no
   device evidence to investigate.
-- **Relay.** Not needed. The cloud worker's location timeline, reached through
-  a connected relay, collects the same evidence through these two tools and returns one combined document; this
-  workflow calls the tools directly so each product's document and budgets stay
-  separate. When the product servers are reached through a relay connection,
-  call the same two evidence tools.
+- **Cloud worker.** Not needed. Its location timeline, reached through a
+  connected relay, collects the same evidence through these two tools and
+  returns one combined document; this workflow calls the tools directly so each
+  product's document and budgets stay separate. When you reach the product
+  servers through the cloud worker, call the same two evidence tools.
 
 Use the product setup skills for connection help; never ask for secrets.
 
