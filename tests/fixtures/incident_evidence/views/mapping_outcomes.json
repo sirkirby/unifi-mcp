@@ -223,7 +223,7 @@
               "original_value": 1786191900000
             },
             "event_type": "CLIENT_CONNECTED_WIRELESS_2",
-            "summary": "fixture-phone has connected to fixture-front-door-ap.",
+            "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
             "entity_ids": [
               "aa:bb:cc:00:20:01",
               "aa:bb:cc:00:10:01"
@@ -254,7 +254,7 @@
               "original_value": 1786191960000
             },
             "event_type": "DEVICE_DISCONNECTED_AP",
-            "summary": "fixture-front-door disconnected.",
+            "summary": "aa:bb:cc:00:10:02 disconnected.",
             "entity_ids": [
               "aa:bb:cc:00:10:02"
             ],
@@ -605,7 +605,7 @@
               "original_value": 1786191900000
             },
             "event_type": "CLIENT_CONNECTED_WIRELESS_2",
-            "summary": "fixture-phone has connected to fixture-front-door-ap.",
+            "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
             "entity_ids": [
               "aa:bb:cc:00:20:01",
               "aa:bb:cc:00:10:01"
@@ -636,7 +636,7 @@
               "original_value": 1786191960000
             },
             "event_type": "DEVICE_DISCONNECTED_AP",
-            "summary": "fixture-front-door disconnected.",
+            "summary": "aa:bb:cc:00:10:02 disconnected.",
             "entity_ids": [
               "aa:bb:cc:00:10:02"
             ],
