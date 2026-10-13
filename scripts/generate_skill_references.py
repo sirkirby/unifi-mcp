@@ -164,14 +164,13 @@ def update_reference_content(content: str, categories: dict[str, list[dict]]) ->
                 merged_tools.extend(categories[cat])
                 matched_cats.add(cat)
 
-        if not merged_tools:
-            continue
-
-        # Sort merged: reads first, then mutates, alphabetical within
-        merged_tools.sort(key=lambda t: (0 if t["type"] == "Read" else 1, t["name"]))
-
-        table = generate_table(merged_tools)
-        replacement = f"{start_marker}\n{table}\n{end_marker}"
+        if merged_tools:
+            # Sort merged: reads first, then mutates, alphabetical within
+            merged_tools.sort(key=lambda t: (0 if t["type"] == "Read" else 1, t["name"]))
+            replacement = f"{start_marker}\n{generate_table(merged_tools)}\n{end_marker}"
+        else:
+            # The pinned release has no tools here (yet): an empty section, never stale rows.
+            replacement = f"{start_marker}\n{end_marker}"
 
         new_content, count = pattern.subn(replacement, content)
         if count > 0:

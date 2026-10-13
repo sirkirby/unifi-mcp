@@ -69,3 +69,21 @@ def test_check_fails_when_a_category_has_no_marker_section(repo, sections, expec
         generator.run(repo, check_mode=False) == 0
     )  # generating fills what it can and never fails on a missing section
     assert generator.run(repo, check_mode=True) == expected
+
+
+def test_a_section_the_pinned_release_has_no_tools_for_is_emptied(repo) -> None:
+    stale = (
+        "<!-- AUTO:tools:incident_evidence -->\n1 tools.\n\n| Tool | Type | Description |\n"
+        "|------|------|-------------|\n| `unifi_get_incident_evidence` | Read | Not in the pinned release. |\n"
+        "<!-- /AUTO:tools:incident_evidence -->\n"
+    )
+    _write(repo, REFERENCE, "# Network Server Tool Reference (2 tools)\n\n" + _section("things") + _section("widgets"))
+    assert generator.run(repo, check_mode=False) == 0
+    path = repo / REFERENCE
+    path.write_text(path.read_text() + stale)
+    # A hand-filled or once-released table for a category the pinned release lacks is drift.
+    assert generator.run(repo, check_mode=True) == 1
+    assert generator.run(repo, check_mode=False) == 0
+    text = (repo / REFERENCE).read_text()
+    assert _section("incident_evidence") in text and "unifi_get_incident_evidence" not in text
+    assert generator.run(repo, check_mode=True) == 0
