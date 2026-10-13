@@ -44,6 +44,7 @@
             "outcome": "partial",
             "failure": null,
             "partial_reasons": [
+              "conflicting_records",
               "truncation_unknown"
             ],
             "coverage": {
@@ -67,7 +68,7 @@
                 "offset": 0,
                 "requested_cap": 100,
                 "cap": 100,
-                "returned": 2,
+                "returned": 4,
                 "has_more": null,
                 "total_reported": null,
                 "post_filtered": false,
@@ -76,14 +77,14 @@
               "truncation": "unknown",
               "retention_coverage": "unknown",
               "counts": {
-                "received": 2,
-                "accepted": 2,
-                "in_window": 2,
+                "received": 4,
+                "accepted": 4,
+                "in_window": 4,
                 "out_of_window": 0,
                 "untimed": 0,
                 "malformed_dropped": 0,
                 "duplicates_dropped": 0,
-                "conflicting": 0,
+                "conflicting": 2,
                 "boundary_uncertain": 0
               },
               "complete": false,
@@ -282,6 +283,56 @@
             "summary": "smartDetectZone: vehicle",
             "entity_ids": [
               "cam-fixture-000b"
+            ],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": null,
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:30:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786192200000
+            },
+            "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+            "summary": "fixture-tablet has connected to fixture-ap-renamed.",
+            "entity_ids": [
+              "aa:bb:cc:00:20:03"
+            ],
+            "mapping": {
+              "status": "not_evaluated",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|c56666753f8543f8e93fdd98",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": null,
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:30:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786192200000
+            },
+            "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+            "summary": "fixture-tablet has connected to fixture-ap-1.",
+            "entity_ids": [
+              "aa:bb:cc:00:20:03"
             ],
             "mapping": {
               "status": "not_evaluated",
@@ -346,8 +397,8 @@
           "omission": "presentation_limit",
           "resume_after": null,
           "collected": {
-            "total": 5,
-            "in_window": 5,
+            "total": 7,
+            "in_window": 7,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -358,8 +409,8 @@
             "untimed": 0
           },
           "returned": {
-            "total": 5,
-            "in_window": 5,
+            "total": 7,
+            "in_window": 7,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -418,6 +469,7 @@
             "outcome": "partial",
             "failure": null,
             "partial_reasons": [
+              "conflicting_records",
               "truncation_unknown"
             ],
             "coverage": {
@@ -441,7 +493,7 @@
                 "offset": 0,
                 "requested_cap": 100,
                 "cap": 100,
-                "returned": 2,
+                "returned": 4,
                 "has_more": null,
                 "total_reported": null,
                 "post_filtered": false,
@@ -450,14 +502,14 @@
               "truncation": "unknown",
               "retention_coverage": "unknown",
               "counts": {
-                "received": 2,
-                "accepted": 2,
-                "in_window": 2,
+                "received": 4,
+                "accepted": 4,
+                "in_window": 4,
                 "out_of_window": 0,
                 "untimed": 0,
                 "malformed_dropped": 0,
                 "duplicates_dropped": 0,
-                "conflicting": 0,
+                "conflicting": 2,
                 "boundary_uncertain": 0
               },
               "complete": false,
@@ -645,8 +697,8 @@
           "omission": "presentation_limit",
           "resume_after": null,
           "collected": {
-            "total": 5,
-            "in_window": 5,
+            "total": 7,
+            "in_window": 7,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -663,8 +715,8 @@
             "untimed": 0
           },
           "omitted": {
-            "total": 3,
-            "in_window": 3,
+            "total": 5,
+            "in_window": 5,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -717,6 +769,7 @@
             "outcome": "partial",
             "failure": null,
             "partial_reasons": [
+              "conflicting_records",
               "truncation_unknown"
             ],
             "coverage": {
@@ -740,7 +793,7 @@
                 "offset": 0,
                 "requested_cap": 100,
                 "cap": 100,
-                "returned": 2,
+                "returned": 4,
                 "has_more": null,
                 "total_reported": null,
                 "post_filtered": false,
@@ -749,14 +802,14 @@
               "truncation": "unknown",
               "retention_coverage": "unknown",
               "counts": {
-                "received": 2,
-                "accepted": 2,
-                "in_window": 2,
+                "received": 4,
+                "accepted": 4,
+                "in_window": 4,
                 "out_of_window": 0,
                 "untimed": 0,
                 "malformed_dropped": 0,
                 "duplicates_dropped": 0,
-                "conflicting": 0,
+                "conflicting": 2,
                 "boundary_uncertain": 0
               },
               "complete": false,
@@ -914,22 +967,22 @@
             "truncated": {}
           },
           {
-            "evidence_id": "network.events|str|evt-net-0101",
+            "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc",
             "product": "network",
             "source_tool": "unifi_list_events",
-            "source_record_id": "evt-net-0101",
+            "source_record_id": null,
             "time": {
               "status": "in_window",
-              "utc": "2026-08-08T12:50:00.000000Z",
+              "utc": "2026-08-08T12:30:00.000000Z",
               "boundary_uncertain": false,
               "original_field": "time",
               "original_type": "integer",
-              "original_value": 1786193400000
+              "original_value": 1786192200000
             },
-            "event_type": "CLIENT_DISCONNECTED_WIRELESS_2",
-            "summary": "fixture-phone disconnected from fixture-ap-1.",
+            "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+            "summary": "fixture-tablet has connected to fixture-ap-renamed.",
             "entity_ids": [
-              "aa:bb:cc:00:20:01"
+              "aa:bb:cc:00:20:03"
             ],
             "mapping": {
               "status": "not_evaluated",
@@ -944,8 +997,8 @@
           "omission": "presentation_limit",
           "resume_after": "0|2026-08-08T12:06:30.125000Z|protect.events|str|evt-protect-0100",
           "collected": {
-            "total": 5,
-            "in_window": 5,
+            "total": 7,
+            "in_window": 7,
             "out_of_window": 0,
             "untimed": 0
           },
@@ -962,14 +1015,14 @@
             "untimed": 0
           },
           "omitted": {
-            "total": 1,
-            "in_window": 1,
+            "total": 3,
+            "in_window": 3,
             "out_of_window": 0,
             "untimed": 0
           },
           "too_large": 0,
           "limited_by": "max_records_returned",
-          "next_cursor": "0|2026-08-08T12:50:00.000000Z|network.events|str|evt-net-0101"
+          "next_cursor": "0|2026-08-08T12:30:00.000000Z|network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc"
         }
       }
     }
