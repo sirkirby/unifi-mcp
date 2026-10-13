@@ -114,13 +114,18 @@ class FakeController:
 
     ``login_status`` other than 200 rejects every login. Clear ``release`` to
     hold logins open until it is set; ``login_started`` is set when one arrives.
+    ``network_rows`` maps a Network path suffix (``"/stat/sta"``) to the rows
+    that read returns instead of none.
     """
 
-    def __init__(self, product: str, *, login_status: int = 200) -> None:
+    def __init__(
+        self, product: str, *, login_status: int = 200, network_rows: dict[str, list[dict[str, Any]]] | None = None
+    ) -> None:
         from aiohttp import web
 
         self.product = product
         self.login_status = login_status
+        self.network_rows = network_rows or {}
         self.login_started = asyncio.Event()
         self.release = asyncio.Event()
         self.release.set()
@@ -168,7 +173,8 @@ class FakeController:
         # Network, as a standalone (non-UniFi OS) controller.
         if path == "/":
             return web.Response(status=302, headers={"Location": "/manage"})
-        return web.json_response({"meta": {"rc": "ok"}, "data": []})
+        rows = next((rows for suffix, rows in self.network_rows.items() if path.endswith(suffix)), [])
+        return web.json_response({"meta": {"rc": "ok"}, "data": rows})
 
     def _session_token(self) -> str:
         if self.product != "protect":
@@ -256,12 +262,13 @@ def run_stdio_server(
     wait_seconds: float,
     ready_marker: str = "in the background",
     before_call: float = 0.0,
+    arguments: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run ``module`` over stdio against 127.0.0.1:``port`` and drive it as an MCP client.
 
     Waits until the server logs that it is connecting in the background (the
     process is ready), then sends ``initialize``, ``tools/list`` and one
-    ``tools/call`` of ``tool``. Returns the replies and how long each took.
+    ``tools/call`` of ``tool`` with ``arguments``. Returns the replies and how long each took.
     The environment carries no inherited ``UNIFI_*`` variable.
     """
     probe = tmp_path / "stdio_probe.py"
@@ -331,7 +338,7 @@ def run_stdio_server(
         tools, list_seconds = request(2, "tools/list")
         if before_call:
             time.sleep(before_call)
-        call, call_seconds = request(3, "tools/call", {"name": tool, "arguments": {}})
+        call, call_seconds = request(3, "tools/call", {"name": tool, "arguments": arguments or {}})
     finally:
         proc.stdin.close()
         try:
@@ -344,6 +351,7 @@ def run_stdio_server(
         "initialize": init,
         "initialize_seconds": init_seconds,
         "tools": [entry["name"] for entry in tools["tools"]],
+        "listed": tools["tools"],
         "list_seconds": list_seconds,
         "call": call,
         "call_seconds": call_seconds,

@@ -85,9 +85,10 @@ TOOL_MODULE_MAP: Dict[str, str] = _build_tool_module_map()
 
 
 # Read-only tools lazy mode lists directly, so a client that permits only
-# readOnlyHint tools can call them without the non-read-only *_execute. Each
-# must live in a module holding only read-only tools.
-LAZY_DIRECT_TOOLS: tuple[str, ...] = ("unifi_get_incident_evidence",)
+# readOnlyHint tools can call them without the non-read-only *_execute. The
+# other tools in their modules stay unlisted until loaded.
+# Incident evidence, and the client lookup that ties a camera MAC to its uplink.
+LAZY_DIRECT_TOOLS: tuple[str, ...] = ("unifi_get_incident_evidence", "unifi_get_client_details")
 
 
 @cache

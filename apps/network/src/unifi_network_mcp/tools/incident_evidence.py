@@ -1,7 +1,7 @@
 """Bounded, read-only Network incident evidence.
 
-This module holds only read-only tools: lazy registration loads it at
-startup (``LAZY_DIRECT_TOOLS``) so read-only clients can call it directly.
+Lazy registration lists this tool at startup (``LAZY_DIRECT_TOOLS``) so
+read-only clients can call it directly.
 """
 
 import logging

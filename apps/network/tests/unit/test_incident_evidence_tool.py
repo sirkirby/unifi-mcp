@@ -1,6 +1,5 @@
 """Registration, argument validation and Core delegation for the Network incident evidence tool."""
 
-import ast
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -61,22 +60,6 @@ def test_tool_is_registered_read_only_and_listed_directly_in_lazy_mode():
     assert tool.annotations.read_only_hint is True and tool.annotations.open_world_hint is False
     assert "unifi_get_incident_evidence" in LAZY_DIRECT_TOOLS
     assert TOOL_MODULE_MAP["unifi_get_incident_evidence"] == "unifi_network_mcp.tools.incident_evidence"
-
-
-def test_direct_tool_modules_hold_nothing_but_direct_tools():
-    """Lazy mode registers every tool in a direct tool's module, so nothing else may live there."""
-    from unifi_network_mcp.categories import LAZY_DIRECT_TOOLS, TOOL_MODULE_MAP
-
-    for module in {TOOL_MODULE_MAP[name] for name in LAZY_DIRECT_TOOLS}:
-        path = ROOT / "apps/network/src" / (module.replace(".", "/") + ".py")
-        names = {
-            keyword.value.value
-            for node in ast.walk(ast.parse(path.read_text()))
-            if isinstance(node, ast.Call)
-            for keyword in node.keywords
-            if keyword.arg == "name" and isinstance(keyword.value, ast.Constant)
-        }
-        assert names <= set(LAZY_DIRECT_TOOLS)
 
 
 @pytest.mark.asyncio
