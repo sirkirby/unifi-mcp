@@ -4,6 +4,7 @@ This test ensures that the dynamic versioning from git tags is working correctly
 The version should be derived from git tags (e.g., v0.4.0 -> 0.4.0).
 """
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -42,6 +43,13 @@ class TestVersion:
         from importlib.metadata import version
 
         pkg_version = version("unifi-network-mcp")
+
+        # CI pins the version, so it can't follow the tags; a commit tagged before
+        # checkout would otherwise be compared with a version it was never built as.
+        pinned = os.environ.get("SETUPTOOLS_SCM_PRETEND_VERSION")
+        if pinned:
+            assert pkg_version == pinned, f"Package version '{pkg_version}' does not match the pinned '{pinned}'"
+            return
 
         # Get git describe output, scoped to this package's tag namespace so
         # sibling-package tags on the same commit (e.g. core/, api/) don't get
