@@ -756,7 +756,7 @@
         "conflict_group": {
           "anyOf": [
             {
-              "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:int|str)\\|[A-Za-z0-9%._~-]+$",
+              "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:int|str)\\|[A-Za-z0-9%._~-]+|fields\\|[0-9a-f]{24})$",
               "type": "string"
             },
             {
@@ -786,14 +786,15 @@
           "title": "Event Type"
         },
         "evidence_id": {
-          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:int|str)\\|[A-Za-z0-9%._~-]+(?:\\|version\\|[0-9a-f]{24})?|sha256\\|[0-9a-f]{24})$",
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:(?:int|str)\\|[A-Za-z0-9%._~-]+|fields\\|[0-9a-f]{24})(?:\\|version\\|[0-9a-f]{24})?|sha256\\|[0-9a-f]{24})$",
           "title": "Evidence Id",
           "type": "string"
         },
         "evidence_id_basis": {
           "enum": [
             "source_record_id",
-            "content_hash"
+            "content_hash",
+            "content_hash_without_summary"
           ],
           "title": "Evidence Id Basis",
           "type": "string"

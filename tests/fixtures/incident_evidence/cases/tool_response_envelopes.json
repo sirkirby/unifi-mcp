@@ -39,7 +39,7 @@
         "payload": {
           "success": true,
           "site": "default",
-          "count": 2,
+          "count": 4,
           "filters": {
             "within_hours": 2,
             "limit": 100,
@@ -69,6 +69,22 @@
               "ip": "192.0.2.21",
               "src_ip": "192.0.2.21",
               "dst_ip": "198.51.100.99"
+            },
+            {
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": 1786192200000,
+              "mac": "aa:bb:cc:00:20:03",
+              "severity": "LOW",
+              "category": "CLIENT_DEVICES",
+              "msg": "fixture-tablet has connected to fixture-ap-1."
+            },
+            {
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": 1786192200000,
+              "mac": "aa:bb:cc:00:20:03",
+              "severity": "LOW",
+              "category": "CLIENT_DEVICES",
+              "msg": "fixture-tablet has connected to fixture-ap-renamed."
             }
           ]
         }
@@ -197,6 +213,7 @@
         "outcome": "partial",
         "failure": null,
         "partial_reasons": [
+          "conflicting_records",
           "truncation_unknown"
         ],
         "coverage": {
@@ -220,7 +237,7 @@
             "offset": 0,
             "requested_cap": 100,
             "cap": 100,
-            "returned": 2,
+            "returned": 4,
             "has_more": null,
             "total_reported": null,
             "post_filtered": false,
@@ -228,14 +245,14 @@
           },
           "truncation": "unknown",
           "counts": {
-            "received": 2,
-            "accepted": 2,
-            "in_window": 2,
+            "received": 4,
+            "accepted": 4,
+            "in_window": 4,
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
             "duplicates_dropped": 0,
-            "conflicting": 0,
+            "conflicting": 2,
             "boundary_uncertain": 0
           },
           "complete": false,
@@ -573,6 +590,130 @@
           ]
         },
         "conflict_group": null
+      },
+      {
+        "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|6a62c42109ca1760405d62fc",
+        "evidence_id_basis": "content_hash_without_summary",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786192200000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "fixture-tablet has connected to fixture-ap-renamed.",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:03",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "CLIENT_DEVICES",
+          "severity": "LOW"
+        },
+        "conflict_group": "network.events|fields|66ebd38a7bef30e1a860165e"
+      },
+      {
+        "evidence_id": "network.events|fields|66ebd38a7bef30e1a860165e|version|c56666753f8543f8e93fdd98",
+        "evidence_id_basis": "content_hash_without_summary",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": null,
+          "source_record_id_field": null,
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786192200000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "fixture-tablet has connected to fixture-ap-1.",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:03",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "CLIENT_DEVICES",
+          "severity": "LOW"
+        },
+        "conflict_group": "network.events|fields|66ebd38a7bef30e1a860165e"
       },
       {
         "evidence_id": "network.events|str|evt-net-0101",

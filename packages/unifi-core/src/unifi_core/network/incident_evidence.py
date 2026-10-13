@@ -21,6 +21,7 @@ the request started; ``start`` is a pagination offset, not a time.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -142,6 +143,17 @@ def extract_network_record(raw: Mapping[str, Any]) -> ExtractedRecord | None:
         entities=_entities(raw),
         attributes={key: value for key, value in attributes.items() if value is not None},
     )
+
+
+def extract_network_tool_record(raw: Mapping[str, Any]) -> ExtractedRecord | None:
+    """Extract one ``unifi_list_events``/``unifi_list_alarms`` projection.
+
+    The tools render v2 templates with display names into ``msg``, so the
+    summary cannot tell two reads of one event apart: a record without an ID
+    is identified without it.
+    """
+    extracted = extract_network_record(raw)
+    return replace(extracted, summary_identifies=False) if extracted is not None else None
 
 
 def _scope(site: str | None, controller_id: str | None, location_id: str | None) -> Scope:
@@ -343,4 +355,4 @@ def normalize_network_tool_response(
     records = records_from_tool_response(response, path)
     if isinstance(records, SourceFailure):
         return source_failed(context, records)
-    return normalize_network_records(records, context, budget_exhausted=budget_exhausted)
+    return collect_source(context, records, extract_network_tool_record, budget_exhausted=budget_exhausted)

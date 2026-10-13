@@ -906,13 +906,16 @@ def _no_secret_keys(values: Mapping[str, Any]) -> Mapping[str, Any]:
 #   <source_id>|int|<id>  or  <source_id>|str|<id>     a source record
 #   <base>|version|<digest>                             one of several differing versions
 #   <source_id>|sha256|<digest>                         a record without an ID
+#   <source_id>|fields|<digest>                         a record without an ID whose summary
+#                                                       cannot identify it (hashed without it)
 _DIGEST_RE = r"[0-9a-f]{24}"
 _ENCODED_ID_RE = r"[A-Za-z0-9%._~-]+"
+_BASE_ID_RE = rf"(?:(?:int|str)\|{_ENCODED_ID_RE}|fields\|{_DIGEST_RE})"
 EVIDENCE_ID_PATTERN = (
-    rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|(?:(?:int|str)\|{_ENCODED_ID_RE}(?:\|version\|{_DIGEST_RE})?"
-    rf"|sha256\|{_DIGEST_RE})$"
+    rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|(?:{_BASE_ID_RE}(?:\|version\|{_DIGEST_RE})?|sha256\|{_DIGEST_RE})$"
 )
-CONFLICT_GROUP_PATTERN = rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|(?:int|str)\|{_ENCODED_ID_RE}$"
+CONFLICT_GROUP_PATTERN = rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|{_BASE_ID_RE}$"
+IdentityBasis = Literal["source_record_id", "content_hash", "content_hash_without_summary"]
 
 
 class Provenance(_ClosedModel):
@@ -939,7 +942,7 @@ class Provenance(_ClosedModel):
 
 class EvidenceRecord(_ClosedModel):
     evidence_id: str = Field(pattern=EVIDENCE_ID_PATTERN)
-    evidence_id_basis: Literal["source_record_id", "content_hash"]
+    evidence_id_basis: IdentityBasis
     source_id: str
     provenance: Provenance
     time: EventTime
@@ -949,7 +952,8 @@ class EvidenceRecord(_ClosedModel):
     mapping: MappingOutcome = _NOT_EVALUATED
     attributes: dict[str, AttributeValue] = Field(default_factory=dict, json_schema_extra=_KEY_NAMES_SCHEMA)
     # Set when the source returned differing records under one source record
-    # ID; every version is kept and the group blocks complete coverage.
+    # ID (or one summary-free identity); every version is kept and the group
+    # blocks complete coverage.
     conflict_group: str | None = Field(default=None, pattern=CONFLICT_GROUP_PATTERN)
 
     @field_validator("attributes")
@@ -963,33 +967,41 @@ class EvidenceRecord(_ClosedModel):
         if (record_id is not None) != (self.evidence_id_basis == "source_record_id"):
             raise ValueError("evidence IDs derive from the source record ID exactly when one was returned")
         digest = self.digest()
-        if record_id is None:
+        base = self.identity_base()
+        if base is None:
             if self.conflict_group is not None:
                 raise ValueError("content-hash records cannot conflict")
             expected = content_identity(self.source_id, digest)
+        elif self.conflict_group is None:
+            expected = base
+        elif self.conflict_group != base:
+            raise ValueError("a conflict group is the base identity of its records")
         else:
-            base = record_identity(self.source_id, record_id)
-            if self.conflict_group is None:
-                expected = base
-            elif self.conflict_group != base:
-                raise ValueError("a conflict group is the base identity of its source record ID")
-            else:
-                expected = version_identity(base, digest)
+            expected = version_identity(base, digest)
         if self.evidence_id != expected:
             raise ValueError("evidence_id must follow from the typed source record ID or the evidence digest")
         return self
 
-    def digest(self) -> str:
+    def digest(self, *, with_summary: bool = True) -> str:
         """Hash of the record's own evidence content (see :func:`evidence_digest`)."""
         return evidence_digest(
             source_record_id=self.provenance.source_record_id,
             source_record_id_field=self.provenance.source_record_id_field,
             time=self.time,
             event_type=self.event_type,
-            summary=self.summary,
+            summary=self.summary if with_summary else None,
             entities=self.entities,
             attributes=self.attributes,
         )
+
+    def identity_base(self) -> str | None:
+        """The identity that differing versions share, or ``None`` for a content-hash record."""
+        record_id = self.provenance.source_record_id
+        if record_id is not None:
+            return record_identity(self.source_id, record_id)
+        if self.evidence_id_basis == "content_hash_without_summary":
+            return fields_identity(self.source_id, self.digest(with_summary=False))
+        return None
 
 
 def record_identity(source_id: str, record_id: str | int) -> str:
@@ -1004,6 +1016,10 @@ def version_identity(base: str, digest: str) -> str:
 
 def content_identity(source_id: str, digest: str) -> str:
     return f"{source_id}|sha256|{digest}"
+
+
+def fields_identity(source_id: str, digest: str) -> str:
+    return f"{source_id}|fields|{digest}"
 
 
 def evidence_digest(
@@ -1610,6 +1626,10 @@ class ExtractedRecord:
     summary: str | None
     entities: tuple[EntityRef, ...] = ()
     attributes: Mapping[str, Any] = field(default_factory=dict)
+    # False when the summary was rendered from display names, so it cannot
+    # tell two reads of one event apart; an ID-less record is then identified
+    # without it and differing summaries become versions of one identity.
+    summary_identifies: bool = True
 
 
 ABSENT = _ABSENT
@@ -1668,8 +1688,7 @@ def collect_source(
             continue
         record = _evidence_record(context, extracted)
         digest = record.digest()
-        rid = record.provenance.source_record_id
-        base = record_identity(context.source_id, rid) if rid is not None else record.evidence_id
+        base = record.identity_base() or record.evidence_id
         versions = groups.setdefault(base, {})
         if digest in versions:
             duplicates += 1
@@ -1719,24 +1738,26 @@ def _evidence_record(context: SourceContext, extracted: ExtractedRecord) -> Evid
         clock_uncertainty_ms=context.clock_uncertainty_ms,
     )
     attributes = clean_attributes(extracted.attributes)
+    basis: IdentityBasis
     if record_id is not None:
+        basis = "source_record_id"
         evidence_id = record_identity(context.source_id, record_id)
     else:
-        evidence_id = content_identity(
-            context.source_id,
-            evidence_digest(
-                source_record_id=None,
-                source_record_id_field=None,
-                time=time,
-                event_type=extracted.event_type,
-                summary=extracted.summary,
-                entities=extracted.entities,
-                attributes=attributes,
-            ),
+        basis = "content_hash" if extracted.summary_identifies else "content_hash_without_summary"
+        digest = evidence_digest(
+            source_record_id=None,
+            source_record_id_field=None,
+            time=time,
+            event_type=extracted.event_type,
+            summary=extracted.summary if extracted.summary_identifies else None,
+            entities=extracted.entities,
+            attributes=attributes,
         )
+        identity = content_identity if extracted.summary_identifies else fields_identity
+        evidence_id = identity(context.source_id, digest)
     return EvidenceRecord(
         evidence_id=evidence_id,
-        evidence_id_basis="source_record_id" if record_id is not None else "content_hash",
+        evidence_id_basis=basis,
         source_id=context.source_id,
         provenance=Provenance(
             product=context.product,

@@ -6,9 +6,12 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import jsonschema
 import pytest
 from unifi_core.incident_evidence import (
     ApiFamily,
+    BudgetLimits,
+    Budgets,
     EntityKind,
     FailureKind,
     PartialReason,
@@ -18,6 +21,9 @@ from unifi_core.incident_evidence import (
     TimeWindow,
     Truncation,
     WindowCoverage,
+    assemble_incident_evidence,
+    evidence_to_json,
+    validate_incident_evidence,
 )
 from unifi_core.network.incident_evidence import (
     LEGACY_EVENTS_CAP,
@@ -35,6 +41,8 @@ from unifi_core.network.models.events import threat_event_log_from_controller
 from unifi_core.network.models.system import alarm_from_controller
 from unifi_core.source_page import SourcePage
 
+from ..incident_evidence_corpus import SCHEMA_PATH
+
 REPO = Path(__file__).resolve().parents[4]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "system_log_events_response.json").read_text())["data"]
 MANIFEST = json.loads((REPO / "apps/network/src/unifi_network_mcp/tools_manifest.json").read_text())
@@ -43,6 +51,7 @@ UTC = timezone.utc
 WINDOW = TimeWindow.from_datetimes(datetime(2026, 8, 8, 21, 0, tzinfo=UTC), datetime(2026, 8, 8, 22, 0, tzinfo=UTC))
 COLLECTED = datetime(2026, 8, 8, 22, 5, tzinfo=UTC)
 REQUEST_STARTED = COLLECTED - timedelta(minutes=1)
+BUDGETS = Budgets(limits=BudgetLimits(window_seconds=7200, events=100, calls=10, elapsed_ms=60_000))
 
 
 def _manifest_properties(tool: str) -> set[str]:
@@ -314,3 +323,43 @@ def test_v2_summary_fills_in_identifiers_never_names() -> None:
     assert record.summary == (
         "aa:bb:cc:00:00:01 was blocked from accessing 198.51.100.24 by the {TRIGGER} Firewall Policy."
     )
+
+
+def _tool_response(records: list[dict]) -> dict:
+    projected = [threat_event_log_from_controller(record).model_dump(exclude_none=True) for record in records]
+    return {"success": True, "site": "default", "count": len(projected), "filters": {}, "events": projected}
+
+
+def test_a_display_name_renamed_between_tool_reads_keeps_one_identity_without_an_event_id() -> None:
+    original = {key: value for key, value in FIXTURE[0].items() if key != "id"}
+    renamed = _renamed(original, **RENAMES)
+    first = normalize_network_tool_response(_tool_response([original]), _events_context()).records[0]
+    second = normalize_network_tool_response(_tool_response([renamed]), _events_context()).records[0]
+    # The tool renders names into msg, so the rendered text cannot be part of identity.
+    assert first.summary != second.summary
+    assert first.evidence_id == second.evidence_id
+    assert first.evidence_id_basis == "content_hash_without_summary"
+
+
+def test_both_renamed_tool_reads_are_versions_of_one_identity_never_two_events() -> None:
+    original = {key: value for key, value in FIXTURE[0].items() if key != "id"}
+    evidence = normalize_network_tool_response(
+        _tool_response([original, _renamed(original, **RENAMES)]), _events_context()
+    )
+    base = normalize_network_tool_response(_tool_response([original]), _events_context()).records[0].evidence_id
+    assert len(evidence.records) == 2
+    assert {record.conflict_group for record in evidence.records} == {base}
+    assert evidence.source.coverage.counts.conflicting == 2
+    assert PartialReason.CONFLICTING_RECORDS in evidence.source.partial_reasons
+    assembled = assemble_incident_evidence(requested_window=WINDOW, budgets=BUDGETS, sources=[evidence])
+    payload = evidence_to_json(assembled)
+    jsonschema.validate(payload, json.loads(SCHEMA_PATH.read_text()))
+    assert validate_incident_evidence(payload) == assembled
+
+
+def test_a_display_name_renamed_between_tool_reads_keeps_the_event_id_identity() -> None:
+    renamed = _renamed(FIXTURE[0], **RENAMES)
+    first = normalize_network_tool_response(_tool_response([FIXTURE[0]]), _events_context()).records[0]
+    second = normalize_network_tool_response(_tool_response([renamed]), _events_context()).records[0]
+    assert first.evidence_id == second.evidence_id
+    assert first.evidence_id_basis == "source_record_id"

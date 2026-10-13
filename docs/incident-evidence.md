@@ -35,16 +35,20 @@ are derived and validated, never trusted from the producer.
 - **Identity.** Evidence IDs are `|`-separated, a character source IDs cannot
   contain, and record IDs are percent-encoded: `<source>|int|7` and
   `<source>|str|7` are different records. Records without an ID are
-  `<source>|sha256|<digest>`. The digest hashes the record's own sanitized
+  `<source>|sha256|<digest>` (or `<source>|fields|<digest>`, below). The digest hashes the record's own sanitized
   evidence, never the raw payload, so excluded fields (secrets, buffer stamps,
   recognized identity, display names) cannot change identity. A Network
   summary is the stored `msg`, `message` or `description` when the record has
   one; otherwise it is the v2 `message_raw` with only MAC- and IP-shaped role
   `id`s filled in, so names, and role IDs that are names, keep their `{ROLE}`
-  placeholders (falling back to `title_raw`). Repeats with the same evidence
-  collapse; differing evidence under one source ID is kept as a conflict group
-  of `<base>|version|<digest>` records that blocks complete coverage. Results
-  do not depend on input order.
+  placeholders (falling back to `title_raw`). Network tool responses
+  (`unifi_list_events`, `unifi_list_alarms`) render names into `msg`, so their
+  records without an ID use basis `content_hash_without_summary`: the digest
+  that identifies them treats `summary` as null, and reads that differ only in
+  that text become versions of one identity, never two events. Repeats with
+  the same evidence collapse; differing evidence under one source ID (or one
+  `fields` identity) is kept as a conflict group of `<base>|version|<digest>`
+  records that blocks complete coverage. Results do not depend on input order.
 - **Time.** Windows are half-open, `start <= t < end`, compared in UTC at the
   timestamp's stated precision. Each record keeps the original field, type and
   value, the format, offset, precision and any known clock uncertainty, plus a
@@ -232,14 +236,16 @@ point unless stated otherwise.
    source record ID has base `<source_id>|int|<id>` or `<source_id>|str|<id>`,
    with the ID percent-encoded as UTF-8, leaving only `A–Z a–z 0–9 - . _ ~`
    unescaped. Its `evidence_id` is the base, or `<base>|version|<digest>` when
-   `conflict_group` equals the base. Without an ID it is
-   `<source_id>|sha256|<digest>` with no conflict group. Evidence IDs are
-   unique and every conflict group has at least two records.
+   `conflict_group` equals the base. Without an ID, basis `content_hash` is
+   `<source_id>|sha256|<digest>` with no conflict group; basis
+   `content_hash_without_summary` has base `<source_id>|fields|<digest with
+   "summary": null>` and follows the same base-or-version rule. Evidence IDs
+   are unique and every conflict group has at least two records.
 9. **Records and sources.** Sources are sorted by unique `source_id`. Every
    record cites a listed source and repeats its `product`, `api_family`,
    `source_tool`, `endpoint`, `scope`, `query` and `collected_at`.
    `evidence_id_basis` is `source_record_id` exactly when a source record ID
-   is present.
+   is present; otherwise `content_hash` or `content_hash_without_summary`.
 10. **Counts.** Per source: `accepted` = its records; `in_window`,
     `out_of_window` and `untimed` by time status; `conflicting` = records
     with a conflict group; `boundary_uncertain` = out-of-window records with
