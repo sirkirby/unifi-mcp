@@ -112,6 +112,9 @@ async def test_the_server_recovers_when_the_controller_comes_up(tmp_path, serve_
 
         await controller.start(port, tmp_path)
         await asyncio.sleep(RECONNECT_INTERVAL_SECONDS)
+        # The outage call above needs the short window; the recovery call makes a
+        # real login against the fake, which can outlast it on a busy runner.
+        cm._attempt.wait_seconds = 10.0
         recovered = await _list_doors(cm)
     finally:
         await cm.close()
