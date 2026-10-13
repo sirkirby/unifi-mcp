@@ -55,19 +55,22 @@ _DETECTION_CONFIDENCE_MAX = 100
 def _page(
     rows: list[dict[str, Any]],
     *,
-    raw_count: int,
+    raw_count: int | None,
     limit: int,
     start: datetime | None,
     end: datetime | None,
     post_filtered: bool = False,
 ) -> SourcePage:
-    """A page whose unfiltered read ran short of ``limit`` is the NVR saying it ran out."""
+    """A page whose unfiltered read ran short of ``limit`` is the NVR saying it ran out.
+
+    ``raw_count`` is ``None`` when the rows the NVR returned were never seen.
+    """
     submitted = (
         (int(start.timestamp() * 1000), int(end.timestamp() * 1000)) if start is not None and end is not None else None
     )
     return SourcePage(
         rows=rows,
-        has_more=False if 0 < limit and raw_count < limit else None,
+        has_more=False if raw_count is not None and 0 < limit and raw_count < limit else None,
         cap=max(limit, 0),
         submitted_window_ms=submitted,
         post_filtered=post_filtered,
@@ -776,7 +779,9 @@ class EventManager:
             results.append(self._event_to_dict(ev, compact=compact))
 
         await self._apply_known_face_names(results)
-        return _page(results, raw_count=len(events), limit=limit, start=start, end=end)
+        # uiprotect drops unknown, non-device and low-score events after the NVR
+        # applied the limit, so how many rows the NVR returned is unknown.
+        return _page(results, raw_count=None, limit=limit, start=start, end=end, post_filtered=True)
 
     async def get_event(
         self,
@@ -984,9 +989,8 @@ class EventManager:
             uiprotect_results.append(self._event_to_dict(ev, compact=compact))
 
         await self._apply_known_face_names(uiprotect_results)
-        return _page(
-            uiprotect_results, raw_count=len(events), limit=limit, start=start, end=end, post_filtered=min_conf > 0
-        )
+        # uiprotect filters after the NVR's limit too, so the raw row count is unknown.
+        return _page(uiprotect_results, raw_count=None, limit=limit, start=start, end=end, post_filtered=True)
 
     def _build_detection_search_params(
         self,

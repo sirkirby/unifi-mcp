@@ -279,6 +279,29 @@ async def test_confidence_filter_after_a_short_raw_page_is_complete_for_that_fil
 
 
 @pytest.mark.asyncio
+async def test_sdk_events_page_never_proves_the_end() -> None:
+    # uiprotect drops unknown, non-device and low-score events after the NVR
+    # applied the limit, so a short SDK result says nothing about the NVR.
+    manager, client = _protect_manager([])
+    page = await manager.list_events_page(start=START, end=START + timedelta(hours=1), limit=30)
+    client.get_events.assert_awaited_once()
+    assert page.has_more is None and page.post_filtered
+    source = normalize_protect_page(page, _context(page=page)).source
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert {PartialReason.TRUNCATION_UNKNOWN, PartialReason.POST_FILTERED} <= set(source.partial_reasons)
+
+
+@pytest.mark.asyncio
+async def test_sdk_smart_detections_page_never_proves_the_end() -> None:
+    manager, client = _protect_manager([], min_confidence=0)
+    page = await manager.list_smart_detections_page(start=START, end=START + timedelta(hours=1), limit=17)
+    client.get_events.assert_awaited_once()
+    assert page.has_more is None and page.post_filtered
+    context = _context(source_tool=LIST_SMART_DETECTIONS_TOOL, limit=17, page=page)
+    assert normalize_protect_page(page, context).source.outcome is SourceOutcome.PARTIAL
+
+
+@pytest.mark.asyncio
 async def test_omitted_bounds_submit_no_window() -> None:
     manager, client = _protect_manager([])
     page = await manager.list_events_page(camera_id=CAMERA)

@@ -107,8 +107,8 @@ evidence = normalize_network_page(page, context)
 | Network `get_events_page` (legacy) | fewer rows than the `_limit` sent (at most 3000) | `[collected_at - within_hours, request_started_at]` floored to ms |
 | Network `get_alarms_page` (v2) | a `total_page_count` of 1, remote total, or a short page of at most 100 when no page count is reported | submitted 30-day bounds |
 | Network `get_alarms_page` (legacy) | the full alarm list is the total | caller-supplied, else unknown |
-| Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals) | submitted `start`/`end`, unknown if either is omitted |
-| Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering | as above |
+| Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals), on the raw path (`camera_id` or `metadata_fields`) only; the SDK path filters after the limit and never proves the end | submitted `start`/`end`, unknown if either is omitted |
+| Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering, on the raw path only | as above |
 
 The list methods (`get_events`, `get_alarms`, `list_events`,
 `list_smart_detections`) return the same rows for tools and raise
