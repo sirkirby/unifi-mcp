@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Private staging and atomic publication for the three plugin setup wrappers.
 
-Values enter on stdin only. Never execute credential providers or start servers.
+Values enter on stdin only. Never execute credential providers. Codex setup starts
+the plugin's server once without any settings, so it reads no credentials and
+contacts no controller.
 Client output and exception text are deliberately excluded from diagnostics.
 Claude Code options are saved through its own CLI. Codex and OpenClaw settings go
 to a private per-user file that the plugin's bundled server reads.
 """
 
 import argparse
+import contextlib
 import datetime
 import json
 import os
@@ -18,6 +21,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import tomllib
 from pathlib import Path
 
@@ -932,6 +936,11 @@ class CodexClient:
     def loaded(self, removed):
         return "Restart Codex to load the settings."
 
+    def warm(self, root, name):
+        # The settings are saved and reported before the server starts.
+        sys.stdout.flush()
+        print(warm_up(root, name), flush=True)
+
 
 class OpenClawClient:
     """openclaw.json, where setup before plugin 1.0.0 wrote an mcp.servers.<plugin> entry."""
@@ -987,10 +996,117 @@ class OpenClawClient:
             "already open keeps the unconfigured server."
         )
 
+    def warm(self, root, name):
+        pass
+
 
 def backup_path(config, name):
     stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
     return config.with_name(config.name + ".bak-" + name + "-" + stamp)
+
+
+# The variables Codex passes from its own environment to a plugin's stdio server
+# (its core list and the CA bundle uv reads), so uvx uses the same cache and Python.
+CODEX_SERVER_ENV = (
+    "PATH PATHEXT SHELL COMSPEC SYSTEMROOT WINDIR SYSTEMDRIVE USERNAME USERDOMAIN USERPROFILE HOMEDRIVE HOMEPATH "
+    "PROGRAMFILES PROGRAMFILES(X86) PROGRAMW6432 PROGRAMDATA LOCALAPPDATA APPDATA TEMP TMP TMPDIR POWERSHELL PWSH"
+    if os.name == "nt"
+    else "HOME LOGNAME PATH SHELL USER __CF_USER_TEXT_ENCODING LANG LC_ALL TERM TMPDIR TZ"
+).split() + ["SSL_CERT_FILE"]
+WARM_UP_SECONDS = 60
+# Its own process group, so stopping it also stops what uvx started.
+OWN_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+
+
+def warm_up(root, name, timeout=WARM_UP_SECONDS):
+    """Start the plugin's server once, as Codex launches it, and stop it after it answers initialize.
+
+    The first launch of a server version builds and compiles its environment, which
+    takes longer than Codex waits for plugin servers before a session's first request.
+    The server gets no settings file and no UNIFI_ variables, so it starts in setup
+    mode: it reads no credentials and contacts no controller. Returns a one-line note
+    and never raises; server output is discarded.
+    """
+    pin = package_pin(root, name, bundled=True)
+    failed = (
+        "Notice: " + pin + " did not start ahead of Codex; the settings are saved, but Codex's first session "
+        "may start without the " + name + " tools."
+    )
+    environment = {key: os.environ[key] for key in CODEX_SERVER_ENV if os.environ.get(key)}
+    try:
+        entry = json_object((root / ".mcp.codex.json").read_text(encoding="utf-8"))["mcpServers"][name]
+        command = [entry["command"], *entry["args"]]
+        executable = shutil.which(command[0], path=environment.get("PATH"))
+        if executable is None or not all(isinstance(part, str) for part in command):
+            return failed
+        process = subprocess.Popen(
+            [executable, *command[1:]],
+            cwd=root,
+            env=environment,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            **OWN_GROUP,
+        )
+    except Exception:
+        return failed
+    answered = threading.Event()
+
+    def read_reply():
+        # At most 1 MiB is read; the reply is the first line with the request's id.
+        for _ in range(16):
+            line = process.stdout.readline(65536)
+            if not line:
+                return
+            try:
+                if json.loads(line).get("id") == 1:
+                    answered.set()
+                    return
+            except (ValueError, AttributeError):
+                continue
+
+    try:
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": name + "-setup", "version": "1"},
+            },
+        }
+        reader = threading.Thread(target=read_reply, daemon=True)
+        reader.start()
+        process.stdin.write((json.dumps(request) + "\n").encode("utf-8"))
+        process.stdin.flush()
+        reader.join(timeout)
+    except OSError:
+        pass  # The server exited before reading the request.
+    finally:
+        stop(process)
+    if not answered.is_set():
+        return failed
+    return "Started " + pin + " once, so Codex's next session starts it quickly."
+
+
+def stop(process):
+    """End a stdio server as an MCP client does: close its input, then terminate, then kill."""
+    steps = [process.stdin.close]
+    if os.name == "nt":
+        steps.append(process.kill)
+    else:
+        steps += [lambda: os.killpg(process.pid, signal.SIGTERM), lambda: os.killpg(process.pid, signal.SIGKILL)]
+    for step in steps:
+        with contextlib.suppress(OSError):
+            step()
+        try:
+            process.wait(5)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    with contextlib.suppress(OSError):
+        process.stdout.close()
 
 
 def bundled_main(args, root, name, product, patch, client):
@@ -1039,6 +1155,7 @@ def bundled_main(args, root, name, product, patch, client):
             + str(path)
             + "."
         )
+        client.warm(root, name)
         return
     merged = merge_env(base, patch, product)
     text = settings_text(merged, name).encode("utf-8")
@@ -1082,6 +1199,7 @@ def bundled_main(args, root, name, product, patch, client):
     if auto_notice:
         print(auto_notice)
     print(client.loaded(entry is not None) + " Values are omitted.")
+    client.warm(root, name)
 
 
 def read_patch(args):
