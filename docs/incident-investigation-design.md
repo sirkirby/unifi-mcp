@@ -1,8 +1,8 @@
 # Local plugins and trustworthy incident investigation
 
-Status: proposed design; [tracking issue #787](https://github.com/sirkirby/unifi-mcp/issues/787).
-This document defines the target behavior and contributor boundaries, not a claim
-that installation or incident acceptance has passed.
+Status: delivered; [tracking issue #787](https://github.com/sirkirby/unifi-mcp/issues/787).
+This document defines the target behavior and contributor boundaries. The tracking
+issues hold the acceptance evidence; [what shipped](#what-shipped) summarizes it.
 
 ## Goal and scope
 
@@ -97,6 +97,27 @@ origin, supported matrix cells and unresolved blockers. Verify installed module
 paths to rule out workspace substitution. Keep issues open while required
 installation, released-artifact or live verification remains; merging code alone
 is insufficient. No dates or staffing commitments are implied.
+
+## What shipped
+
+- **Core and adapters:** `unifi-core` holds the versioned evidence schema, product
+  normalization and bounded collection. Network and Protect expose read-only
+  evidence tools that return a budgeted client view by default, and the API server
+  serves the same evidence.
+- **Timeline:** the cloud worker is the single provider of the merged location
+  timeline. The relay is transport only.
+- **Lazy mode:** the evidence tools and the camera mapping lookups
+  (`protect_get_camera`, `unifi_get_client_details`) are listed directly, so the
+  skill reaches them without `*_execute`.
+- **Plugin:** the canonical skill ships in the skills-only `unifi-intelligence`
+  plugin. In Claude Code it installs the Network and Protect plugins as
+  dependencies. Codex and OpenClaw have no dependency support, so their docs give
+  the install order. The skill confirms its inputs before any read, proves each
+  camera mapping by exact identifier, asks before every follow-up and cites only
+  returned records.
+- **Acceptance:** Gate A and Gate B passed in real clients against live
+  controllers, from the released packages and the GitHub marketplace. The
+  [support matrix](plugin-support.md) records which cells are tested.
 
 ## Non-goals
 
