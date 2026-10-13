@@ -180,6 +180,17 @@ once it is ready.
   first request of that session then has no UniFi tools. Later launches of the
   same version are warm.
 
+Codex setup, and setup with `--refresh`, start the server once the way Codex
+starts it, then stop it as soon as it answers. The server gets none of its
+settings, so it reads no credentials and contacts no controller. The first
+session after setup then finds the server warm. Setup waits up to 60 s; if the
+server does not answer in time, setup says so and keeps the saved settings.
+
+A plugin upgrade that moves the server pin is still a first launch. Codex
+installs the upgrade in the background as a session starts, and the next
+session starts the new server version for the first time. Running setup with
+`--refresh` from the upgraded plugin starts that version ahead of time.
+
 `codex exec` sends its prompt at once, so a one-step task can answer without
 the UniFi tools. A short `codex exec` run can also end before a first launch
 finishes, so the next run may start slowly too. In an interactive session the

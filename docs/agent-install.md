@@ -142,8 +142,10 @@ Codex setup before plugin 1.0.0, run its one-time `--refresh` (see the
 Roll back by uninstalling the selected plugin and deleting its settings file.
 
 The first launch of each server version takes a few seconds, and Codex builds a
-session's first tool list after waiting 1 s. A `codex exec` prompt sent then
-can run without the UniFi tools. To make it wait, see
+session's first tool list after waiting 1 s. Setup therefore starts the server
+once, without its settings, so the first session after setup finds it ready. After
+a plugin upgrade that moves the server pin, the next session is a first launch
+again, and a `codex exec` prompt sent then can run without the UniFi tools. See
 [Codex: tools on the first turn](plugin-support.md#codex-tools-on-the-first-turn).
 
 ### GitHub Copilot CLI
