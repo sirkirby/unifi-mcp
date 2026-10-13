@@ -506,6 +506,11 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## Incident Evidence
 
 <!-- AUTO:tools:incident_evidence -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_incident_evidence` | Read | Collects bounded, read-only Network event evidence for one incident window. |
 <!-- /AUTO:tools:incident_evidence -->
 
 ---

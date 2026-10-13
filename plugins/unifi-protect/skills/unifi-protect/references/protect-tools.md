@@ -96,6 +96,11 @@ Always available, regardless of registration mode.
 ## Incident Evidence
 
 <!-- AUTO:tools:incident_evidence -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `protect_get_incident_evidence` | Read | Collects bounded, read-only Protect event evidence for one incident window. |
 <!-- /AUTO:tools:incident_evidence -->
 
 ---
