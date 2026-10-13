@@ -96,11 +96,24 @@ The investigation reads; it never changes anything.
   for the user to decide.
 - Investigate the one confirmed window, once. Continuous monitoring, polling or
   subscriptions are outside this workflow.
+- Never page with `resume_after`, split the window, raise a budget or call
+  `detail="full"` without the user's yes to that follow-up. Offer it, end your
+  turn and wait.
 - Identity stays with explicit, source-backed identifiers. Faces, plates,
   people's names and similar names never identify a person or establish a
   mapping.
 
 ## Workflow
+
+Work in this order, every time:
+
+1. **Confirmation.** Show the inputs and budgets, then end your turn and wait
+   for the user's reply (step 1).
+2. **Mapping lookups.** Check the tools and run the read-only mapping lookups
+   (steps 2 and 3). Ask nothing further unless nothing proves a mapping.
+3. **Evidence.** One call per evidence tool (step 4), then read the views
+   (step 5). Each follow-up read waits for the user's yes.
+4. **Report** (step 6).
 
 ### 1. Confirm the inputs
 
@@ -129,8 +142,22 @@ Collect, before any read:
   characters and `location_id` at most 128, none of them holding a control
   character, quote or backslash; assertions carry no `role`.
 
-Done when the user has confirmed device MAC, window with offset, camera scope
-and budgets.
+**Stop here, even when the request already names every input.** Show this
+block, end your turn and wait for the user's reply. Make no lookup, evidence
+call or other controller read until the user confirms; a correction gets a new
+block.
+
+```text
+Window: <start> to <end> (<timezone>); UTC <start> to <end>
+Device: <MAC>
+Cameras: <camera IDs | none>; unresolved: <descriptions | none>
+Products: Network and Protect (or Network only, with the reason)
+Budgets: max_window_seconds <n>, max_events <n>, max_calls <n>, max_elapsed_ms <n>, max_records_returned <n>
+Next: the mapping lookups, then one call per evidence tool. Reply yes, or correct any line.
+```
+
+Done when the user has replied and confirmed device MAC, window with offset,
+camera scope, products and budgets.
 
 ### 2. Check the evidence tools
 
@@ -177,7 +204,8 @@ exactly two sources:
   say so, because the camera may have been elsewhere during the window.
 
 When both lookups are listed directly with `readOnlyHint: true`, run them
-yourself for every requested camera ID before asking anything. In the default
+yourself, once the user has confirmed the inputs, for every requested camera ID,
+without asking again. In the default
 lazy mode, `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later,
 the servers the Network and Protect plugins pin, list them directly beside the
 evidence tools; eager mode lists every tool.
@@ -197,6 +225,12 @@ When you ask, say which case applies and what the lookups returned, and ask for
 the exact-identifier relationship; an answer becomes an `operator_input`
 mapping. A camera the user only described gets no lookup until the user gives
 its exact ID.
+
+State each `product_inventory` mapping with the uplink field you compared and
+both values: "`sw_mac` `aa:bb:cc:00:10:01` with `sw_port` 3 equals the incident
+device MAC" for a wired camera, "`ap_mac` `aa:bb:cc:00:10:01` equals the
+incident device MAC" for a wireless one. A port number or a device name alone
+proves nothing.
 
 Names, locations, nearby timestamps and "probably" never establish a mapping.
 A candidate is ambiguous when the user's description fits more than one camera
@@ -254,7 +288,8 @@ protect_get_incident_evidence(
 ```
 
 - Leave `detail` at its default, the view. `detail="full"` returns the whole
-  evidence document, which can exceed what a client accepts in one result.
+  evidence document, which can exceed what a client accepts in one result;
+  call it only after the user says yes to it.
 - Network reads the site event log for the window. Leaving `device_macs` out
   keeps upstream and neighbour events, which often explain a device incident;
   pass `device_macs=["<device mac>"]` only when the user wants the device's own
@@ -315,10 +350,10 @@ The offers for `truncation_unknown` and for omitted records are mandatory.
 Whenever a source has `truncation_unknown`, Unanswered Questions and Next Reads
 says "split the window" and gives the call with its new `start` and `end`.
 Whenever `next_cursor` is set, it gives the same call with
-`resume_after="<next_cursor>"`, the cursor copied exactly. Ask before every
-follow-up, use the same evidence tool, and report each view separately. List
-tools return records without continuation state, so they never complete
-coverage.
+`resume_after="<next_cursor>"`, the cursor copied exactly. These are offers:
+make no follow-up call until the user says yes to it, then use the same
+evidence tool and report each view separately. List tools return records
+without continuation state, so they never complete coverage.
 
 Done when every source in every view has its outcome, coverage and counts
 recorded, and every follow-up has been offered or ruled out.
@@ -333,8 +368,9 @@ observation carries a citation, and every coverage claim matches the documents.
 Use these sections, in order:
 
 1. **Incident and Inputs:** the incident, device MAC, window as given and in
-   UTC with its offset, camera scope, mapping assertions with their sources,
-   and the budgets passed.
+   UTC with its offset, camera scope, mapping assertions with their sources
+   (for `product_inventory`, the uplink field compared and both values, as in
+   step 3), and the budgets passed.
 2. **Coverage and Limitations:** per document, its line and its records line,
    then one line per source:
 
@@ -348,7 +384,8 @@ Use these sections, in order:
    [allowed](#coverage-and-limitations), or the gap that rules it out, and the
    retention sentence when any source is `empty`.
 3. **Observations:** one line per record in the view, in the view's order,
-   copied field by field from the record:
+   copied field by field from the record. Cite one line per record you report;
+   a summary by type or count may follow the lines, never replace them:
 
    ```text
    - `<evidence_id>` <time.utc, or time `<time.status>`> (<product>, `<source_tool>`, record `<source_record_id>`): <summary> `<event_type>`; mapping `<mapping.status>`.
@@ -357,7 +394,9 @@ Use these sections, in order:
    Write `(no summary)` when `summary` is null. For a record with no usable
    time, add its original time field, type and value after the mapping. For
    each field in `truncated`, end the line with `; truncated <field> from <n>
-   characters`, so the cut is never presented as the whole text.
+   characters`, so the cut is never presented as the whole text. Copy every
+   other field whole; if you shorten one anyway, end the line with `; shortened
+   <field> in this report from <n> characters`.
    `source_tool` is the read family named in the record (for example
    `unifi_list_events`), not the evidence tool you called. Anywhere else in
    the report, refer to a record by its full `evidence_id` in backticks. Never

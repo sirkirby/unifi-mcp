@@ -29,7 +29,8 @@ BUDGETS = {"max_window_seconds", "max_events", "max_calls", "max_elapsed_ms", "m
 # Read-only camera<->device lookups the skill runs itself when the client lists them directly.
 MAPPING_LOOKUPS = ("protect_get_camera", "unifi_get_client_details")
 LOOKUP_RULES = (
-    "run them yourself for every requested camera ID before asking anything",
+    "run them yourself, once the user has confirmed the inputs, for every requested camera ID, without asking again",
+    "State each `product_inventory` mapping with the uplink field you compared and both values",
     "never reach a lookup through `*_execute`",
     "Ask the user for the mapping only when there is no proof",
     "Leave `summary` at its default, `false`",
@@ -40,6 +41,29 @@ LOOKUP_RULES = (
 )
 # A described camera needs its ID or exact-identifier proof; nothing resolves it from a description.
 CAMERA_INPUT_RULE = "a name, description or location never does"
+# How the skill conducts itself with the user: (section heading, rule). A real client skipped the
+# confirmation, paged without asking and summarised records instead of citing them.
+CONDUCT_RULES = (
+    ("Workflow", "Show the inputs and budgets, then end your turn and wait for the user's reply"),
+    ("Workflow", "Ask nothing further unless nothing proves a mapping"),
+    ("Workflow", "Each follow-up read waits for the user's yes"),
+    ("1. Confirm the inputs", "Stop here, even when the request already names every input."),
+    ("1. Confirm the inputs", "Make no lookup, evidence call or other controller read until the user confirms"),
+    (
+        "Safety",
+        'Never page with `resume_after`, split the window, raise a budget or call `detail="full"` '
+        "without the user's yes to that follow-up",
+    ),
+    ("4. Collect evidence", "call it only after the user says yes to it"),
+    ("5. Read the evidence", "make no follow-up call until the user says yes to it"),
+    (
+        "Report",
+        "Cite one line per record you report; a summary by type or count may follow the lines, never replace them",
+    ),
+    ("Report", "if you shorten one anyway, end the line with `; shortened <field> in this report from <n> characters`"),
+    ("Report", "the uplink field compared and both values"),
+)
+CONFIRMATION_FIELDS = ("Window:", "Device:", "Cameras:", "Products:", "Budgets:")
 REPORT_SECTIONS = (
     "Incident and Inputs",
     "Coverage and Limitations",
@@ -124,6 +148,38 @@ def dependency_errors(text: str) -> list[str]:
     if not re.search(r"^Optional: worker$", text, re.M):
         errors.append("Optional must be exactly worker")
     return errors
+
+
+def section(text: str, heading: str) -> str:
+    """The body under a ``##`` or ``###`` heading, up to the next heading of that level or higher."""
+    match = re.search(rf"^(#{{2,3}}) {re.escape(heading)}\n", text, re.M)
+    if not match:
+        return ""
+    rest = text[match.end() :]
+    end = re.search(rf"^#{{2,{len(match[1])}}} ", rest, re.M)
+    return rest[: end.start()] if end else rest
+
+
+def conduct_errors(text: str) -> list[str]:
+    """The workflow stops for confirmation, asks before every follow-up read and cites every record it reports."""
+    errors = [
+        f"missing conduct rule: {rule}" for heading, rule in CONDUCT_RULES if rule not in flat(section(text, heading))
+    ]
+    order = [
+        flat(section(text, "Workflow")).find(f"**{step}.**") for step in ("Confirmation", "Mapping lookups", "Evidence")
+    ]
+    if -1 in order or order != sorted(order):
+        errors.append("workflow order must be confirmation, then mapping lookups, then evidence")
+    block = re.search(r"```text\n(.*?)```", section(text, "1. Confirm the inputs"), re.S)
+    for field in CONFIRMATION_FIELDS:
+        if not block or not re.search(rf"^{re.escape(field)}", block[1], re.M):
+            errors.append(f"confirmation block lacks {field}")
+    return errors
+
+
+def remove(text: str, phrase: str) -> str:
+    """Delete one occurrence of a phrase, however the skill wraps its lines."""
+    return re.sub(r"\s+".join(map(re.escape, phrase.split())), "", text, count=1)
 
 
 def mapping_errors(text: str) -> list[str]:
@@ -463,8 +519,14 @@ def test_skill_maps_cameras_with_the_lookups_itself() -> None:
     ("old", "new", "expected"),
     [
         (
-            "run them\nyourself for every requested camera ID before asking anything",
-            "ask the user",
+            "run them\nyourself, once the user has confirmed the inputs, for every requested camera ID,"
+            "\nwithout asking again",
+            "run them yourself before asking anything",
+            "missing mapping rule",
+        ),
+        (
+            "State each `product_inventory` mapping with the uplink field you compared and\nboth values",
+            "State each mapping as proven",
             "missing mapping rule",
         ),
         (
@@ -501,6 +563,32 @@ def test_mapping_step_mutations_are_rejected(old: str, new: str, expected: str) 
     text = SKILL.read_text()
     assert old in text
     assert any(expected in error for error in mapping_errors(text.replace(old, new, 1)))
+
+
+def test_skill_stops_for_confirmation_and_asks_before_follow_ups() -> None:
+    assert not conduct_errors(SKILL.read_text()), conduct_errors(SKILL.read_text())
+
+
+@pytest.mark.parametrize("rule", [rule for _, rule in CONDUCT_RULES], ids=lambda rule: rule[:40])
+def test_dropping_a_conduct_rule_is_rejected(rule: str) -> None:
+    text = remove(SKILL.read_text(), rule)
+    assert text != SKILL.read_text()
+    assert f"missing conduct rule: {rule}" in conduct_errors(text)
+
+
+@pytest.mark.parametrize("field", CONFIRMATION_FIELDS)
+def test_confirmation_block_field_is_required(field: str) -> None:
+    text = SKILL.read_text().replace(f"\n{field} ", "\nRemoved ", 1)
+    assert f"confirmation block lacks {field}" in conduct_errors(text)
+
+
+def test_evidence_before_confirmation_is_rejected() -> None:
+    text = (
+        SKILL.read_text()
+        .replace("**Confirmation.**", "**Confirm.**", 1)
+        .replace("**Report** (step 6).", "**Report** (step 6).\n5. **Confirmation.** Confirm afterwards.", 1)
+    )
+    assert "workflow order must be confirmation, then mapping lookups, then evidence" in conduct_errors(text)
 
 
 def test_evidence_tool_missing_from_lazy_mode_is_rejected() -> None:
