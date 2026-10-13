@@ -114,6 +114,20 @@ OpenCode's built-in MCP support, and the current manual paths for Antigravity,
 Cursor, and Devin Desktop. A skills install adds agent guidance; it does not by
 itself register the MCP server.
 
+### What's new: the UniFi Intelligence plugin
+
+- **A new plugin, `unifi-intelligence` 1.0.0**, listed in the Claude Code and
+  Codex marketplaces. It ships skills only: Incident Investigation, Security
+  Patrol and Visitor Audit. It replaces the unlisted `cross-product` bundle.
+- **It needs the Network and Protect plugins.** Claude Code installs
+  `unifi-network` and `unifi-protect` with it; on Codex and OpenClaw, install
+  and set up those two first.
+- **Incident Investigation runs locally.** It investigates one Network device
+  incident with Protect camera context from the servers' read-only incident
+  evidence tools, and cites every claim.
+- **Security Patrol and Visitor Audit need the cloud worker**, which provides
+  the merged location timeline through a connected relay.
+
 ### What's new in the 1.0.1 plugins
 
 - **A down controller no longer fails the plugin.** The servers answer the
@@ -170,6 +184,9 @@ Repeat for Protect or Access if needed:
 /plugin install unifi-access@unifi-plugins
 ```
 
+For the cross-product skills, `/plugin install unifi-intelligence@unifi-plugins`
+also installs the Network and Protect plugins it needs.
+
 `/plugin install` opens the plugin's options dialog straight away; fill it in there, or close it and run the setup command. Each plugin's setup command walks you through connecting to your controller and configuring permissions, and saves the result as the plugin's Claude Code options. Auto-update is off by default for this marketplace; see the [plugin upgrade guide](docs/plugin-upgrade.md) for update steps.
 
 Prerequisites, version boundaries and verification status for each client are in the [plugin support matrix](docs/plugin-support.md).
@@ -182,7 +199,7 @@ Register the UniFi MCP marketplace, then install the plugins from Codex's `/plug
 codex plugin marketplace add sirkirby/unifi-mcp
 ```
 
-Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. After installing, ask Codex to run the plugin's setup skill, for example:
+Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. `unifi-intelligence` adds the cross-product skills; Codex does not install plugin dependencies, so install and set up `unifi-network` and `unifi-protect` before it. After installing, ask Codex to run the plugin's setup skill, for example:
 
 > Use the `unifi-network-setup` skill to configure this for Codex.
 
@@ -212,7 +229,7 @@ bash ~/.openclaw/extensions/unifi-network/scripts/set-env.sh --target openclaw \
   'UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file'
 ```
 
-Setup saves these settings in `~/.config/unifi-mcp/network.env`, readable by you only, and the plugin's own server reads that file. It adds no entry to `openclaw.json`, so `openclaw plugins update` brings each new server version with nothing to rerun. An `mcp.servers.unifi-network` entry in `openclaw.json` replaces the plugin's server and pins its version; setup before plugin 1.0.0 wrote one, and `set-env.sh --target openclaw --refresh` converts it once (see the [upgrade guide](docs/plugin-upgrade.md#openclaw)). Repeat with `unifi-protect` or `unifi-access` as needed.
+Setup saves these settings in `~/.config/unifi-mcp/network.env`, readable by you only, and the plugin's own server reads that file. It adds no entry to `openclaw.json`, so `openclaw plugins update` brings each new server version with nothing to rerun. An `mcp.servers.unifi-network` entry in `openclaw.json` replaces the plugin's server and pins its version; setup before plugin 1.0.0 wrote one, and `set-env.sh --target openclaw --refresh` converts it once (see the [upgrade guide](docs/plugin-upgrade.md#openclaw)). Repeat with `unifi-protect` or `unifi-access` as needed. Install `unifi-intelligence` for the cross-product skills only after setting up `unifi-network` and `unifi-protect`; OpenClaw does not install plugin dependencies.
 
 ### Other MCP clients
 
@@ -282,9 +299,9 @@ Once connected, just ask your AI agent in natural language:
 > "Who badged into the office today? Show me a timeline of all door access events"
 > "Create a visitor pass for John Smith with access to the main entrance tomorrow 9-5"
 
-**Cross-Product** (requires [relay](packages/unifi-mcp-relay/) for full experience)
-> "Show me everything that happened at the front entrance in the last hour" — correlates Network clients, Protect camera events, and Access badge scans in a single timeline
-> "A switch went offline at 2 AM — was there physical activity nearby?"
+**UniFi Intelligence** (the `unifi-intelligence` plugin)
+> "Switch `aa:bb:cc:00:10:02` dropped off at 8:45 this morning, New York time. What happened between 8:00 and 9:00?" — cites Network events and mapped Protect camera events with their coverage
+> "Show me everything that happened at the front entrance in the last hour" — needs the [cloud worker](apps/worker/) and [relay](packages/unifi-mcp-relay/)
 
 All mutations use a **preview-then-confirm** flow — you see exactly what will change before anything is applied.
 
@@ -343,10 +360,13 @@ Each plugin ships with agent skills that go beyond raw tool access — they teac
 | **Firewall Auditor** | unifi-network | Security audit with 16 benchmarks, 100-point scoring, topology analysis, and trend tracking |
 | **Security Digest** | unifi-protect | Protect event summary with explicit coverage limits; optional Access and Network reads add correlation hypotheses |
 | **UniFi Access** | unifi-access | Door control, credentials, visitors, access policies — with real-time event streaming and activity summaries |
+| **Incident Investigation** | unifi-intelligence | One Network device incident with Protect camera context, from the read-only incident evidence tools, with cited coverage |
+| **Security Patrol** | unifi-intelligence | Area activity from the cloud worker's merged location timeline |
+| **Visitor Audit** | unifi-intelligence | Access events beside Network evidence from the cloud worker's timeline, with identity limits |
 
 Skills include reference documentation for device states, alarm types, firewall schemas, and event fields. The agent gathers and interprets evidence; the firewall score CLI computes scores from supported findings. Firewall snapshots, diffs, and template application follow the skill instructions.
 
-Each non-setup skill declares required and optional servers and requires a Coverage and Limitations section in reports. Missing required dependencies stop the workflow; optional missing sources, failed reads, and result caps are disclosed. Cross-product repository workflows require a separately available relay for merged timelines; see [Cross-Product Capabilities](docs/cross-product.md).
+Each non-setup skill declares required and optional servers and requires a Coverage and Limitations section in reports. Missing required dependencies stop the workflow; optional missing sources, failed reads, and result caps are disclosed. Security Patrol and Visitor Audit need the cloud worker's merged timeline through a connected relay; see [Cross-Product Capabilities](docs/cross-product.md).
 
 ## Architecture
 
@@ -367,7 +387,7 @@ plugins/
   unifi-network/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
   unifi-protect/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
   unifi-access/     # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
-  unifi-intelligence/ # Unlisted skills-only bundle; merged timelines need the cloud worker and relay
+  unifi-intelligence/ # Skills-only plugin; needs unifi-network and unifi-protect
 skills/
   _shared/          # Shared utilities for skill scripts (MCP client, config)
 docs/               # Ecosystem-level documentation

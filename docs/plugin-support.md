@@ -11,12 +11,20 @@ to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md)
 | `unifi-network` | Listed | Listed | `unifi-network-mcp` |
 | `unifi-protect` | Listed | Listed | `unifi-protect-mcp` |
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
-| `unifi-intelligence` | Not listed | Not listed | None (skills only) |
+| `unifi-intelligence` | Listed | Listed | None (skills only) |
 
 Each plugin has its own semantic version for everything it ships. For example,
 plugin `1.0.0` can launch `unifi-network-mcp==0.37.0`; the plugin version and
-server package pin are independent. The advertised plugins and unlisted
-cross-product bundle start at `1.0.0` with this scheme.
+server package pin are independent. Every plugin started at `1.0.0` with this
+scheme; `unifi-intelligence`, which replaces the unlisted `cross-product`
+bundle, starts there as a new plugin.
+
+**Plugin dependencies.** `unifi-intelligence` requires the `unifi-network` and
+`unifi-protect` plugins. Its Claude Code manifest declares them in
+`dependencies`, so Claude Code installs and enables them with it, and
+`claude plugin prune` removes them once nothing needs them. Codex and OpenClaw
+have no plugin dependencies; there, the plugin's description says to install
+both first.
 
 A plugin release is a plugin version bump merged to `main`; there is no
 separate publish step, and server packages keep their own tagged releases. Each
@@ -142,7 +150,7 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
   and names them with the reason: other consumers have not been verified as
   migrated. Values are omitted.
 
-The `unifi-intelligence` skills can be installed as standalone skills (see the
+The `unifi-intelligence` skills can also be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)). Incident
 Investigation uses the incident evidence tools of the local Network and Protect
 servers and needs no relay. Security Patrol and Visitor Audit use
@@ -176,7 +184,8 @@ Those checks do not count as `tested`. To produce `tested` evidence, follow the 
 | Transport: remote HTTP from the plugin | `unsupported` | `unsupported` | `unsupported` |
 | Connection: one UniFi product controller per plugin | `not tested` | `not tested` | `not tested` |
 | Connection: relay | Not required by product plugins | Not required by product plugins | Not required by product plugins |
-| `unifi-intelligence` from a marketplace | `unsupported` | `unsupported` | `unsupported` |
+| `unifi-intelligence` from a marketplace | `not tested` | `not tested` | `not tested` |
+| Required plugins installed with `unifi-intelligence` | `not tested` | `unsupported` | `unsupported` |
 
 No minimum client version has been established for any client.
 

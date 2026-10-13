@@ -99,9 +99,9 @@ combination; select one location when controllers return conflicting source IDs.
 The former `start_time`/`end_time`, `area_hint` and `event_types` parameters are no
 longer supported.
 
-## Hero Skills
+## UniFi Intelligence Skills
 
-Three repository skills describe cross-product workflows:
+The `unifi-intelligence` plugin ships three cross-product skills:
 
 | Skill | Use Case | Products |
 |-------|----------|----------|
@@ -109,12 +109,14 @@ Three repository skills describe cross-product workflows:
 | **Incident Investigation** | "A switch went offline — what happened?" | Network + Protect |
 | **Visitor Audit** | "Which access and network activity was observed today?" | Access + Network |
 
-These skills live in `plugins/unifi-intelligence/skills/`; they are not automatically
-installed by the individual product plugins, and the bundle is not listed in the
-Claude Code or Codex marketplace. Install them as standalone skills (see the
-[install guide](agent-install.md#standalone-skills-through-npm)). Availability depends on the client
-and its installed skill packages; verify discovery before invoking them. Each
-skill declares required and optional servers in its Dependencies section.
+The plugin is listed in the Claude Code and Codex marketplaces and ships skills
+only, no MCP server. It requires the `unifi-network` and `unifi-protect`
+plugins: Claude Code installs them as its dependencies, while Codex and OpenClaw
+install no plugin dependencies, so install and set up those two first there (see
+the [install guide](agent-install.md#unifi-intelligence)). The skills can also be
+installed as [standalone skills](agent-install.md#standalone-skills-through-npm)
+from `plugins/unifi-intelligence`. Each skill declares required and optional
+servers in its Dependencies section.
 
 Incident Investigation requires the local Network and Protect servers and uses
 their incident evidence tools; the relay is optional and unused. Security Patrol

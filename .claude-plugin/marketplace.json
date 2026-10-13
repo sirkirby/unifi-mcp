@@ -34,6 +34,15 @@
       "keywords": ["unifi", "access", "doors", "credentials", "mcp"],
       "category": "networking",
       "repository": "https://github.com/sirkirby/unifi-mcp"
+    },
+    {
+      "name": "unifi-intelligence",
+      "source": "./plugins/unifi-intelligence",
+      "description": "UniFi Intelligence skills — investigate Network device incidents with Protect camera context; requires the unifi-network and unifi-protect plugins",
+      "license": "MIT",
+      "keywords": ["unifi", "incident", "investigation", "security", "network", "protect"],
+      "category": "networking",
+      "repository": "https://github.com/sirkirby/unifi-mcp"
     }
   ]
 }

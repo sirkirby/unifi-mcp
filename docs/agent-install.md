@@ -172,6 +172,27 @@ that is already open keeps the unconfigured server until a new session starts or
 `openclaw gateway restart` runs. Repeat only for other UniFi products the user
 selected.
 
+### UniFi Intelligence
+
+`unifi-intelligence` is a skills-only plugin: Incident Investigation, Security
+Patrol and Visitor Audit. It ships no MCP server and requires the
+`unifi-network` and `unifi-protect` plugins, each set up with its own setup
+skill.
+
+- **Claude Code** installs both as dependencies:
+  `/plugin install unifi-intelligence@unifi-plugins`, then run the setup skill
+  of each one not yet configured. `claude plugin prune` later removes them only
+  if no installed plugin still needs them.
+- **Codex and OpenClaw** install no plugin dependencies. Install and set up
+  `unifi-network` and `unifi-protect` first, then install `unifi-intelligence`
+  the same way.
+
+Incident Investigation uses the local Network and Protect servers. Security
+Patrol and Visitor Audit need the cloud worker: they call
+`unifi_location_timeline`, which only the
+[cloud worker](../apps/worker/) provides, through a connected
+[relay](../packages/unifi-mcp-relay/). Without it they stop and say so.
+
 ## Standalone skills through npm
 
 The open [skills CLI](https://skills.sh/docs/cli) runs through `npx`; UniFi MCP

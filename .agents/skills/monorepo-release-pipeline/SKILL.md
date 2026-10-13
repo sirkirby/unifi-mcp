@@ -325,8 +325,13 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
 
 - Each plugin has an independent SemVer describing everything it ships, separate from
   the server pin. Set the same `version` in every existing Claude and Codex manifest
-  (at least one). The unlisted `unifi-intelligence` bundle uses its Claude manifest only.
+  (at least one). The skills-only `unifi-intelligence` bundle has both manifests, no MCP
+  config and no pin, and names the MCP plugins it needs in the Claude manifest's
+  `dependencies`; Codex and OpenClaw install no dependencies, so its descriptions say so.
   Keep `version` out of marketplace entries.
+- A renamed plugin is a new identity to every client, so it starts at `1.0.0`. The guard
+  checks a plugin with no files at the merge base as new and skips a removed one; say in
+  the upgrade guide what users of the old name do.
 - Bump every affected plugin in the same PR whenever any file under `plugins/<name>/`
   changes, including skills, references, setup scripts, MCP configs and docs. Version-only
   bumps are allowed.

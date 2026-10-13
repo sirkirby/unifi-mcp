@@ -5,6 +5,25 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## unifi-intelligence 1.0.0
+
+The cross-product skills move from the unlisted `cross-product` bundle into a
+new plugin, `unifi-intelligence` ("UniFi Intelligence"), listed in the Claude
+Code and Codex marketplaces. It is a new plugin, so it starts at 1.0.0, and it
+ships skills only: Incident Investigation, Security Patrol and Visitor Audit.
+
+- **It requires `unifi-network` and `unifi-protect`.** Claude Code installs and
+  enables them with it. Codex and OpenClaw do not install plugin dependencies:
+  install and set up both first. See the
+  [install guide](agent-install.md#unifi-intelligence).
+- **Security Patrol and Visitor Audit need the cloud worker.** They call
+  `unifi_location_timeline`, which only the cloud worker provides, through a
+  connected relay; local servers do not.
+- **If you installed the old bundle's skills** with
+  `npx skills add .../plugins/cross-product`, that path no longer exists. Remove
+  those skills with the skills CLI and install the plugin, or add the skills
+  again from `plugins/unifi-intelligence`.
+
 ## 1.0.1
 
 `unifi-network`, `unifi-protect` and `unifi-access` move to 1.0.1 and start
@@ -378,7 +397,9 @@ Hermes Agent cannot load the current plugin layout and is not supported.
 - If Claude Code reports a keychain write but does not keep it, setup restores
   the previous non-secret options and says so, but cannot restore the previous
   keychain value. Re-enter it, or switch to a file or command provider.
-- The `unifi-intelligence` bundle stays unlisted in both marketplaces. Its
-  merged-timeline workflows need `unifi_location_timeline`, which the cloud
+- The unlisted `cross-product` bundle has become the listed
+  `unifi-intelligence` plugin; see
+  [unifi-intelligence 1.0.0](#unifi-intelligence-100). Its Security Patrol and
+  Visitor Audit workflows need `unifi_location_timeline`, which the cloud
   worker provides through a connected relay and local servers do not. See
   [Cross-Product Capabilities](cross-product.md).
