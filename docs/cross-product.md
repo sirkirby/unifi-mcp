@@ -118,10 +118,11 @@ skill declares required and optional servers in its Dependencies section.
 
 Incident Investigation requires the local Network and Protect servers and uses
 their incident evidence tools; the relay is optional and unused. Security Patrol
-and Visitor Audit are merged-timeline workflows that require the relay's
-`unifi_location_timeline` tool. Visitor Audit also requires Access and optionally
-Network; Security Patrol needs at least one product (two for a multi-product
-correlation). Without the relay, those two stop the merged workflow and offer
+and Visitor Audit are merged-timeline workflows that require
+`unifi_location_timeline`, which the cloud worker provides through a connected
+relay. Visitor Audit also requires Access and optionally Network; Security
+Patrol needs at least one product (two for a multi-product correlation).
+Without it, those two stop the merged workflow and offer
 separate local reads, explicitly stating that no merged timeline is available.
 
 Reports include Coverage and Limitations: requested interval, source availability,

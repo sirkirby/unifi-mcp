@@ -16,11 +16,12 @@ is missing or a required read fails, stop and report it unavailable. Optional so
 may be skipped only when the report visibly names the missing source and resulting
 coverage limits. Use the product setup skill for connection help; never request secrets.
 
-The relay provides `unifi_location_timeline`; local product servers do not. If it
+The cloud worker provides `unifi_location_timeline` through a connected relay;
+local product servers do not. If it
 is unavailable, stop the merged-timeline workflow and report “No merged timeline
 available.” Offer separate local product reads with their own coverage labels.
 Security Patrol needs at least one available product; a multi-product claim needs
-at least two. A relay response alone does not establish complete source coverage.
+at least two. A timeline response alone does not establish complete source coverage.
 
 ## Coverage and Limitations
 

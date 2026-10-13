@@ -146,8 +146,9 @@ The `cross-product` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)). Incident
 Investigation uses the incident evidence tools of the local Network and Protect
 servers and needs no relay. Security Patrol and Visitor Audit use
-`unifi_location_timeline`, which is provided only through the
-[relay](../packages/unifi-mcp-relay/); local stdio servers do not expose it.
+`unifi_location_timeline`, which only the cloud worker provides, through a
+connected [relay](../packages/unifi-mcp-relay/); local stdio servers do not
+expose it.
 
 ## Client matrix
 

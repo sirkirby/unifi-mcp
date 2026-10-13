@@ -379,6 +379,6 @@ Hermes Agent cannot load the current plugin layout and is not supported.
   the previous non-secret options and says so, but cannot restore the previous
   keychain value. Re-enter it, or switch to a file or command provider.
 - The `cross-product` bundle stays unlisted in both marketplaces. Its
-  merged-timeline workflows need the relay's `unifi_location_timeline` tool,
-  which local servers do not provide. See
+  merged-timeline workflows need `unifi_location_timeline`, which the cloud
+  worker provides through a connected relay and local servers do not. See
   [Cross-Product Capabilities](cross-product.md).
