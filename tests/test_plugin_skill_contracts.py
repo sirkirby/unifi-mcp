@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -28,11 +29,17 @@ DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial"}
 SERVERS = {"network", "protect", "access", "relay"}
 
 
-def catalog() -> dict[str, tuple[str, dict]]:
+def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
+    """Tool input schemas: the server releases plugins pin, or with ``pinned=False`` the workspace servers."""
     result = {}
-    # Skills call the server release their plugin pins, not the workspace server.
+    # Plugin skills call the server release their plugin pins; repository docs describe the workspace server.
     for product in ("network", "protect", "access"):
-        for tool in refs.pinned_manifest(ROOT, product)[1]["tools"]:
+        manifest = (
+            refs.pinned_manifest(ROOT, product)[1]
+            if pinned
+            else json.loads((ROOT / refs.manifest_path(product)).read_text(encoding="utf-8"))
+        )
+        for tool in manifest["tools"]:
             result[tool["name"]] = (product, tool["schema"]["input"])
     # Read the literal registration schema without importing controller code.
     path = ROOT / "packages/unifi-mcp-relay/src/unifi_mcp_relay/location_timeline.py"
@@ -196,7 +203,7 @@ def test_incomplete_report_examples_are_present(scenario: str) -> None:
 
 def test_documented_timeline_signature() -> None:
     text = (ROOT / "docs/cross-product.md").read_text()
-    assert not reference_errors(text, catalog())
+    assert not reference_errors(text, catalog(pinned=False))
 
 
 @pytest.mark.parametrize("heading", ["Requirements", "Prerequisites", "Required MCP Server"])
