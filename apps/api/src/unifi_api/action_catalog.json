@@ -4080,12 +4080,24 @@
       "manager_method": "get_client_dpi_traffic",
       "input_schema": {
         "properties": {
+          "duration": {
+            "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+            "type": "string"
+          },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "type": "string"
+          },
           "group_by": {
             "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
             "type": "string"
           },
           "mac_address": {
             "description": "Client MAC address",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4166,8 +4178,16 @@
             "description": "Time period for stats: 'hourly' (last 1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
           },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "type": "string"
+          },
           "granularity": {
             "description": "Time resolution: '5minutes' (~12h retention), 'hourly' (default, ~7d), 'daily' (~1yr), 'monthly' (~1yr)",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4889,8 +4909,20 @@
       "manager_method": "get_site_dpi_traffic",
       "input_schema": {
         "properties": {
+          "duration": {
+            "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+            "type": "string"
+          },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "type": "string"
+          },
           "group_by": {
             "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -5081,9 +5113,25 @@
             "description": "Time period for stats: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
           },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "type": "string"
+          },
+          "granularity": {
+            "description": "Report resolution: '5minutes', 'hourly', 'daily', 'monthly'. Default: the finest the controller still retains for the window start",
+            "type": "string"
+          },
           "limit": {
             "description": "Maximum number of top clients to return (default 10)",
             "type": "integer"
+          },
+          "sort_by": {
+            "description": "Rank by 'total' (default), 'upload' (client sent) or 'download' (client received)",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "type": "string"
           }
         },
         "type": "object",

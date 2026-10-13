@@ -58,6 +58,7 @@ from unifi_core.network.read_views import (
     shape_voucher_list,
     shape_wlan_list,
 )
+from unifi_core.network.time_window import duration_hours, parse_window_bound
 
 from unifi_api.services.action_results import ShapedReadResult
 
@@ -850,20 +851,26 @@ def _translate_update_device_radio(args: dict[str, Any]) -> tuple[tuple[Any, ...
 # string like "daily") and ``limit``; manager expects ``duration_hours``
 # (an integer).
 
-_DURATION_HOURS: dict[str, int] = {
-    "hourly": 1,
-    "daily": 24,
-    "weekly": 168,
-    "monthly": 720,
-}
+
+def _window_kwargs(out: dict[str, Any]) -> None:
+    """Move the tools' ``start``/``end`` bounds to the managers' epoch-ms arguments."""
+    for source, target in (("start", "start_ms"), ("end", "end_ms")):
+        if source in out:
+            out[target] = parse_window_bound(out.pop(source))
 
 
 def _translate_get_top_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Convert ``duration`` string → ``duration_hours`` int for stats_manager.get_top_clients."""
     out = dict(args)
-    duration = out.pop("duration", "daily")
-    duration_hours = _DURATION_HOURS.get(str(duration), 1)
-    return (), {"duration_hours": duration_hours, "limit": out.get("limit", 10)}
+    kwargs: dict[str, Any] = {
+        "duration_hours": duration_hours(out.pop("duration", "daily")),
+        "limit": out.get("limit", 10),
+    }
+    _window_kwargs(out)
+    for key in ("start_ms", "end_ms", "granularity", "sort_by"):
+        if out.get(key) is not None:
+            kwargs[key] = out[key]
+    return (), kwargs
 
 
 def _translate_list_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -929,7 +936,8 @@ def _translate_duration(
     out = {key: value for key, value in args.items() if key not in drop}
     duration = out.pop("duration", None)
     if duration is not None:
-        out["duration_hours"] = _DURATION_HOURS.get(str(duration), default_hours)
+        out["duration_hours"] = duration_hours(duration)
+    _window_kwargs(out)
     for source, target in (rename or {}).items():
         if source in out:
             out[target] = out.pop(source)
@@ -1815,7 +1823,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     # Network — device radio update: flatten → (device_mac, radio_id, updates)
     "unifi_update_device_radio": _spec(_translate_radio_update, "device_mac", "radio_id", "updates"),
     # Network — stats: convert duration string to duration_hours integer
-    "unifi_get_top_clients": _spec(_translate_get_top_clients, "duration_hours", "limit"),
+    "unifi_get_top_clients": _spec(
+        _translate_get_top_clients, "duration_hours", "limit", "start_ms", "end_ms", "granularity", "sort_by"
+    ),
     # Network — event tool names differ from the Core manager signatures.
     "unifi_list_events": _spec(
         _translate_list_events, "event_type", "within", "limit", "start", "categories", "severities"
@@ -1898,7 +1908,14 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "client_mac",
     ),
     "unifi_get_client_dpi_traffic": _spec(
-        _rename_and_drop(rename={"mac_address": "client_mac", "group_by": "by"}), "client_mac", "by"
+        lambda args: _translate_duration(
+            args, default_hours=24, rename={"mac_address": "client_mac", "group_by": "by"}
+        ),
+        "client_mac",
+        "by",
+        "duration_hours",
+        "start_ms",
+        "end_ms",
     ),
     "unifi_get_client_sessions": _spec(
         lambda args: _translate_duration(args, default_hours=24, rename={"mac_address": "client_mac"}),
@@ -1912,6 +1929,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "client_id",
         "duration_hours",
         "granularity",
+        "start_ms",
+        "end_ms",
     ),
     "unifi_get_dashboard": _spec(_rename_and_drop(drop=frozenset({"summary"})), "history_seconds"),
     "unifi_get_device_details": _spec(
@@ -1933,7 +1952,13 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_network_stats": _spec(
         lambda args: _translate_duration(args, default_hours=1), "duration_hours", "granularity"
     ),
-    "unifi_get_site_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "by"),
+    "unifi_get_site_dpi_traffic": _spec(
+        lambda args: _translate_duration(args, default_hours=24, rename={"group_by": "by"}),
+        "by",
+        "duration_hours",
+        "start_ms",
+        "end_ms",
+    ),
     "unifi_get_snmp_settings": _spec(_rename_and_drop(constants={"section": "snmp"}), "section"),
     "unifi_get_mgmt_settings": _spec(_rename_and_drop(constants={"section": "mgmt"}), "section"),
     "unifi_get_speedtest_results": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),

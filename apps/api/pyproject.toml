@@ -25,7 +25,8 @@ dependencies = [
     # Key-backed inventory, public projections and auth requirements need Core 0.4.53.
     # WAN DNS and firewall-group public contracts require Core 0.4.55.
     # Bounded incident evidence collection and its client view require Core 0.4.71.
-    "unifi-core[network,protect,access]>=0.4.73,<0.5",
+    # Windowed stats and 10.x DPI/IPS (unifi_core.network.time_window) require Core 0.4.75.
+    "unifi-core[network,protect,access]>=0.4.75,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.

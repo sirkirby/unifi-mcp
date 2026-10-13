@@ -280,9 +280,9 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 ## Statistics (6 tools)
 
 - `unifi_get_network_stats` — Network-wide statistics
-- `unifi_get_client_stats` — Per-client statistics
+- `unifi_get_client_stats` — Per-client traffic time-series with upload/download totals; optional absolute `start`/`end` window
 - `unifi_get_device_stats` — Per-device traffic time-series
-- `unifi_get_top_clients` — Top clients by bandwidth usage
+- `unifi_get_top_clients` — Clients ranked by traffic inside a window (`duration` or `start`/`end`), sortable by upload or download
 - `unifi_get_dpi_stats` — Deep Packet Inspection statistics
 - `unifi_get_alerts` — Recent alerts
 

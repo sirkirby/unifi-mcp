@@ -204,6 +204,26 @@ def test_top_clients_list_serializer_shape() -> None:
     assert item["total_bytes"] == 300
 
 
+def test_top_clients_serializer_keeps_window_direction_and_source() -> None:
+    # Shape returned by StatsManager.get_top_clients for a windowed report.
+    sample = {
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "rx_bytes": 900,
+        "tx_bytes": 100,
+        "upload_bytes": 900,
+        "download_bytes": 100,
+        "total_bytes": 1000,
+        "source": "report",
+        "granularity": "5minutes",
+    }
+    item = TopClient.from_manager_output(sample).to_dict()
+    assert item["upload_bytes"] == 900
+    assert item["download_bytes"] == 100
+    assert item["upload_bytes"] == item["rx_bytes"]
+    assert item["download_bytes"] == item["tx_bytes"]
+    assert item["source"] == "report"
+
+
 # ---- Speedtest ----
 
 
