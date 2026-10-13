@@ -147,7 +147,8 @@ Note also whether the mapping lookups `protect_get_camera` and
 `unifi_get_client_details` are listed directly with `readOnlyHint: true`; that
 decides who establishes the mappings in step 3. In lazy mode,
 `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later list them
-directly; earlier releases list them only in eager mode.
+directly, and the UniFi Network and Protect plugins pin those servers; earlier
+server releases list them only in eager mode.
 
 Done when each evidence tool is confirmed listed and read-only, or recorded
 as unavailable, and each mapping lookup is recorded as listed or not.
@@ -177,8 +178,9 @@ exactly two sources:
 
 When both lookups are listed directly with `readOnlyHint: true`, run them
 yourself for every requested camera ID before asking anything. In the default
-lazy mode, `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later
-list them directly beside the evidence tools; eager mode lists every tool.
+lazy mode, `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later,
+the servers the Network and Protect plugins pin, list them directly beside the
+evidence tools; eager mode lists every tool.
 Camera and device listings are not listed directly in lazy mode, and they
 select candidates only; they prove no mapping. Call each lookup by its own
 name; never reach a lookup through `*_execute`.

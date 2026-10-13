@@ -153,7 +153,11 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
 The `unifi-intelligence` skills can also be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)). Incident
 Investigation uses the incident evidence tools of the local Network and Protect
-servers and needs no relay. Security Patrol and Visitor Audit need the cloud
+servers and needs no relay. With the pinned servers (`unifi-network-mcp` 0.38.1,
+`unifi-protect-mcp` 0.9.1), lazy mode also lists the read-only lookups it uses
+to tie a camera to the incident device, `protect_get_camera` and
+`unifi_get_client_details`; with an older server or in `meta_only` mode it asks
+the user for that mapping instead. Security Patrol and Visitor Audit need the cloud
 worker: they use `unifi_location_timeline`, which only the cloud worker
 provides, through a connected [relay](../packages/unifi-mcp-relay/); local stdio
 servers do not expose it. The timeline reports Access as unsupported, so those

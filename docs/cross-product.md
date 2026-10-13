@@ -37,7 +37,8 @@ and Protect servers; the relay is not used.
 3. **Mappings.** A camera is tied to the device only by an exact identifier. When
    the client lists the read-only lookups `protect_get_camera` and
    `unifi_get_client_details` directly (lazy mode does from
-   `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1), the skill runs
+   `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1, the servers the
+   Network and Protect plugins pin), the skill runs
    them itself to show the camera's MAC as a Network client on that device; it
    asks the user only when the lookups are unavailable or show no such
    relationship. A described camera is used only once the user gives its ID. Similar names and

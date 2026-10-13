@@ -35,7 +35,8 @@ LOOKUP_RULES = (
     "Leave `summary` at its default, `false`",
     "write the camera MAC as six lowercase colon-separated pairs",
     "with both written in that same lowercase colon form before comparing",
-    "`unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later list them directly",
+    "`unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later, "
+    "the servers the Network and Protect plugins pin, list them directly",
 )
 # A described camera needs its ID or exact-identifier proof; nothing resolves it from a description.
 CAMERA_INPUT_RULE = "a name, description or location never does"
