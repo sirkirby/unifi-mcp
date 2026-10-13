@@ -264,7 +264,7 @@ intentional change, bump `INCIDENT_EVIDENCE_SCHEMA_VERSION` if serialized
 output changes incompatibly, then regenerate and review the diff:
 
 ```bash
-UNIFI_UPDATE_INCIDENT_GOLDEN=1 uv run --package unifi-core pytest \
+INCIDENT_EVIDENCE_UPDATE_GOLDEN=1 uv run --package unifi-core pytest \
   packages/unifi-core/tests/test_incident_evidence_golden.py
 ```
 

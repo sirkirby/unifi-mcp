@@ -15,7 +15,7 @@ worker, read the same files and must produce the same output. Cases under
 Regenerate expected outputs and the schema artifact after an intentional
 contract change, then review the diff:
 
-    UNIFI_UPDATE_INCIDENT_GOLDEN=1 uv run --package unifi-core pytest \
+    INCIDENT_EVIDENCE_UPDATE_GOLDEN=1 uv run --package unifi-core pytest \
         packages/unifi-core/tests/test_incident_evidence_golden.py
 """
 
@@ -47,7 +47,8 @@ from unifi_core.source_page import SourcePage
 CORPUS_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "incident_evidence"
 CASES_DIR = CORPUS_DIR / "cases"
 SCHEMA_PATH = CORPUS_DIR / "incident-evidence.v1.schema.json"
-UPDATE_ENV = "UNIFI_UPDATE_INCIDENT_GOLDEN"
+# Not ``UNIFI_``-prefixed: the test guard deletes those before any test reads them.
+UPDATE_ENV = "INCIDENT_EVIDENCE_UPDATE_GOLDEN"
 
 
 def case_paths() -> list[Path]:
