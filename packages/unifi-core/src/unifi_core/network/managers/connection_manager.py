@@ -508,15 +508,12 @@ class ConnectionManager:
         return rules
 
     def _record_connection_error(self, error: BaseException) -> str:
-        self._support_attempt = connection_attempt_failed(error)
+        category = ErrorCategory.AUTHENTICATION if self._is_mfa_required_error(error) else None
+        self._support_attempt = connection_attempt_failed(error, category=category)
         self._last_connection_error = self._sanitize_connection_error(error)
         self._last_connection_failure = (
             self._last_connection_error,
-            connection_failure(
-                "Connecting to the Network controller failed.",
-                error,
-                category=ErrorCategory.AUTHENTICATION if self._is_mfa_required_error(error) else None,
-            ),
+            connection_failure("Connecting to the Network controller failed.", error, category=category),
         )
         return self._last_connection_error
 

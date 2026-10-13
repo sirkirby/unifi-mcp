@@ -169,3 +169,18 @@ async def test_an_mfa_challenge_without_a_totp_secret_is_an_auth_failure(tmp_pat
     assert sum(line.endswith("/api/auth/login") for line in controller.seen) == 1
     assert PRIVATE not in json.dumps(evidence.model_dump(mode="json"))
     assert all(PRIVATE not in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_an_mfa_challenge_is_recorded_as_an_auth_failure_in_the_support_status(tmp_path) -> None:
+    attempts: list[dict] = []
+    await _collect(
+        tmp_path,
+        login_status=499,
+        max_calls=20,
+        connection_state=lambda connection: attempts.append(connection.support_status()["last_attempt"]),
+    )
+    (attempt,) = attempts
+    assert attempt["status"] == "failed"
+    assert attempt["error_category"] == "authentication"
+    assert attempt["remediation"] == "check_credentials"
