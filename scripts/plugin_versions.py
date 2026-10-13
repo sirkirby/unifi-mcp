@@ -225,6 +225,12 @@ def sync(root: Path, releasing: str | None = None) -> None:
             cwd=root,
             check=True,
         )
+    # Plugin tool references and counts follow the pins just moved.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parent / "generate_skill_references.py"), "--root", str(root)],
+        cwd=root,
+        check=True,
+    )
     check(root, "HEAD", releasing)
 
 

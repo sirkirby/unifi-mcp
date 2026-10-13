@@ -189,7 +189,7 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 4. Run `make manifest`
 5. Add tests in `apps/<server>/tests/unit/test_<category>.py`
 6. Add `ToolAnnotations` to the `@server.tool()` decorator
-7. Commit code + manifest + tests together
+7. Commit code + manifest + tests together. Plugin skill counts and generated plugin references follow the server release the plugin pins, so they stay unchanged here and change in the plugin release that moves the pin (a new category needs its reference marker section then).
 
 ### Add a new tool category
 

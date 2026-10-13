@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Generate tool reference tables for the UniFi skill from tool manifests.
 
-Reads each server's tools_manifest.json and updates the skill reference
-docs with accurate tool tables. Hand-written sections (tips, scenarios)
-are preserved — only content between AUTO markers is replaced.
+Reads the tools_manifest.json of the server release each product's plugin
+pins (``git show <tag>:<manifest>``, through ``plugin_tool_refs``), never the
+workspace manifest: plugin references describe the server users install, and
+change in the plugin release that moves the pin. Hand-written sections (tips,
+scenarios) are preserved — only content between AUTO markers, the reference's
+header count and the main SKILL.md's tool-count phrases are replaced.
 
 Usage:
-    python scripts/generate_skill_references.py [--check]
+    python scripts/generate_skill_references.py [--check] [--root PATH]
 
 Flags:
     --check   Dry-run mode: report drift without modifying files (exit 1 if drift found)
@@ -19,41 +22,40 @@ Markers in reference files:
 
 from __future__ import annotations
 
-import json
+import argparse
 import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plugin_tool_refs import pinned_manifest  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLUGINS_DIR = REPO_ROOT / "plugins"
-
-# Server configs — reference files live in each plugin's skill directory
-SERVERS = [
-    {
-        "name": "network",
-        "manifest": REPO_ROOT / "apps" / "network" / "src" / "unifi_network_mcp" / "tools_manifest.json",
-        "reference": PLUGINS_DIR / "unifi-network" / "skills" / "unifi-network" / "references" / "network-tools.md",
-        "module_strip": "unifi_network_mcp.tools.",
-    },
-    {
-        "name": "protect",
-        "manifest": REPO_ROOT / "apps" / "protect" / "src" / "unifi_protect_mcp" / "tools_manifest.json",
-        "reference": PLUGINS_DIR / "unifi-protect" / "skills" / "unifi-protect" / "references" / "protect-tools.md",
-        "module_strip": "unifi_protect_mcp.tools.",
-    },
-    {
-        "name": "access",
-        "manifest": REPO_ROOT / "apps" / "access" / "src" / "unifi_access_mcp" / "tools_manifest.json",
-        "reference": PLUGINS_DIR / "unifi-access" / "skills" / "unifi-access" / "references" / "access-tools.md",
-        "module_strip": "unifi_access_mcp.tools.",
-    },
-]
+PRODUCTS = ("network", "protect", "access")
 
 
-def load_manifest(path: Path) -> dict:
-    """Load a tools_manifest.json file."""
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+# Tool-count phrases in each product plugin's main SKILL.md, kept at the pinned count.
+SKILL_COUNT_PATTERNS = (
+    re.compile(r"(It provides )\d+( tools)"),
+    re.compile(r"(list of all )\d+( tools)"),
+)
+
+
+def skill_dir(root: Path, product: str) -> Path:
+    """The product plugin's main skill."""
+    return root / "plugins" / f"unifi-{product}" / "skills" / f"unifi-{product}"
+
+
+def reference_path(root: Path, product: str) -> Path:
+    """The generated tool reference in the product plugin's main skill."""
+    return skill_dir(root, product) / "references" / f"{product}-tools.md"
+
+
+def update_skill_counts(content: str, total_tools: int) -> str:
+    """Update the tool counts the main SKILL.md states."""
+    for pattern in SKILL_COUNT_PATTERNS:
+        content = pattern.sub(rf"\g<1>{total_tools}\g<2>", content)
+    return content
 
 
 def first_sentence(text: str) -> str:
@@ -188,49 +190,53 @@ def update_header_count(content: str, total_tools: int, server_name: str) -> str
     return pattern.sub(rf"\g<1>({total_tools} tools)", content)
 
 
-def main():
-    check_mode = "--check" in sys.argv
+def run(root: Path, check_mode: bool) -> int:
     mode_label = "Checking" if check_mode else "Generating"
 
-    print(f"{mode_label} skill reference tables from tool manifests...")
+    print(f"{mode_label} skill reference tables from the tool manifests plugins pin...")
 
     total_updated = 0
     total_missing = 0
     all_missing_cats: list[tuple[str, str]] = []
     has_drift = False
 
-    for server in SERVERS:
-        manifest_path = server["manifest"]
-        reference_path = server["reference"]
+    for product in PRODUCTS:
+        path = reference_path(root, product)
 
-        if not manifest_path.exists():
-            print(f"  SKIP: Manifest not found for {server['name']}: {manifest_path}")
+        if not path.exists():
+            print(f"  SKIP: Reference not found for {product}: {path}")
             continue
 
-        if not reference_path.exists():
-            print(f"  SKIP: Reference not found for {server['name']}: {reference_path}")
-            continue
+        print(f"\n  {product.title()} Server:")
+        tag, manifest = pinned_manifest(root, product)
+        categories = group_by_category(manifest, f"unifi_{product}_mcp.tools.")
+        count = len(manifest["tools"])
 
-        print(f"\n  {server['name'].title()} Server:")
-        manifest = load_manifest(manifest_path)
-        categories = group_by_category(manifest, server["module_strip"])
+        print(f"    Pinned release {tag}: {count} tools in {len(categories)} categories")
 
-        print(f"    Manifest: {manifest['count']} tools in {len(categories)} categories")
-
-        content = reference_path.read_text(encoding="utf-8")
+        content = path.read_text(encoding="utf-8")
         new_content, updated, missing, missing_cats = update_reference_content(content, categories)
-        new_content = update_header_count(new_content, manifest["count"], server["name"])
+        new_content = update_header_count(new_content, count, product)
 
         if new_content != content:
             has_drift = True
             if not check_mode:
-                reference_path.write_text(new_content, encoding="utf-8")
+                path.write_text(new_content, encoding="utf-8")
+
+        skill = skill_dir(root, product) / "SKILL.md"
+        if skill.exists():
+            skill_content = skill.read_text(encoding="utf-8")
+            new_skill_content = update_skill_counts(skill_content, count)
+            if new_skill_content != skill_content:
+                has_drift = True
+                if not check_mode:
+                    skill.write_text(new_skill_content, encoding="utf-8")
 
         total_updated += updated
         total_missing += missing
 
         for cat in missing_cats:
-            all_missing_cats.append((server["name"], cat))
+            all_missing_cats.append((product, cat))
 
         print(f"    Updated: {updated} categories, Missing markers: {missing}")
 
@@ -252,6 +258,18 @@ def main():
         return 1
 
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--check", action="store_true", help="report drift without modifying files")
+    parser.add_argument("--root", type=Path, default=REPO_ROOT)
+    args = parser.parse_args()
+    try:
+        return run(args.root, args.check)
+    except (ValueError, OSError, KeyError) as exc:
+        print(f"Skill reference generation failed: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

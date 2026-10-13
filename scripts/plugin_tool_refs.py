@@ -3,7 +3,9 @@
 
 Every ``unifi_``/``protect_``/``access_`` name in a plugin's files must exist in
 the ``tools_manifest.json`` of the server release that the product's plugin pins,
-read from that release tag in git. That is what users actually run. Cross-product
+read from that release tag in git. That is what users actually run. The same
+pinned manifest (:func:`pinned_manifest`) drives the generated plugin tool
+references and the plugin tool counts. Cross-product
 skills may also name tools served by the latest released relay.
 
 Uses only the standard library, like ``plugin_versions.py``.
@@ -46,8 +48,17 @@ def tag_exists(root: Path, tag: str) -> bool:
     return True
 
 
-def pinned_release(root: Path, product: str) -> Release:
-    """Read the tool manifest from the release tag the product's plugin pins."""
+def manifest_path(product: str) -> str:
+    """Where a product's tool manifest lives, in the workspace and in every release tag."""
+    return f"apps/{product}/src/unifi_{product}_mcp/tools_manifest.json"
+
+
+def pinned_manifest(root: Path, product: str) -> tuple[str, dict]:
+    """The release tag the product's plugin pins, and the tool manifest at that tag.
+
+    Read with ``git show <tag>:<manifest>`` from local tags, so it needs no
+    network access, only tags fetched (``git fetch --tags``).
+    """
     bundle = root / "plugins" / f"unifi-{product}"
     if not bundle.is_dir():
         raise ValueError(f"no unifi-{product} plugin pins a {product} release")
@@ -61,11 +72,21 @@ def pinned_release(root: Path, product: str) -> Release:
             tag = f"v{version}"
         else:
             raise ValueError(f"unifi-{product}: pinned release tag {tag} is missing; fetch tags (git fetch --tags)")
-    path = f"apps/{product}/src/unifi_{product}_mcp/tools_manifest.json"
+    path = manifest_path(product)
     try:
-        manifest = json.loads(git(root, "show", f"{tag}:{path}"))
+        return tag, json.loads(git(root, "show", f"{tag}:{path}"))
     except ValueError as exc:
         raise ValueError(f"unifi-{product}: release {tag} has no {path}") from exc
+
+
+def pinned_tool_count(root: Path, product: str) -> int:
+    """How many tools the server release the product's plugin pins provides (meta-tools excluded)."""
+    return len(pinned_manifest(root, product)[1]["tools"])
+
+
+def pinned_release(root: Path, product: str) -> Release:
+    """Read the tool names from the release tag the product's plugin pins."""
+    tag, manifest = pinned_manifest(root, product)
     tools = {tool["name"] for tool in manifest["tools"]}
     prefix = next(p for p, owner in PREFIXES.items() if owner == product)
     return Release(f"{tag} (pinned by unifi-{product})", tools | {f"{prefix}_{meta}" for meta in META_TOOLS})
