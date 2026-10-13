@@ -96,6 +96,13 @@ The investigation reads; it never changes anything.
   for the user to decide.
 - Investigate the one confirmed window, once. Continuous monitoring, polling or
   subscriptions are outside this workflow.
+- Offer only reads the directly listed read-only tools can make: the two
+  incident evidence tools for exact identifiers, `protect_get_camera` by camera
+  ID and `unifi_get_client_details` by MAC.
+  Never offer to list devices, cameras, access points or doors, and never
+  reach for `*_load_tools`, `*_execute` or `*_batch`.
+- When an identifier is missing, ask the user for it: they can find it in the
+  UniFi app, or by running the product's own list tool in eager mode.
 - Never page with `resume_after`, split the window, raise a budget or call
   `detail="full"` without the user's yes to that follow-up. Offer it, end your
   turn and wait.
@@ -121,9 +128,8 @@ Collect, before any read:
 
 - **Incident:** what happened, in the user's words.
 - **Device:** the exact Network device MAC. If the user gives only a name, ask
-  for the MAC, or show candidates from `unifi_list_devices(search="<name>")`
-  when that tool is directly listed and let the user choose. Never pick a
-  device by name similarity.
+  for the MAC, from the UniFi app or the Network server's own device list tool
+  in eager mode. Never pick a device by name similarity.
 - **Window:** start and end with a date and timezone. Convert to ISO 8601 with
   an explicit offset (`2026-08-08T08:00:00-04:00`) and show both forms. Ask for
   a missing date, timezone or end; never assume the client's timezone. The
@@ -131,7 +137,9 @@ Collect, before any read:
 - **Cameras:** cameras the user wants as context, by exact Protect camera ID, or
   "none". A camera the user only describes is used only once the user gives its
   ID or an exact identifier proves which camera it is; a name, description or
-  location never does. Otherwise leave it out and report it as unresolved.
+  location never does. Ask for the Protect camera ID, from the UniFi Protect app
+  or the Protect server's own camera list tool in eager mode; otherwise leave
+  the camera out and report it as unresolved.
 - **Budgets:** state the values you will pass. Defaults: `max_window_seconds`
   equal to the window length, `max_events=1000`, `max_calls=20`,
   `max_elapsed_ms=30000`, `max_records_returned=25`. A window longer than 86400

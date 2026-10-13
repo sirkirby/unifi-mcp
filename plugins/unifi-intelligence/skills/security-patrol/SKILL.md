@@ -16,7 +16,8 @@ not. Look for it in the client's tool list, which takes no tool call. If it is
 not listed, stop with no tool call at all and report “No merged timeline
 available: this skill needs the cloud worker.” You may offer separate local
 product reads in words, naming the tools you would use; make none until the
-user agrees, and give any you then make their own coverage labels.
+user agrees, naming only the reads Safety allows, and give any you then make
+their own coverage labels.
 
 Verify required tools through MCP discovery before collecting data; discovery alone
 does not prove controller connectivity or authorization. If a required server/tool
@@ -61,7 +62,14 @@ You are reviewing activity at one area across the connected UniFi products.
 - Use only tools the client lists directly with `readOnlyHint: true`. Never use
   `*_execute` or `*_batch`, even for a lookup: they are not read-only.
 - Make no controller read the user has not agreed to. Identifiers come from the
-  user, or from read-only lookups the user has agreed to.
+  user.
+- Offer only reads the directly listed read-only tools can make: the two
+  incident evidence tools for exact identifiers, `protect_get_camera` by camera
+  ID and `unifi_get_client_details` by MAC.
+  Never offer to list devices, cameras, access points or doors, and never
+  reach for `*_load_tools`, `*_execute` or `*_batch`.
+- When an identifier is missing, ask the user for it: they can find it in the
+  UniFi app, or by running the product's own list tool in eager mode.
 - Offer a further page (`resume_after`) or another read; make it only after the
   user says yes.
 
@@ -71,11 +79,10 @@ Given an area (e.g., "front entrance", "server room", "main door") and a time wi
 
 1. Turn the area into exact identifiers: the Network devices (access points,
    switches) and Protect cameras that cover it. The timeline filters by exact
-   identifier only and never matches area names. Ask the user. If the user
-   agrees, show candidates from read-only lookups such as
-   `unifi_list_devices(search="entrance")` and `protect_list_cameras()`, when
-   the client lists them directly, and let the user choose. Never pick a device
-   or camera by name similarity.
+   identifier only and never matches area names. Ask the user for the device
+   MACs and camera IDs; they can find them in the UniFi app, or by running each
+   product's own list tool in eager mode. Never pick a device or camera by name
+   similarity.
 2. Confirm the window with a date and timezone, as ISO 8601 with an explicit offset.
 3. Call the timeline with the confirmed identifiers:
    `unifi_location_timeline(start="2026-08-08T08:00:00-04:00", end="2026-08-08T09:00:00-04:00", device_macs=["aa:bb:cc:00:10:01"], camera_ids=["cam-fixture-000a"])`.
@@ -84,8 +91,8 @@ Given an area (e.g., "front entrance", "server room", "main door") and a time wi
    yes.
 4. If the user wants door events, read them separately for the same window
    (here in UTC), for example `access_list_events(start="2026-08-08T12:00:00Z", end="2026-08-08T13:00:00Z", door_id="<door UUID>", limit=200)`,
-   with the door UUID from the user, or from `access_list_doors()` if the user
-   agrees and the client lists it directly. When the
+   with the door UUID from the user (from the UniFi Access app, or the Access
+   server's own door list tool in eager mode). When the
    returned count equals `limit`, label the Access read capped.
 5. Interpret the records, labelling every correlation as a hypothesis:
    - Motion with no door event found in the retrieved records (coverage and

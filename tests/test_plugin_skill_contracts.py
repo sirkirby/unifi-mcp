@@ -141,7 +141,7 @@ WORKER_SKILL_RULES = (
     "stop with no tool call at all",
     "make none until the user agrees",
     "Never use `*_execute` or `*_batch`, even for a lookup",
-    "Identifiers come from the user, or from read-only lookups the user has agreed to.",
+    "Identifiers come from the user.",
     "make it only after the user says yes",
 )
 
@@ -194,6 +194,63 @@ def test_dropping_a_timeline_skill_rule_is_rejected(path: Path, rule: str) -> No
     mutated = re.sub(r"\s+".join(map(re.escape, rule.split())), "", text)
     assert mutated != text
     assert f"missing timeline skill rule: {rule}" in worker_skill_errors(mutated)
+
+
+# In lazy mode no directly listed read-only tool lists devices, cameras or doors; a real client offered such a
+# listing and, when the user accepted, reached for a non-read-only `*_load_tools`.
+INTELLIGENCE_SKILLS = sorted((ROOT / "plugins/unifi-intelligence/skills").glob("*/SKILL.md"))
+OFFER_RULES = (
+    "Offer only reads the directly listed read-only tools can make",
+    "Never offer to list devices, cameras, access points or doors, and never reach for `*_load_tools`, "
+    "`*_execute` or `*_batch`.",
+    "When an identifier is missing, ask the user for it: they can find it in the UniFi app, or by running the "
+    "product's own list tool in eager mode.",
+)
+LISTING_TOOL = re.compile(
+    r"\b(?:unifi|protect|access)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
+)
+LISTING_OFFER = re.compile(r"\b(?:offer|offers|I can|let me|show)\b[^.]{0,60}\blist\b", re.IGNORECASE)
+
+
+def offer_errors(text: str) -> list[str]:
+    """Offers name only reads directly listed read-only tools can make; a missing identifier is asked for."""
+    flat = " ".join(text.split())
+    errors = [f"missing offer rule: {rule}" for rule in OFFER_RULES if rule not in flat]
+    errors.extend(f"names a listing or loader tool: {name}" for name in sorted(set(LISTING_TOOL.findall(text))))
+    # The rules themselves say what never to offer; any other sentence must not offer a listing.
+    for sentence in re.split(r"(?<=[.!?])\s+", flat):
+        if "never" not in sentence.lower() and LISTING_OFFER.search(sentence):
+            errors.append(f"offers a listing: {sentence[:80]}")
+    return errors
+
+
+@pytest.mark.parametrize("path", INTELLIGENCE_SKILLS, ids=lambda p: p.parent.name)
+def test_skills_offer_only_reads_they_can_make(path: Path) -> None:
+    assert not offer_errors(path.read_text()), offer_errors(path.read_text())
+
+
+@pytest.mark.parametrize("path", INTELLIGENCE_SKILLS, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize(
+    ("addition", "expected"),
+    [
+        ("\nIf the camera ID is missing, offer to list the user's cameras.\n", "offers a listing"),
+        ("\nLet me list your access points so you can choose one.\n", "offers a listing"),
+        ("\nI can list the devices on this site for you.\n", "offers a listing"),
+        ("\nLoad the camera tools with `protect_load_tools` first.\n", "names a listing or loader tool"),
+        ('\nShow candidates from `unifi_list_devices(search="door")`.\n', "names a listing or loader tool"),
+    ],
+)
+def test_listing_offers_are_rejected(path: Path, addition: str, expected: str) -> None:
+    assert any(expected in error for error in offer_errors(path.read_text() + addition))
+
+
+@pytest.mark.parametrize("path", INTELLIGENCE_SKILLS, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize("rule", OFFER_RULES, ids=lambda rule: rule[:30])
+def test_dropping_an_offer_rule_is_rejected(path: Path, rule: str) -> None:
+    text = path.read_text()
+    mutated = re.sub(r"\s+".join(map(re.escape, rule.split())), "", text)
+    assert mutated != text
+    assert f"missing offer rule: {rule}" in offer_errors(mutated)
 
 
 @pytest.mark.parametrize("path", skills(), ids=lambda p: p.parent.name)

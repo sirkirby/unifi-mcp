@@ -16,7 +16,8 @@ not. Look for it in the client's tool list, which takes no tool call. If it is
 not listed, stop with no tool call at all and report “No merged timeline
 available: this skill needs the cloud worker.” You may offer separate local
 product reads in words, naming the tools you would use; make none until the
-user agrees, and give any you then make their own coverage labels.
+user agrees, naming only the reads Safety allows, and give any you then make
+their own coverage labels.
 
 Verify required tools through MCP discovery before collecting data; discovery alone
 does not prove controller connectivity or authorization. If a required server/tool
@@ -64,7 +65,14 @@ evidence near the same doors.
 - Use only tools the client lists directly with `readOnlyHint: true`. Never use
   `*_execute` or `*_batch`, even for a lookup: they are not read-only.
 - Make no controller read the user has not agreed to. Identifiers come from the
-  user, or from read-only lookups the user has agreed to.
+  user.
+- Offer only reads the directly listed read-only tools can make:
+  `unifi_get_incident_evidence` for exact device MACs and
+  `unifi_get_client_details` by MAC.
+  Never offer to list devices, cameras, access points or doors, and never
+  reach for `*_load_tools`, `*_execute` or `*_batch`.
+- When an identifier is missing, ask the user for it: they can find it in the
+  UniFi app, or by running the product's own list tool in eager mode.
 - Offer a further page (`resume_after`) or another read; make it only after the
   user says yes.
 
@@ -73,16 +81,16 @@ evidence near the same doors.
 Given a time window (e.g., "today", "this week"), you:
 
 1. Confirm the window with a date and timezone, and the doors to audit by UUID,
-   or all doors. Door UUIDs come from the user, or from `access_list_doors()` if
-   the user agrees and the client lists it directly.
+   or all doors. Door UUIDs come from the user, from the UniFi Access app or the
+   Access server's own door list tool in eager mode.
 2. Read the door events from Access for the window, for example
    `access_list_events(start="2026-08-08T13:00:00Z", end="2026-08-08T21:00:00Z", limit=500)`,
    adding `door_id` for one door. When the returned count equals `limit`, label
    the read capped and offer a narrower window.
 3. Turn the doors' surroundings into exact Network device MACs, such as the
-   access points that serve the entrance: ask the user. If the user agrees, show
-   candidates from `unifi_list_devices(device_type="ap")`, when the client lists
-   it directly, and let the user choose. Never pick a device by name similarity.
+   access points that serve the entrance: ask the user for their MACs, from the
+   UniFi app or the Network server's own device list tool in eager mode. Never
+   pick a device by name similarity.
 4. Read Network evidence for the same window from the timeline:
    `unifi_location_timeline(start="2026-08-08T09:00:00-04:00", end="2026-08-08T17:00:00-04:00", products=["network"], device_macs=["aa:bb:cc:00:10:01"])`.
    When `record_selection.next_cursor` is set, offer the same call with
