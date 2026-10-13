@@ -141,7 +141,9 @@ recorded in the filters.
 The schema artifact encodes every rule one JSON document can express on its
 own: closed objects and enums; evidence-key grammar; evidence ID shape;
 `overall`/`coverage_complete` against source outcomes and budget exhaustion;
-success, partial and failure outcome shapes and failure kind per outcome;
+success, partial and failure outcome shapes and failure kind per outcome; a
+partial source's failure exactly when it lists `partial_response`, and its
+read `interrupted` exactly when it carries a failure or `budget_exhausted`;
 complete-coverage preconditions; exhaustion proof for `not_truncated` and
 `truncated`; observed bounds present exactly when in-window records exist;
 placed versus unplaced times; and mapping outcome shapes.

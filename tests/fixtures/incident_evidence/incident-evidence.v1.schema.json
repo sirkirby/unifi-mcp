@@ -1582,6 +1582,90 @@
         {
           "if": {
             "properties": {
+              "partial_reasons": {
+                "contains": {
+                  "const": "partial_response"
+                }
+              }
+            },
+            "required": [
+              "partial_reasons"
+            ]
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "else": {
+              "properties": {
+                "failure": {
+                  "type": "null"
+                },
+                "partial_reasons": {
+                  "not": {
+                    "contains": {
+                      "const": "budget_exhausted"
+                    }
+                  }
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "coverage": {
+                  "properties": {
+                    "pagination": {
+                      "properties": {
+                        "interrupted": {
+                          "const": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "failure": {
+                      "type": "object"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "partial_reasons": {
+                      "contains": {
+                        "const": "budget_exhausted"
+                      }
+                    }
+                  },
+                  "required": [
+                    "partial_reasons"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
               "outcome": {
                 "enum": [
                   "unavailable",

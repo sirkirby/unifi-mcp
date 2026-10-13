@@ -451,6 +451,28 @@ _SOURCE_RULES = {
             {"required": ["failure"], **_props(outcome={"const": "partial"}, failure={"type": "object"})},
             _props(partial_reasons={"contains": {"const": "partial_response"}}),
         ),
+        # The reverse: a response that broke off carries its failure.
+        _when(
+            {"required": ["partial_reasons"], **_props(partial_reasons={"contains": {"const": "partial_response"}})},
+            _props(failure={"type": "object"}),
+        ),
+        # A partial read is interrupted exactly when it broke off or a budget stopped it.
+        _when(
+            _props(outcome={"const": "partial"}),
+            _when(
+                _props(coverage=_props(pagination=_props(interrupted={"const": True}))),
+                {
+                    "anyOf": [
+                        _props(failure={"type": "object"}),
+                        {
+                            "required": ["partial_reasons"],
+                            **_props(partial_reasons={"contains": {"const": "budget_exhausted"}}),
+                        },
+                    ]
+                },
+                _props(failure={"type": "null"}, partial_reasons={"not": {"contains": {"const": "budget_exhausted"}}}),
+            ),
+        ),
         _when(
             _props(outcome={"enum": _FAILED}),
             _props(

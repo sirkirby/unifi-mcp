@@ -137,6 +137,32 @@ def test_schema_rejects_failed_evidence_presented_as_an_all_clear() -> None:
         jsonschema.validate(payload, json.loads(SCHEMA_PATH.read_text()))
 
 
+def _partial_response_shape(failure: bool, partial_response: bool) -> dict[str, Any]:
+    payload = load_case(CASES_DIR / "timeouts.json")["expected"]
+    source = payload["sources"][0]
+    assert source["failure"] and "partial_response" in source["partial_reasons"]
+    if not failure:
+        source["failure"] = None
+    if not partial_response:
+        source["partial_reasons"].remove("partial_response")
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("failure", "partial_response", "valid"),
+    [(True, True, True), (False, True, False), (True, False, False), (False, False, False)],
+)
+def test_schema_and_semantic_validation_agree_on_partial_response_shapes(failure, partial_response, valid) -> None:
+    payload = _partial_response_shape(failure, partial_response)
+    validator = jsonschema.Draft202012Validator(json.loads(SCHEMA_PATH.read_text()))
+    assert (not list(validator.iter_errors(payload))) is valid
+    if valid:
+        validate_incident_evidence(payload)
+    else:
+        with pytest.raises(ValidationError):
+            validate_incident_evidence(payload)
+
+
 # --- sanitization ---------------------------------------------------------
 
 _MAC_TOKEN = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])")
