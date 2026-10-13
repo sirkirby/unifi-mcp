@@ -368,7 +368,7 @@
           "boundary_uncertain": false
         },
         "event_type": "CLIENT_CONNECTED_WIRELESS_2",
-        "summary": "fixture-phone has connected to fixture-ap-1.",
+        "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
         "entities": [
           {
             "kind": "network_client",
@@ -502,7 +502,7 @@
           "boundary_uncertain": false
         },
         "event_type": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
-        "summary": "fixture-laptop was blocked from accessing 198.51.100.24 by the fixture-policy Firewall Policy.",
+        "summary": "aa:bb:cc:00:20:02 was blocked from accessing 198.51.100.24 by the {TRIGGER} Firewall Policy.",
         "entities": [
           {
             "kind": "network_client",
@@ -627,7 +627,7 @@
           "boundary_uncertain": false
         },
         "event_type": "DEVICE_DISCONNECTED_AP",
-        "summary": "fixture-ap-2 disconnected.",
+        "summary": "aa:bb:cc:00:10:02 disconnected.",
         "entities": [
           {
             "kind": "network_device",

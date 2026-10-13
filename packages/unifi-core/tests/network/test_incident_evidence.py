@@ -77,7 +77,7 @@ def test_v2_system_log_records_normalize_with_role_scoped_entities() -> None:
     assert first.time.original_value == 1786225096952
     assert first.time.utc == "2026-08-08T21:38:16.952000Z"
     assert first.event_type == "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT"
-    assert first.summary.startswith("Lab-Camera was blocked")
+    assert first.summary.startswith("aa:bb:cc:00:00:01 was blocked")
     assert [(e.kind, e.role, e.id) for e in first.entities] == [
         (EntityKind.NETWORK_CLIENT, "SRC_CLIENT", "aa:bb:cc:00:00:01")
     ]
@@ -271,3 +271,46 @@ def test_excluded_fields_do_not_change_identity_or_create_conflicts(field) -> No
     first = normalize_network_records([dict(no_id, **{field: "a"})], _events_context()).records[0]
     second = normalize_network_records([dict(no_id, **{field: "b"})], _events_context()).records[0]
     assert first.evidence_id == second.evidence_id
+
+
+def _renamed(record: dict, **names: str) -> dict:
+    """``record`` with only the display names of the given v2 roles changed."""
+    parameters = {role: dict(actor) for role, actor in record["parameters"].items()}
+    for role, name in names.items():
+        parameters[role] = {**parameters[role], "name": name, "hostname": name}
+        if role == "CONSOLE_NAME":
+            # The console role carries its name as its ID too.
+            parameters[role]["id"] = name
+    return {**record, "parameters": parameters}
+
+
+RENAMES = {"SRC_CLIENT": "fixture-renamed-client", "TRIGGER": "fixture-renamed-policy", "CONSOLE_NAME": "fixture-gw"}
+
+
+def _exhausted_page(rows: list[dict]):
+    page = SourcePage(rows=rows, has_more=False, offset=0, cap=100, api_path="v2")
+    return normalize_network_page(page, _events_context(page=page))
+
+
+def test_interpolated_display_names_do_not_change_identity_of_an_identified_event() -> None:
+    original = FIXTURE[0]
+    evidence = _exhausted_page([original, _renamed(original, **RENAMES)])
+    assert len(evidence.records) == 1
+    assert evidence.source.coverage.counts.conflicting == 0
+    assert evidence.source.coverage.counts.duplicates_dropped == 1
+    assert evidence.source.outcome is SourceOutcome.COMPLETE
+
+
+def test_interpolated_display_names_do_not_change_identity_without_an_event_id() -> None:
+    original = {key: value for key, value in FIXTURE[0].items() if key != "id"}
+    evidence = _exhausted_page([original, _renamed(original, **RENAMES)])
+    assert len(evidence.records) == 1
+    assert evidence.records[0].evidence_id_basis == "content_hash"
+    assert evidence.source.coverage.population_total == 1
+
+
+def test_v2_summary_fills_in_identifiers_never_names() -> None:
+    record = normalize_network_records([FIXTURE[0]], _events_context()).records[0]
+    assert record.summary == (
+        "aa:bb:cc:00:00:01 was blocked from accessing 198.51.100.24 by the {TRIGGER} Firewall Policy."
+    )

@@ -37,10 +37,14 @@ are derived and validated, never trusted from the producer.
   `<source>|str|7` are different records. Records without an ID are
   `<source>|sha256|<digest>`. The digest hashes the record's own sanitized
   evidence, never the raw payload, so excluded fields (secrets, buffer stamps,
-  recognized identity, display names) cannot change identity. Repeats with the
-  same evidence collapse; differing evidence under one source ID is kept as a
-  conflict group of `<base>|version|<digest>` records that blocks complete
-  coverage. Results do not depend on input order.
+  recognized identity, display names) cannot change identity. A Network
+  summary is the stored `msg`, `message` or `description` when the record has
+  one; otherwise it is the v2 `message_raw` with only MAC- and IP-shaped role
+  `id`s filled in, so names, and role IDs that are names, keep their `{ROLE}`
+  placeholders (falling back to `title_raw`). Repeats with the same evidence
+  collapse; differing evidence under one source ID is kept as a conflict group
+  of `<base>|version|<digest>` records that blocks complete coverage. Results
+  do not depend on input order.
 - **Time.** Windows are half-open, `start <= t < end`, compared in UTC at the
   timestamp's stated precision. Each record keeps the original field, type and
   value, the format, offset, precision and any known clock uncertainty, plus a

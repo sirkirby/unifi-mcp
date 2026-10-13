@@ -44,7 +44,7 @@ from unifi_core.incident_evidence import (
     source_failed,
 )
 from unifi_core.mac import looks_like_mac
-from unifi_core.network.models.events import threat_event_log_from_controller
+from unifi_core.network.models.events import identifier_message, threat_event_log_from_controller
 from unifi_core.source_page import SourcePage
 
 LIST_EVENTS_TOOL = "unifi_list_events"
@@ -76,6 +76,8 @@ _LEGACY_KINDS: tuple[tuple[str, EntityKind], ...] = (
 )
 _TIME_FIELDS = ("time", "timestamp", "ts", "datetime")
 _PROJECTION_SKIP = frozenset({*_TIME_FIELDS, "_id", "id"})
+# Text the controller stored with the event, as opposed to a v2 template rendered on read.
+_STORED_MESSAGE_FIELDS = ("msg", "message", "description")
 # The alarm v2 path looks back this far (EventManager._get_alarms_v2).
 ALARM_V2_LOOKBACK = timedelta(days=30)
 
@@ -128,13 +130,15 @@ def extract_network_record(raw: Mapping[str, Any]) -> ExtractedRecord | None:
     }
     if isinstance(raw.get("archived"), bool):
         attributes["archived"] = raw["archived"]
+    # A v2 template filled with display names would make a renamed client a different event.
+    stored = any(raw.get(key) for key in _STORED_MESSAGE_FIELDS)
     return ExtractedRecord(
         record_id=raw[record_id_field] if record_id_field else None,
         record_id_field=record_id_field,
         time_field=time_field,
         time_value=time_value,
         event_type=event_type,
-        summary=projected.msg,
+        summary=projected.msg if stored else identifier_message(raw),
         entities=_entities(raw),
         attributes={key: value for key, value in attributes.items() if value is not None},
     )
