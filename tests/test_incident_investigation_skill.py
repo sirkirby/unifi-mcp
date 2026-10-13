@@ -60,7 +60,13 @@ CONDUCT_RULES = (
         "Report",
         "Cite one line per record you report; a summary by type or count may follow the lines, never replace them",
     ),
-    ("Report", "if you shorten one anyway, end the line with `; shortened <field> in this report from <n> characters`"),
+    ("Report", "Copy every cited value exactly as returned: times, IDs, MACs and summaries."),
+    ("Report", "Never reformat or round a time"),
+    (
+        "Report",
+        "Any other change to a cited value is a shortening: end the line with "
+        "`; shortened <field> in this report from <n> characters`",
+    ),
     ("Report", "the uplink field compared and both values"),
 )
 CONFIRMATION_FIELDS = ("Window:", "Device:", "Cameras:", "Products:", "Budgets:")

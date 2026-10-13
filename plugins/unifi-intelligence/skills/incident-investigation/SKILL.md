@@ -403,8 +403,11 @@ Use these sections, in order:
    time, add its original time field, type and value after the mapping. For
    each field in `truncated`, end the line with `; truncated <field> from <n>
    characters`, so the cut is never presented as the whole text. Copy every
-   other field whole; if you shorten one anyway, end the line with `; shortened
-   <field> in this report from <n> characters`.
+   cited value exactly as returned: times, IDs, MACs and summaries. Never
+   reformat or round a time: `2026-08-08T11:59:59.999000Z` is cited as written,
+   never as `2026-08-08T11:59:59.999Z`. Any other change to a cited value is a
+   shortening: end the line with `; shortened <field> in this report from <n>
+   characters`.
    `source_tool` is the read family named in the record (for example
    `unifi_list_events`), not the evidence tool you called. Anywhere else in
    the report, refer to a record by its full `evidence_id` in backticks. Never
