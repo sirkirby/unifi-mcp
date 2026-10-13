@@ -468,7 +468,7 @@ def _example(case: str) -> str:
             "(N, `evt-net-0001`)",
             "format",
         ),
-        ("network_protect_real_shapes", "fixture-phone has connected", "phone joined", "summary"),
+        ("network_protect_real_shapes", "aa:bb:cc:00:20:01 has connected", "phone joined", "summary"),
         ("network_protect_real_shapes", "(`protect.events|str|evt-protect-0001`)", "(`evt-protect-0001`)", "shorthand"),
         ("network_protect_real_shapes", "(`network.events|str|evt-net-0001`)", "(`N/evt-net-0001`)", "shorthand"),
         ("mapping_outcomes", "mapping `ambiguous`", "mapping `verified`", "event type or mapping"),

@@ -39,7 +39,7 @@ describe them.
 
 **Observations:**
 
-- `network.events|str|evt-net-0001` 2026-08-08T12:10:05.250000Z (network, `unifi_list_events`, record `evt-net-0001`): fixture-phone has connected to fixture-ap-1. `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
+- `network.events|str|evt-net-0001` 2026-08-08T12:10:05.250000Z (network, `unifi_list_events`, record `evt-net-0001`): aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01. `CLIENT_CONNECTED_WIRELESS_2`; mapping `not_evaluated`.
 - `protect.events|str|evt-protect-0001` 2026-08-08T12:10:07.500000Z (protect, `protect_list_events`, record `evt-protect-0001`): smartDetectZone: person `smartDetectZone`; mapping `not_evaluated`.
 
 **Hypotheses:**
@@ -223,8 +223,8 @@ ambiguous, so no AP event is attributed to one camera.
 
 **Observations:**
 
-- `network.events|str|evt-net-1101` 2026-08-08T12:25:00.000000Z (network, `unifi_list_events`, record `evt-net-1101`): fixture-phone has connected to fixture-front-door-ap. `CLIENT_CONNECTED_WIRELESS_2`; mapping `ambiguous` (targets `cam-fixture-000a` and `cam-fixture-000b`).
-- `network.events|str|evt-net-1102` 2026-08-08T12:26:00.000000Z (network, `unifi_list_events`, record `evt-net-1102`): fixture-front-door disconnected. `DEVICE_DISCONNECTED_AP`; mapping `missing`. This device is `aa:bb:cc:00:10:02`, not the AP under investigation; the similar name establishes nothing.
+- `network.events|str|evt-net-1101` 2026-08-08T12:25:00.000000Z (network, `unifi_list_events`, record `evt-net-1101`): aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01. `CLIENT_CONNECTED_WIRELESS_2`; mapping `ambiguous` (targets `cam-fixture-000a` and `cam-fixture-000b`).
+- `network.events|str|evt-net-1102` 2026-08-08T12:26:00.000000Z (network, `unifi_list_events`, record `evt-net-1102`): aa:bb:cc:00:10:02 disconnected. `DEVICE_DISCONNECTED_AP`; mapping `missing`. This device is not the AP under investigation.
 - `protect.events|str|evt-protect-1101` 2026-08-08T12:26:00.000000Z (protect, `protect_list_events`, record `evt-protect-1101`): motion `motion`; mapping `verified` (camera `cam-fixture-000a`, from `product_inventory`).
 - `protect.events|str|evt-protect-1102` 2026-08-08T12:26:00.000000Z (protect, `protect_list_events`, record `evt-protect-1102`): motion `motion`; mapping `missing` (camera `cam-fixture-unmapped`).
 - `network.events|str|evt-net-1103` 2026-08-08T12:27:00.000000Z (network, `unifi_list_events`, record `evt-net-1103`): uppercase dashed MAC still matches exactly `K`; mapping `verified` (location `loc-fixture-1`).
@@ -236,7 +236,7 @@ ambiguous, so no AP event is attributed to one camera.
   Because the AP maps to two cameras, neither camera is linked to that AP event.
   Alternatives: routine foot traffic; motion unrelated to the AP.
 - `protect.events|str|evt-protect-1102` happened in the same second as the
-  `fixture-front-door` disconnect (`network.events|str|evt-net-1102`), but its camera
+  `aa:bb:cc:00:10:02` disconnect (`network.events|str|evt-net-1102`), but its camera
   is unmapped and that device is not the AP. Same-second timing establishes neither
   a mapping nor a cause.
 
