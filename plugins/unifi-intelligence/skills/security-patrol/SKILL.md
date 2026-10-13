@@ -12,9 +12,11 @@ Optional: network, protect, access
 
 This skill needs the cloud worker. The cloud worker provides
 `unifi_location_timeline` through a connected relay; local product servers do
-not. If it is unavailable, stop the merged-timeline workflow and report “No
-merged timeline available: this skill needs the cloud worker.” Offer separate
-local product reads with their own coverage labels.
+not. Look for it in the client's tool list, which takes no tool call. If it is
+not listed, stop with no tool call at all and report “No merged timeline
+available: this skill needs the cloud worker.” You may offer separate local
+product reads in words, naming the tools you would use; make none until the
+user agrees, and give any you then make their own coverage labels.
 
 Verify required tools through MCP discovery before collecting data; discovery alone
 does not prove controller connectivity or authorization. If a required server/tool
@@ -54,24 +56,36 @@ physically used it. Missing mappings or clock uncertainty limit correlations.
 
 You are reviewing activity at one area across the connected UniFi products.
 
+## Safety
+
+- Use only tools the client lists directly with `readOnlyHint: true`. Never use
+  `*_execute` or `*_batch`, even for a lookup: they are not read-only.
+- Make no controller read the user has not agreed to. Identifiers come from the
+  user, or from read-only lookups the user has agreed to.
+- Offer a further page (`resume_after`) or another read; make it only after the
+  user says yes.
+
 ## What You Do
 
 Given an area (e.g., "front entrance", "server room", "main door") and a time window, you:
 
 1. Turn the area into exact identifiers: the Network devices (access points,
    switches) and Protect cameras that cover it. The timeline filters by exact
-   identifier only and never matches area names. Ask the user, or show
-   candidates from read-only lookups such as `unifi_list_devices(search="entrance")`
-   and `protect_list_cameras()` and let the user choose. Never pick a device or
-   camera by name similarity.
+   identifier only and never matches area names. Ask the user. If the user
+   agrees, show candidates from read-only lookups such as
+   `unifi_list_devices(search="entrance")` and `protect_list_cameras()`, when
+   the client lists them directly, and let the user choose. Never pick a device
+   or camera by name similarity.
 2. Confirm the window with a date and timezone, as ISO 8601 with an explicit offset.
 3. Call the timeline with the confirmed identifiers:
    `unifi_location_timeline(start="2026-08-08T08:00:00-04:00", end="2026-08-08T09:00:00-04:00", device_macs=["aa:bb:cc:00:10:01"], camera_ids=["cam-fixture-000a"])`.
    Read the default view; when `record_selection.next_cursor` is set, offer the
-   same call with `resume_after` set to it.
+   same call with `resume_after` set to it, and make it only after the user says
+   yes.
 4. If the user wants door events, read them separately for the same window
    (here in UTC), for example `access_list_events(start="2026-08-08T12:00:00Z", end="2026-08-08T13:00:00Z", door_id="<door UUID>", limit=200)`,
-   with the door UUID from `access_list_doors()` confirmed by the user. When the
+   with the door UUID from the user, or from `access_list_doors()` if the user
+   agrees and the client lists it directly. When the
    returned count equals `limit`, label the Access read capped.
 5. Interpret the records, labelling every correlation as a hypothesis:
    - Motion with no door event found in the retrieved records (coverage and

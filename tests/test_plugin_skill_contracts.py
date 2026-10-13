@@ -136,6 +136,16 @@ def structure_errors(text: str) -> list[str]:
     return errors
 
 
+# Without the worker a real client said so and then read the controllers through `*_execute` unasked.
+WORKER_SKILL_RULES = (
+    "stop with no tool call at all",
+    "make none until the user agrees",
+    "Never use `*_execute` or `*_batch`, even for a lookup",
+    "Identifiers come from the user, or from read-only lookups the user has agreed to.",
+    "make it only after the user says yes",
+)
+
+
 def worker_skill_errors(text: str) -> list[str]:
     """A skill that calls the worker's timeline requires it, says so plainly and never asks it for Access."""
     if not re.search(r"\bunifi_location_timeline\(", text):
@@ -149,6 +159,8 @@ def worker_skill_errors(text: str) -> list[str]:
     # The worker reports Access as unsupported; Access comes from its own read.
     if any("access" in products for products in re.findall(r"\bproducts=\[([^\]]*)\]", text)):
         errors.append("timeline skill must not request Access from the timeline")
+    flat = " ".join(text.split())
+    errors.extend(f"missing timeline skill rule: {rule}" for rule in WORKER_SKILL_RULES if rule not in flat)
     return errors
 
 
@@ -172,6 +184,16 @@ def test_timeline_skill_mutations_are_rejected(old: str, new: str, expected: str
     text = (ROOT / "plugins/unifi-intelligence/skills/security-patrol/SKILL.md").read_text()
     assert old in text
     assert any(expected in error for error in worker_skill_errors(text.replace(old, new, 1)))
+
+
+@pytest.mark.parametrize("path", TIMELINE_SKILLS, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize("rule", WORKER_SKILL_RULES, ids=lambda rule: rule[:30])
+def test_dropping_a_timeline_skill_rule_is_rejected(path: Path, rule: str) -> None:
+    text = path.read_text()
+    # Remove every occurrence, however the skill wraps its lines.
+    mutated = re.sub(r"\s+".join(map(re.escape, rule.split())), "", text)
+    assert mutated != text
+    assert f"missing timeline skill rule: {rule}" in worker_skill_errors(mutated)
 
 
 @pytest.mark.parametrize("path", skills(), ids=lambda p: p.parent.name)
