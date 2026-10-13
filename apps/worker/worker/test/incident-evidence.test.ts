@@ -75,6 +75,38 @@ describe("incident evidence corpus", () => {
       expect(viewSchemaCheck(actual)).toBe(true);
     }
   });
+  it("cites each version's own conflict group right after its evidence ID, and nothing else names one", async () => {
+    let versions = 0;
+    for (const name of ["conflicting_versions.json", "tool_response_envelopes.json"]) {
+      const view = await incidentEvidenceView(fixtureEvidence(name), 50);
+      for (const record of view.records) {
+        const base = record.evidence_id.replace(/\|version\|[0-9a-f]{24}$/, "");
+        if (base === record.evidence_id) {
+          expect(Object.keys(record)).not.toContain("conflict_group");
+          continue;
+        }
+        versions += 1;
+        expect(Object.keys(record).slice(0, 2)).toEqual(["evidence_id", "conflict_group"]);
+        expect(record.conflict_group).toBe(base);
+        // The view schema refuses a version without its group, and a group on anything but a version.
+        const { conflict_group: _group, ...ungrouped } = record;
+        expect(viewSchemaCheck({ ...view, records: [ungrouped] })).toBe(false);
+        expect(viewSchemaCheck({ ...view, records: [{ ...record, evidence_id: base }] })).toBe(false);
+      }
+    }
+    // Both identity bases conflict: a typed source record ID and a summary-free tool read.
+    expect(versions).toBeGreaterThan(2);
+    const fields = (await incidentEvidenceView(fixtureEvidence("tool_response_envelopes.json"), 50)).records
+      .filter((record: any) => /\|fields\|[0-9a-f]{24}\|version\|/.test(record.evidence_id));
+    expect(fields.length).toBeGreaterThan(1);
+  });
+  it("refuses a document whose version names another identity's conflict group", async () => {
+    const doc = structuredClone(fixtureEvidence("tool_response_envelopes.json"));
+    const versions = doc.records.filter((record: any) => record.conflict_group !== null);
+    const other = doc.records.find((record: any) => record.conflict_group === null && record.evidence_id_basis !== "content_hash");
+    versions[0].conflict_group = other ? other.evidence_id : `${versions[0].source_id}|fields|${"0".repeat(24)}`;
+    await expect(validateIncidentEvidence(doc)).rejects.toThrow("conflict group");
+  });
   it.each(bounded)("fits every page of %s to Core's output budget exactly", async (name) => {
     const fixture = read("view-bounds", name);
     if (fixture.refusal !== undefined) {

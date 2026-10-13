@@ -169,7 +169,10 @@ function coverageState(queried: EvidenceDocument | null, requested: EvidenceDocu
 function truncation(p: EvidenceDocument): string {
   if (p.has_more === true) return "truncated";
   if (p.total_reported !== null && !p.post_filtered) {
-    if (p.total_reported > (p.offset ?? 0) + p.returned) return "truncated";
+    const seen = (p.offset ?? 0) + p.returned;
+    // A total below the rows already read contradicts them; it proves nothing.
+    if (p.total_reported < seen) return "unknown";
+    if (p.total_reported > seen) return "truncated";
     if (!p.interrupted) return "not_truncated";
   }
   if (p.interrupted) return "unknown";
@@ -252,14 +255,21 @@ export async function validateIncidentEvidence(value: unknown): Promise<Evidence
     if (!equal(record.mapping, resolveMapping(record.entities, doc.mappings))) fail("record mapping");
     const rid = p.source_record_id;
     if ((rid !== null) !== (record.evidence_id_basis === "source_record_id")) fail("evidence ID basis");
-    const hash = await digest({ source_record_id: rid === null ? null : [typeof rid === "number" ? "int" : "str", rid],
+    const content = { source_record_id: rid === null ? null : [typeof rid === "number" ? "int" : "str", rid],
       source_record_id_field: p.source_record_id_field,
       time: [record.time.original_field, record.time.original_type, record.time.original_value],
-      event_type: record.event_type, summary: record.summary, entities: record.entities, attributes: record.attributes });
-    const base = rid === null ? `${record.source_id}|sha256|${hash}` :
-      `${record.source_id}|${typeof rid === "number" ? "int" : "str"}|${encodeURIComponent(String(rid)).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
-    const expected = rid === null || record.conflict_group === null ? base : `${base}|version|${hash}`;
-    if (record.conflict_group !== null && (rid === null || record.conflict_group !== base)) fail("conflict group");
+      event_type: record.event_type, summary: record.summary, entities: record.entities, attributes: record.attributes };
+    const hash = await digest(content);
+    // The identity differing versions share: the typed source record ID, or for a record without one whose
+    // summary cannot identify it, the digest of its content with the summary left out. Plain content-hash
+    // records have none and cannot conflict.
+    const base = rid !== null
+      ? `${record.source_id}|${typeof rid === "number" ? "int" : "str"}|${encodeURIComponent(String(rid)).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`
+      : record.evidence_id_basis === "content_hash_without_summary"
+        ? `${record.source_id}|fields|${await digest({ ...content, summary: null })}` : null;
+    if (record.conflict_group !== null && (base === null || record.conflict_group !== base)) fail("conflict group");
+    const expected = base === null ? `${record.source_id}|sha256|${hash}` :
+      record.conflict_group === null ? base : `${base}|version|${hash}`;
     if (record.evidence_id !== expected || evidenceIds.has(expected)) fail("evidence ID");
     evidenceIds.add(expected);
     perSource.get(record.source_id)!.push(record);
@@ -355,8 +365,11 @@ export const MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH;
 /** Core's `SOURCE_LABEL_TOKEN_LIMIT`: a source's tool and scope labels are cut to it; a valid ASCII request label never is. */
 const SOURCE_LABEL_TOKEN_LIMIT = 128;
 const textTokenLimits = { event_type: 40, original_value: 40, source_tool: SOURCE_LABEL_TOKEN_LIMIT, summary: 200 } as const;
-const evidenceIdPattern = new RegExp(String.raw`^[a-z0-9][a-z0-9_.:-]{0,127}\|(?:(?:int|str)\|[A-Za-z0-9%._~-]+` +
+const baseIdPattern = String.raw`(?:(?:int|str)\|[A-Za-z0-9%._~-]+|fields\|[0-9a-f]{24})`;
+const evidenceIdPattern = new RegExp(String.raw`^[a-z0-9][a-z0-9_.:-]{0,127}\|(?:` + baseIdPattern +
   String.raw`(?:\|version\|[0-9a-f]{24})?|sha256\|[0-9a-f]{24})$`);
+/** A version's evidence ID is its conflict group's base identity plus this suffix. */
+const versionSuffix = /\|version\|[0-9a-f]{24}$/;
 const cursorPattern = /^(?:[02]\|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z|1\|)\|(.+)$/;
 const viewSourceFields = ["source_id", "product", "source_tool", "scope", "outcome", "failure", "partial_reasons", "coverage"];
 const scopeFields = ["controller_id", "site", "location_id"];
@@ -489,8 +502,16 @@ function citation(record: EvidenceDocument): EvidenceDocument | null {
   const eventType = text("event_type", record.event_type);
   const originalValue = text("original_value", record.time.original_value);
   const summary = text("summary", record.summary);
+  // Versions of one identity name their conflict group, which is the evidence ID without its version suffix;
+  // other citations omit the key, so they cost nothing more.
+  const base = record.evidence_id.replace(versionSuffix, "");
+  if ((record.conflict_group === null) !== (base === record.evidence_id) ||
+      (record.conflict_group !== null && record.conflict_group !== base)) {
+    fail("a cited version names its own conflict group, and only versions name one");
+  }
+  const group = record.conflict_group === null ? {} : { conflict_group: record.conflict_group };
   const cited = {
-    evidence_id: record.evidence_id, product: record.provenance.product, source_tool: sourceTool,
+    evidence_id: record.evidence_id, ...group, product: record.provenance.product, source_tool: sourceTool,
     source_record_id: record.provenance.source_record_id,
     time: { status: record.time.status, utc: record.time.utc, boundary_uncertain: record.time.boundary_uncertain,
       original_field: record.time.original_field, original_type: record.time.original_type, original_value: originalValue },
