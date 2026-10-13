@@ -61,8 +61,8 @@ are derived and validated, never trusted from the producer.
   received, accepted, in-window, out-of-window, untimed, malformed, duplicate,
   conflicting and boundary-uncertain records. Only the source's own
   continuation flag (`has_more: false`) or remote total proves the tail was
-  read; a cap never does. `population_total` is set only when coverage is
-  complete.
+  read; a cap never does, and neither does a total below the rows already
+  read. `population_total` is set only when coverage is complete.
 - **Failure.** Sources end `complete`, `empty`, `partial` (with sorted
   reasons), or one of `unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`. A response that
@@ -158,10 +158,11 @@ point unless stated otherwise.
    `covered`; else `not_covered`.
 3. **Truncation.** With `seen = (offset ?? 0) + returned`: `has_more` true →
    `truncated`; else if `total_reported` is set and `post_filtered` is false:
-   `total_reported > seen` → `truncated`, otherwise `not_truncated` unless
-   `interrupted`; else if `interrupted` → `unknown`; else if `has_more` is
-   false → `not_truncated`; else `unknown`. Also `returned == counts.received`
-   and `cap <= requested_cap` when both are set.
+   `total_reported < seen` → `unknown` (a total that contradicts the rows
+   read proves nothing), `total_reported > seen` → `truncated`, otherwise
+   `not_truncated` unless `interrupted`; else if `interrupted` → `unknown`;
+   else if `has_more` is false → `not_truncated`; else `unknown`. Also
+   `returned == counts.received` and `cap <= requested_cap` when both are set.
 4. **Completeness.** `complete` is true exactly when window coverage is
    `covered`, truncation is `not_truncated`, `offset` is null or 0, the read
    was not `interrupted`, and `malformed_dropped`, `untimed`, `conflicting`

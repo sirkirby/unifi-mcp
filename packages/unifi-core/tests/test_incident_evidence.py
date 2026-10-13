@@ -406,6 +406,37 @@ def test_truncation_follows_only_from_reported_pagination(pagination, expected) 
     assert truncation_state(pagination) is expected
 
 
+@pytest.mark.parametrize(
+    ("pagination", "expected"),
+    [
+        # A total below what was read contradicts the rows, so it proves nothing.
+        (Pagination(cap=10, returned=1, total_reported=0), Truncation.UNKNOWN),
+        (Pagination(cap=10, returned=1, total_reported=0, has_more=False), Truncation.UNKNOWN),
+        (Pagination(offset=10, cap=10, returned=5, total_reported=12), Truncation.UNKNOWN),
+        # A total above what was read outweighs a flag that says the read ended.
+        (Pagination(cap=10, returned=3, total_reported=4, has_more=False), Truncation.TRUNCATED),
+        (Pagination(cap=10, returned=3, total_reported=3, has_more=False), Truncation.NOT_TRUNCATED),
+    ],
+)
+def test_a_contradictory_total_never_proves_exhaustion(pagination, expected) -> None:
+    assert truncation_state(pagination) is expected
+
+
+@pytest.mark.parametrize(("total", "has_more"), [(0, None), (0, False), (2, False)])
+def test_a_contradictory_total_leaves_coverage_incomplete(total: int, has_more: bool | None) -> None:
+    source = _collect([{"id": "a", "time": _ms(START)}], total_reported=total, has_more=has_more).source
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert not source.coverage.complete
+    assert source.coverage.population_total is None
+
+
+def test_coverage_rejects_an_all_clear_resting_on_a_total_below_the_rows_read() -> None:
+    payload = _collect([{"id": "a", "time": _ms(START)}]).source.coverage.model_dump()
+    payload["pagination"] = {**payload["pagination"], "has_more": None, "total_reported": 0}
+    with pytest.raises(ValidationError):
+        Coverage.model_validate(payload)
+
+
 def test_cap_reached_count_is_not_a_population_total() -> None:
     source = _collect([{"id": str(i), "time": _ms(START) + i} for i in range(10)], has_more=None).source
     assert source.coverage.counts.in_window == 10

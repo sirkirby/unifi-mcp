@@ -1134,6 +1134,9 @@ def truncation_state(pagination: Pagination) -> Truncation:
         return Truncation.TRUNCATED
     if pagination.total_reported is not None and not pagination.post_filtered:
         seen = (pagination.offset or 0) + pagination.returned
+        if pagination.total_reported < seen:
+            # A total below the rows already read contradicts them; it proves nothing.
+            return Truncation.UNKNOWN
         if pagination.total_reported > seen:
             return Truncation.TRUNCATED
         if not pagination.interrupted:
