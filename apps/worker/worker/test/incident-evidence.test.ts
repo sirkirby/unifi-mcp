@@ -194,7 +194,8 @@ describe("incident evidence corpus", () => {
       outcomes.cut += Number(view.sources.some((source: any) => Object.keys(source.truncated).length));
     }
     expect(Object.values(outcomes).every(Boolean)).toBe(true);
-  });
+    // Forty large draws take seconds alone and can pass the default limit under the parallel suite.
+  }, 30_000);
   it("costs every string a token per byte it is sent in, however degenerate", () => {
     const degenerate = ["A" + " ".repeat(4_000_000) + "B", "\t".repeat(50_000), "!".repeat(100_000), "~-.|".repeat(25_000),
       "qxzjvkwQXZJVKW".repeat(7_000), "\u00a0".repeat(50_000), "\u3000".repeat(50_000), "\u4e2d\u6587".repeat(25_000),
