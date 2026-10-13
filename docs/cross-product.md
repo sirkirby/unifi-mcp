@@ -134,9 +134,10 @@ unsupported, so both skills read door events separately with
 timeline's. Both turn an area or door into exact device MACs and camera IDs
 before calling the timeline, which never matches names. Visitor Audit also
 requires Access; Security Patrol needs at least one product (two for a
-multi-product correlation). Without the cloud worker, those two stop the merged
-workflow and offer separate local reads, explicitly stating that no merged
-timeline is available.
+multi-product correlation). Without the cloud worker, those two stop with no
+tool call, stating that no merged timeline is available; they may offer local
+reads in words and make none until the user agrees. Every read they make uses a
+tool the client lists directly as read-only, never `*_execute` or `*_batch`.
 
 Reports include Coverage and Limitations: requested interval, source availability,
 filters, returned counts, caps and failures. A sorted timeline does not establish

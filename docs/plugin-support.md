@@ -189,8 +189,22 @@ Those checks do not count as `tested`. To produce `tested` evidence, follow the 
 | Transport: remote HTTP from the plugin | `unsupported` | `unsupported` | `unsupported` |
 | Connection: one UniFi product controller per plugin | `not tested` | `not tested` | `not tested` |
 | Connection: relay | Not required by product plugins | Not required by product plugins | Not required by product plugins |
-| `unifi-intelligence` from a marketplace | `not tested` | `not tested` | `not tested` |
-| Required plugins installed with `unifi-intelligence` | `not tested` | `unsupported` | `unsupported` |
+| `unifi-intelligence` from a marketplace | `tested` | `tested` | `tested` |
+| Required plugins installed with `unifi-intelligence` | `tested` | `unsupported` | `unsupported` |
+| Network and Protect plugins already installed are kept as they are | `tested` | Not applicable | Not applicable |
+| Removing `unifi-intelligence` prunes only the plugins it installed | `tested` | Not applicable | Not applicable |
+| `unifi-intelligence` skills with a real model | `not tested` | `not tested` | `not tested` |
+
+The `unifi-intelligence` rows come from installing a release candidate in each
+real client from a local mirror of this marketplace: Claude Code 2.1.296,
+Codex 0.162.0 and OpenClaw 2026.9.9. In Claude Code, installing it on a clean
+profile installed Network and Protect as dependencies, which `claude plugin
+prune` later removed; for a user who already had both, it reinstalled nothing
+and pruned nothing. Codex and OpenClaw installed it alone, as documented. The
+same run exercised the skills, which then changed to stop for confirmation and
+to make no read the user has not agreed to, so the skills row stays
+`not tested`. Security Patrol and Visitor Audit were not run in Codex, and
+OpenClaw ran only with a stub model, never a real one.
 
 No minimum client version has been established for any client.
 

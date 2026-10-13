@@ -95,7 +95,8 @@ In Claude Code:
 ```
 
 Replace `unifi-network` with `unifi-protect` or `unifi-access` as needed.
-`/plugin install` opens the plugin's options dialog straight away. Fill it in
+`/plugin install` of a product plugin opens its options dialog straight away
+(plugins installed as dependencies open none; run their setup skills). Fill it in
 there, or press Esc and run the setup skill, which asks for each setting and
 never needs a password or API key typed into the chat. From a shell,
 `claude plugin install` instead reports the options as not yet set and suggests
@@ -180,9 +181,11 @@ Patrol and Visitor Audit. It ships no MCP server and requires the
 skill.
 
 - **Claude Code** installs both as dependencies:
-  `/plugin install unifi-intelligence@unifi-plugins`, then run the setup skill
-  of each one not yet configured. `claude plugin prune` later removes them only
-  if no installed plugin still needs them.
+  `/plugin install unifi-intelligence@unifi-plugins`. It opens no options
+  dialog for them, so run the setup skill of each one not yet configured.
+  Network and Protect plugins you already installed are kept as they are.
+  `claude plugin prune` later removes only the plugins it installed as
+  dependencies, once no installed plugin still needs them.
 - **Codex and OpenClaw** install no plugin dependencies. Install and set up
   `unifi-network` and `unifi-protect` first, then install `unifi-intelligence`
   the same way.
@@ -191,7 +194,8 @@ Incident Investigation uses the local Network and Protect servers. Security
 Patrol and Visitor Audit need the cloud worker: they call
 `unifi_location_timeline`, which only the
 [cloud worker](../apps/worker/) provides, through a connected
-[relay](../packages/unifi-mcp-relay/). Without it they stop and say so.
+[relay](../packages/unifi-mcp-relay/). Without it they stop with no tool
+call and say so; they may offer local reads, and make none until you agree.
 
 ## Standalone skills through npm
 

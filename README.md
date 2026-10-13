@@ -185,9 +185,12 @@ Repeat for Protect or Access if needed:
 ```
 
 For the cross-product skills, `/plugin install unifi-intelligence@unifi-plugins`
-also installs the Network and Protect plugins it needs.
+also installs the Network and Protect plugins it needs. Claude Code opens no
+options dialog for plugins it installs as dependencies, so run each product's
+setup command (`/unifi-network:unifi-network-setup`,
+`/unifi-protect:unifi-protect-setup`) for any not yet configured.
 
-`/plugin install` opens the plugin's options dialog straight away; fill it in there, or close it and run the setup command. Each plugin's setup command walks you through connecting to your controller and configuring permissions, and saves the result as the plugin's Claude Code options. Auto-update is off by default for this marketplace; see the [plugin upgrade guide](docs/plugin-upgrade.md) for update steps.
+`/plugin install` of a product plugin opens its options dialog straight away; fill it in there, or close it and run the setup command. Each plugin's setup command walks you through connecting to your controller and configuring permissions, and saves the result as the plugin's Claude Code options. Auto-update is off by default for this marketplace; see the [plugin upgrade guide](docs/plugin-upgrade.md) for update steps.
 
 Prerequisites, version boundaries and verification status for each client are in the [plugin support matrix](docs/plugin-support.md).
 
