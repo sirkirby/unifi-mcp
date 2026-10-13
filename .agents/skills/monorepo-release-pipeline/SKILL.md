@@ -312,7 +312,7 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
 - **Enforcement.** `make check-plugin-versions` admits version bumps and pins;
   `make check-plugin-tool-refs` fails when a shipped plugin file names a tool absent
   from the release tag its product's plugin pins (cross-product: the product pins plus
-  the latest released relay). Both run in `make pre-commit` and in the generated-artifacts
+  the latest released cloud worker). Both run in `make pre-commit` and in the generated-artifacts
   CI job. Never weaken either check to pass a PR; fix the plugin text or move the pin.
 - **Counts and references follow the pin.** Plugin skill tool counts and the generated
   `references/*-tools.md` come from the manifest of the release tag each plugin pins

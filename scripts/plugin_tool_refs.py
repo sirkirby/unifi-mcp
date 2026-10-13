@@ -6,7 +6,8 @@ the ``tools_manifest.json`` of the server release that the product's plugin pins
 read from that release tag in git. That is what users actually run. The same
 pinned manifest (:func:`pinned_manifest`) drives the generated plugin tool
 references and the plugin tool counts. Cross-product
-skills may also name tools served by the latest released relay.
+skills may also name tools the latest released cloud worker serves through a
+connected relay; the relay itself only forwards product tools.
 
 Uses only the standard library, like ``plugin_versions.py``.
 """
@@ -28,8 +29,9 @@ TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access)_[a-z0-9_]*[a-z0-9](?
 META_TOOLS = ("tool_index", "execute", "batch", "batch_status", "load_tools")
 # Prefixed identifiers that are not tools: Access event types and topics, and field names.
 NOT_TOOLS = frozenset({"access_granted", "access_denied", "access_denial", "access_end", "protect_camera_id"})
-RELAY_SOURCE = "packages/unifi-mcp-relay/src/"
-RELAY_TOOL = re.compile(r'^TOOL_NAME = "([a-z0-9_]+)"$', re.MULTILINE)
+WORKER_SOURCE = "apps/worker/worker/src/"
+# A tool definition's name, in a TypeScript object literal or a JSON definition file.
+WORKER_TOOL = re.compile(r'^\s*"?name"?: "((?:unifi|protect|access)_[a-z0-9_]+)",?$', re.MULTILINE)
 
 
 @dataclass
@@ -92,17 +94,17 @@ def pinned_release(root: Path, product: str) -> Release:
     return Release(f"{tag} (pinned by unifi-{product})", tools | {f"{prefix}_{meta}" for meta in META_TOOLS})
 
 
-def relay_release(root: Path) -> Release:
-    """Read tool names from the latest released relay's source."""
-    version = latest_tag(set(git(root, "tag", "--list", "relay/v*").splitlines()), "relay")
+def worker_release(root: Path) -> Release:
+    """Read the tool names the latest released cloud worker defines."""
+    version = latest_tag(set(git(root, "tag", "--list", "worker/v*").splitlines()), "worker")
     if version is None:
-        return Release("no released relay (no relay/v* tag; fetch tags)")
-    tag = f"relay/v{version}"
+        return Release("no released worker (no worker/v* tag; fetch tags)")
+    tag = f"worker/v{version}"
     tools = set()
-    for path in git(root, "ls-tree", "-r", "--name-only", tag, "--", RELAY_SOURCE).splitlines():
-        if path.endswith(".py"):
-            tools.update(RELAY_TOOL.findall(git(root, "show", f"{tag}:{path}")))
-    return Release(f"relay {tag}", tools)
+    for path in git(root, "ls-tree", "-r", "--name-only", tag, "--", WORKER_SOURCE).splitlines():
+        if path.endswith((".ts", ".json")):
+            tools.update(WORKER_TOOL.findall(git(root, "show", f"{tag}:{path}")))
+    return Release(f"worker {tag}", tools)
 
 
 def workspace_modules(root: Path) -> set[str]:
@@ -113,7 +115,7 @@ def workspace_modules(root: Path) -> set[str]:
 def check(root: Path) -> int:
     """Raise ValueError listing every unknown tool name; return the number of names checked."""
     releases: dict[str, Release] = {}
-    relay: Release | None = None
+    worker: Release | None = None
     ignored = NOT_TOOLS | workspace_modules(root)
     errors: list[str] = []
     seen: set[tuple[str, str]] = set()
@@ -134,8 +136,8 @@ def check(root: Path) -> int:
                         releases[product] = pinned_release(root, product)
                     sources = [releases[product]]
                     if bundle.name == "cross-product":
-                        relay = relay or relay_release(root)
-                        sources.append(relay)
+                        worker = worker or worker_release(root)
+                        sources.append(worker)
                     if not any(name in release.tools for release in sources):
                         where = path.relative_to(root)
                         checked = " or ".join(release.source for release in sources)
