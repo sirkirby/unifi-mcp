@@ -33,23 +33,25 @@ async def register_lazy_direct_tools(server: Any, lazy_loader: Any, tool_names: 
 
     Lazy mode lists only meta-tools, and its one route to a domain tool,
     ``*_execute``, is not read-only, so a client that permits only
-    ``readOnlyHint`` tools reaches no domain tool at all. Loading these
-    tools' modules at startup lists them with their own annotations.
+    ``readOnlyHint`` tools reaches no domain tool at all. Registering these
+    tools at startup lists them with their own annotations.
 
-    Loading a module registers every tool in it, so each module must hold
-    only the named tools, and each must be read-only; anything else fails
-    startup rather than widening what lazy mode exposes.
+    Only the named tools register: the other tools in their modules are held
+    by the loader and register when first loaded, so ``*_execute`` reaches
+    them as before. Every named tool must be read-only, and nothing else may
+    register; anything else fails startup rather than widening what lazy mode
+    exposes.
     """
     before = {tool.name for tool in await server.list_tools()}
-    for name in tool_names:
-        if not await lazy_loader.load_tool(name):
-            raise ValueError(f"lazy direct tool {name!r} could not be loaded")
+    failed = await lazy_loader.load_only(tool_names)
+    if failed:
+        raise ValueError(f"lazy direct tool {failed[0]!r} could not be loaded")
     tools = {tool.name: tool for tool in await server.list_tools()}
     problems = [f"{name} is not registered" for name in tool_names if name not in tools]
     problems += [f"{name} is not read-only" for name in tool_names if name in tools and not _read_only(tools[name])]
     problems += [f"{name} was registered alongside them" for name in sorted(set(tools) - before - set(tool_names))]
     if problems:
-        raise ValueError("lazy direct tools must be read-only tools in their own modules: " + "; ".join(problems))
+        raise ValueError("lazy direct tools must be read-only and registered alone: " + "; ".join(problems))
 
 
 async def register_tools_for_mode(

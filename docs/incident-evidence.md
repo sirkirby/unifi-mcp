@@ -454,9 +454,11 @@ domain tool, `*_execute`, is not read-only, so a client that permits only
 `readOnlyHint: true` tools could reach no controller read. Each app's
 `LAZY_DIRECT_TOOLS` (in `categories.py`) names read-only tools that lazy mode
 registers directly at startup, so they are listed with their own annotations.
-Loading a module registers every tool in it, so startup fails unless every
-tool the module registers is named and read-only. `meta_only` mode still lists
-only meta-tools, and eager mode lists every tool.
+Only the named tools register: the other tools in their modules are held and
+register when first loaded, so `*_execute` and `*_tool_index` reach them as
+before. Startup fails if a named tool is not read-only or anything else
+registers. `meta_only` mode still lists only meta-tools, and eager mode lists
+every tool.
 
 ## Current product contracts
 

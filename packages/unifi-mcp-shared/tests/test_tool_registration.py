@@ -1,6 +1,10 @@
 """Tests for shared tool registration mode dispatch."""
 
+import importlib
+import json
 import logging
+import sys
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -177,84 +181,201 @@ class TestRegisterToolsForMode:
         filtering.assert_awaited_once()
 
 
-class _ModuleLoader:
-    """Stands in for LazyToolLoader: loading a tool registers every tool its module holds."""
+_FIXTURE_MODULES = {
+    "cameras": """
+from mcp.types import ToolAnnotations
 
-    def __init__(self, server, modules: dict[str, list[tuple[str, bool]]]):
-        self.server = server
-        self.modules = modules
-        self.loaded: list[str] = []
+from {package}._runtime import server
 
-    async def load_tool(self, name: str) -> bool:
-        for module_tools in self.modules.values():
-            if name in {tool for tool, _ in module_tools}:
-                for tool, read_only in module_tools:
-                    if tool not in self.loaded:
-                        self.loaded.append(tool)
-                        self._register(tool, read_only)
-                return True
-        return False
+READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False)
 
-    def _register(self, name: str, read_only: bool) -> None:
-        from mcp.types import ToolAnnotations
 
-        async def handler() -> dict:
-            return {"success": True}
+@server.tool(name="unifi_get_camera", annotations=READ)
+async def get_camera(camera_id: str) -> dict:
+    return {{"success": True, "data": {{"read": camera_id}}}}
 
-        self.server.tool(name=name, annotations=ToolAnnotations(readOnlyHint=read_only, openWorldHint=False))(handler)
+
+@server.tool(name="unifi_reboot_camera", annotations=WRITE)
+async def reboot_camera(camera_id: str) -> dict:
+    return {{"success": True, "data": {{"rebooted": camera_id}}}}
+
+
+@server.tool(name="unifi_list_cameras", annotations=READ)
+async def list_cameras() -> dict:
+    return {{"success": True, "data": ["cam-1"]}}
+""",
+    "evidence": """
+from mcp.types import ToolAnnotations
+
+from {package}._runtime import server
+
+
+@server.tool(name="unifi_get_incident_evidence", annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+async def get_incident_evidence() -> dict:
+    return {{"success": True, "data": {{}}}}
+""",
+    # Registers a second tool without going through ``server.tool``.
+    "stray": """
+from mcp.types import ToolAnnotations
+
+from {package}._runtime import server
+
+READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+
+
+@server.tool(name="unifi_get_stray", annotations=READ)
+async def get_stray() -> dict:
+    return {{"success": True, "data": {{}}}}
+
+
+async def sneaky() -> dict:
+    return {{"success": True, "data": {{}}}}
+
+
+server.add_tool(sneaky, name="unifi_sneaky", annotations=READ)
+""",
+}
+_FIXTURE_TOOLS = {
+    "unifi_get_camera": "cameras",
+    "unifi_reboot_camera": "cameras",
+    "unifi_list_cameras": "cameras",
+    "unifi_get_incident_evidence": "evidence",
+    "unifi_get_stray": "stray",
+    "unifi_sneaky": "stray",
+}
+_LAZY_META_TOOLS = {"unifi_tool_index", "unifi_execute", "unifi_batch", "unifi_batch_status", "unifi_load_tools"}
+
+
+@pytest.fixture
+def tool_package(tmp_path, monkeypatch):
+    """A throwaway tool package whose modules register with ``server.tool`` on import, as app tool modules do."""
+    package = f"lazy_direct_fixture_{uuid.uuid4().hex}"
+    root = tmp_path / package
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "_runtime.py").write_text("server = None\n")
+    for module, source in _FIXTURE_MODULES.items():
+        (root / f"{module}.py").write_text(source.format(package=package))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    yield package
+    for name in [name for name in sys.modules if name == package or name.startswith(f"{package}.")]:
+        del sys.modules[name]
+
+
+async def _start(package: str, directory, mode: str, direct: tuple[str, ...]):
+    """Run the real registration dispatch against the fixture package; return the server."""
+    from unifi_mcp_shared.lazy_tools import setup_lazy_loading
+    from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
+    from unifi_mcp_shared.tool_index import get_tool_index
+
+    server = StrictKwargFastMCP("lazy-direct-test")
+    importlib.import_module(f"{package}._runtime").server = server
+    module_map = {name: f"{package}.{module}" for name, module in _FIXTURE_TOOLS.items()}
+    manifest = directory / "tools_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "count": len(module_map),
+                "module_map": module_map,
+                "tools": [{"name": name, "description": f"Fixture {name}"} for name in module_map],
+            }
+        )
+    )
+
+    async def tool_index(args=None):
+        return get_tool_index(registration_mode="lazy", manifest_path=manifest, **(args or {}))
+
+    await register_tools_for_mode(
+        mode=mode,
+        server=server,
+        original_tool_decorator=server.tool,
+        tool_index_handler=tool_index,
+        start_async_tool=Mock(),
+        get_job_status=Mock(),
+        register_tool=Mock(),
+        tool_module_map=module_map,
+        setup_lazy_loading=lambda srv, decorator: setup_lazy_loading(srv, decorator, module_map),
+        base_package=package,
+        config=_config(),
+        logger=logging.getLogger("test"),
+        auto_load_tools=Mock(return_value=None),
+        lazy_direct_tools=direct,
+    )
+    return server
+
+
+async def _call(server, name: str, arguments: dict) -> dict:
+    from unifi_mcp_shared.response_serialization import normalize_call_tool_result
+
+    result = normalize_call_tool_result(await server.call_tool(name, arguments))
+    if isinstance(result, dict):
+        return result
+    return json.loads(result[0].text)
 
 
 class TestLazyDirectTools:
-    """Lazy mode can list chosen read-only tools so read-only clients reach them without *_execute."""
+    """Lazy mode lists chosen read-only tools so read-only clients reach them without *_execute."""
 
-    def _real_server(self):
-        from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
-
-        return StrictKwargFastMCP("lazy-direct-test")
-
-    async def _register(self, mode, server, loader, direct):
-        deps = _deps()
-        deps["setup_lazy_loading"] = Mock(return_value=loader)
-        await register_tools_for_mode(
-            mode=mode,
-            server=server,
-            base_package="unifi_network_mcp.tools",
-            config=_config(),
-            logger=logging.getLogger("test"),
-            lazy_direct_tools=direct,
-            **deps,
-        )
+    DIRECT = ("unifi_get_incident_evidence", "unifi_get_camera")
 
     @pytest.mark.asyncio
-    async def test_lazy_mode_lists_direct_read_only_tools_with_their_annotations(self):
-        server = self._real_server()
-        loader = _ModuleLoader(server, {"evidence": [("unifi_get_incident_evidence", True)]})
-        await self._register("lazy", server, loader, ("unifi_get_incident_evidence",))
+    async def test_lists_only_the_named_tools_even_beside_other_tools_in_their_module(self, tool_package, tmp_path):
+        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
         listed = {tool.name: tool for tool in await server.list_tools()}
-        assert listed["unifi_get_incident_evidence"].annotations.read_only_hint is True
+        assert set(listed) == _LAZY_META_TOOLS | set(self.DIRECT)
+        assert all(listed[name].annotations.read_only_hint is True for name in self.DIRECT)
+
+    @pytest.mark.asyncio
+    async def test_a_listed_tool_runs_directly_and_through_execute(self, tool_package, tmp_path):
+        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
+        assert await _call(server, "unifi_get_camera", {"camera_id": "cam-1"}) == {
+            "success": True,
+            "data": {"read": "cam-1"},
+        }
+        executed = await _call(
+            server, "unifi_execute", {"tool": "unifi_get_camera", "arguments": {"camera_id": "cam-1"}}
+        )
+        assert executed == {"success": True, "data": {"read": "cam-1"}}
+
+    @pytest.mark.asyncio
+    async def test_module_siblings_still_run_through_execute(self, tool_package, tmp_path):
+        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
+        rebooted = await _call(
+            server, "unifi_execute", {"tool": "unifi_reboot_camera", "arguments": {"camera_id": "cam-1"}}
+        )
+        assert rebooted == {"success": True, "data": {"rebooted": "cam-1"}}
+        listed = await _call(server, "unifi_execute", {"tool": "unifi_list_cameras", "arguments": {}})
+        assert listed == {"success": True, "data": ["cam-1"]}
+        # As before, a tool runs once it is registered; nothing else was registered with it.
+        names = {tool.name for tool in await server.list_tools()}
+        assert names == _LAZY_META_TOOLS | set(self.DIRECT) | {"unifi_reboot_camera", "unifi_list_cameras"}
+
+    @pytest.mark.asyncio
+    async def test_the_index_still_lists_the_listed_tool_and_its_siblings(self, tool_package, tmp_path):
+        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
+        index = await _call(server, "unifi_tool_index", {})
+        assert {"unifi_get_camera", "unifi_reboot_camera", "unifi_list_cameras"} <= {
+            tool["name"] for tool in index["tools"]
+        }
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", ["meta_only", "eager"])
-    async def test_other_modes_ignore_direct_tools(self, mode):
-        server = self._real_server()
-        loader = _ModuleLoader(server, {"evidence": [("unifi_get_incident_evidence", True)]})
-        await self._register(mode, server, loader, ("unifi_get_incident_evidence",))
-        assert loader.loaded == []
+    async def test_other_modes_ignore_direct_tools(self, tool_package, tmp_path, mode):
+        server = await _start(tool_package, tmp_path, mode, self.DIRECT)
+        assert not {tool.name for tool in await server.list_tools()} & set(_FIXTURE_TOOLS)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("modules", "problem"),
+        ("direct", "problem"),
         [
-            ({"evidence": [("unifi_get_incident_evidence", False)]}, "is not read-only"),
-            (
-                {"events": [("unifi_get_incident_evidence", True), ("unifi_archive_alarm", False)]},
-                "unifi_archive_alarm was registered alongside them",
-            ),
-            ({}, "could not be loaded"),
+            (("unifi_reboot_camera",), "unifi_reboot_camera is not read-only"),
+            (("unifi_get_nothing",), "'unifi_get_nothing' could not be loaded"),
+            (("unifi_get_stray",), "unifi_sneaky was registered alongside them"),
         ],
     )
-    async def test_direct_tools_must_be_read_only_and_alone_in_their_module(self, modules, problem):
-        server = self._real_server()
-        loader = _ModuleLoader(server, modules)
+    async def test_startup_is_refused_for_a_write_an_unknown_name_or_an_unnamed_registration(
+        self, tool_package, tmp_path, direct, problem
+    ):
         with pytest.raises(ValueError, match=problem):
-            await self._register("lazy", server, loader, ("unifi_get_incident_evidence",))
+            await _start(tool_package, tmp_path, "lazy", direct)
