@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
@@ -40,6 +42,23 @@ describe("RelayObject location evidence meta-tool", () => {
     expect(relay.sendToolCall.mock.calls.map((call: any[]) => call[1])).toEqual(["unifi_get_incident_evidence", "protect_get_incident_evidence"]);
     expect((result as any).data.sources.map((source: any) => source.outcome)).toEqual(["unavailable", "unavailable"]);
     expect(JSON.stringify(result)).not.toContain("private controller text");
+  });
+  it("forwards exactly the arguments the product evidence tools accept", async () => {
+    const schemas = Object.fromEntries(["network", "protect"].map((product) => {
+      const manifest = JSON.parse(readFileSync(fileURLToPath(String(new URL(`../../../${product}/src/unifi_${product}_mcp/tools_manifest.json`, import.meta.url))), "utf8"));
+      const tool = manifest.tools.find((entry: any) => entry.name.endsWith("_get_incident_evidence"));
+      return [tool.name, tool.schema.input];
+    }));
+    const relay = fakeRelay(["fixture-1"], new Map([["fixture-1", Object.keys(schemas)]]), null);
+    await relay.handleToolCall("unifi_location_timeline", {
+      ...windowArgs, device_macs: ["02:00:00:00:00:01"], camera_ids: ["fixture-camera"],
+    });
+    expect(relay.sendToolCall.mock.calls.map((call: any[]) => call[1])).toEqual(Object.keys(schemas));
+    for (const [, name, args] of relay.sendToolCall.mock.calls) {
+      expect(Object.keys(args).filter((key) => !(key in schemas[name].properties))).toEqual([]);
+      expect(schemas[name].required.filter((key: string) => !(key in args))).toEqual([]);
+      expect(args).toMatchObject({ start: windowArgs.start, end: windowArgs.end, detail: "full" });
+    }
   });
   it("classifies a real pending WebSocket call timeout as timeout", async () => {
     vi.useFakeTimers();

@@ -68,7 +68,7 @@ New Worker source files SHOULD be added to `worker/src/` only when they represen
 
 - The relay uses a singleton Durable Object (`env.RELAY.idFromName("singleton")`).
 - The Durable Object uses SQLite for persistent location/token storage (configured in `wrangler.toml` via `new_sqlite_classes`).
-- Meta-tools (`unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_location_timeline`) are defined in `relay-object.ts` and handled by the relay itself — they MUST NOT be forwarded to relay clients.
+- Meta-tools (`unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_location_timeline`) are defined in `relay-object.ts` (`unifi_location_timeline` in `location-timeline-tool.json`, which repository checks read) and handled by the relay itself — they MUST NOT be forwarded to relay clients.
 
 ### 3.7 Dependencies
 
