@@ -11,7 +11,7 @@ to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md)
 | `unifi-network` | Listed | Listed | `unifi-network-mcp` |
 | `unifi-protect` | Listed | Listed | `unifi-protect-mcp` |
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
-| `cross-product` | Not listed | Not listed | None (skills only) |
+| `unifi-intelligence` | Not listed | Not listed | None (skills only) |
 
 Each plugin has its own semantic version for everything it ships. For example,
 plugin `1.0.0` can launch `unifi-network-mcp==0.37.0`; the plugin version and
@@ -142,7 +142,7 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
   and names them with the reason: other consumers have not been verified as
   migrated. Values are omitted.
 
-The `cross-product` skills can be installed as standalone skills (see the
+The `unifi-intelligence` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)). Incident
 Investigation uses the incident evidence tools of the local Network and Protect
 servers and needs no relay. Security Patrol and Visitor Audit use
@@ -176,7 +176,7 @@ Those checks do not count as `tested`. To produce `tested` evidence, follow the 
 | Transport: remote HTTP from the plugin | `unsupported` | `unsupported` | `unsupported` |
 | Connection: one UniFi product controller per plugin | `not tested` | `not tested` | `not tested` |
 | Connection: relay | Not required by product plugins | Not required by product plugins | Not required by product plugins |
-| `cross-product` from a marketplace | `unsupported` | `unsupported` | `unsupported` |
+| `unifi-intelligence` from a marketplace | `unsupported` | `unsupported` | `unsupported` |
 
 No minimum client version has been established for any client.
 

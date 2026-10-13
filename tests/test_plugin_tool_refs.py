@@ -124,9 +124,9 @@ def test_product_bundle_cannot_name_worker_tools(repo: Path) -> None:
         refs.check(repo)
 
 
-def test_cross_product_checks_product_pins_and_released_worker(repo: Path) -> None:
-    skill = "plugins/cross-product/skills/patrol/SKILL.md"
-    write(repo, "plugins/cross-product/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
+def test_skills_only_bundle_checks_product_pins_and_released_worker(repo: Path) -> None:
+    skill = "plugins/unifi-intelligence/skills/patrol/SKILL.md"
+    write(repo, "plugins/unifi-intelligence/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
     write(repo, skill, "Call `unifi_location_timeline`, then `unifi_list_clients`.\n")
     with pytest.raises(ValueError, match=r"not a tool in .* or no released worker \(no worker/v\* tag; fetch tags\)"):
         refs.check(repo)
@@ -136,8 +136,8 @@ def test_cross_product_checks_product_pins_and_released_worker(repo: Path) -> No
 
 
 def test_worker_tool_defined_in_json_resolves(repo: Path) -> None:
-    write(repo, "plugins/cross-product/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
-    write(repo, "plugins/cross-product/skills/patrol/SKILL.md", "Call `unifi_location_timeline`.\n")
+    write(repo, "plugins/unifi-intelligence/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
+    write(repo, "plugins/unifi-intelligence/skills/patrol/SKILL.md", "Call `unifi_location_timeline`.\n")
     write(repo, "apps/worker/worker/src/location-timeline-tool.json", TIMELINE_JSON)
     with pytest.raises(ValueError, match="no released worker"):
         refs.check(repo)  # Defined in the workspace, but no worker release serves it yet.
@@ -146,8 +146,8 @@ def test_worker_tool_defined_in_json_resolves(repo: Path) -> None:
 
 
 def test_relay_source_no_longer_provides_tools(repo: Path) -> None:
-    write(repo, "plugins/cross-product/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
-    write(repo, "plugins/cross-product/skills/patrol/SKILL.md", "Call `unifi_location_timeline`.\n")
+    write(repo, "plugins/unifi-intelligence/.claude-plugin/plugin.json", json.dumps({"version": "1.0.0"}))
+    write(repo, "plugins/unifi-intelligence/skills/patrol/SKILL.md", "Call `unifi_location_timeline`.\n")
     write(repo, "packages/unifi-mcp-relay/src/unifi_mcp_relay/timeline.py", 'TOOL_NAME = "unifi_location_timeline"\n')
     release(repo, "relay/v0.3.18")
     with pytest.raises(ValueError, match="no released worker"):

@@ -367,7 +367,7 @@ plugins/
   unifi-network/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
   unifi-protect/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
   unifi-access/     # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
-  cross-product/    # Unlisted skills-only bundle; merged timelines need the cloud worker and relay
+  unifi-intelligence/ # Unlisted skills-only bundle; merged timelines need the cloud worker and relay
 skills/
   _shared/          # Shared utilities for skill scripts (MCP client, config)
 docs/               # Ecosystem-level documentation

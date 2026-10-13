@@ -311,7 +311,7 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
   tagged and the pin moves; usually in or after the writeback.
 - **Enforcement.** `make check-plugin-versions` admits version bumps and pins;
   `make check-plugin-tool-refs` fails when a shipped plugin file names a tool absent
-  from the release tag its product's plugin pins (cross-product: the product pins plus
+  from the release tag its product's plugin pins (unifi-intelligence: the product pins plus
   the latest released cloud worker). Both run in `make pre-commit` and in the generated-artifacts
   CI job. Never weaken either check to pass a PR; fix the plugin text or move the pin.
 - **Counts and references follow the pin.** Plugin skill tool counts and the generated
@@ -325,7 +325,7 @@ Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
 
 - Each plugin has an independent SemVer describing everything it ships, separate from
   the server pin. Set the same `version` in every existing Claude and Codex manifest
-  (at least one). The unlisted `cross-product` bundle uses its Claude manifest only.
+  (at least one). The unlisted `unifi-intelligence` bundle uses its Claude manifest only.
   Keep `version` out of marketplace entries.
 - Bump every affected plugin in the same PR whenever any file under `plugins/<name>/`
   changes, including skills, references, setup scripts, MCP configs and docs. Version-only

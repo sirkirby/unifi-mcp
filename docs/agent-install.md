@@ -182,7 +182,7 @@ does not discover contributor-only skills from the repository root:
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-network
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-protect
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-access
-npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/cross-product
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-intelligence
 ```
 
 Choose only the relevant command. The installer prompts for the destination

@@ -546,11 +546,13 @@ def test_release_workflow_delegates_to_version_module() -> None:
 
 def test_claude_author_string_is_reported(tmp_path: Path) -> None:
     root = _copy_packaging_tree(tmp_path)
-    _edit_json(root / "plugins" / "cross-product" / ".claude-plugin" / "plugin.json", lambda d: d.update(author="x"))
+    _edit_json(
+        root / "plugins" / "unifi-intelligence" / ".claude-plugin" / "plugin.json", lambda d: d.update(author="x")
+    )
 
     errors = packaging_errors(root)
 
-    assert any("cross-product/.claude-plugin/plugin.json: author must be an object" in error for error in errors)
+    assert any("unifi-intelligence/.claude-plugin/plugin.json: author must be an object" in error for error in errors)
 
 
 def test_legacy_codex_manifest_is_used_without_portable_root(tmp_path: Path) -> None:

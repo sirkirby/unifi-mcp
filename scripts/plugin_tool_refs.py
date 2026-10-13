@@ -5,9 +5,10 @@ Every ``unifi_``/``protect_``/``access_`` name in a plugin's files must exist in
 the ``tools_manifest.json`` of the server release that the product's plugin pins,
 read from that release tag in git. That is what users actually run. The same
 pinned manifest (:func:`pinned_manifest`) drives the generated plugin tool
-references and the plugin tool counts. Cross-product
-skills may also name tools the latest released cloud worker serves through a
-connected relay; the relay itself only forwards product tools.
+references and the plugin tool counts. Skills in the skills-only
+``unifi-intelligence`` bundle may also name tools the latest released cloud
+worker serves through a connected relay; the relay itself only forwards product
+tools.
 
 Uses only the standard library, like ``plugin_versions.py``.
 """
@@ -135,7 +136,8 @@ def check(root: Path) -> int:
                     if product not in releases:
                         releases[product] = pinned_release(root, product)
                     sources = [releases[product]]
-                    if bundle.name == "cross-product":
+                    # Product bundles name only their servers' tools; the skills-only bundle also uses the worker's.
+                    if bundle.name not in {f"unifi-{product}" for product in PREFIXES.values()}:
                         worker = worker or worker_release(root)
                         sources.append(worker)
                     if not any(name in release.tools for release in sources):

@@ -56,7 +56,7 @@ and Protect servers; the relay is not used.
 If only Network is connected, the skill stops, reports Protect unavailable and,
 with the user's consent, runs a Network-only investigation labelled as having no
 camera context. Worked reports built from the golden evidence corpus are in
-`plugins/cross-product/skills/incident-investigation/references/report-examples.md`.
+`plugins/unifi-intelligence/skills/incident-investigation/references/report-examples.md`.
 The evidence contract, budgets and the checks a consumer applies are in
 [Incident evidence](incident-evidence.md).
 
@@ -109,7 +109,7 @@ Three repository skills describe cross-product workflows:
 | **Incident Investigation** | "A switch went offline — what happened?" | Network + Protect |
 | **Visitor Audit** | "Which access and network activity was observed today?" | Access + Network |
 
-These skills live in `plugins/cross-product/skills/`; they are not automatically
+These skills live in `plugins/unifi-intelligence/skills/`; they are not automatically
 installed by the individual product plugins, and the bundle is not listed in the
 Claude Code or Codex marketplace. Install them as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)). Availability depends on the client

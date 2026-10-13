@@ -174,18 +174,41 @@ def test_uses_merge_base_instead_of_tip(repo: Path) -> None:
 
 
 @pytest.mark.parametrize("client", versions.MANIFESTS)
-def test_unlisted_skills_only_plugin_checks_existing_manifests(repo: Path, client: str) -> None:
-    write(repo, f"plugins/cross-product/{client}", {"name": "cross-product", "version": "1.0.0"})
+def test_skills_only_plugin_checks_existing_manifests(repo: Path, client: str) -> None:
+    write(repo, f"plugins/unifi-intelligence/{client}", {"name": "unifi-intelligence", "version": "1.0.0"})
     versions.check(repo, "base")
     versions.git(repo, "add", ".")
-    versions.git(repo, "commit", "-qm", "cross product")
-    write(repo, f"plugins/cross-product/{client}", {"name": "cross-product", "version": "0.9.0"})
-    with pytest.raises(ValueError, match="cross-product: changed plugin"):
+    versions.git(repo, "commit", "-qm", "skills only")
+    write(repo, f"plugins/unifi-intelligence/{client}", {"name": "unifi-intelligence", "version": "0.9.0"})
+    with pytest.raises(ValueError, match="unifi-intelligence: changed plugin"):
         versions.check(repo, "HEAD")
 
 
+def test_product_plugin_without_mcp_configs_fails(repo: Path) -> None:
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
+        data = json.loads((repo / "plugins/unifi-network" / filename).read_text())
+        data.pop("mcpServers", None)
+        write(repo, f"plugins/unifi-network/{filename}", data)
+    (repo / "plugins/unifi-network/.mcp.codex.json").unlink()
+    manifests(repo, "1.0.1")
+    with pytest.raises(ValueError, match="unifi-network: missing MCP configs"):
+        versions.check(repo, "base")
+
+
+def test_renamed_plugin_is_checked_as_new(repo: Path) -> None:
+    write(repo, "plugins/old-name/.claude-plugin/plugin.json", {"name": "old-name", "version": "1.1.0"})
+    versions.git(repo, "add", ".")
+    versions.git(repo, "commit", "-qm", "old name")
+    versions.git(repo, "branch", "-f", "base")
+    versions.git(repo, "mv", "plugins/old-name", "plugins/new-name")
+    edit(repo, "plugins/new-name/.claude-plugin/plugin.json", name="new-name", version="1.0.0")
+    versions.check(repo, "base")
+    versions.git(repo, "rm", "-rqf", "plugins/new-name")
+    versions.check(repo, "base")
+
+
 def test_plugin_needs_at_least_one_manifest(repo: Path) -> None:
-    (repo / "plugins/cross-product").mkdir()
+    (repo / "plugins/unifi-intelligence").mkdir()
     with pytest.raises(ValueError, match="at least one plugin manifest"):
         versions.check(repo, "base")
 

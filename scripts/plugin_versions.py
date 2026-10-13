@@ -108,7 +108,7 @@ def plugin_state(bundle: Path) -> tuple[str, dict[str, str]]:
         pins = config_pins(claude, str(bundle / MANIFESTS[0]))
         if config_pins(load(codex), str(codex)) != pins:
             raise ValueError(f"{bundle.name}: mismatched pins between Claude and Codex")
-    elif bundle.name != "cross-product":
+    elif bundle.name in {f"unifi-{product}" for product in PRODUCTS}:
         raise ValueError(f"{bundle.name}: missing MCP configs")
     return versions[0], pins
 
@@ -149,6 +149,8 @@ def check(root: Path, base_ref: str, releasing: str | None = None) -> None:
     bundles = {path.name for path in (root / "plugins").iterdir() if path.is_dir()}
     bundles.update(path.split("/")[1] for path in changed if len(path.split("/")) > 2)
     for name in sorted(bundles):
+        if not (root / "plugins" / name).is_dir():  # A removed or renamed plugin has no version left to check.
+            continue
         version, pins = plugin_state(root / "plugins" / name)
         for package, pin in pins.items():
             tag = pin_tag(package, pin)

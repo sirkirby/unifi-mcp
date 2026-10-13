@@ -18,7 +18,7 @@ import pytest
 from test_plugin_skill_contracts import DATA_NAMES, TOOL, structure_errors
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "plugins/cross-product/skills/incident-investigation"
+SKILL_DIR = ROOT / "plugins/unifi-intelligence/skills/incident-investigation"
 SKILL = SKILL_DIR / "SKILL.md"
 EXAMPLES = SKILL_DIR / "references/report-examples.md"
 CASES = ROOT / "tests/fixtures/incident_evidence/cases"
