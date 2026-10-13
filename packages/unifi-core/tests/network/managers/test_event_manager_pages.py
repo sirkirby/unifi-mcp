@@ -114,7 +114,8 @@ async def test_alarm_remote_total_beyond_the_page_is_truncation() -> None:
     manager = sdk_event_manager({"data": [VALID], "total_element_count": 25, "total_page_count": 2})
     with patch("unifi_core.network.managers.event_manager.time.time", return_value=NOW.timestamp()):
         page = await manager.get_alarms_page(limit=99)
-    assert page.total_reported == 25 and page.has_more is None
+    # The page count says a second page follows.
+    assert page.total_reported == 25 and page.has_more is True
     context = network_alarms_context(requested_window=WINDOW, collected_at=NOW, limit=99, page=page)
     source = normalize_network_page(page, context).source
     assert source.coverage.truncation is Truncation.TRUNCATED
@@ -127,6 +128,67 @@ async def test_empty_event_page_reporting_a_remote_total_is_not_empty() -> None:
     source, evidence = _events_evidence(page, limit=99)
     assert source.source.coverage.truncation is Truncation.TRUNCATED
     assert evidence.overall is OverallStatus.PARTIAL
+
+
+@pytest.mark.asyncio
+async def test_empty_event_page_with_more_pages_is_not_empty() -> None:
+    manager, page = await _events_page({"data": [], "total_page_count": 2}, limit=99)
+    # An empty page that claims more pages ends the read without proving the end.
+    assert page.rows == [] and page.has_more is True and len(manager.sent_requests) == 1
+    source, evidence = _events_evidence(page, limit=99)
+    assert source.source.coverage.truncation is Truncation.TRUNCATED
+    assert evidence.overall is OverallStatus.PARTIAL and not evidence.coverage_complete
+
+
+@pytest.mark.asyncio
+async def test_short_event_page_with_more_pages_reads_the_next_page() -> None:
+    first, second = dict(VALID, id="fixture-p0"), dict(VALID, id="fixture-p1")
+    manager, page = await _events_page(
+        {"data": [first], "total_page_count": 2}, {"data": [second], "total_page_count": 2}, limit=99
+    )
+    assert [row["id"] for row in page.rows] == ["fixture-p0", "fixture-p1"]
+    assert page.has_more is False and len(manager.sent_requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_full_final_event_page_proves_the_end_without_another_request() -> None:
+    rows = [dict(VALID, id=f"fixture-{i}") for i in range(3)]
+    manager, page = await _events_page({"data": rows, "total_page_count": 1}, limit=3)
+    assert page.has_more is False and len(manager.sent_requests) == 1
+    source, _ = _events_evidence(page, limit=3)
+    assert source.source.outcome is SourceOutcome.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_rows_past_the_reported_page_count_prove_nothing() -> None:
+    _, page = await _events_page({"data": [VALID], "total_page_count": 0}, limit=99)
+    assert page.has_more is None
+    source, _ = _events_evidence(page, limit=99)
+    assert source.source.coverage.truncation is Truncation.UNKNOWN
+
+
+async def _alarms_page(body, limit):
+    manager = sdk_event_manager(body)
+    with patch("unifi_core.network.managers.event_manager.time.time", return_value=NOW.timestamp()):
+        page = await manager.get_alarms_page(limit=limit)
+    context = network_alarms_context(requested_window=WINDOW, collected_at=NOW, limit=limit, page=page)
+    return page, normalize_network_page(page, context).source
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rows", [[], [VALID]])
+async def test_alarm_page_with_more_pages_is_truncated(rows) -> None:
+    page, source = await _alarms_page({"data": rows, "total_page_count": 2}, limit=99)
+    assert page.has_more is True
+    assert source.coverage.truncation is Truncation.TRUNCATED and not source.coverage.complete
+
+
+@pytest.mark.asyncio
+async def test_full_final_alarm_page_proves_the_end() -> None:
+    rows = [dict(VALID, id=f"fixture-{i}") for i in range(3)]
+    page, source = await _alarms_page({"data": rows, "total_page_count": 1}, limit=3)
+    assert page.has_more is False
+    assert source.coverage.truncation is Truncation.NOT_TRUNCATED
 
 
 @pytest.mark.asyncio

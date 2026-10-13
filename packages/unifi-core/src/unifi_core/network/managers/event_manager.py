@@ -91,6 +91,19 @@ def _v2_page(response: Any, endpoint: str) -> _V2Page:
     )
 
 
+def _v2_has_more(page: _V2Page, page_number: int, page_size: int) -> Optional[bool]:
+    """Whether pages follow ``page_number``: from the page count when reported, else from a short page.
+
+    ``None`` when nothing shows either, including rows on a page past the
+    reported count, which contradict it.
+    """
+    if page.total_pages is not None:
+        if page.rows and page_number >= page.total_pages:
+            return None
+        return page_number + 1 < page.total_pages
+    return False if 0 < page_size and len(page.rows) < page_size else None
+
+
 def _legacy_rows(response: Any, endpoint: str) -> List[Any]:
     """Return legacy ``data`` rows, or raise when the envelope carries none."""
     if isinstance(response, list):
@@ -792,7 +805,7 @@ class EventManager:
 
             rows: List[Any] = []
             total_elements: Optional[int] = None
-            exhausted = False
+            more: Optional[bool] = None
             while len(rows) < limit + page_offset:
                 payload["pageNumber"] = page_number
                 api_request = ApiRequestV2(
@@ -804,24 +817,18 @@ class EventManager:
                 page = _v2_page(response, "/system-log/all")
                 if total_elements is None:
                     total_elements = page.total_elements
-                if not page.rows:
-                    exhausted = True
-                    break
+                more = _v2_has_more(page, page_number, page_size)
                 rows.extend(page.rows)
                 page_number += 1
-
-                if page.total_pages is not None and page_number >= page.total_pages:
-                    exhausted = True
-                    break
-                if len(page.rows) < page_size:
-                    exhausted = True
+                # Read on only while the log shows more and still answers with rows.
+                if not page.rows or more is False or (more is None and page.total_pages is not None):
                     break
 
             returned = rows[page_offset : page_offset + limit]
             cut = len(rows) > page_offset + limit
             return SourcePage(
                 rows=returned,
-                has_more=True if cut else (False if exhausted and total_elements is None else None),
+                has_more=True if cut else more,
                 total_reported=total_elements,
                 offset=offset,
                 cap=limit,
@@ -922,10 +929,9 @@ class EventManager:
             page = _v2_page(response, "/system-log/critical")
             returned = page.rows[: max(limit, 0)]
             cut = len(page.rows) > len(returned)
-            short = 0 < page_size and len(page.rows) < page_size
             return SourcePage(
                 rows=returned,
-                has_more=True if cut else (False if short and page.total_elements is None else None),
+                has_more=True if cut else _v2_has_more(page, 0, page_size),
                 total_reported=page.total_elements,
                 offset=0,
                 cap=page_size,

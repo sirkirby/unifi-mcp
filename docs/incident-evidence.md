@@ -103,9 +103,9 @@ evidence = normalize_network_page(page, context)
 
 | Manager page | Exhaustion proof | Queried window |
 |--------------|------------------|----------------|
-| Network `get_events_page` (v2) | remote `total_element_count`, or an empty/short page | submitted `timestampFrom`/`timestampTo` |
+| Network `get_events_page` (v2) | the last page of `total_page_count`, remote `total_element_count`, or an empty/short page when no page count is reported | submitted `timestampFrom`/`timestampTo` |
 | Network `get_events_page` (legacy) | fewer rows than the `_limit` sent (at most 3000) | `[collected_at - within_hours, request_started_at]` floored to ms |
-| Network `get_alarms_page` (v2) | remote total, or a short page of at most 100 | submitted 30-day bounds |
+| Network `get_alarms_page` (v2) | a `total_page_count` of 1, remote total, or a short page of at most 100 when no page count is reported | submitted 30-day bounds |
 | Network `get_alarms_page` (legacy) | the full alarm list is the total | caller-supplied, else unknown |
 | Protect `list_events_page` | fewer raw rows than `limit` (the NVR reports no totals) | submitted `start`/`end`, unknown if either is omitted |
 | Protect `list_smart_detections_page` | fewer raw rows than `limit`, before confidence filtering | as above |
