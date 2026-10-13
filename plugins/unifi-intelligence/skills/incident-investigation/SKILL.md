@@ -116,8 +116,9 @@ Collect, before any read:
   a missing date, timezone or end; never assume the client's timezone. The
   window is half-open: `start <= t < end`.
 - **Cameras:** cameras the user wants as context, by exact Protect camera ID, or
-  "none". A camera named only by a description is resolved in step 3, or
-  dropped.
+  "none". A camera the user only describes is used only once the user gives its
+  ID or an exact identifier proves which camera it is; a name, description or
+  location never does. Otherwise leave it out and report it as unresolved.
 - **Budgets:** state the values you will pass. Defaults: `max_window_seconds`
   equal to the window length, `max_events=1000`, `max_calls=20`,
   `max_elapsed_ms=30000`, `max_records_returned=25`. A window longer than 86400
@@ -142,8 +143,14 @@ or `protect_tool_index(name="protect_get_incident_evidence", include_schemas=Tru
 to read a schema. A tool that is absent (for example in `meta_only` mode) is
 unavailable: apply [Dependencies](#dependencies).
 
+Note also whether the mapping lookups `protect_get_camera` and
+`unifi_get_client_details` are listed directly with `readOnlyHint: true`; that
+decides who establishes the mappings in step 3. In lazy mode,
+`unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later list them
+directly; earlier releases list them only in eager mode.
+
 Done when each evidence tool is confirmed listed and read-only, or recorded
-as unavailable.
+as unavailable, and each mapping lookup is recorded as listed or not.
 
 ### 3. Establish camera mappings
 
@@ -155,15 +162,34 @@ exactly two sources:
 - `product_inventory`: read-only lookups show an exact-identifier relationship.
   Read the camera's `mac` with `protect_get_camera(camera_id="<id>")`, then
   read that MAC as a Network client with
-  `unifi_get_client_details(mac_address="<camera mac>")`. The mapping holds
-  when the client's uplink identifier (`ap_mac` for wireless, `sw_mac`, plus
-  `sw_port` for a port, when wired) equals the incident device MAC. A client
-  record that states no uplink identifier gives no mapping. These are
-  current-state reads; say so, because the camera may have been elsewhere
-  during the window.
+  `unifi_get_client_details(mac_address="<camera mac>")`. Leave `summary` at
+  its default, `false`: the summary form drops `sw_mac` and `sw_port` and keeps
+  `ap_mac` only for wireless clients. The mapping holds when the client's
+  uplink identifier (`ap_mac` for wireless, `sw_mac`, plus `sw_port` for a
+  port, when wired) equals the incident device MAC. A client record that
+  states no uplink identifier gives no mapping. These are current-state reads;
+  say so, because the camera may have been elsewhere during the window.
 
-Use these lookups only when the tools are directly listed with
-`readOnlyHint: true` (eager mode). Otherwise ask the user for the mapping.
+When both lookups are listed directly with `readOnlyHint: true`, run them
+yourself for every requested camera ID before asking anything. In the default
+lazy mode, `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later
+list them directly beside the evidence tools; eager mode lists every tool.
+Camera and device listings are not listed directly in lazy mode, and they
+select candidates only; they prove no mapping. Call each lookup by its own
+name; never reach a lookup through `*_execute`.
+
+Ask the user for the mapping only when there is no proof:
+
+- **Lookups unavailable.** A lookup is not listed directly (for example in
+  `meta_only` mode, or lazy mode on a server release before those versions), or
+  its call fails.
+- **No relationship shown.** The lookups ran, but the client record states no
+  uplink identifier or names a different device.
+
+When you ask, say which case applies and what the lookups returned, and ask for
+the exact-identifier relationship; an answer becomes an `operator_input`
+mapping. A camera the user only described gets no lookup until the user gives
+its exact ID.
 
 Names, locations, nearby timestamps and "probably" never establish a mapping.
 A candidate is ambiguous when the user's description fits more than one camera

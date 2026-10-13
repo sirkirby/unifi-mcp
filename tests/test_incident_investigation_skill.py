@@ -26,6 +26,17 @@ VIEWS = ROOT / "tests/fixtures/incident_evidence/views"
 
 EVIDENCE_TOOLS = {"unifi_get_incident_evidence": "network", "protect_get_incident_evidence": "protect"}
 BUDGETS = {"max_window_seconds", "max_events", "max_calls", "max_elapsed_ms", "max_records_returned"}
+# Read-only camera<->device lookups the skill runs itself when the client lists them directly.
+MAPPING_LOOKUPS = ("protect_get_camera", "unifi_get_client_details")
+LOOKUP_RULES = (
+    "run them yourself for every requested camera ID before asking anything",
+    "never reach a lookup through `*_execute`",
+    "Ask the user for the mapping only when there is no proof",
+    "Leave `summary` at its default, `false`",
+    "`unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1 and later list them directly",
+)
+# A described camera needs its ID or exact-identifier proof; nothing resolves it from a description.
+CAMERA_INPUT_RULE = "a name, description or location never does"
 REPORT_SECTIONS = (
     "Incident and Inputs",
     "Coverage and Limitations",
@@ -109,6 +120,29 @@ def dependency_errors(text: str) -> list[str]:
         errors.append("Requires must be exactly network, protect")
     if not re.search(r"^Optional: worker$", text, re.M):
         errors.append("Optional must be exactly worker")
+    return errors
+
+
+def mapping_errors(text: str) -> list[str]:
+    """Step 3 maps cameras with the read-only lookups itself and asks only without proof."""
+    step = re.search(r"^### 3\. Establish camera mappings\n(.*?)(?=^### )", text, re.M | re.S)
+    checks = re.search(r"^### 2\. Check the evidence tools\n(.*?)(?=^### )", text, re.M | re.S)
+    if not step or not checks:
+        return ["missing mapping or tool-check step"]
+    errors = [
+        f"mapping step names {name}"
+        for name in sorted(set(re.findall(rf"\b{TOOL}\b", step[1])) - set(MAPPING_LOOKUPS) - DATA_NAMES)
+    ]
+    for name in MAPPING_LOOKUPS:
+        if not re.search(rf"`{name}\(", step[1]):
+            errors.append(f"mapping step does not call {name}")
+        if f"`{name}`" not in checks[1]:
+            errors.append(f"tool check does not record {name}")
+    errors.extend(f"missing mapping rule: {rule}" for rule in LOOKUP_RULES if rule not in flat(step[1]))
+    if CAMERA_INPUT_RULE not in flat(text) or "resolved in step 3" in flat(text):
+        errors.append("described cameras must need an ID or exact-identifier proof")
+    if re.search(r"unifi_get_client_details\([^)]*summary=True", text):
+        errors.append("mapping lookup must keep summary=false")
     return errors
 
 
@@ -416,6 +450,44 @@ def test_mutating_or_unknown_tool_is_rejected(addition: str) -> None:
 def test_missing_explicit_budget_is_rejected(budget: str) -> None:
     text = re.sub(rf"^\s*{budget}=.*\n", "", SKILL.read_text(), count=1, flags=re.M)
     assert any(f"omits {budget}" in error for error in evidence_call_errors(text, lazy_direct_tools()))
+
+
+def test_skill_maps_cameras_with_the_lookups_itself() -> None:
+    assert not mapping_errors(SKILL.read_text()), mapping_errors(SKILL.read_text())
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        (
+            "run them\nyourself for every requested camera ID before asking anything",
+            "ask the user",
+            "missing mapping rule",
+        ),
+        (
+            "Ask the user for the mapping only when there is no proof",
+            "Ask the user for the mapping",
+            "missing mapping rule",
+        ),
+        ('`unifi_get_client_details(mac_address="<camera mac>")`', "the client record", "does not call"),
+        (
+            "Read the camera's `mac` with",
+            "Read the camera's `mac` with `protect_list_cameras` or",
+            "names protect_list_cameras",
+        ),
+        ("a name, description or\n  location never does", "a name is enough", "described cameras"),
+        (
+            '`unifi_get_client_details(mac_address="<camera mac>")`',
+            '`unifi_get_client_details(mac_address="<camera mac>", summary=True)`',
+            "summary=false",
+        ),
+        ("Leave `summary` at\n  its default, `false`", "Pass `summary`", "missing mapping rule"),
+    ],
+)
+def test_mapping_step_mutations_are_rejected(old: str, new: str, expected: str) -> None:
+    text = SKILL.read_text()
+    assert old in text
+    assert any(expected in error for error in mapping_errors(text.replace(old, new, 1)))
 
 
 def test_evidence_tool_missing_from_lazy_mode_is_rejected() -> None:

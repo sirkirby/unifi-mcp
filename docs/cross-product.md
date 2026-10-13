@@ -34,11 +34,16 @@ and Protect servers; the relay is not used.
    `protect_get_incident_evidence` with `readOnlyHint: true`. The default lazy
    registration mode lists both directly, so a client restricted to read-only
    tools can call them; `meta_only` mode does not list them.
-3. **Mappings.** A camera is tied to the device only by an exact identifier: the
-   user states it, or read-only lookups show the camera's MAC as a Network client
-   on that device. Similar names and nearby timestamps never create a mapping. The
-   mapping is passed to both tools as `mappings` assertions; ambiguous or missing
-   mappings are reported and the camera is left out.
+3. **Mappings.** A camera is tied to the device only by an exact identifier. When
+   the client lists the read-only lookups `protect_get_camera` and
+   `unifi_get_client_details` directly (lazy mode does from
+   `unifi-network-mcp` 0.38.1 and `unifi-protect-mcp` 0.9.1), the skill runs
+   them itself to show the camera's MAC as a Network client on that device; it
+   asks the user only when the lookups are unavailable or show no such
+   relationship. A described camera is used only once the user gives its ID. Similar names and
+   nearby timestamps never create a mapping. The mapping is passed to both tools
+   as `mappings` assertions; ambiguous or missing mappings are reported and the
+   camera is left out.
 4. **Collection.** One call per evidence tool with the same window and explicit
    `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms` and
    `max_records_returned`. Each returns a bounded client view that fits in one
