@@ -144,7 +144,7 @@ execution, batch orchestration, and optional direct registration. See [MCP Disco
 
 | Mode | Initial `tools/list` behavior | Best fit |
 |------|-------------------------------|----------|
-| `lazy` (default) | Meta-tools plus `protect_load_tools`; domain tools load on demand | Production LLM clients with limited context |
+| `lazy` (default) | Meta-tools plus `protect_load_tools`, and the read-only `protect_get_incident_evidence` and `protect_get_camera`; other domain tools load on demand | Production LLM clients with limited context |
 | `eager` | Meta-tools plus all selected Protect tools registered directly | Standard MCP clients and dev consoles |
 | `meta_only` | Core meta-tools only; use `protect_execute` for operations | Maximum context control |
 

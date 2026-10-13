@@ -73,7 +73,8 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   deprecated, and any value makes the server log a deprecation notice. Allow the
   client to call only tools whose manifest annotation is `readOnlyHint: true`.
   In the default lazy registration mode a candidate lists its incident evidence
-  tools directly, and they are read-only. Other controller reads, such as the
+  tools, `protect_get_camera` and `unifi_get_client_details` directly, and they
+  are read-only. Other controller reads, such as the
   harmless read in step 5, go through `*_execute`, which is not read-only, so
   select eager registration through the setup skill's optional settings for
   those steps.

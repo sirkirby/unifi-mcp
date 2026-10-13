@@ -229,7 +229,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 ## Clients (12 tools)
 
 - `unifi_list_clients` — List connected clients
-- `unifi_get_client_details` — Get full client object by MAC
+- `unifi_get_client_details` — Get full client object by MAC. Listed directly in lazy mode so read-only clients can tie a camera's MAC to its uplink (`ap_mac`, or `sw_mac` and `sw_port`).
 - `unifi_lookup_by_ip` — Quick IP-to-hostname lookup
 - `unifi_list_blocked_clients` — List blocked clients
 - `unifi_block_client` — Block a client by MAC
@@ -312,7 +312,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 
 | Mode | Initial Tokens | Behavior |
 |------|---------------|----------|
-| `lazy` (default) | ~200 | Meta-tools and `unifi_get_incident_evidence` registered; others load on first use |
+| `lazy` (default) | ~200 | Meta-tools, `unifi_get_incident_evidence` and `unifi_get_client_details` registered; others load on first use |
 | `eager` | ~5,000 | All tools registered immediately |
 | `meta_only` | ~200 | Only meta-tools; use `unifi_execute` for everything |
 

@@ -20,7 +20,7 @@ In lazy mode, an additional meta-tool is available:
 ## Cameras (12 tools)
 
 - `protect_list_cameras` -- List all cameras with name, model, state, recording mode
-- `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ
+- `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ. Listed directly in lazy mode so read-only clients can read a camera's MAC.
 - `protect_get_snapshot` -- Fetch JPEG snapshot (base64 or resource reference)
 - `protect_get_camera_streams` -- RTSP/RTSPS stream URLs by channel (High/Medium/Low)
 - `protect_get_camera_analytics` -- Motion and smart detection analytics with timestamps

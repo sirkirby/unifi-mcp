@@ -453,8 +453,11 @@ The default lazy registration mode lists only meta-tools, and its route to a
 domain tool, `*_execute`, is not read-only, so a client that permits only
 `readOnlyHint: true` tools could reach no controller read. Each app's
 `LAZY_DIRECT_TOOLS` (in `categories.py`) names read-only tools that lazy mode
-registers directly at startup, so they are listed with their own annotations.
-Only the named tools register: the other tools in their modules are held and
+registers directly at startup, so they are listed with their own annotations:
+each product's evidence tool, plus the lookups that tie a camera to a Network
+device by exact identifier, `protect_get_camera` (the camera's MAC) and
+`unifi_get_client_details` (that MAC's uplink, `ap_mac` or `sw_mac` and
+`sw_port`). Only the named tools register: the other tools in their modules are held and
 register when first loaded, so `*_execute` and `*_tool_index` reach them as
 before. Startup fails if a named tool is not read-only or anything else
 registers. `meta_only` mode still lists only meta-tools, and eager mode lists
