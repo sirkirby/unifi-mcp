@@ -2,7 +2,7 @@
 
 Run with ``uv run --package unifi-core python
  tests/fixtures/incident_evidence/generate_combine.py [--check]``.
-The check mode is also exercised by the relay suite.
+The check mode also runs in ``tests/test_incident_combine_fixtures.py``.
 """
 
 from __future__ import annotations

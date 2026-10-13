@@ -93,20 +93,12 @@ The relay + worker architecture supports multiple locations. Each location runs 
 
 ## Incident evidence
 
-`unifi_location_timeline` consumes the product tools
-`unifi_get_incident_evidence` and `protect_get_incident_evidence`. Pass `start`
-and `end` with UTC offsets, optional exact `device_macs`/`camera_ids`, explicit
-`mappings` and `max_window_seconds`, `max_events`, `max_calls`, `max_elapsed_ms`.
-Network and Protect are selected by default; Access is reported unsupported.
-
-The relay asks each product tool for its full document, validates and combines
-them, and returns the combined set's client view in `data` by default:
-per-source coverage, including failed sources, and bounded record citations.
-`detail: "full"` returns the whole combined document; `max_records_returned`
-(1 to 50, default 25) sets the citations in the view. Inspect `overall`, `coverage_complete` and `budgets.exhausted`;
-an empty record list alone says nothing about source availability. The worker
-owns cloud-facing discovery and can select one location using `location_id`.
-Contradictory source IDs across locations fail combination. See the
+The cloud worker provides `unifi_location_timeline` when a relay is connected;
+the relay does not register or handle it. The relay forwards the product
+evidence tools, `unifi_get_incident_evidence` and
+`protect_get_incident_evidence`, like any other read-only tool, and the worker
+validates and combines what each location returns. Local product servers
+serve the evidence tools directly. See the
 [contract and combine rules](../../docs/incident-evidence.md#relay-and-worker-consumers).
 
 ## Architecture
@@ -121,7 +113,6 @@ The relay is a standalone Python package with no dependency on the MCP server pa
 | `forwarder.py` | Tool call routing to the correct local server |
 | `client.py` | WebSocket client with reconnection and auth |
 | `main.py` | Orchestrator wiring discovery, forwarding, and the client |
-| `location_timeline.py` | Validated evidence-tool consumer using Core combination |
 
 ## Development
 

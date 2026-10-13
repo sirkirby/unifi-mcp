@@ -2,8 +2,8 @@
 
 `unifi_core.incident_evidence` is the one versioned, closed model every incident
 surface uses to say what it observed, where each observation came from, and what
-it could not check. MCP tools, API routes, the relay and the worker consume it;
-none of them define their own evidence semantics.
+it could not check. MCP tools, API routes and the cloud worker consume it, and
+the relay forwards it; none of them define their own evidence semantics.
 
 | Piece | Location |
 |-------|----------|
@@ -321,7 +321,7 @@ valid document, not only for what valid requests collect:
   characters (`{}` when nothing was cut). An ASCII label the request rules
   accept is never cut; one with multi-byte characters is cut past 128 bytes
   (a label of 128 emoji to its first 32), and a document from elsewhere, such
-  as an older relay's, can carry a longer one.
+  as an older server's, can carry a longer one.
 - Request validation bounds the rest (at most 5 cameras, 20 assertions, and
   the label and identifier rules under [Inputs](#inputs)), so only
   records are fitted to what remains.
@@ -623,9 +623,12 @@ RFC 5737 documentation IPs and `fixture-` names. A test enforces this.
 
 ## Relay and worker consumers
 
-`unifi_location_timeline` returns the same standard success envelope as the
-product tools: `{"success": true, "data": <view or IncidentEvidence>}`. It
-calls each product tool with `detail: "full"`, combines the full documents,
+The cloud worker provides `unifi_location_timeline` when a relay is connected.
+The relay does not register or handle it: it forwards the product evidence
+tools like any other read-only tool, and local product servers serve those
+tools but not the timeline. The timeline returns the same standard success
+envelope as the product tools: `{"success": true, "data": <view or
+IncidentEvidence>}`. It calls each product tool with `detail: "full"`, combines the full documents,
 and returns the combined set's [client view](#client-view) unless its own
 `detail` is `full`; `max_records_returned` and `resume_after` apply to that
 view, which fits the same output budget. A product document from outside
@@ -637,8 +640,8 @@ transport envelope does not establish complete collection: inspect `overall`,
 `coverage_complete`, each source outcome and `budgets.exhausted`. Total source
 failure returns `overall: "failed"`, never an empty all-clear.
 
-Both consumers forward `start` and `end` with explicit UTC offsets to
-`unifi_get_incident_evidence` and `protect_get_incident_evidence`. They accept
+The worker forwards `start` and `end` with explicit UTC offsets to
+`unifi_get_incident_evidence` and `protect_get_incident_evidence`. It accepts
 `device_macs`, `camera_ids`, `mappings`, `location_id`, the four `max_*`
 budgets described above, `detail`, `max_records_returned` and `resume_after`,
 under the same bounds as the product tools: a count over its limit is refused
@@ -650,16 +653,14 @@ Use exact identifiers and explicit assertions to select evidence and mappings.
 
 Every source is returned in full, so a call reads at most 7 sources: as many as
 one location produces (Network, a Protect source per camera, at most 5, and
-Access). The relay serves one location, so it never reaches the limit. The
-worker counts selected locations × requested products, with Protect counted
+Access). The worker counts selected locations × requested products, with Protect counted
 once per camera ID, and refuses a call over the limit before any read, naming
 the counts; select one `location_id`, or fewer products or cameras. A failed
 location still contributes its sources, so the limit keeps the view of every
 allowed call within budget.
 
-The Python relay calls through `ToolForwarder` and validates each returned
-document with Core before calling `combine_incident_evidence`. The worker sends
-one evidence-tool call to each selected relay location and validates the
+The worker sends one evidence-tool call to each selected location through its
+relay and validates the
 committed JSON Schema plus all 13 semantic rules before combining. Missing tools,
 disconnected locations, transport failures, error envelopes and malformed
 responses become failed sources within the combined document. Error envelopes
@@ -689,8 +690,9 @@ must fail at its declared schema or semantic layer.
 
 `tests/fixtures/incident_evidence/combine/` contains Python-generated input/output
 pairs for order independence, deduplication, mapping union, conflicting source
-IDs, exhausted budgets and mixed failures. The relay suite checks generator
-drift and TypeScript compares canonical JSON with those outputs. TypeScript
+IDs, exhausted budgets and mixed failures.
+`tests/test_incident_combine_fixtures.py` checks generator drift against Core
+and TypeScript compares canonical JSON with those outputs. TypeScript
 also projects every golden case into the client view and compares canonical
 JSON with the golden views in `views/`:
 
@@ -708,5 +710,5 @@ golden case and combine fixtures cover integral floats, exponent thresholds,
 signed zero and large integers; integers needing exact precision beyond
 binary64 should be represented as strings.
 
-`unifi_core.event_timeline` still provides the legacy projection for other callers. The relay and worker timeline no longer return that projection,
+`unifi_core.event_timeline` still provides the legacy projection for other callers. The worker's timeline no longer returns that projection,
 which cannot carry coverage or failure state.

@@ -13,9 +13,10 @@ Each server runs independently. An agent connected to all three can call tools f
 ### Relay Mode
 
 The [relay sidecar](../packages/unifi-mcp-relay/) connects local servers to a
-Cloudflare Worker. Its `unifi_location_timeline` consumer collects bounded
-Network and Protect evidence through the same product evidence tools available
-to local clients. See the [incident evidence contract](incident-evidence.md).
+Cloudflare Worker. The worker provides `unifi_location_timeline` when a relay is
+connected: it collects bounded Network and Protect evidence through the same
+product evidence tools available to local clients, which the relay forwards.
+See the [incident evidence contract](incident-evidence.md#relay-and-worker-consumers).
 
 ## The Location Timeline Tool
 
