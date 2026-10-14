@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     # The settings-file startup report and setup mode require Shared 0.6.28.
-    "unifi-mcp-shared>=0.6.28,<0.7",
+    "unifi-mcp-shared>=0.6.33,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
