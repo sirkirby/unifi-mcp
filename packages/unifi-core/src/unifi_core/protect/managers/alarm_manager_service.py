@@ -20,7 +20,7 @@ falls back to the legacy automations API on both 403 and empty/4xx for this reas
 import logging
 from typing import Any, Dict, List
 
-from uiprotect.exceptions import NotAuthorized
+from uiprotect.exceptions import BadRequest, NotAuthorized
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
@@ -115,7 +115,15 @@ class AlarmManagerService:
     async def _profile_action(self, profile_id: str, action: str) -> Dict[str, Any]:
         if not profile_id:
             raise ValueError("profile_id is required")
-        data = await self._api_request(f"profiles/{profile_id}/actions/{action}", method="post")
+        try:
+            data = await self._api_request(f"profiles/{profile_id}/actions/{action}", method="post")
+        except BadRequest as exc:
+            # uiprotect formats "Request failed: <url> - Status: <n> - Reason: <reason>"; keep only
+            # the controller's reason so the console address never reaches tool output.
+            reason = str(exc).rsplit(" - Reason: ", 1)[-1].strip() if " - Reason: " in str(exc) else ""
+            raise ValueError(
+                f"The controller refused to {action} alarm profile {profile_id}: {reason or 'request rejected'}"
+            ) from None
         return data if isinstance(data, dict) else {}
 
     async def create_rule(self, body: Dict[str, Any]) -> Dict[str, Any]:

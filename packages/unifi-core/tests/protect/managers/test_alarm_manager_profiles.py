@@ -124,7 +124,6 @@ class TestLegacyProfileSelection:
         ({"featureFlags": {"useExternalAlarmManager": False}}, False),
         ({"featureFlags": {}}, False),
         ({}, False),
-        (None, False),
     ],
 )
 async def test_is_global_alarm_manager_reads_nvr_feature_flag(nvr, expected):
@@ -132,3 +131,23 @@ async def test_is_global_alarm_manager_reads_nvr_feature_flag(nvr, expected):
     cm.client.api_request = AsyncMock(return_value=nvr)
     assert await AlarmManager(cm).is_global_alarm_manager() is expected
     cm.client.api_request.assert_awaited_once_with("nvr", method="get")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "nvr",
+    [
+        None,
+        [],
+        {"featureFlags": None},
+        {"featureFlags": []},
+        {"featureFlags": {"useExternalAlarmManager": None}},
+        {"featureFlags": {"useExternalAlarmManager": "true"}},
+        {"featureFlags": {"useExternalAlarmManager": 1}},
+    ],
+)
+async def test_is_global_alarm_manager_rejects_malformed_payloads(nvr):
+    cm = MagicMock()
+    cm.client.api_request = AsyncMock(return_value=nvr)
+    with pytest.raises(ValueError, match="cannot determine the Alarm Manager mode"):
+        await AlarmManager(cm).is_global_alarm_manager()

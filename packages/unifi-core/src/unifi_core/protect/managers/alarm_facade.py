@@ -33,6 +33,9 @@ from unifi_core.protect.models.alarm_rules import (
 )
 from unifi_core.protect.models.alarms import profile_from_controller
 
+# v2 profile states that count as "already armed" for arm idempotence and as a successful arm.
+_V2_ARMED_STATES = frozenset({"armed", "arming"})
+_V2_DISARMED = "disarmed"
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
@@ -175,15 +178,18 @@ class AlarmRulesFacade:
 
         On a Global-mode console the legacy ``arm/enable`` endpoint returns 204
         without arming anything, so the v2 action is used whenever v2 serves the
-        profiles. The profile is re-read afterwards and the call only reports
-        success when the controller shows it ``arming`` or ``armed``.
+        profiles. The profile must report a state first (``disarmed`` to act,
+        ``armed``/``arming`` is a no-op, anything else is refused), and it is
+        re-read afterwards: the call only reports success when the controller
+        shows it ``arming`` or ``armed``.
         """
         profiles = await self._profiles_for_mutation()
         if profiles is None:
             return await self._legacy.arm(profile_id)
 
         target = self._resolve_v2_profile(profiles, profile_id)
-        if AlarmManager._is_armed_status(target.get("state")):
+        state = self._v2_state(target, "arm")
+        if state in _V2_ARMED_STATES:
             return {
                 "armed": True,
                 "profile_id": target["id"],
@@ -192,10 +198,15 @@ class AlarmRulesFacade:
                 "state_set_at": target.get("state_set_at"),
                 "already_armed": True,
             }
+        if state != _V2_DISARMED:
+            raise ValueError(
+                f"Alarm profile {target.get('name') or target['id']!r} is {state!r}; arm was not attempted. "
+                "Disarm it first."
+            )
 
         await self._service.arm_profile(target["id"])
         after = await self._v2_profile_after_action(target["id"])
-        if not AlarmManager._is_armed_status(after.get("state")):
+        if self._v2_state_or_none(after) not in _V2_ARMED_STATES:
             raise ValueError(
                 f"The controller accepted the arm request for profile {target.get('name') or target['id']!r} "
                 f"but it is still {after.get('state')!r}. Check for open sensors or arm it from the Protect app."
@@ -230,7 +241,9 @@ class AlarmRulesFacade:
     async def disarm(self, profile_id: str | None = None) -> dict[str, Any]:
         """Disarm one profile, or every active profile when ``profile_id`` is omitted.
 
-        Each disarm is verified by re-reading the profile from the controller.
+        Every profile considered must report a state (a missing state refuses the
+        request), and each disarm is verified by re-reading the profile: only an
+        explicit ``disarmed`` counts as success.
         """
         profiles = await self._profiles_for_mutation()
         if profiles is None:
@@ -244,7 +257,7 @@ class AlarmRulesFacade:
         for target in targets:
             await self._service.disarm_profile(target["id"])
             after = await self._v2_profile_after_action(target["id"])
-            if AlarmManager._is_armed_status(after.get("state")):
+            if self._v2_state_or_none(after) != _V2_DISARMED:
                 raise ValueError(
                     f"The controller accepted the disarm request for profile "
                     f"{target.get('name') or target['id']!r} but it is still {after.get('state')!r}."
@@ -312,8 +325,31 @@ class AlarmRulesFacade:
         return None
 
     @staticmethod
-    def _active_v2_profiles(profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [p for p in profiles if AlarmManager._is_armed_status(p.get("state"))]
+    def _v2_state_or_none(profile: dict[str, Any]) -> str | None:
+        state = profile.get("state")
+        if not isinstance(state, str) or not state.strip():
+            return None
+        return state.strip().lower()
+
+    @classmethod
+    def _v2_state(cls, profile: dict[str, Any], action: str) -> str:
+        """Return the profile's state, refusing to act when the controller did not report one.
+
+        Matches :meth:`get_arm_state`, which rejects a missing v2 state instead of
+        reading it as disarmed.
+        """
+        state = cls._v2_state_or_none(profile)
+        if state is None:
+            raise ValueError(
+                f"The controller returned no state for alarm profile {profile.get('name') or profile.get('id')!r}; "
+                f"{action} was not attempted. Retry once the profile state is available."
+            )
+        return state
+
+    @classmethod
+    def _active_v2_profiles(cls, profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Profiles in any state other than ``disarmed``; a missing state raises."""
+        return [p for p in profiles if cls._v2_state(p, "the request") != _V2_DISARMED]
 
     @staticmethod
     def _resolve_v2_profile(profiles: list[dict[str, Any]], profile_id: str | None) -> dict[str, Any]:
@@ -328,6 +364,9 @@ class AlarmRulesFacade:
             by_name = [p for p in profiles if (p.get("name") or "").strip().lower() == wanted.lower()]
             if len(by_name) == 1:
                 return by_name[0]
+            if len(by_name) > 1:
+                ids = ", ".join(str(p.get("id")) for p in by_name)
+                raise ValueError(f"Several alarm profiles are named {profile_id!r}; pass the profile id instead: {ids}")
             raise UniFiNotFoundError("alarm profile", profile_id)
         if len(profiles) == 1:
             return profiles[0]
@@ -337,8 +376,8 @@ class AlarmRulesFacade:
     def _disarm_targets(self, profiles: list[dict[str, Any]], profile_id: str | None) -> list[dict[str, Any]]:
         if profile_id:
             target = self._resolve_v2_profile(profiles, profile_id)
-            return [target] if AlarmManager._is_armed_status(target.get("state")) else []
-        return self._active_v2_profiles(profiles)
+            return [] if self._v2_state(target, "disarm") == _V2_DISARMED else [target]
+        return [p for p in profiles if self._v2_state(p, "disarm") != _V2_DISARMED]
 
     async def _v2_profile_after_action(self, profile_id: str) -> dict[str, Any]:
         raw = await self._service.list_profiles()

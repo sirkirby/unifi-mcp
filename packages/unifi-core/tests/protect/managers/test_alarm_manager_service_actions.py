@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from uiprotect.exceptions import NotAuthorized
+from uiprotect.exceptions import BadRequest, NotAuthorized
 from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError, AlarmManagerService
 
 _PROFILE_ID = "019e473a-0000-7000-8000-000000000002"
@@ -56,3 +56,18 @@ async def test_profile_action_maps_forbidden_to_permission_error():
     service, _ = _service(error=NotAuthorized("forbidden"))
     with pytest.raises(AlarmManagerPermissionError):
         await service.disarm_profile(_PROFILE_ID)
+
+
+@pytest.mark.asyncio
+async def test_profile_action_bad_request_surfaces_reason_without_url():
+    error = BadRequest(
+        f"Request failed: https://192.0.2.10/api/v2/alarms/profiles/{_PROFILE_ID}/actions/arm - Status: 400 - "
+        "Reason: Cannot arm alarm profile with no alarms assigned"
+    )
+    service, _ = _service(error=error)
+    with pytest.raises(ValueError) as exc:
+        await service.arm_profile(_PROFILE_ID)
+    message = str(exc.value)
+    assert "Cannot arm alarm profile with no alarms assigned" in message
+    assert "192.0.2.10" not in message and "https://" not in message
+    assert exc.value.__cause__ is None
