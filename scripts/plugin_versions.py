@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent plugin SemVer, release pin writebacks, and merge-base admission.
+"""Independent plugin SemVer, release pin writebacks, changelog entries and merge-base admission.
 
 Uses only the standard library so the release workflow and local/PR guard run
 exactly the same logic without installing the workspace.
@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 SEMVER = re.compile(
@@ -26,6 +27,9 @@ MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
 CODEX_MCP = ".mcp.codex.json"
 MARKETPLACES = (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json")
 PRODUCTS = ("network", "protect", "access")
+CHANGELOG = "CHANGELOG.md"
+CHANGELOG_MARKER = "<!-- New entries go below this line, newest first; the release writeback inserts here. -->"
+REPO_URL = "https://github.com/sirkirby/unifi-mcp"
 
 
 @dataclass(frozen=True)
@@ -159,26 +163,50 @@ def check(root: Path, base_ref: str, releasing: str | None = None) -> None:
         if not any(path.startswith(f"plugins/{name}/") for path in changed):
             continue
         baseline_files = git(root, "ls-tree", "-r", "--name-only", base, "--", f"plugins/{name}/").splitlines()
-        if not baseline_files:  # New plugins have no prior version to exceed.
-            continue
-        manifest = next((f"plugins/{name}/{m}" for m in MANIFESTS if f"plugins/{name}/{m}" in baseline_files), None)
-        if manifest is None:
-            raise ValueError(f"{name}: base plugin has no version manifest")
-        old = json.loads(git(root, "show", f"{base}:{manifest}"))["version"]
-        if Version.parse(version).key <= Version.parse(old).key:
-            raise ValueError(f"{name}: changed plugin requires version strictly greater than {old}; got {version}")
+        if baseline_files:  # New plugins have no prior version to exceed.
+            manifest = next((f"plugins/{name}/{m}" for m in MANIFESTS if f"plugins/{name}/{m}" in baseline_files), None)
+            if manifest is None:
+                raise ValueError(f"{name}: base plugin has no version manifest")
+            old = json.loads(git(root, "show", f"{base}:{manifest}"))["version"]
+            if Version.parse(version).key <= Version.parse(old).key:
+                raise ValueError(f"{name}: changed plugin requires version strictly greater than {old}; got {version}")
+        if not changelog_has(root, name, version):
+            raise ValueError(f"{name}: {CHANGELOG} has no entry heading naming {name} {version}")
     print(f"Plugin versions and release pins pass against merge base {base}")
 
 
-def update_pin(bundle: Path, new_pin: str) -> bool:
-    """Update the inline Claude and bundled Codex pins and manifest versions; retrying the same pin is a no-op."""
+def changelog_has(root: Path, name: str, version: str) -> bool:
+    path = root / CHANGELOG
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    entry = rf"^## .*(?<![\w-]){re.escape(name)} {re.escape(version)}(?![\w.+-])"
+    return re.search(entry, text, re.MULTILINE) is not None
+
+
+def record_pin_moves(root: Path, moves: list[tuple[str, str, str, str]]) -> None:
+    """Insert one changelog entry for the plugins a writeback bumped: (plugin, version, package, pin)."""
+    path = root / CHANGELOG
+    text = path.read_text(encoding="utf-8") if path.is_file() else f"# Changelog\n\n{CHANGELOG_MARKER}\n"
+    if CHANGELOG_MARKER not in text:
+        raise ValueError(f"{CHANGELOG}: missing the entry marker {CHANGELOG_MARKER}")
+    plugins = ", ".join(f"{name} {version}" for name, version, _, _ in moves)
+    pins = [f"`{package}` [{pin}]({REPO_URL}/releases/tag/{pin_tag(package, pin)})" for _, _, package, pin in moves]
+    pinned = pins[0] if len(pins) == 1 else f"{', '.join(pins[:-1])} and {pins[-1]}"
+    entry = f"## {datetime.now(UTC).date().isoformat()} — {plugins}\n\n- Pins {pinned}.\n"
+    path.write_text(text.replace(CHANGELOG_MARKER, f"{CHANGELOG_MARKER}\n\n{entry}", 1), encoding="utf-8")
+
+
+def update_pin(bundle: Path, new_pin: str) -> str | None:
+    """Update the inline Claude and bundled Codex pins and manifest versions; retrying the same pin is a no-op.
+
+    Returns the new plugin version, or None when the pin was already current.
+    """
     plugin, pins = plugin_state(bundle)
     package = f"{bundle.name}-mcp"
     if set(pins) != {package}:
         raise ValueError(f"{bundle.name}: expected only {package} pin")
     old_pin = pins[package]
     if new_pin == old_pin:
-        return False
+        return None
     version = next_version(plugin, old_pin, new_pin)
     for filename in (*MANIFESTS, CODEX_MCP):
         path = bundle / filename
@@ -195,7 +223,7 @@ def update_pin(bundle: Path, new_pin: str) -> bool:
             ]
         save(path, data)
     print(f"{bundle.name}: plugin {plugin} -> {version}; server {old_pin} -> {new_pin}")
-    return True
+    return version
 
 
 def latest_tag(tags: set[str], product: str) -> str | None:
@@ -212,6 +240,7 @@ def sync(root: Path, releasing: str | None = None) -> None:
     tags = set(git(root, "tag", "--list").splitlines())
     if releasing:
         tags.add(releasing)
+    moves = []
     for product in PRODUCTS:
         version = latest_tag(tags, product)
         if version is None:
@@ -221,12 +250,15 @@ def sync(root: Path, releasing: str | None = None) -> None:
         current = pins[f"unifi-{product}-mcp"]
         if Version.parse(version).key < Version.parse(current).key:
             raise ValueError(f"{product}: latest release tag {version} is behind pin {current}")
-        update_pin(bundle, version)
+        if plugin := update_pin(bundle, version):
+            moves.append((bundle.name, plugin, f"unifi-{product}-mcp", version))
         subprocess.run(
             [sys.executable, str(root / "scripts/generate_server_manifest.py"), "--app", product, "--version", version],
             cwd=root,
             check=True,
         )
+    if moves:
+        record_pin_moves(root, moves)
     # Plugin tool references and counts follow the pins just moved.
     subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parent / "generate_skill_references.py"), "--root", str(root)],
