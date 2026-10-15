@@ -758,7 +758,7 @@
       "input_schema": {
         "properties": {
           "profile_id": {
-            "description": "Arm profile id or name as returned by protect_alarm_list_profiles. Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile).",
+            "description": "Arm profile id from protect_alarm_list_profiles (Global-mode consoles also accept the profile name; legacy consoles need the id). Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile). Must not be blank.",
             "type": "string"
           }
         },
@@ -824,7 +824,7 @@
       "input_schema": {
         "properties": {
           "profile_id": {
-            "description": "Arm profile id or name to disarm. Omit to disarm every active profile (legacy consoles disarm system-wide and ignore this).",
+            "description": "Arm profile id to disarm (Global-mode consoles also accept the profile name). Omit to disarm every active profile; must not be blank. Legacy consoles disarm system-wide and ignore this.",
             "type": "string"
           }
         },

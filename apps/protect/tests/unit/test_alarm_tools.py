@@ -227,3 +227,52 @@ async def test_disarm_preview_delegates_to_alarm_facade():
     facade.disarm.assert_not_called()
     assert result["success"] is True
     assert result["requires_confirmation"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+@pytest.mark.parametrize("confirm", [True, False])
+async def test_arm_rejects_blank_profile_id(blank, confirm):
+    from unifi_protect_mcp.tools.alarm import protect_alarm_arm
+
+    facade = MagicMock()
+    facade.arm = AsyncMock()
+    facade.preview_arm = AsyncMock()
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_arm(profile_id=blank, confirm=confirm)
+
+    assert result["success"] is False
+    assert "must not be blank" in result["error"]
+    facade.arm.assert_not_called()
+    facade.preview_arm.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+@pytest.mark.parametrize("confirm", [True, False])
+async def test_disarm_rejects_blank_profile_id_instead_of_disarming_everything(blank, confirm):
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock()
+    facade.preview_disarm = AsyncMock()
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm(profile_id=blank, confirm=confirm)
+
+    assert result["success"] is False
+    assert "must not be blank" in result["error"]
+    facade.disarm.assert_not_called()
+    facade.preview_disarm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_disarm_without_profile_id_still_targets_every_active_profile():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock(return_value={"armed": False, "profiles": []})
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm(confirm=True)
+
+    facade.disarm.assert_awaited_once_with(None)
+    assert result["success"] is True
