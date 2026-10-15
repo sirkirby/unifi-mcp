@@ -91,6 +91,12 @@ async def test_profile_action_keeps_a_reason_that_contains_the_delimiter():
         "Cannot arm profile on https://192.0.2.10:7443; no alarms assigned",
         "Console 192.0.2.10 refused the request",
         "Console [2001:db8::10] refused the request",
+        "Console 2001:db8::10 refused the request",
+        "Console [2001:db8::10%eth0] refused the request",
+        "Console fe80::1%eth0 refused the request",
+        "Console 192.0.2.10:7443 refused the request.",
+        "Console [2001:db8::10]:7443 refused the request",
+        "Console nvr.example.internal refused the request",
         "",
         "   ",
     ],
@@ -101,11 +107,34 @@ async def test_profile_action_drops_a_reason_with_an_address(reason):
         f"Reason: {reason}"
     )
     service, _ = _service(error=error)
+    service._cm.host = "nvr.example.internal"
     with pytest.raises(ValueError) as exc:
         await service.arm_profile(_PROFILE_ID)
     message = str(exc.value)
     assert message.endswith(": request rejected")
-    assert "192.0.2.10" not in message and "2001:db8" not in message and "://" not in message
+    for address in ("192.0.2.10", "2001:db8", "fe80::1", "nvr.example.internal", "://"):
+        assert address not in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Cannot arm alarm profile with no alarms assigned",
+        "Profile is breached: 2 sensors open",
+        "Activation delay must be between 0 and 300 seconds.",
+    ],
+)
+async def test_profile_action_keeps_an_ordinary_reason(reason):
+    error = BadRequest(
+        f"Request failed: https://192.0.2.10/api/v2/alarms/profiles/{_PROFILE_ID}/actions/arm - Status: 400 - "
+        f"Reason: {reason}"
+    )
+    service, _ = _service(error=error)
+    service._cm.host = "nvr.example.internal"
+    with pytest.raises(ValueError) as exc:
+        await service.arm_profile(_PROFILE_ID)
+    assert str(exc.value).endswith(f": {reason}")
 
 
 @pytest.mark.asyncio
