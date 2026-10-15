@@ -18,9 +18,10 @@ falls back to the legacy automations API on both 403 and empty/4xx for this reas
 """
 
 import logging
+import re
 from typing import Any, Dict, List
 
-from uiprotect.exceptions import BadRequest, NotAuthorized
+from uiprotect.exceptions import BadRequest, NotAuthorized, PublicOnlyModeError
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
@@ -38,6 +39,23 @@ _PERMISSION_HINT = (
 
 class AlarmManagerPermissionError(PermissionError):
     """Raised when the configured account lacks SuperAdmin access to /api/v2/alarms/."""
+
+
+# A URL or an IPv4/bracketed IPv6 address inside the controller's own reason text.
+_ADDRESS_RE = re.compile(r"[a-z][a-z0-9+.-]*://|\b\d{1,3}(?:\.\d{1,3}){3}\b|\[[0-9a-f:]*:[0-9a-f:.]*\]", re.IGNORECASE)
+
+
+def _refusal_reason(error: BadRequest) -> str:
+    """The controller's reason from a uiprotect request error, or fixed text when it carries an address.
+
+    uiprotect formats "Request failed: <url> - Status: <n> - Reason: <reason>", so the reason starts
+    after the first delimiter and the request URL never reaches the caller.
+    """
+    _, sep, reason = str(error).partition(" - Reason: ")
+    reason = reason.strip() if sep else ""
+    if not reason or _ADDRESS_RE.search(reason):
+        return "request rejected"
+    return reason
 
 
 class AlarmManagerService:
@@ -117,12 +135,12 @@ class AlarmManagerService:
             raise ValueError("profile_id is required")
         try:
             data = await self._api_request(f"profiles/{profile_id}/actions/{action}", method="post")
+        except PublicOnlyModeError:
+            # Raised locally before any request; its fixed text explains the private session it needs.
+            raise
         except BadRequest as exc:
-            # uiprotect formats "Request failed: <url> - Status: <n> - Reason: <reason>"; keep only
-            # the controller's reason so the console address never reaches tool output.
-            reason = str(exc).rsplit(" - Reason: ", 1)[-1].strip() if " - Reason: " in str(exc) else ""
             raise ValueError(
-                f"The controller refused to {action} alarm profile {profile_id}: {reason or 'request rejected'}"
+                f"The controller refused to {action} alarm profile {profile_id}: {_refusal_reason(exc)}"
             ) from None
         return data if isinstance(data, dict) else {}
 
