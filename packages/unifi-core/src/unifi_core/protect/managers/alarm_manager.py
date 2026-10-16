@@ -60,11 +60,9 @@ logger = logging.getLogger(__name__)
 # Values of ``nvr.armMode.status`` that mean "not armed".
 _DISARMED_STATUSES = {"disabled", "disarmed", "off", "inactive"}
 _LEGACY_PROFILE_ID_NOT_FOUND_ERROR = (
-    "The legacy Protect arm endpoint did not recognize this profile_id. Alarm Manager "
-    "v2 ids returned by protect_alarm_list_profiles are not accepted by that endpoint; "
-    "use a profile marked arm_compatible=true, or omit profile_id to use the currently "
-    "selected legacy profile. A v2 arming endpoint is not implemented because its "
-    "contract has not been verified."
+    "The legacy Protect arm endpoint did not recognize this profile_id. On this console, "
+    "pass a legacy profile id from protect_alarm_list_profiles (id_family legacy_arm), "
+    "or omit profile_id to use the currently selected legacy profile."
 )
 
 

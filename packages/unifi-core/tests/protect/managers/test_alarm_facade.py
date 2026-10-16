@@ -184,7 +184,7 @@ async def test_list_profiles_prefers_alarm_manager_profiles_and_reports_complete
             "state": "armed",
             "state_set_at": "2026-09-04T09:00:00Z",
             "id_family": "alarm_manager_v2",
-            "arm_compatible": False,
+            "arm_compatible": True,
         }
     ]
 

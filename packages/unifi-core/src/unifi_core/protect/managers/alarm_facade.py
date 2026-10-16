@@ -39,6 +39,18 @@ _V2_DISARMED = "disarmed"
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
+def _reject_blank_profile_id(profile_id: str | None) -> None:
+    """Refuse an explicit empty or whitespace-only ``profile_id``.
+
+    ``None`` means omitted (the single profile for arm, every active profile for
+    disarm); a blank string must not fall through to that broader target.
+    """
+    if profile_id is not None and not profile_id.strip():
+        raise ValueError(
+            "profile_id must not be blank; pass a profile id from protect_alarm_list_profiles, or omit it."
+        )
+
+
 class AlarmRulesFacade:
     """Selects the best available alarm backend and returns canonical rules."""
 
@@ -97,7 +109,7 @@ class AlarmRulesFacade:
                 if not isinstance(profile, dict):
                     continue
                 item = profile_from_controller(
-                    {**profile, "id_family": "alarm_manager_v2", "arm_compatible": False}
+                    {**profile, "id_family": "alarm_manager_v2", "arm_compatible": True}
                 ).model_dump(exclude_none=True)
                 shaped.append(item)
             return shaped, True
@@ -157,6 +169,7 @@ class AlarmRulesFacade:
 
     async def preview_arm(self, profile_id: str | None = None) -> dict[str, Any]:
         """Return current + proposed state for an arm preview, v2-first."""
+        _reject_blank_profile_id(profile_id)
         profiles = await self._profiles_for_mutation()
         if profiles is None:
             return await self._legacy.preview_arm(profile_id)
@@ -183,6 +196,7 @@ class AlarmRulesFacade:
         re-read afterwards: the call only reports success when the controller
         shows it ``arming`` or ``armed``.
         """
+        _reject_blank_profile_id(profile_id)
         profiles = await self._profiles_for_mutation()
         if profiles is None:
             return await self._legacy.arm(profile_id)
@@ -222,6 +236,7 @@ class AlarmRulesFacade:
 
     async def preview_disarm(self, profile_id: str | None = None) -> dict[str, Any]:
         """Return current state for a disarm preview, v2-first."""
+        _reject_blank_profile_id(profile_id)
         profiles = await self._profiles_for_mutation()
         if profiles is None:
             return await self._legacy.preview_disarm()
@@ -245,6 +260,7 @@ class AlarmRulesFacade:
         request), and each disarm is verified by re-reading the profile: only an
         explicit ``disarmed`` counts as success.
         """
+        _reject_blank_profile_id(profile_id)
         profiles = await self._profiles_for_mutation()
         if profiles is None:
             return await self._legacy.disarm()
@@ -300,7 +316,7 @@ class AlarmRulesFacade:
             for profile in raw:
                 if not isinstance(profile, dict):
                     continue
-                item = profile_from_controller({**profile, "id_family": "alarm_manager_v2", "arm_compatible": False})
+                item = profile_from_controller({**profile, "id_family": "alarm_manager_v2", "arm_compatible": True})
                 shaped.append(item.model_dump(exclude_none=True))
             return shaped
 

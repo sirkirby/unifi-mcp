@@ -194,3 +194,46 @@ async def test_ambiguous_profile_name_asks_for_the_id():
         await facade.arm("ARM NIGHT")
     assert _NIGHT_ID in str(exc.value) and _ALL_ID in str(exc.value)
     facade._service.arm_profile.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Blank profile ids are refused, never widened to the omitted-id target
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+@pytest.mark.parametrize("operation", ["arm", "disarm", "preview_arm", "preview_disarm"])
+async def test_blank_profile_id_is_refused_before_any_backend_call(operation, blank):
+    armed = {**_NIGHT, "state": "armed"}
+    facade = _facade([armed, {**_ALL, "state": "armed"}])
+
+    with pytest.raises(ValueError, match="must not be blank"):
+        await getattr(facade, operation)(blank)
+
+    facade._service.list_profiles.assert_not_called()
+    facade._service.arm_profile.assert_not_called()
+    facade._service.disarm_profile.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["arm", "disarm", "preview_arm", "preview_disarm"])
+async def test_blank_profile_id_is_refused_on_legacy_consoles(operation):
+    facade = _facade_with_real_mode_reader({})
+
+    with pytest.raises(ValueError, match="must not be blank"):
+        await getattr(facade, operation)("  ")
+
+    getattr(facade._legacy, operation).assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_omitted_profile_id_still_disarms_every_active_profile():
+    armed = [{**_NIGHT, "state": "armed"}, {**_ALL, "state": "armed"}]
+    after = [{**_NIGHT, "state": "disarmed"}, {**_ALL, "state": "disarmed"}]
+    facade = _facade(armed, after)
+
+    result = await facade.disarm(None)
+
+    assert result["armed"] is False
+    assert {p["profile_id"] for p in result["profiles"]} == {_NIGHT_ID, _ALL_ID}
