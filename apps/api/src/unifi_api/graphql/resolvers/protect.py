@@ -1308,9 +1308,9 @@ class ProtectQuery:
         permission_classes=[IsRead],
         description=(
             "List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each "
-            "profile's state and state_set_at timestamp. Alarm Manager v2 profile "
-            "IDs are scoped to this read family; use arm_compatible to determine "
-            "whether a profile can be passed to legacy arm actions."
+            "profile's state and state_set_at timestamp. Use arm_compatible to "
+            "determine whether a profile id can be passed to the arm and disarm "
+            "actions."
         ),
     )
     async def alarm_profiles(
