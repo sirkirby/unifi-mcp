@@ -171,12 +171,14 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     this.locationTools.clear();
     this.toolToLocations.clear();
 
-    // Rebuild WebSocket map from hibernation-managed sockets
+    // Rebuild WebSocket map from hibernation-managed sockets.
+    // getWebSockets() documents no iteration order, so a socket that was
+    // replaced must be skipped rather than winning by enumeration order.
     this.locationWebSockets.clear();
     for (const ws of this.ctx.getWebSockets()) {
       try {
-        const attachment = ws.deserializeAttachment() as { locationId?: string } | null;
-        if (attachment?.locationId) {
+        const attachment = ws.deserializeAttachment() as { locationId?: string; superseded?: boolean } | null;
+        if (attachment?.locationId && !attachment.superseded) {
           this.locationWebSockets.set(attachment.locationId, ws);
         }
       } catch {
@@ -558,11 +560,16 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       );
     }
 
+    // Attach location_id to the WebSocket before rebuilding so this socket is
+    // identifiable and can be preferred over any superseded connection.
+    ws.serializeAttachment({ locationId, locationName: msg.location_name || locationName });
+
+    // Retire any other socket still bound to this location so a later
+    // in-memory rebuild cannot route calls back to a stale connection.
+    this.retireSupersededSockets(locationId, ws);
+
     // Rebuild in-memory state
     this.rebuildInMemoryState();
-
-    // Attach location_id to the WebSocket for later identification
-    ws.serializeAttachment({ locationId, locationName: msg.location_name || locationName });
 
     // Cache the WebSocket for O(1) lookup
     this.locationWebSockets.set(locationId, ws);
@@ -651,12 +658,44 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       const attachment = ws.deserializeAttachment() as { locationId?: string } | null;
       if (attachment?.locationId) {
         // Remove from WebSocket cache -- location is no longer routable.
+        // Only clear the binding when this socket is still the active route:
+        // a superseded connection closing late must not remove its replacement.
         // In-memory tool state stays (tools are still in SQLite) so the
         // location will become routable again when it reconnects.
-        this.locationWebSockets.delete(attachment.locationId);
+        if (this.locationWebSockets.get(attachment.locationId) === ws) {
+          this.locationWebSockets.delete(attachment.locationId);
+        }
       }
     } catch {
       // No attachment, nothing to clean up
+    }
+  }
+
+  /**
+   * Mark any previously registered socket for a location as superseded and
+   * close it. The attachment is durable across hibernation, so a later
+   * rebuildInMemoryState() will not resurrect the stale connection as the
+   * active route.
+   */
+  private retireSupersededSockets(locationId: string, current: WebSocket): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === current) {
+        continue;
+      }
+      try {
+        const attachment = ws.deserializeAttachment() as { locationId?: string } | null;
+        if (attachment?.locationId !== locationId) {
+          continue;
+        }
+        ws.serializeAttachment({ ...attachment, locationId, superseded: true });
+        try {
+          ws.close(1000, "superseded by a newer registration");
+        } catch {
+          // Socket may already be closing.
+        }
+      } catch {
+        // No attachment, not a registered socket for this location.
+      }
     }
   }
 

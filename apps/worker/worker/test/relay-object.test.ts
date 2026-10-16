@@ -20,6 +20,12 @@ import type { ToolInfo, AggregatedResponse } from "../src/types";
 import { handleMcpRequest, type RelayStub } from "../src/mcp-handler";
 import { buildToolIndexResponse, toolInputSchema, toolServerOrigin } from "../src/tool-info";
 
+// The lifecycle tests below instantiate the real RelayObject with a fake
+// Durable Object context, so mock the Cloudflare runtime module the class
+// imports. No network or real Cloudflare infrastructure is used.
+vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
+import { RelayObject } from "../src/relay-object";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -532,5 +538,144 @@ describe("meta-tool definitions", () => {
 
     expect(batch).toBeDefined();
     expect(batch!.annotations?.readOnlyHint).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RelayObject WebSocket lifecycle
+//
+// These tests exercise the real class methods (handleRegister,
+// handleCatalogUpdate, rebuildInMemoryState, cleanupWebSocket,
+// findWebSocketForLocation) against a minimal in-memory fake of the Durable
+// Object state. getWebSockets() documents no iteration order, so the fixture
+// deliberately returns the newer socket before the superseded one.
+// ---------------------------------------------------------------------------
+
+interface SocketAttachment {
+  locationId?: string;
+  locationName?: string;
+  superseded?: boolean;
+}
+
+class FakeSocket {
+  attachment: SocketAttachment;
+  readyState: number;
+  closed = false;
+  sent: unknown[] = [];
+
+  constructor(
+    public name: string,
+    attachment: SocketAttachment,
+    readyState = 1,
+  ) {
+    this.attachment = attachment;
+    this.readyState = readyState;
+  }
+
+  deserializeAttachment(): SocketAttachment {
+    return this.attachment;
+  }
+
+  serializeAttachment(value: unknown): void {
+    this.attachment = value as SocketAttachment;
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = 2;
+  }
+
+  send(data: string): void {
+    this.sent.push(JSON.parse(data));
+  }
+}
+
+function createLifecycleRelay(sockets: FakeSocket[]): any {
+  const relay = Object.create(RelayObject.prototype) as any;
+  relay.locationTools = new Map();
+  relay.toolToLocations = new Map();
+  relay.locationWebSockets = new Map();
+  relay.pending = new Map();
+  relay.stateRebuilt = true;
+  relay.ctx = {
+    getWebSockets: () => sockets,
+    storage: {
+      sql: {
+        exec: (query: string) => ({
+          toArray: () =>
+            query.includes("WHERE relay_token_hash = ?")
+              ? [{ location_id: "A", location_name: "A", relay_token_hash: "hash" }]
+              : [],
+        }),
+      },
+    },
+  };
+  return relay;
+}
+
+async function registerSocket(relay: any, ws: FakeSocket, locationName = "A"): Promise<void> {
+  await relay.handleRegister(ws, {
+    type: "register",
+    protocol_version: 1,
+    token: "synthetic-token",
+    location_name: locationName,
+    tools: [],
+  });
+}
+
+describe("RelayObject WebSocket lifecycle", () => {
+  it("keeps the newest registration when another location rebuilds the catalog", async () => {
+    const fresh = new FakeSocket("newer-A", { locationId: "A" });
+    const older = new FakeSocket("older-A", { locationId: "A" });
+    const other = new FakeSocket("B", { locationId: "B" });
+    const relay = createLifecycleRelay([fresh, older, other]);
+
+    await registerSocket(relay, fresh);
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
+
+    relay.handleCatalogUpdate(other, { type: "catalog_update", tools: [] });
+
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
+  });
+
+  it("keeps the replacement route when a superseded socket closes late", async () => {
+    const fresh = new FakeSocket("newer-A", { locationId: "A" });
+    const older = new FakeSocket("older-A", { locationId: "A" });
+    const relay = createLifecycleRelay([fresh, older]);
+
+    await registerSocket(relay, fresh);
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
+
+    // A close/error event for the superseded connection arrives afterwards.
+    older.readyState = 3;
+    relay.cleanupWebSocket(older);
+
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
+  });
+
+  it("still clears the route when the active socket closes", async () => {
+    const fresh = new FakeSocket("newer-A", { locationId: "A" });
+    const relay = createLifecycleRelay([fresh]);
+
+    await registerSocket(relay, fresh);
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
+
+    fresh.readyState = 3;
+    relay.cleanupWebSocket(fresh);
+
+    expect(relay.findWebSocketForLocation("A")).toBeNull();
+  });
+
+  it("ignores a superseded CLOSING socket during an in-memory rebuild", () => {
+    const fresh = new FakeSocket("newer-A", { locationId: "A" });
+    // getWebSockets() may return a CLOSING socket; the superseded marker kept
+    // in its attachment must keep it from reclaiming the active route.
+    const older = new FakeSocket("older-A", { locationId: "A", superseded: true }, 2);
+    const relay = createLifecycleRelay([fresh, older]);
+    relay.stateRebuilt = false;
+
+    relay.rebuildInMemoryState();
+
+    expect(relay.findWebSocketForLocation("A")).toBe(fresh);
   });
 });
