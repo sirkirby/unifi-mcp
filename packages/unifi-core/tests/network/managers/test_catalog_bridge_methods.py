@@ -64,7 +64,9 @@ async def test_client_stats_bridge_resolves_controller_id_to_mac() -> None:
 
     assert result == [{"rx_bytes": 1}]
     client_manager.get_client_details.assert_awaited_once_with("client-object-id", existence_only=True)
-    manager.get_client_stats.assert_awaited_once_with("aa:bb:cc:dd:ee:ff", duration_hours=24, granularity="hourly")
+    manager.get_client_stats.assert_awaited_once_with(
+        "aa:bb:cc:dd:ee:ff", duration_hours=24, granularity="hourly", start_ms=None, end_ms=None
+    )
 
 
 @pytest.mark.asyncio

@@ -798,17 +798,35 @@ class TopClient(BaseModel):
     )
     tx_bytes: Optional[int] = Field(
         default=None,
-        description="Bytes transmitted by this client",
+        description="Bytes the network transmitted to this client (the client's download)",
         json_schema_extra={"mutable": False},
     )
     rx_bytes: Optional[int] = Field(
         default=None,
-        description="Bytes received by this client",
+        description="Bytes the network received from this client (the client's upload)",
+        json_schema_extra={"mutable": False},
+    )
+    upload_bytes: Optional[int] = Field(
+        default=None,
+        description="Bytes uploaded by this client (same value as rx_bytes)",
+        json_schema_extra={"mutable": False},
+    )
+    download_bytes: Optional[int] = Field(
+        default=None,
+        description="Bytes downloaded by this client (same value as tx_bytes)",
         json_schema_extra={"mutable": False},
     )
     total_bytes: Optional[int] = Field(
         default=None,
-        description="Total bytes (tx + rx) for this client",
+        description="Total bytes (upload + download) for this client",
+        json_schema_extra={"mutable": False},
+    )
+    source: Optional[str] = Field(
+        default=None,
+        description=(
+            "Where the totals came from: 'report' (summed over the requested window) or "
+            "'live_counters' (cumulative since association, not scoped to the window)"
+        ),
         json_schema_extra={"mutable": False},
     )
 
@@ -826,7 +844,10 @@ def top_client_from_controller(raw: Any) -> TopClient:
         hostname=_get(raw, "name", "hostname"),
         tx_bytes=_get(raw, "tx_bytes"),
         rx_bytes=_get(raw, "rx_bytes"),
+        upload_bytes=_get(raw, "upload_bytes"),
+        download_bytes=_get(raw, "download_bytes"),
         total_bytes=_get(raw, "total_bytes", "bytes"),
+        source=_get(raw, "source"),
     )
 
 

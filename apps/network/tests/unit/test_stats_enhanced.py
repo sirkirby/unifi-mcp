@@ -279,7 +279,7 @@ class TestStatsManagerEnhanced:
         /stat/ips/event with 200 and an empty list rather than failing, so a
         fallback guarded only by an exception never runs for them.
         """
-        v2_events = [{"key": "EVT_IPS_IpsAlert"}]
+        v2_events = [{"key": "THREAT_DETECTED", "subcategory": "SECURITY_INTRUSION_PREVENTION"}]
         mock_connection.request.side_effect = [[], v2_events]
 
         result = await stats_manager.get_ips_events()
@@ -287,7 +287,7 @@ class TestStatsManagerEnhanced:
         assert result == v2_events
         assert mock_connection.request.call_count == 2
         assert mock_connection.request.call_args_list[0][0][0].path == "/stat/ips/event"
-        assert mock_connection.request.call_args_list[1][0][0].path == "/system-log/critical"
+        assert mock_connection.request.call_args_list[1][0][0].path == "/system-log/all"
 
     @pytest.mark.asyncio
     async def test_get_ips_events_non_empty_legacy_skips_v2(self, stats_manager, mock_connection):
@@ -326,7 +326,7 @@ class TestStatsManagerEnhanced:
     @pytest.mark.asyncio
     async def test_get_ips_events_non_list_legacy_falls_back_to_v2(self, stats_manager, mock_connection):
         """A malformed legacy answer must reach v2 rather than be coerced to []."""
-        v2_events = [{"key": "EVT_IPS_IpsAlert"}]
+        v2_events = [{"key": "THREAT_DETECTED", "subcategory": "SECURITY_INTRUSION_PREVENTION"}]
         mock_connection.request.side_effect = [{"unexpected": "envelope"}, v2_events]
 
         result = await stats_manager.get_ips_events()
