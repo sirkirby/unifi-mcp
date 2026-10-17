@@ -16,7 +16,7 @@
         "UNIFI_PASSWORD": "your-password",
         "UNIFI_PORT": "443",
         "UNIFI_SITE": "default",
-        "UNIFI_VERIFY_SSL": "false",
+        "UNIFI_VERIFY_SSL": "true",
         "UNIFI_TOOL_REGISTRATION_MODE": "meta_only"
       }
     }

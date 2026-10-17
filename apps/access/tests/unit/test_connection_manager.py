@@ -84,7 +84,7 @@ class TestConstructor:
     def test_defaults(self):
         cm = AccessConnectionManager(host="h", username="u", password="p")
         assert cm.port == 443
-        assert cm.verify_ssl is False
+        assert cm.verify_ssl is True
         assert cm._api_key is None
         assert cm._api_port == 12445
 

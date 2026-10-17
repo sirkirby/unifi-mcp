@@ -55,7 +55,7 @@ def serve_clients(monkeypatch):
 
 def _manager(port: int) -> ncm.ConnectionManager:
     cm = ncm.ConnectionManager(
-        host="127.0.0.1", username=FAKE_USERNAME, password=FAKE_PASSWORD, port=port, retry_delay=0
+        host="127.0.0.1", username=FAKE_USERNAME, password=FAKE_PASSWORD, port=port, retry_delay=0, verify_ssl=False
     )
     cm._attempt.wait_seconds = WAIT_SECONDS
     return cm

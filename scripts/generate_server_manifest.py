@@ -38,7 +38,12 @@ _SHARED_ENV_VARS = [
         "name": "UNIFI_VERIFY_SSL",
         "description": "SSL certificate verification",
         "isRequired": False,
-        "default": "false",
+        "default": "true",
+    },
+    {
+        "name": "UNIFI_SSL_FINGERPRINT",
+        "description": "SHA-256 fingerprint pinning a self-signed controller certificate (overrides UNIFI_VERIFY_SSL)",
+        "isRequired": False,
     },
 ]
 
