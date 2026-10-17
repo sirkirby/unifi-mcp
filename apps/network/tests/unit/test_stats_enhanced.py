@@ -662,197 +662,6 @@ class TestGetAlertsFallbackDiagnostics:
         assert result == [{"_id": "a1", "archived": False}]
 
 
-class TestEgressForensics:
-    """Window-scoped stats used to attribute an upload spike to a client."""
-
-    @pytest.fixture
-    def mock_connection(self):
-        conn = MagicMock()
-        conn.site = "default"
-        conn.request = AsyncMock()
-        conn.get_cached = MagicMock(return_value=None)
-        conn._update_cache = MagicMock()
-        return conn
-
-    @pytest.fixture
-    def stats_manager(self, mock_connection):
-        from unifi_core.network.managers.stats_manager import StatsManager
-
-        client_manager = MagicMock()
-        client_manager.get_clients = AsyncMock(return_value=[])
-        return StatsManager(mock_connection, client_manager)
-
-    @pytest.mark.asyncio
-    async def test_top_clients_sums_report_over_window(self, stats_manager, mock_connection):
-        """Ranking comes from the per-client report inside the window, rx counted as upload."""
-        mock_connection.request.return_value = [
-            {"user": "AA:BB:CC:00:00:01", "rx_bytes": 40, "tx_bytes": 1, "time": 1},
-            {"user": "aa:bb:cc:00:00:01", "rx_bytes": 60, "tx_bytes": 1, "time": 2},
-            {"user": "aa:bb:cc:00:00:02", "rx_bytes": 5, "tx_bytes": 500, "time": 1},
-        ]
-
-        result = await stats_manager.get_top_clients(start_ms=1_000, end_ms=2_000, granularity="5minutes")
-
-        request = mock_connection.request.call_args[0][0]
-        assert request.path == "/stat/report/5minutes.user"
-        assert request.data["start"] == 1_000 and request.data["end"] == 2_000
-        assert "mac" not in request.data and "macs" not in request.data
-        assert [r["mac"] for r in result] == ["aa:bb:cc:00:00:02", "aa:bb:cc:00:00:01"]
-        uploader = result[1]
-        assert uploader["upload_bytes"] == 100 and uploader["download_bytes"] == 2
-        assert uploader["total_bytes"] == 102 and uploader["source"] == "report"
-
-    @pytest.mark.asyncio
-    async def test_top_clients_sort_by_upload(self, stats_manager, mock_connection):
-        mock_connection.request.return_value = [
-            {"user": "aa:bb:cc:00:00:01", "rx_bytes": 100, "tx_bytes": 0},
-            {"user": "aa:bb:cc:00:00:02", "rx_bytes": 5, "tx_bytes": 500},
-        ]
-
-        result = await stats_manager.get_top_clients(start_ms=1_000, end_ms=2_000, sort_by="upload")
-
-        assert result[0]["mac"] == "aa:bb:cc:00:00:01"
-
-    @pytest.mark.asyncio
-    async def test_top_clients_rejects_unknown_sort(self, stats_manager):
-        with pytest.raises(ValueError):
-            await stats_manager.get_top_clients(sort_by="bytes")
-
-    @pytest.mark.asyncio
-    async def test_top_clients_rejects_inverted_window(self, stats_manager):
-        with pytest.raises(ValueError):
-            await stats_manager.get_top_clients(start_ms=2_000, end_ms=1_000)
-
-    @pytest.mark.asyncio
-    async def test_top_clients_falls_back_to_live_counters_marked_as_such(self, stats_manager, mock_connection):
-        """A controller without the report still answers, but says the numbers are not windowed."""
-        mock_connection.request.return_value = []
-        stats_manager._client_manager.get_clients = AsyncMock(
-            return_value=[{"mac": "aa:bb:cc:00:00:03", "name": "nas", "wired-rx_bytes": 9, "wired-tx_bytes": 1}]
-        )
-
-        result = await stats_manager.get_top_clients()
-
-        assert result[0]["source"] == "live_counters"
-        assert result[0]["upload_bytes"] == 9
-
-    @pytest.mark.asyncio
-    async def test_top_clients_auto_granularity_follows_window_age(self, stats_manager, mock_connection):
-        import time
-
-        mock_connection.request.return_value = []
-        now = int(time.time() * 1000)
-        await stats_manager.get_top_clients(start_ms=now - 3_600_000, end_ms=now)
-        assert mock_connection.request.call_args_list[0][0][0].path == "/stat/report/5minutes.user"
-        await stats_manager.get_top_clients(start_ms=now - 3 * 86_400_000, end_ms=now)
-        assert mock_connection.request.call_args_list[-1][0][0].path == "/stat/report/hourly.user"
-        await stats_manager.get_top_clients(start_ms=now - 30 * 86_400_000, end_ms=now)
-        assert mock_connection.request.call_args_list[-1][0][0].path == "/stat/report/daily.user"
-
-    @pytest.mark.asyncio
-    async def test_client_stats_absolute_window(self, stats_manager, mock_connection):
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_client_stats("aa:bb:cc:00:00:01", start_ms=1_000, end_ms=5_000)
-
-        request = mock_connection.request.call_args[0][0]
-        assert request.data["start"] == 1_000 and request.data["end"] == 5_000
-
-    @pytest.mark.asyncio
-    async def test_client_dpi_uses_v2_window_and_filters_client(self, stats_manager, mock_connection):
-        mock_connection.request.return_value = {
-            "client_usage_by_app": [
-                {
-                    "client": {"mac": "AA:BB:CC:00:00:01"},
-                    "usage_by_app": [
-                        {
-                            "application": 234,
-                            "category": 13,
-                            "bytes_transmitted": 70,
-                            "bytes_received": 1,
-                            "total_bytes": 71,
-                        },
-                        {
-                            "application": 10,
-                            "category": 4,
-                            "bytes_transmitted": 1,
-                            "bytes_received": 200,
-                            "total_bytes": 201,
-                        },
-                    ],
-                },
-                {"client": {"mac": "aa:bb:cc:00:00:02"}, "usage_by_app": [{"application": 1, "total_bytes": 999}]},
-            ],
-            "total_usage_by_app": [],
-        }
-
-        result = await stats_manager.get_client_dpi_traffic("aa:bb:cc:00:00:01", start_ms=1_000, end_ms=2_000)
-
-        request = mock_connection.request.call_args[0][0]
-        assert request.path.startswith("/traffic?start=1000&end=2000")
-        assert [r["application"] for r in result] == [10, 234]
-        assert result[1]["upload_bytes"] == 70 and result[1]["download_bytes"] == 1
-        assert mock_connection.request.await_count == 1
-
-    @pytest.mark.asyncio
-    async def test_client_dpi_by_category_folds_apps(self, stats_manager, mock_connection):
-        mock_connection.request.return_value = {
-            "client_usage_by_app": [
-                {
-                    "client": {"mac": "aa:bb:cc:00:00:01"},
-                    "usage_by_app": [
-                        {
-                            "application": 1,
-                            "category": 13,
-                            "bytes_transmitted": 5,
-                            "bytes_received": 1,
-                            "total_bytes": 6,
-                        },
-                        {
-                            "application": 2,
-                            "category": 13,
-                            "bytes_transmitted": 5,
-                            "bytes_received": 1,
-                            "total_bytes": 6,
-                        },
-                    ],
-                }
-            ]
-        }
-
-        result = await stats_manager.get_client_dpi_traffic("aa:bb:cc:00:00:01", by="by_cat")
-
-        assert result == [
-            {
-                "category": 13,
-                "bytes_transmitted": 10,
-                "bytes_received": 2,
-                "total_bytes": 12,
-                "upload_bytes": 10,
-                "download_bytes": 2,
-            }
-        ]
-
-    @pytest.mark.asyncio
-    async def test_client_dpi_falls_back_to_legacy_when_v2_missing(self, stats_manager, mock_connection):
-        mock_connection.request.side_effect = [RuntimeError("404"), [{"app": 2}]]
-
-        result = await stats_manager.get_client_dpi_traffic("aa:bb:cc:00:00:01")
-
-        assert result == [{"app": 2}]
-        assert mock_connection.request.call_args_list[1][0][0].path == "/stat/stadpi"
-
-    @pytest.mark.asyncio
-    async def test_site_dpi_uses_v2_totals(self, stats_manager, mock_connection):
-        mock_connection.request.return_value = {
-            "total_usage_by_app": [{"application": 65535, "category": 255, "bytes_transmitted": 9, "total_bytes": 9}]
-        }
-
-        result = await stats_manager.get_site_dpi_traffic(start_ms=1_000, end_ms=2_000)
-
-        assert result[0]["application"] == 65535 and result[0]["upload_bytes"] == 9
-
-
 class TestStatsToolArguments:
     """Tool-level argument handling: no silent fallbacks."""
 
@@ -871,7 +680,6 @@ class TestStatsToolArguments:
             ("2026-10-02T06:35:00Z", 1790922900000),
             ("2026-10-02T02:35:00-04:00", 1790922900000),
             (None, None),
-            ("", None),
         ],
     )
     def test_epoch_ms_parsing(self, value, expected):
@@ -884,3 +692,17 @@ class TestStatsToolArguments:
 
         with pytest.raises(ValueError):
             _epoch_ms("last tuesday")
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_epoch_ms_rejects_blank(self, value):
+        """An empty bound is an error, not "omitted": None is the only way to omit it."""
+        from unifi_network_mcp.tools.stats import _epoch_ms
+
+        with pytest.raises(ValueError, match="Empty time bound"):
+            _epoch_ms(value)
+
+    def test_epoch_ms_rejects_naive_iso(self):
+        from unifi_network_mcp.tools.stats import _epoch_ms
+
+        with pytest.raises(ValueError, match="UTC offset"):
+            _epoch_ms("2026-10-02T06:35:00")

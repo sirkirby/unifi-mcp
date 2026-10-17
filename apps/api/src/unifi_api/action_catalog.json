@@ -4085,7 +4085,7 @@
             "type": "string"
           },
           "end": {
-            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           },
           "group_by": {
@@ -4097,7 +4097,7 @@
             "type": "string"
           },
           "start": {
-            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4179,7 +4179,7 @@
             "type": "string"
           },
           "end": {
-            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           },
           "granularity": {
@@ -4187,7 +4187,7 @@
             "type": "string"
           },
           "start": {
-            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4914,7 +4914,7 @@
             "type": "string"
           },
           "end": {
-            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           },
           "group_by": {
@@ -4922,7 +4922,7 @@
             "type": "string"
           },
           "start": {
-            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -5114,7 +5114,7 @@
             "type": "string"
           },
           "end": {
-            "description": "Window end (default now). Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           },
           "granularity": {
@@ -5130,7 +5130,7 @@
             "type": "string"
           },
           "start": {
-            "description": "Window start. Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. Takes precedence over duration.",
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },

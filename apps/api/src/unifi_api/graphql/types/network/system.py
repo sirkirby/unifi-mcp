@@ -30,6 +30,8 @@ import strawberry
 from unifi_core.network.models.system import mgmt_from_controller, snmp_from_controller
 from unifi_core.redaction import redact_value
 
+from unifi_api.graphql.scalars import BigInt
+
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
     if not isinstance(obj, dict):
@@ -473,17 +475,19 @@ class AutoBackupSettings:
 class TopClient:
     mac: str | None
     hostname: str | None
-    tx_bytes: int | None = strawberry.field(
+    tx_bytes: BigInt | None = strawberry.field(
         description="Bytes the network transmitted to this client (the client's download)."
     )
-    rx_bytes: int | None = strawberry.field(
+    rx_bytes: BigInt | None = strawberry.field(
         description="Bytes the network received from this client (the client's upload)."
     )
-    upload_bytes: int | None = strawberry.field(description="Bytes uploaded by this client (same value as rx_bytes).")
-    download_bytes: int | None = strawberry.field(
+    upload_bytes: BigInt | None = strawberry.field(
+        description="Bytes uploaded by this client (same value as rx_bytes)."
+    )
+    download_bytes: BigInt | None = strawberry.field(
         description="Bytes downloaded by this client (same value as tx_bytes)."
     )
-    total_bytes: int | None
+    total_bytes: BigInt | None
     source: str | None = strawberry.field(
         description=(
             "'report' when summed over the requested window; 'live_counters' when cumulative "

@@ -2234,17 +2234,17 @@ type TopClient {
   hostname: String
 
   """Bytes the network transmitted to this client (the client's download)."""
-  txBytes: Int
+  txBytes: BigInt
 
   """Bytes the network received from this client (the client's upload)."""
-  rxBytes: Int
+  rxBytes: BigInt
 
   """Bytes uploaded by this client (same value as rx_bytes)."""
-  uploadBytes: Int
+  uploadBytes: BigInt
 
   """Bytes downloaded by this client (same value as tx_bytes)."""
-  downloadBytes: Int
-  totalBytes: Int
+  downloadBytes: BigInt
+  totalBytes: BigInt
 
   """
   'report' when summed over the requested window; 'live_counters' when cumulative since association and not scoped to the window.

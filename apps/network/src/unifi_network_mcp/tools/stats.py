@@ -24,8 +24,9 @@ from unifi_network_mcp.runtime import client_manager, device_manager, server, st
 logger = logging.getLogger(__name__)
 
 _WINDOW_DESCRIPTION = (
-    "Absolute window bound: ISO 8601 (e.g. '2026-10-02T02:15:00-04:00') or epoch seconds/milliseconds. "
-    "Takes precedence over duration."
+    "Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; "
+    "a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. "
+    "Omit it rather than passing an empty string. Takes precedence over duration."
 )
 
 
@@ -298,9 +299,17 @@ async def get_top_clients(
 
         enriched = []
         for entry in top_client_stats:
+            entry = dict(entry)
             mac = entry.get("mac")
             if mac and not entry.get("name") and not entry.get("hostname"):
-                details = await client_manager.get_client_details(mac, existence_only=True)
+                # Report rows carry no name. A client from a historical window may have
+                # left inventory since, so the lookup is best-effort per row: on failure
+                # the row keeps its MAC and byte counts rather than sinking the ranking.
+                try:
+                    details = await client_manager.get_client_details(mac, existence_only=True)
+                except Exception as lookup_error:
+                    logger.debug("Top client name lookup failed (%s)", type(lookup_error).__name__)
+                    details = None
                 if details:
                     raw = details.raw if hasattr(details, "raw") else details
                     entry["name"] = raw.get("name") or raw.get("hostname") or mac
