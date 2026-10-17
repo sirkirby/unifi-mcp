@@ -33,7 +33,14 @@ def test_cache_logs_do_not_disclose_keys_or_prefixes(caplog: pytest.LogCaptureFi
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "method", ["get_client_dpi_traffic", "get_client_wifi_details", "get_client_sessions", "_get_device_stat"]
+    "method",
+    [
+        "get_client_dpi_traffic",
+        "get_site_dpi_traffic",
+        "get_client_wifi_details",
+        "get_client_sessions",
+        "_get_device_stat",
+    ],
 )
 async def test_client_device_failure_translation_is_safe(method: str, caplog: pytest.LogCaptureFixture) -> None:
     connection = MagicMock()
@@ -44,7 +51,9 @@ async def test_client_device_failure_translation_is_safe(method: str, caplog: py
     manager = SwitchManager(connection) if method == "_get_device_stat" else StatsManager(connection, MagicMock())
     with caplog.at_level(logging.DEBUG), pytest.raises(RequestError) as caught:
         await getattr(manager, method)(MAC)
-    connection.request.assert_awaited_once()
+    # DPI tries the v2 aggregate before the legacy endpoint, so it may await twice;
+    # what matters here is that no attempt leaks the MAC or controller text.
+    connection.request.assert_awaited()
     rendered = "".join(traceback.format_exception(caught.value))
     assert "RuntimeError" in str(caught.value)
     assert caught.value.__suppress_context__ is True
@@ -53,3 +62,27 @@ async def test_client_device_failure_translation_is_safe(method: str, caplog: py
         assert value not in str(caught.value)
         assert value not in rendered
     assert all(record.exc_info is None for record in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("explicit", [False, True])
+async def test_top_clients_report_failure_translation_is_safe(explicit: bool, caplog: pytest.LogCaptureFixture) -> None:
+    connection = MagicMock()
+    connection.site = "default"
+    connection.get_cached.return_value = None
+    connection.request = AsyncMock(side_effect=RuntimeError(f"{MAC} {CANARY}"))
+    client_manager = MagicMock()
+    client_manager.get_clients = AsyncMock(return_value=[])
+    manager = StatsManager(connection, client_manager)
+    window = {"start_ms": 1_000, "end_ms": 2_000} if explicit else {}
+    with caplog.at_level(logging.DEBUG), pytest.raises(RequestError) as caught:
+        await manager.get_top_clients(**window)
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert "RuntimeError" in str(caught.value)
+    assert caught.value.__suppress_context__ is True
+    for value in (MAC, CANARY):
+        assert value not in caplog.text
+        assert value not in str(caught.value)
+        assert value not in rendered
+    assert all(record.exc_info is None for record in caplog.records)
+    client_manager.get_clients.assert_not_awaited()

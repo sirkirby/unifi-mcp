@@ -4054,9 +4054,24 @@ def test_omitted_public_defaults_are_injected_before_required_manager_calls() ->
     assert voucher_kwargs["quota"] == 1
 
 
-def test_top_clients_unknown_duration_matches_wrapper_one_hour_fallback() -> None:
-    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"]({"duration": "typo"})
-    assert kwargs == {"duration_hours": 1, "limit": 10}
+def test_top_clients_unknown_duration_is_rejected_like_the_wrapper() -> None:
+    # A silently substituted window returns plausible data for the wrong period,
+    # so both the MCP wrapper and this translator refuse unknown values.
+    with pytest.raises(ValueError, match="Invalid duration"):
+        DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"]({"duration": "typo"})
+
+
+def test_top_clients_forwards_absolute_window() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"](
+        {"start": "2026-10-02T06:15:00Z", "end": "1790923200", "sort_by": "upload"}
+    )
+    assert kwargs == {
+        "duration_hours": 24,
+        "limit": 10,
+        "start_ms": 1790921700000,
+        "end_ms": 1790923200000,
+        "sort_by": "upload",
+    }
 
 
 def test_alarm_facade_result_adapter_unwraps_result_and_preserves_coverage() -> None:

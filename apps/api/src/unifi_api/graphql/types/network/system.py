@@ -30,6 +30,8 @@ import strawberry
 from unifi_core.network.models.system import mgmt_from_controller, snmp_from_controller
 from unifi_core.redaction import redact_value
 
+from unifi_api.graphql.scalars import BigInt
+
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
     if not isinstance(obj, dict):
@@ -473,9 +475,25 @@ class AutoBackupSettings:
 class TopClient:
     mac: str | None
     hostname: str | None
-    tx_bytes: int | None
-    rx_bytes: int | None
-    total_bytes: int | None
+    tx_bytes: BigInt | None = strawberry.field(
+        description="Bytes the network transmitted to this client (the client's download)."
+    )
+    rx_bytes: BigInt | None = strawberry.field(
+        description="Bytes the network received from this client (the client's upload)."
+    )
+    upload_bytes: BigInt | None = strawberry.field(
+        description="Bytes uploaded by this client (same value as rx_bytes)."
+    )
+    download_bytes: BigInt | None = strawberry.field(
+        description="Bytes downloaded by this client (same value as tx_bytes)."
+    )
+    total_bytes: BigInt | None
+    source: str | None = strawberry.field(
+        description=(
+            "'report' when summed over the requested window; 'live_counters' when cumulative "
+            "since association and not scoped to the window."
+        )
+    )
     _was_dict: strawberry.Private[bool] = True
 
     @classmethod
@@ -495,7 +513,10 @@ class TopClient:
                 hostname=None,
                 tx_bytes=None,
                 rx_bytes=None,
+                upload_bytes=None,
+                download_bytes=None,
                 total_bytes=None,
+                source=None,
                 _was_dict=False,
             )
         return cls(
@@ -503,7 +524,10 @@ class TopClient:
             hostname=_get(record, "name", "hostname"),
             tx_bytes=_get(record, "tx_bytes"),
             rx_bytes=_get(record, "rx_bytes"),
+            upload_bytes=_get(record, "upload_bytes"),
+            download_bytes=_get(record, "download_bytes"),
             total_bytes=_get(record, "total_bytes", "bytes"),
+            source=_get(record, "source"),
             _was_dict=True,
         )
 

@@ -5,7 +5,7 @@ This module provides MCP tools to fetch statistics from a Unifi Network Controll
 """
 
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -17,9 +17,17 @@ from unifi_core.network.models.sessions import (
 from unifi_core.network.models.stats import dpi_stats_from_controller
 from unifi_core.network.models.system import speedtest_result_from_controller, top_client_from_controller
 from unifi_core.network.read_views import shape_alerts, shape_dashboard
+from unifi_core.network.time_window import duration_hours as _duration_hours
+from unifi_core.network.time_window import parse_window_bound as _epoch_ms
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
+
+_WINDOW_DESCRIPTION = (
+    "Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; "
+    "a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. "
+    "Omit it rather than passing an empty string. Takes precedence over duration."
+)
 
 
 @server.tool(
@@ -43,7 +51,7 @@ async def get_network_stats(
 ) -> Dict[str, Any]:
     """Implementation for getting network stats."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
+        duration_hours = _duration_hours(duration)
         stats = await stats_manager.get_network_stats(duration_hours=duration_hours, granularity=granularity)
 
         def _first_non_none(*values):
@@ -87,7 +95,13 @@ async def get_network_stats(
 
 @server.tool(
     name="unifi_get_client_stats",
-    description="Get statistics for a specific client/device",
+    description=(
+        "Get a client's traffic time-series from the controller's per-client report. "
+        "summary.upload_bytes is what the client sent and summary.download_bytes what it received "
+        "(the report's rx_bytes/tx_bytes, counted from the network side). Pass start/end to inspect "
+        "a past incident window. Wired clients are not metered per client in this report on current "
+        "gateways, so an empty series for a wired client means 'not reported', not 'no traffic'."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_client_stats(
@@ -104,10 +118,12 @@ async def get_client_stats(
             description="Time resolution: '5minutes' (~12h retention), 'hourly' (default, ~7d), 'daily' (~1yr), 'monthly' (~1yr)"
         ),
     ] = "hourly",
+    start: Annotated[Optional[str], Field(description="Window start. " + _WINDOW_DESCRIPTION)] = None,
+    end: Annotated[Optional[str], Field(description="Window end (default now). " + _WINDOW_DESCRIPTION)] = None,
 ) -> Dict[str, Any]:
     """Implementation for getting client stats."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
+        duration_hours = _duration_hours(duration)
         client_details = await client_manager.get_client_details(client_id)
         if not client_details:
             return {"success": False, "error": f"Client '{client_id}' not found"}
@@ -118,11 +134,24 @@ async def get_client_stats(
         client_name = client_raw.get("name") or client_raw.get("hostname") or client_mac
 
         # Stats endpoint expects MAC, not _id
-        stats = await stats_manager.get_client_stats(client_mac, duration_hours=duration_hours, granularity=granularity)
+        start_ms, end_ms = _epoch_ms(start), _epoch_ms(end)
+        stats = await stats_manager.get_client_stats(
+            client_mac,
+            duration_hours=duration_hours,
+            granularity=granularity,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+        total_rx = sum(e.get("rx_bytes", 0) or 0 for e in stats)
+        total_tx = sum(e.get("tx_bytes", 0) or 0 for e in stats)
         summary = {
-            "total_rx_bytes": sum(e.get("rx_bytes", 0) for e in stats),
-            "total_tx_bytes": sum(e.get("tx_bytes", 0) for e in stats),
-            "total_bytes": sum(e.get("bytes", e.get("rx_bytes", 0) + e.get("tx_bytes", 0)) for e in stats),
+            "total_rx_bytes": total_rx,
+            "total_tx_bytes": total_tx,
+            "total_bytes": sum(
+                e.get("bytes", (e.get("rx_bytes", 0) or 0) + (e.get("tx_bytes", 0) or 0)) for e in stats
+            ),
+            "upload_bytes": total_rx,
+            "download_bytes": total_tx,
         }
         return {
             "success": True,
@@ -130,6 +159,8 @@ async def get_client_stats(
             "client_id": client_id,
             "client_name": client_name,
             "duration": duration,
+            "start": start_ms,
+            "end": end_ms,
             "granularity": granularity,
             "summary": summary,
             "stats": stats,
@@ -166,7 +197,7 @@ async def get_device_stats(
 ) -> Dict[str, Any]:
     """Implementation for getting device stats."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
+        duration_hours = _duration_hours(duration)
         device_details = await device_manager.get_device_details(device_id)
         if not device_details:
             return {"success": False, "error": f"Device '{device_id}' not found"}
@@ -220,7 +251,15 @@ async def get_device_stats(
 
 @server.tool(
     name="unifi_get_top_clients",
-    description="Get a list of top clients by usage (sorted by total bytes)",
+    description=(
+        "Rank clients by traffic inside a time window — the first call when working an upload or "
+        "egress spike ('who sent data between 02:00 and 05:00?'). Sums the controller's per-client "
+        "report over the window; upload_bytes is what each client sent, download_bytes what it "
+        "received. Use sort_by='upload' for exfiltration questions. Covers clients the controller "
+        "meters individually (wireless on current gateways); wired clients, cluster nodes included, "
+        "are absent. Entries with source='live_counters' are a fallback for controllers without the "
+        "report and are cumulative since association, not scoped to the window."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_top_clients(
@@ -231,28 +270,61 @@ async def get_top_clients(
         ),
     ] = "daily",
     limit: Annotated[int, Field(description="Maximum number of top clients to return (default 10)")] = 10,
+    start: Annotated[Optional[str], Field(description="Window start. " + _WINDOW_DESCRIPTION)] = None,
+    end: Annotated[Optional[str], Field(description="Window end (default now). " + _WINDOW_DESCRIPTION)] = None,
+    granularity: Annotated[
+        Optional[str],
+        Field(
+            description="Report resolution: '5minutes', 'hourly', 'daily', 'monthly'. Default: the finest "
+            "the controller still retains for the window start"
+        ),
+    ] = None,
+    sort_by: Annotated[
+        Literal["total", "upload", "download"],
+        Field(description="Rank by 'total' (default), 'upload' (client sent) or 'download' (client received)"),
+    ] = "total",
 ) -> Dict[str, Any]:
     """Implementation for getting top clients by usage."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
-        top_client_stats = await stats_manager.get_top_clients(duration_hours=duration_hours, limit=limit)
+        duration_hours = _duration_hours(duration)
+        start_ms, end_ms = _epoch_ms(start), _epoch_ms(end)
+        top_client_stats = await stats_manager.get_top_clients(
+            duration_hours=duration_hours,
+            limit=limit,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            granularity=granularity,
+            sort_by=sort_by,
+        )
 
         enriched = []
         for entry in top_client_stats:
+            entry = dict(entry)
             mac = entry.get("mac")
-            if mac:
-                details = await client_manager.get_client_details(mac, existence_only=True)
+            if mac and not entry.get("name") and not entry.get("hostname"):
+                # Report rows carry no name. A client from a historical window may have
+                # left inventory since, so the lookup is best-effort per row: on failure
+                # the row keeps its MAC and byte counts rather than sinking the ranking.
+                try:
+                    details = await client_manager.get_client_details(mac, existence_only=True)
+                except Exception as lookup_error:
+                    logger.debug("Top client name lookup failed (%s)", type(lookup_error).__name__)
+                    details = None
                 if details:
                     raw = details.raw if hasattr(details, "raw") else details
-                    if not entry.get("name") and not entry.get("hostname"):
-                        entry["name"] = raw.get("name") or raw.get("hostname") or mac
+                    entry["name"] = raw.get("name") or raw.get("hostname") or mac
             enriched.append(entry)
 
         shaped = [top_client_from_controller(e).model_dump(exclude_none=False) for e in enriched]
+        first = enriched[0] if enriched else {}
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
+            "start": first.get("start", start_ms),
+            "end": first.get("end", end_ms),
+            "granularity": first.get("granularity", granularity),
+            "sort_by": sort_by,
             "limit": limit,
             "top_clients": shaped,
         }
@@ -331,7 +403,7 @@ async def get_gateway_stats(
 ) -> Dict[str, Any]:
     """Implementation for getting gateway stats."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
+        duration_hours = _duration_hours(duration)
         stats = await stats_manager.get_gateway_stats(duration_hours=duration_hours, granularity=granularity)
         summary: Dict[str, Any] = {
             "total_wan_rx_bytes": sum(int(e.get("wan-rx_bytes", 0) or 0) for e in stats),
@@ -370,7 +442,7 @@ async def get_speedtest_results(
 ) -> Dict[str, Any]:
     """Implementation for getting historical speedtest results."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
+        duration_hours = _duration_hours(duration)
         results = await stats_manager.get_speedtest_results(duration_hours=duration_hours)
 
         shaped = [speedtest_result_from_controller(r).model_dump(exclude_none=False) for r in results]
@@ -392,6 +464,13 @@ async def get_speedtest_results(
         "Get actual DPI traffic data by application or category for the entire site. "
         "Shows real bandwidth usage per app/category, NOT restriction configuration. "
         "Use unifi_get_dpi_stats for restriction config instead. "
+        "On Network 9.x+ this reads the v2 traffic aggregate for the window (default: last 24h); "
+        "older controllers fall back to the legacy per-site/per-client DPI endpoint, which has no window. "
+        "upload_bytes is what the client sent. application/category are numeric DPI IDs — resolve names "
+        "with unifi_list_dpi_applications / unifi_list_dpi_categories; 65535/255 means unidentified "
+        "(typically encrypted QUIC/TLS). The controller aggregates DPI in coarse buckets, so totals for "
+        "windows that cut through a bucket are approximate: use DPI for what kind of traffic, and "
+        "unifi_get_top_clients / unifi_get_client_stats for how much. "
         "Note: requires Traffic Identification to be enabled on the controller, "
         "which is separate from Device Identification."
     ),
@@ -402,14 +481,26 @@ async def get_site_dpi_traffic(
         str,
         Field(description="Group results: 'by_app' (default) for per-application or 'by_cat' for per-category"),
     ] = "by_app",
+    duration: Annotated[
+        str,
+        Field(description="Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)"),
+    ] = "daily",
+    start: Annotated[Optional[str], Field(description="Window start. " + _WINDOW_DESCRIPTION)] = None,
+    end: Annotated[Optional[str], Field(description="Window end (default now). " + _WINDOW_DESCRIPTION)] = None,
 ) -> Dict[str, Any]:
     """Implementation for getting site-wide DPI traffic data."""
     try:
-        traffic = await stats_manager.get_site_dpi_traffic(by=group_by)
+        start_ms, end_ms = _epoch_ms(start), _epoch_ms(end)
+        traffic = await stats_manager.get_site_dpi_traffic(
+            by=group_by, duration_hours=_duration_hours(duration), start_ms=start_ms, end_ms=end_ms
+        )
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "group_by": group_by,
+            "duration": duration,
+            "start": start_ms,
+            "end": end_ms,
             "traffic": traffic,
         }
     except Exception as e:
@@ -421,6 +512,13 @@ async def get_site_dpi_traffic(
     name="unifi_get_client_dpi_traffic",
     description=(
         "Get per-client DPI traffic data by application or category. "
+        "On Network 9.x+ this reads the v2 traffic aggregate for the window (default: last 24h); "
+        "older controllers fall back to the legacy per-site/per-client DPI endpoint, which has no window. "
+        "upload_bytes is what the client sent. application/category are numeric DPI IDs — resolve names "
+        "with unifi_list_dpi_applications / unifi_list_dpi_categories; 65535/255 means unidentified "
+        "(typically encrypted QUIC/TLS). The controller aggregates DPI in coarse buckets, so totals for "
+        "windows that cut through a bucket are approximate: use DPI for what kind of traffic, and "
+        "unifi_get_top_clients / unifi_get_client_stats for how much. "
         "Note: requires Traffic Identification to be enabled on the controller, "
         "which is separate from Device Identification."
     ),
@@ -432,15 +530,32 @@ async def get_client_dpi_traffic(
         str,
         Field(description="Group results: 'by_app' (default) for per-application or 'by_cat' for per-category"),
     ] = "by_app",
+    duration: Annotated[
+        str,
+        Field(description="Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)"),
+    ] = "daily",
+    start: Annotated[Optional[str], Field(description="Window start. " + _WINDOW_DESCRIPTION)] = None,
+    end: Annotated[Optional[str], Field(description="Window end (default now). " + _WINDOW_DESCRIPTION)] = None,
 ) -> Dict[str, Any]:
     """Implementation for getting per-client DPI traffic data."""
     try:
-        traffic = await stats_manager.get_client_dpi_traffic(client_mac=mac_address, by=group_by)
+        duration_hours = _duration_hours(duration)
+        start_ms, end_ms = _epoch_ms(start), _epoch_ms(end)
+    except ValueError as e:
+        # Argument errors carry no client data, so they are safe to return verbatim.
+        return {"success": False, "error": f"Failed to get client DPI traffic: {e}"}
+    try:
+        traffic = await stats_manager.get_client_dpi_traffic(
+            client_mac=mac_address, by=group_by, duration_hours=duration_hours, start_ms=start_ms, end_ms=end_ms
+        )
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "client_mac": mac_address,
             "group_by": group_by,
+            "duration": duration,
+            "start": start_ms,
+            "end": end_ms,
             "traffic": traffic,
         }
     except Exception as e:
@@ -452,8 +567,9 @@ async def get_client_dpi_traffic(
     name="unifi_get_ips_events",
     description=(
         "Get IPS/IDS security events (intrusion detection/prevention alerts). "
-        "Note: on newer UniFi OS / Network Application versions, IPS events may not populate "
-        "this legacy endpoint. Check the controller's traffic flows for threat data instead."
+        "Reads the legacy IPS endpoint and, when it is empty or gone (Network 10.x), the SECURITY "
+        "category of the v2 system log, where threat blocks are recorded. For other security "
+        "event types use unifi_list_events with categories=['SECURITY']."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -466,7 +582,7 @@ async def get_ips_events(
 ) -> Dict[str, Any]:
     """Implementation for getting IPS/IDS events."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
+        duration_hours = _duration_hours(duration)
         events = await stats_manager.get_ips_events(duration_hours=duration_hours, limit=limit)
         return {
             "success": True,
@@ -504,7 +620,7 @@ async def get_client_sessions(
 ) -> Dict[str, Any]:
     """Implementation for getting client session history."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
+        duration_hours = _duration_hours(duration)
         sessions = await stats_manager.get_client_sessions(
             client_mac=mac_address, duration_hours=duration_hours, limit=limit
         )
@@ -570,7 +686,7 @@ async def get_anomalies(
 ) -> Dict[str, Any]:
     """Implementation for getting anomaly events."""
     try:
-        duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
+        duration_hours = _duration_hours(duration)
         anomalies = await stats_manager.get_anomalies(duration_hours=duration_hours)
         return {
             "success": True,

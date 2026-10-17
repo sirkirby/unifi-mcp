@@ -2221,9 +2221,24 @@ type ThreatPosture {
 type TopClient {
   mac: String
   hostname: String
-  txBytes: Int
-  rxBytes: Int
-  totalBytes: Int
+
+  """Bytes the network transmitted to this client (the client's download)."""
+  txBytes: BigInt
+
+  """Bytes the network received from this client (the client's upload)."""
+  rxBytes: BigInt
+
+  """Bytes uploaded by this client (same value as rx_bytes)."""
+  uploadBytes: BigInt
+
+  """Bytes downloaded by this client (same value as tx_bytes)."""
+  downloadBytes: BigInt
+  totalBytes: BigInt
+
+  """
+  'report' when summed over the requested window; 'live_counters' when cumulative since association and not scoped to the window.
+  """
+  source: String
 }
 
 """A single UniFi traffic-flow record."""

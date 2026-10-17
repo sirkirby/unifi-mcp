@@ -37,7 +37,12 @@ EXTRAS = {
     "unifi_set_switch_port_profile": {"port_overrides": []},
     "unifi_toggle_device": {"disabled": True},
     "unifi_update_switch_stp": {"stp_priority": 32768},
-    "unifi_get_client_dpi_traffic": {"group_by": "by_cat"},
+    "unifi_get_client_dpi_traffic": {
+        "group_by": "by_cat",
+        "duration": "weekly",
+        "start": "2026-10-02T06:15:00Z",
+        "end": "2026-10-02T09:00:00Z",
+    },
     "unifi_get_client_sessions": {"duration": "weekly", "limit": 9},
     "unifi_recent_events": {"event_type": "EVT", "limit": 9},
 }
