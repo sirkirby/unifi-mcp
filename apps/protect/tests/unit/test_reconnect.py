@@ -7,6 +7,7 @@ from typing import Annotated
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_protect_mcp.reconnect import reconnecting_tool_decorator
@@ -65,7 +66,11 @@ def scratch_tool():
     name = "protect_reconnect_probe"
     calls: list[str] = []
 
-    @main.server.tool(name=name, description="Test-only probe.")
+    @main.server.tool(
+        name=name,
+        description="Test-only probe.",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    )
     async def protect_reconnect_probe() -> dict:
         connected = main.connection_manager._client is not None
         calls.append("connected" if connected else "disconnected")

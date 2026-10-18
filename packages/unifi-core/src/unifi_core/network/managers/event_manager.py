@@ -43,6 +43,7 @@ _V2_PROBE_MAX_FAILURES = 32
 _V2_ENVELOPE_KEYS = frozenset(
     {"data", "logs", "total_element_count", "totalElementCount", "total_page_count", "totalPageCount"}
 )
+_V2_CRITICAL_ROW_KEYS = frozenset({"category", "event", "severity", "message_raw", "title_raw"})
 _LEGACY_EVENTS_CAP = 3000
 _V2_PAGE_CAP = 100
 
@@ -68,14 +69,31 @@ def _v2_page(response: Any, endpoint: str) -> _V2Page:
     ``ApiRequestV2.decode`` wraps an object body as ``[body]`` and
     ``ConnectionManager.request`` returns that list, so the envelope arrives
     as the single element of a list (tests may pass the bare object). The
-    envelope must hold its rows under ``data`` or ``logs``; a list of rows,
-    an unknown envelope or a non-list collection is malformed, never empty.
+    critical endpoint also returns bare row lists, which carry no totals, so
+    their counts stay unknown; other endpoints require an envelope whose rows
+    are under ``data`` or ``logs``. Unknown envelopes and non-list collections
+    are malformed, never empty.
     """
     envelope: Any = response
     if isinstance(response, list):
-        if len(response) != 1 or not isinstance(response[0], dict):
-            raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
-        envelope = response[0]
+        if endpoint == "/system-log/critical":
+            if not response:
+                return _V2Page(rows=[], total_elements=0, total_pages=1)
+            if not all(isinstance(item, dict) for item in response):
+                raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+            envelope_items = [bool(_V2_ENVELOPE_KEYS & item.keys()) for item in response]
+            if any(envelope_items):
+                if not all(envelope_items) or len(response) != 1:
+                    raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+                envelope = response[0]
+            else:
+                if any(not _V2_CRITICAL_ROW_KEYS & item.keys() for item in response):
+                    raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+                return _V2Page(rows=response, total_elements=None, total_pages=None)
+        else:
+            if len(response) != 1 or not isinstance(response[0], dict):
+                raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+            envelope = response[0]
     if not isinstance(envelope, dict) or not _V2_ENVELOPE_KEYS & envelope.keys():
         raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
     key = "data" if "data" in envelope else "logs" if "logs" in envelope else None
@@ -794,16 +812,23 @@ class EventManager:
             page_number = offset // page_size
             page_offset = offset % page_size
 
+            requested_categories = categories or _DEFAULT_CATEGORIES
             payload: Dict[str, Any] = {
                 "timestampFrom": from_ms,
                 "timestampTo": now_ms,
                 "severities": severities or _DEFAULT_SEVERITIES,
-                "categories": categories or _DEFAULT_CATEGORIES,
-                "type": "GENERAL",
+                "categories": requested_categories,
                 "pageNumber": page_number,
                 "pageSize": page_size,
                 "searchText": "",
             }
+            # ``type`` selects a log view, not a record type. The GENERAL view
+            # holds every category except AUDIT (admin activity), whose records
+            # exist only outside it, so asking for AUDIT under GENERAL returns
+            # nothing. Verified on Network 10.6: without ``type`` the default
+            # categories return the same records, and AUDIT is included.
+            if "AUDIT" not in requested_categories:
+                payload["type"] = "GENERAL"
 
             if event_type:
                 # ``keys`` is the controller's exact event-key filter. ``searchText``
@@ -1109,6 +1134,10 @@ class EventManager:
             {"category": "SOFTWARE_UPDATES", "description": "Firmware update events"},
             {"category": "UNIFI_ETHERNET_PORTS", "description": "Port events (STP, storms, errors)"},
             {"category": "VPN", "description": "VPN client and site-to-site events"},
+            {
+                "category": "AUDIT",
+                "description": "Admin activity: configuration changes and admin logins (not in the default set)",
+            },
         ]
 
     async def archive_alarm(self, alarm_id: str) -> bool:

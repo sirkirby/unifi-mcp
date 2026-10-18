@@ -53,6 +53,24 @@ class TestEventManagerV2:
         assert api_request.data["searchText"] == ""
 
     @pytest.mark.asyncio
+    async def test_default_categories_keep_the_general_view(self, event_manager, mock_connection):
+        """Requests that do not ask for AUDIT are unchanged."""
+        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
+        await event_manager.get_events(categories=["SECURITY"])
+        assert mock_connection.request.call_args[0][0].data["type"] == "GENERAL"
+        await event_manager.get_events()
+        assert mock_connection.request.call_args[0][0].data["type"] == "GENERAL"
+
+    @pytest.mark.asyncio
+    async def test_audit_category_drops_the_general_view(self, event_manager, mock_connection):
+        """AUDIT records exist only outside the GENERAL view, so asking for them under it returns nothing."""
+        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
+        await event_manager.get_events(categories=["SECURITY", "AUDIT"])
+        payload = mock_connection.request.call_args[0][0].data
+        assert payload["categories"] == ["SECURITY", "AUDIT"]
+        assert "type" not in payload
+
+    @pytest.mark.asyncio
     async def test_get_events_paginates_past_v2_page_size_cap(self, event_manager, mock_connection):
         first_page = [{"id": f"evt{i}"} for i in range(100)]
         second_page = [{"id": f"evt{i}"} for i in range(100, 150)]
@@ -260,6 +278,7 @@ class TestEventManagerCommon:
         categories = event_manager.get_event_categories()
         assert len(categories) > 0
         assert any(c["category"] == "SECURITY" for c in categories)
+        assert any(c["category"] == "AUDIT" for c in categories)
         assert all("description" in c for c in categories)
 
     @pytest.mark.asyncio

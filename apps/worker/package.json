@@ -1,6 +1,6 @@
 {
   "name": "unifi-mcp-worker",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "CLI to deploy and manage the UniFi MCP Cloudflare Worker relay",
   "type": "module",
   "bin": {

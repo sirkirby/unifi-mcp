@@ -107,6 +107,30 @@ When `UNIFI_PROTECT_TOOL_PERMISSION_MODE=confirm` (default), mutating tools foll
 
 This applies even when a policy gate permits the action.
 
+## Meta-tools and read-only clients
+
+`protect_execute` and `protect_batch` run any Protect tool by name, so they are
+annotated `readOnlyHint: false` even when the tool they run is a read; so is
+`protect_load_tools`. They skip no check on the server: a call through them reaches the
+named tool's policy gate and confirmation flow exactly as a direct call does, and bypass
+mode injects `confirm=true` the same way.
+
+What they change is what a client-side allowlist sees. A client that permits only
+`readOnlyHint: true` tools never calls them, so it cannot change anything through them.
+A client, or a person approving prompts, that permits `protect_execute` because reads
+go through it has permitted every mutation the policy gates allow, under one tool name.
+Approving one of these calls means approving its `tool` and `arguments`.
+
+For a client that should only read:
+
+- Set `UNIFI_POLICY_PROTECT_CREATE`, `UNIFI_POLICY_PROTECT_UPDATE` and
+  `UNIFI_POLICY_PROTECT_DELETE` to `false`. That boundary is on the server and holds
+  whatever the client permits.
+- Set `UNIFI_TOOL_REGISTRATION_MODE=eager`, so every read tool is listed with its own
+  `readOnlyHint: true` and the client never needs `protect_execute`. In the default lazy
+  mode only the tools in `LAZY_DIRECT_TOOLS` are listed directly
+  ([details](../../../docs/incident-evidence.md#read-only-clients-in-lazy-mode)).
+
 ## Backwards Compatibility
 
 The following deprecated variables are still accepted but will be removed in a future release:

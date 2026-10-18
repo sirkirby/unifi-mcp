@@ -8,7 +8,8 @@ dependencies = [
     # Optional meta-tool registration and awaited eager filtering require Shared 0.6.27.
     # The settings-file startup report and setup mode require Shared 0.6.28.
     # Listing incident evidence directly in lazy mode requires Shared 0.6.31.
-    "unifi-mcp-shared>=0.6.32,<0.7",
+    # The fail-closed import-time tool decorator requires Shared 0.6.34.
+    "unifi-mcp-shared>=0.6.34,<0.7",
     # Network managers in unifi-core import aiounifi; the [network] extra
     # declares the compatibility floor for library consumers. This deployable
     # app also pins the auth client exactly so one MCP release always resolves
@@ -30,7 +31,11 @@ dependencies = [
     # Serving MCP before the controller connects (shared bounded connection
     # attempt and not_connected_message) requires Core 0.4.70.
     # Bounded incident evidence collection and its client view require Core 0.4.71.
-    "unifi-core[network]>=0.4.71,<0.5",
+    # AUDIT system-log events and the VPN health fields require Core 0.4.72.
+    # Reading bare critical system-log rows as alarms requires Core 0.4.74.
+    # Reporting an unverified gateway settings write requires Core 0.4.75.
+    # Windowed stats and 10.x DPI/IPS (unifi_core.network.time_window) require Core 0.4.76.
+    "unifi-core[network]>=0.4.76,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

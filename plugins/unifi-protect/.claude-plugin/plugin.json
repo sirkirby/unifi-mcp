@@ -1,6 +1,6 @@
 {
   "name": "unifi-protect",
-  "version": "1.1.3",
+  "version": "1.1.6",
   "description": "UniFi Protect MCP server \u2014 manage security cameras, NVR, recordings, and smart detections",
   "author": {
     "name": "sirkirby",
@@ -21,7 +21,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-protect-mcp==0.9.1"
+        "unifi-protect-mcp==0.9.4"
       ],
       "env": {
         "UNIFI_PROTECT_HOST": "${user_config.host}",

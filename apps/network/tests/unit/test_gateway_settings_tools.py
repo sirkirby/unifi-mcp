@@ -107,6 +107,21 @@ class TestUpdateGatewaySettings:
         assert "upnp_enabled" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_confirm_unverified_write_is_not_reported_as_failed(self):
+        """When only the verifying re-read failed, say the change may be live."""
+        from unifi_core.network.managers.gateway_settings_manager import UNVERIFIED_UPDATE_ERROR
+
+        detail = f"{UNVERIFIED_UPDATE_ERROR} to verify it: 503. The change may have been applied."
+        with patch(_MGR) as mgr:
+            mgr.get_gateway_settings = AsyncMock(return_value=SAMPLE_USG)
+            mgr.update_gateway_settings = AsyncMock(return_value=(False, detail))
+            from unifi_network_mcp.tools.gateway_settings import update_gateway_settings
+
+            result = await update_gateway_settings(update_data={"upnp_enabled": True}, confirm=True)
+
+        assert result == {"success": False, "mutation_applied": None, "error": detail}
+
+    @pytest.mark.asyncio
     async def test_preview_does_not_write(self):
         """confirm=false is preview-only — the manager update must never be called."""
         with patch(_MGR) as mgr:

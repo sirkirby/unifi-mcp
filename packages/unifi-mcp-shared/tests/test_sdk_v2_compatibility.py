@@ -93,7 +93,14 @@ async def test_bare_allowed_hosts_accept_real_host_headers_with_ports() -> None:
         ),
     )
     assert server.transport_security is not None
-    assert server.transport_security.allowed_hosts == ["localhost:*", "127.0.0.1:*", "[::1]:*"]
+    assert server.transport_security.allowed_hosts == [
+        "localhost",
+        "localhost:*",
+        "127.0.0.1",
+        "127.0.0.1:*",
+        "[::1]",
+        "[::1]:*",
+    ]
 
     app = server.streamable_http_app(
         transport_security=server.transport_security,
@@ -117,3 +124,67 @@ async def test_bare_allowed_hosts_accept_real_host_headers_with_ports() -> None:
     # The deliberately incomplete discover envelope is rejected after host
     # validation. SDK v2 returned 421 here before bare hosts were normalized.
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("host_header", ["proxy.example.internal", "proxy.example.internal:443"])
+async def test_bare_allowed_host_accepts_host_header_with_or_without_port(host_header: str) -> None:
+    """Reverse proxies and gateways often forward the hostname with no port (#773)."""
+    server = UniFiMCPServer(
+        "host-pattern-test",
+        transport_security=TransportSecuritySettings(allowed_hosts=["proxy.example.internal"]),
+    )
+    app = server.streamable_http_app(transport_security=server.transport_security, host="127.0.0.1")
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:34567") as client:
+            response = await client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {}},
+                headers={
+                    "Host": host_header,
+                    "Accept": "application/json, text/event-stream",
+                    "MCP-Protocol-Version": "2026-07-28",
+                },
+            )
+
+    # Past host validation (which answers 421); the incomplete envelope is then rejected.
+    assert response.status_code == 400
+
+
+async def test_unlisted_host_is_still_rejected() -> None:
+    server = UniFiMCPServer(
+        "host-pattern-test",
+        transport_security=TransportSecuritySettings(allowed_hosts=["proxy.example.internal"]),
+    )
+    app = server.streamable_http_app(transport_security=server.transport_security, host="127.0.0.1")
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:34567") as client:
+            response = await client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {}},
+                headers={
+                    "Host": "attacker.example",
+                    "Accept": "application/json, text/event-stream",
+                    "MCP-Protocol-Version": "2026-07-28",
+                },
+            )
+
+    assert response.status_code == 421
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        ("name", ["name", "name:*"]),
+        ("name:8443", ["name:8443"]),
+        ("[::1]", ["[::1]", "[::1]:*"]),
+        ("[::1]:3000", ["[::1]:3000"]),
+        ("::1", ["[::1]", "[::1]:*"]),
+        ("*", ["*"]),
+    ],
+)
+def test_normalize_allowed_host_keeps_portless_form(entry: str, expected: list[str]) -> None:
+    from unifi_mcp_shared.server import _normalize_allowed_host
+
+    assert _normalize_allowed_host(entry) == expected

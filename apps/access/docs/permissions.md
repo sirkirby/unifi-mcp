@@ -114,6 +114,29 @@ When `UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm` (default), mutating tools follo
 
 This applies even when a policy gate permits the action.
 
+## Meta-tools and read-only clients
+
+`access_execute` and `access_batch` run any Access tool by name, so they are
+annotated `readOnlyHint: false` even when the tool they run is a read; so is
+`access_load_tools`. They skip no check on the server: a call through them reaches the
+named tool's policy gate and confirmation flow exactly as a direct call does, and bypass
+mode injects `confirm=true` the same way.
+
+What they change is what a client-side allowlist sees. A client that permits only
+`readOnlyHint: true` tools never calls them, so it cannot change anything through them.
+A client, or a person approving prompts, that permits `access_execute` because reads
+go through it has permitted every mutation the policy gates allow, under one tool name.
+Approving one of these calls means approving its `tool` and `arguments`.
+
+For a client that should only read:
+
+- Set `UNIFI_POLICY_ACCESS_CREATE`, `UNIFI_POLICY_ACCESS_UPDATE` and
+  `UNIFI_POLICY_ACCESS_DELETE` to `false`. That boundary is on the server and holds
+  whatever the client permits.
+- Set `UNIFI_TOOL_REGISTRATION_MODE=eager`, so every read tool is listed with its own
+  `readOnlyHint: true` and the client never needs `access_execute`. In the default lazy
+  mode no domain tool is listed directly.
+
 ## Backwards Compatibility
 
 The following deprecated variables are still accepted but will be removed in a future release:

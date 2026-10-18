@@ -66,18 +66,29 @@ def _normalize_transport_security(
     if settings is None:
         return None
 
-    allowed_hosts = [_normalize_allowed_host(host) for host in settings.allowed_hosts]
+    allowed_hosts: list[str] = []
+    for host in settings.allowed_hosts:
+        for value in _normalize_allowed_host(host):
+            if value not in allowed_hosts:
+                allowed_hosts.append(value)
     return settings.model_copy(update={"allowed_hosts": allowed_hosts})
 
 
-def _normalize_allowed_host(host: str) -> str:
+def _normalize_allowed_host(host: str) -> list[str]:
+    """Expand one v1-style allowlist entry into the SDK v2 patterns it meant.
+
+    A bare entry ("name", "[::1]") allowed that host on any port *and* with no
+    port at all. SDK v2 matches "name:*" only against a Host header that carries
+    a port, so the bare form is kept alongside it: reverse proxies and gateways
+    commonly forward the hostname without a port.
+    """
     value = host.strip()
     if not value or value == "*":
-        return value
+        return [value]
     if value.startswith("["):
-        return value if "]:" in value else f"{value}:*"
+        return [value] if "]:" in value else [value, f"{value}:*"]
     if value.count(":") > 1:
-        return f"[{value}]:*"
+        return [f"[{value}]", f"[{value}]:*"]
     if ":" in value:
-        return value
-    return f"{value}:*"
+        return [value]
+    return [value, f"{value}:*"]

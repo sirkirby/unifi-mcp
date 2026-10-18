@@ -526,7 +526,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_anomalies` | Read | Get network anomaly detection events. |
 | `unifi_get_client_dpi_traffic` | Read | Get per-client DPI traffic data by application or category. |
 | `unifi_get_client_sessions` | Read | Get client session history. |
-| `unifi_get_client_stats` | Read | Get statistics for a specific client/device |
+| `unifi_get_client_stats` | Read | Get a client's traffic time-series from the controller's per-client report. |
 | `unifi_get_client_wifi_details` | Read | Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channe... |
 | `unifi_get_dashboard` | Read | Get the pre-aggregated site dashboard. |
 | `unifi_get_device_stats` | Read | Returns historical traffic time-series (rx/tx bytes, client counts) for one device by MAC or _id. |
@@ -536,7 +536,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_network_stats` | Read | Get network statistics from the Unifi Network controller |
 | `unifi_get_site_dpi_traffic` | Read | Get actual DPI traffic data by application or category for the entire site. |
 | `unifi_get_speedtest_results` | Read | Get historical speedtest results including download, upload (Mbps), and latency (ms). |
-| `unifi_get_top_clients` | Read | Get a list of top clients by usage (sorted by total bytes) |
+| `unifi_get_top_clients` | Read | Rank clients by traffic inside a time window — the first call when working an upload or egress spike ('who sent data between 02:00 and 05... |
 <!-- /AUTO:tools:stats -->
 
 **Tips:**

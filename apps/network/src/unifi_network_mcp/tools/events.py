@@ -80,7 +80,7 @@ async def list_events(
     categories: Annotated[
         Optional[List[str]],
         Field(
-            description="Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers"
+            description="Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). 'AUDIT' returns admin activity (configuration changes, admin logins) and is not in the default set. Ignored on legacy controllers"
         ),
     ] = None,
     severities: Annotated[

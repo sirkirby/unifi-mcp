@@ -77,6 +77,7 @@ async def test_get_threat_management_settings_tool_error_handling(mock_system_ma
 
 def test_tool_annotations():
     from unifi_network_mcp.runtime import server
+    from unifi_network_mcp.tools import system  # noqa: F401 - decorator registration
 
     tools = server._tool_manager._tools
     assert "unifi_get_threat_management_settings" in tools

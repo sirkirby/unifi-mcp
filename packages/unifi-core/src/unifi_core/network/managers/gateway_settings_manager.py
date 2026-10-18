@@ -23,6 +23,9 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_GATEWAY_SETTINGS = "gateway_settings"
 SETTING_KEY = "usg"
+# Start of the error returned when the PUT was sent but the verifying re-read failed.
+# Callers can tell it apart from a real failure: the change may well be live.
+UNVERIFIED_UPDATE_ERROR = "Controller accepted the gateway settings update, but the settings could not be re-read"
 
 
 def _unpersisted_fields(before: Dict[str, Any], after: Dict[str, Any], requested: Dict[str, Any]) -> List[str]:
@@ -113,7 +116,9 @@ class GatewaySettingsManager:
         Returns:
             Tuple of (success, error_message). On success error_message is None.
             On failure error_message describes which fields the controller
-            accepted but did not persist.
+            accepted but did not persist, or starts with
+            ``UNVERIFIED_UPDATE_ERROR`` when the write was sent but could not
+            be re-read, so it may have been applied.
         """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
@@ -163,8 +168,16 @@ class GatewaySettingsManager:
             logger.info("Update command sent for gateway settings with merged data.")
             self._connection._invalidate_cache(f"{CACHE_PREFIX_GATEWAY_SETTINGS}_{self._connection.site}")
 
-            # 4. Verify the controller actually persisted the change.
-            refetched = await self.get_gateway_settings()
+            # 4. Verify the controller actually persisted the change. The write has
+            #    landed by now, so a failed re-read means "unverified", not "failed".
+            try:
+                refetched = await self.get_gateway_settings()
+            except Exception as e:
+                logger.warning("Gateway settings were written but could not be re-read to verify them: %s", e)
+                return False, (
+                    f"{UNVERIFIED_UPDATE_ERROR} to verify it: {e}. The change may have been applied; "
+                    "read the gateway settings before retrying or reverting."
+                )
             stuck = _unpersisted_fields(existing, refetched, update_data)
             if stuck:
                 return False, (

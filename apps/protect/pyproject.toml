@@ -7,7 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     # The settings-file startup report and setup mode require Shared 0.6.28.
     # Listing incident evidence directly in lazy mode requires Shared 0.6.31.
-    "unifi-mcp-shared>=0.6.32,<0.7",
+    # The fail-closed import-time tool decorator requires Shared 0.6.34.
+    "unifi-mcp-shared>=0.6.34,<0.7",
     # Protect managers in unifi-core import uiprotect; pull it in via the
     # [protect] extra rather than declaring uiprotect here directly. Camera
     # detail fields require Core 0.4.35; explicit zero event limits require
@@ -21,7 +22,7 @@ dependencies = [
     # Serving MCP before the controller connects (bounded, shared connection
     # attempt) requires Core 0.4.70.
     # Bounded incident evidence collection and its client view require Core 0.4.71.
-    "unifi-core[protect]>=0.4.71,<0.5",
+    "unifi-core[protect]>=0.4.72,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

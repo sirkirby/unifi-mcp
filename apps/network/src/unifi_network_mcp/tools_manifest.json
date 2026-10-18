@@ -6593,17 +6593,29 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get per-client DPI traffic data by application or category. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
+      "description": "Get per-client DPI traffic data by application or category. On Network 9.x+ this reads the v2 traffic aggregate for the window (default: last 24h); older controllers fall back to the legacy per-site/per-client DPI endpoint, which has no window. upload_bytes is what the client sent. application/category are numeric DPI IDs \u2014 resolve names with unifi_list_dpi_applications / unifi_list_dpi_categories; 65535/255 means unidentified (typically encrypted QUIC/TLS). The controller aggregates DPI in coarse buckets, so totals for windows that cut through a bucket are approximate: use DPI for what kind of traffic, and unifi_get_top_clients / unifi_get_client_stats for how much. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
       "name": "unifi_get_client_dpi_traffic",
       "schema": {
         "input": {
           "properties": {
+            "duration": {
+              "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+              "type": "string"
+            },
+            "end": {
+              "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+              "type": "string"
+            },
             "group_by": {
               "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
               "type": "string"
             },
             "mac_address": {
               "description": "Client MAC address",
+              "type": "string"
+            },
+            "start": {
+              "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
               "type": "string"
             }
           },
@@ -6881,7 +6893,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get statistics for a specific client/device",
+      "description": "Get a client's traffic time-series from the controller's per-client report. summary.upload_bytes is what the client sent and summary.download_bytes what it received (the report's rx_bytes/tx_bytes, counted from the network side). Pass start/end to inspect a past incident window. Wired clients are not metered per client in this report on current gateways, so an empty series for a wired client means 'not reported', not 'no traffic'.",
       "name": "unifi_get_client_stats",
       "schema": {
         "input": {
@@ -6894,8 +6906,16 @@
               "description": "Time period for stats: 'hourly' (last 1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
               "type": "string"
             },
+            "end": {
+              "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+              "type": "string"
+            },
             "granularity": {
               "description": "Time resolution: '5minutes' (~12h retention), 'hourly' (default, ~7d), 'daily' (~1yr), 'monthly' (~1yr)",
+              "type": "string"
+            },
+            "start": {
+              "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
               "type": "string"
             }
           },
@@ -8516,7 +8536,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get IPS/IDS security events (intrusion detection/prevention alerts). Note: on newer UniFi OS / Network Application versions, IPS events may not populate this legacy endpoint. Check the controller's traffic flows for threat data instead.",
+      "description": "Get IPS/IDS security events (intrusion detection/prevention alerts). Reads the legacy IPS endpoint and, when it is empty or gone (Network 10.x), the SECURITY category of the v2 system log, where threat blocks are recorded. For other security event types use unifi_list_events with categories=['SECURITY'].",
       "name": "unifi_get_ips_events",
       "schema": {
         "input": {
@@ -9990,13 +10010,25 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get actual DPI traffic data by application or category for the entire site. Shows real bandwidth usage per app/category, NOT restriction configuration. Use unifi_get_dpi_stats for restriction config instead. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
+      "description": "Get actual DPI traffic data by application or category for the entire site. Shows real bandwidth usage per app/category, NOT restriction configuration. Use unifi_get_dpi_stats for restriction config instead. On Network 9.x+ this reads the v2 traffic aggregate for the window (default: last 24h); older controllers fall back to the legacy per-site/per-client DPI endpoint, which has no window. upload_bytes is what the client sent. application/category are numeric DPI IDs \u2014 resolve names with unifi_list_dpi_applications / unifi_list_dpi_categories; 65535/255 means unidentified (typically encrypted QUIC/TLS). The controller aggregates DPI in coarse buckets, so totals for windows that cut through a bucket are approximate: use DPI for what kind of traffic, and unifi_get_top_clients / unifi_get_client_stats for how much. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
       "name": "unifi_get_site_dpi_traffic",
       "schema": {
         "input": {
           "properties": {
+            "duration": {
+              "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+              "type": "string"
+            },
+            "end": {
+              "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+              "type": "string"
+            },
             "group_by": {
               "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+              "type": "string"
+            },
+            "start": {
+              "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
               "type": "string"
             }
           },
@@ -10930,7 +10962,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get a list of top clients by usage (sorted by total bytes)",
+      "description": "Rank clients by traffic inside a time window \u2014 the first call when working an upload or egress spike ('who sent data between 02:00 and 05:00?'). Sums the controller's per-client report over the window; upload_bytes is what each client sent, download_bytes what it received. Use sort_by='upload' for exfiltration questions. Covers clients the controller meters individually (wireless on current gateways); wired clients, cluster nodes included, are absent. Entries with source='live_counters' are a fallback for controllers without the report and are cumulative since association, not scoped to the window.",
       "name": "unifi_get_top_clients",
       "schema": {
         "input": {
@@ -10939,9 +10971,25 @@
               "description": "Time period for stats: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
               "type": "string"
             },
+            "end": {
+              "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+              "type": "string"
+            },
+            "granularity": {
+              "description": "Report resolution: '5minutes', 'hourly', 'daily', 'monthly'. Default: the finest the controller still retains for the window start",
+              "type": "string"
+            },
             "limit": {
               "description": "Maximum number of top clients to return (default 10)",
               "type": "integer"
+            },
+            "sort_by": {
+              "description": "Rank by 'total' (default), 'upload' (client sent) or 'download' (client received)",
+              "type": "string"
+            },
+            "start": {
+              "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -13204,7 +13252,7 @@
         "input": {
           "properties": {
             "categories": {
-              "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
+              "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). 'AUDIT' returns admin activity (configuration changes, admin logins) and is not in the default set. Ignored on legacy controllers",
               "type": "array"
             },
             "event_type": {

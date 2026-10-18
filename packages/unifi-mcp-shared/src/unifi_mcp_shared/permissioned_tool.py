@@ -17,6 +17,82 @@ from unifi_mcp_shared.metadata import tool_title_from_name
 from unifi_mcp_shared.output_schema import apply_unifi_tool_response_signature, get_unifi_tool_response_output_schema
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
 
+# Registration kwargs this package understands and FastMCP does not.
+_PROJECT_TOOL_KWARGS = ("permission_category", "permission_action", "auth", "input_schema", "output_schema")
+
+
+def require_policy_check_for_mutating_tool(
+    tool_name: str,
+    category: str | None,
+    action: str | None,
+    annotations: dict[str, Any] | None,
+) -> bool:
+    """Refuse to register a tool that could change state without a policy check.
+
+    A tool is policy-checked only when it declares both ``permission_category``
+    and ``permission_action``. Any other tool is only allowed when it is
+    annotated ``readOnlyHint=True``; a missing annotation counts as not
+    read-only, matching the MCP default.
+
+    Returns:
+        True if the tool is policy-checked.
+
+    Raises:
+        ValueError: If the tool is not policy-checked and not annotated read-only.
+    """
+    if category and action:
+        return True
+    if (annotations or {}).get("readOnlyHint") is not True:
+        raise ValueError(
+            f"Tool {tool_name!r} is not annotated readOnlyHint=True, so it must declare both "
+            "permission_category and permission_action"
+        )
+    return False
+
+
+def create_import_time_tool_decorator(original_tool_decorator: Callable, *, logger: Any) -> Callable:
+    """Create the stand-in ``server.tool`` used until main.py installs ``permissioned_tool``.
+
+    Tool modules can be imported without main.py (tests, tooling), so this accepts
+    the project-level kwargs FastMCP does not understand (the permission kwargs,
+    ``input_schema`` and ``output_schema``) and drops them before registering. It cannot check a policy
+    gate, so a tool that declares ``permission_category`` and ``permission_action``
+    is registered with MCP fail-closed: calls return a denial instead of running
+    ungated. The function is returned undecorated, so direct calls from tests are
+    unaffected.
+    """
+
+    def placeholder_tool(*d_args, **d_kwargs):
+        category = d_kwargs.get("permission_category")
+        action = d_kwargs.get("permission_action")
+        for key in _PROJECT_TOOL_KWARGS:
+            d_kwargs.pop(key, None)
+
+        def decorator(func):
+            tool_name = d_kwargs.get("name") or (d_args[0] if d_args else None) or getattr(func, "__name__", "<tool>")
+            annotations = normalize_tool_annotations(d_kwargs.get("annotations"))
+            if not require_policy_check_for_mutating_tool(str(tool_name), category, action, annotations):
+                return original_tool_decorator(*d_args, **d_kwargs)(func)
+
+            logger.warning(
+                "Tool %s was registered before the permission system was initialized; it will deny every call",
+                tool_name,
+            )
+
+            @wraps(func)
+            async def denied_func(*args, **kwargs):
+                return {
+                    "success": False,
+                    "error": f"Tool {tool_name} is unavailable: it was registered before permissions were initialized.",
+                }
+
+            original_tool_decorator(*d_args, **d_kwargs)(denied_func)
+            return func
+
+        return decorator
+
+    return placeholder_tool
+
 
 def setup_permissioned_tool(
     *,
@@ -113,8 +189,8 @@ def create_permissioned_tool(
             if input_schema is None:
                 input_schema = _infer_input_schema(func, tool_name, logger)
 
-            # Fast path: no permissions requested, just register.
-            if not category or not action:
+            # Fast path: read-only tool with no permission declared, just register.
+            if not require_policy_check_for_mutating_tool(str(tool_name), category, action, annotations):
                 register_tool_fn(
                     name=tool_name,
                     title=title,

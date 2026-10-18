@@ -616,7 +616,7 @@ async def test_protect_health_happy_path(tmp_path, monkeypatch) -> None:
 
     payload = {
         "cpu": {"average_load": 12.5, "temperature_c": 50.0},
-        "memory": {"available_bytes": 1, "free_bytes": 2, "total_bytes": 3},
+        "memory": {"available_bytes": None, "free_bytes": 0, "total_bytes": 8_358_936_576},
         "storage": {
             "available_bytes": 1,
             "size_bytes": 2,
@@ -643,6 +643,7 @@ async def test_protect_health_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["data"]["cpu"]["average_load"] == 12.5
+    assert body["data"]["memory"] == payload["memory"]
     assert body["render_hint"]["kind"] == "detail"
 
 

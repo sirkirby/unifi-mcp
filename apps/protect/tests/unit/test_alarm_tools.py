@@ -25,7 +25,6 @@ async def test_list_profiles_delegates_to_alarm_facade():
 
     with (
         patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade),
-        patch("unifi_protect_mcp.tools.alarm.alarm_manager", legacy),
     ):
         result = await alarm.protect_alarm_list_profiles()
 
@@ -71,7 +70,6 @@ async def test_update_rule_confirm_delegates_to_alarm_facade():
 
     with (
         patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade),
-        patch("unifi_protect_mcp.tools.alarm.alarm_manager", legacy),
     ):
         result = await alarm.protect_alarm_update_rule("uuid-1", {"title": "Updated"}, confirm=True)
 
@@ -143,3 +141,138 @@ async def test_get_status_delegates_to_global_facade():
     assert result["data"]["armed"] is True
     assert result["data"]["status"] == "breached"
     assert result["data"]["profile_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_arm_confirm_delegates_to_alarm_facade():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_arm
+
+    facade = MagicMock()
+    facade.arm = AsyncMock(return_value={"armed": True, "profile_id": "uuid-1", "state": "arming"})
+    facade.preview_arm = AsyncMock()
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_arm(profile_id="uuid-1", confirm=True)
+
+    facade.arm.assert_awaited_once_with("uuid-1")
+    facade.preview_arm.assert_not_called()
+    assert result == {"success": True, "data": {"armed": True, "profile_id": "uuid-1", "state": "arming"}}
+
+
+@pytest.mark.asyncio
+async def test_arm_preview_delegates_to_alarm_facade():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_arm
+
+    facade = MagicMock()
+    facade.arm = AsyncMock()
+    facade.preview_arm = AsyncMock(
+        return_value={
+            "target_profile_id": "uuid-1",
+            "target_profile_name": "Arm All",
+            "current_state": {"armed": False, "active_profile_id": None, "status": "disarmed"},
+            "proposed_changes": {"armed": True, "active_profile_id": "uuid-1"},
+        }
+    )
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_arm(profile_id="uuid-1")
+
+    facade.preview_arm.assert_awaited_once_with("uuid-1")
+    facade.arm.assert_not_called()
+    assert result["success"] is True
+    assert result["requires_confirmation"] is True
+
+
+@pytest.mark.asyncio
+async def test_arm_surfaces_verification_failure_as_error():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_arm
+
+    facade = MagicMock()
+    facade.arm = AsyncMock(side_effect=ValueError("still 'disarmed'"))
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_arm(profile_id="uuid-1", confirm=True)
+
+    assert result == {"success": False, "error": "still 'disarmed'"}
+
+
+@pytest.mark.asyncio
+async def test_disarm_confirm_delegates_to_alarm_facade_with_profile():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock(return_value={"armed": False, "profiles": []})
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm(profile_id="uuid-1", confirm=True)
+
+    facade.disarm.assert_awaited_once_with("uuid-1")
+    assert result == {"success": True, "data": {"armed": False, "profiles": []}}
+
+
+@pytest.mark.asyncio
+async def test_disarm_preview_delegates_to_alarm_facade():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock()
+    facade.preview_disarm = AsyncMock(
+        return_value={
+            "active_profile_id": "uuid-1",
+            "active_profile_name": "Arm Night",
+            "current_state": {"armed": True, "status": "armed", "profiles": []},
+            "proposed_changes": {"armed": False},
+        }
+    )
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm()
+
+    facade.preview_disarm.assert_awaited_once_with(None)
+    facade.disarm.assert_not_called()
+    assert result["success"] is True
+    assert result["requires_confirmation"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+@pytest.mark.parametrize("confirm", [True, False])
+async def test_arm_rejects_blank_profile_id(blank, confirm):
+    from unifi_protect_mcp.tools.alarm import protect_alarm_arm
+
+    facade = MagicMock()
+    facade.arm = AsyncMock()
+    facade.preview_arm = AsyncMock()
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_arm(profile_id=blank, confirm=confirm)
+
+    assert result["success"] is False
+    assert "must not be blank" in result["error"]
+    facade.arm.assert_not_called()
+    facade.preview_arm.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+@pytest.mark.parametrize("confirm", [True, False])
+async def test_disarm_rejects_blank_profile_id_instead_of_disarming_everything(blank, confirm):
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock()
+    facade.preview_disarm = AsyncMock()
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm(profile_id=blank, confirm=confirm)
+
+    assert result["success"] is False
+    assert "must not be blank" in result["error"]
+    facade.disarm.assert_not_called()
+    facade.preview_disarm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_disarm_without_profile_id_still_targets_every_active_profile():
+    from unifi_protect_mcp.tools.alarm import protect_alarm_disarm
+
+    facade = MagicMock()
+    facade.disarm = AsyncMock(return_value={"armed": False, "profiles": []})
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await protect_alarm_disarm(confirm=True)
+
+    facade.disarm.assert_awaited_once_with(None)
+    assert result["success"] is True

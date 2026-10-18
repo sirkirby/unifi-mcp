@@ -54,7 +54,7 @@ async def test_protect_health(tmp_path, monkeypatch):
         {
             ("protect", "system_manager", "get_health"): {
                 "cpu": {"averageLoad": 12.5},
-                "memory": {"total": 8192, "used": 4096},
+                "memory": {"total_bytes": 8_358_936_576, "free_bytes": 0, "available_bytes": None},
                 "storage": {"used": 500, "total": 2000},
                 "is_updating": False,
                 "uptime_seconds": 86400,
@@ -66,7 +66,7 @@ async def test_protect_health(tmp_path, monkeypatch):
         key,
         f'''{{
         protect {{ health(controller: "{cid}") {{
-            isUpdating uptimeSeconds
+            isUpdating uptimeSeconds memory
         }} }}
     }}''',
     )
@@ -74,6 +74,7 @@ async def test_protect_health(tmp_path, monkeypatch):
     result = body["data"]["protect"]["health"]
     assert result["isUpdating"] is False
     assert result["uptimeSeconds"] == 86400
+    assert result["memory"] == {"total_bytes": 8_358_936_576, "free_bytes": 0, "available_bytes": None}
 
 
 @pytest.mark.asyncio

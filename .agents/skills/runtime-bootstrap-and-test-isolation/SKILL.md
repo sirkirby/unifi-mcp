@@ -117,7 +117,7 @@ Tool functions go through three decorator replacements during bootstrap and perm
 | Stage | Where | What it installs | Effect |
 |---|---|---|---|
 | 1 | `runtime.py` — `get_server()` | `create_mcp_tool_adapter(server.tool)` stored as `server._original_tool` | Registers tool with the MCP server |
-| 2 | `runtime.py` — `get_server()` | `_create_permissioned_tool_wrapper(server._original_tool)` replaces `server.tool` | **Strips `permission_category`/`permission_action` kwargs from the call signature** |
+| 2 | `runtime.py` — `get_server()` | `create_import_time_tool_decorator(server._original_tool, logger=logger)` replaces `server.tool` | **Strips `permission_category`/`permission_action` kwargs from the call signature**; a tool declaring both is registered with MCP fail-closed |
 | 3 | `main.py` | `setup_permissioned_tool(server=server, ...)` | Checks real permissions at call time and routes to preview/execute state machine |
 
 **Why stage 2 is the key to test isolation:**
@@ -127,6 +127,8 @@ Tool functions declare `permission_category` and `permission_action` as kwargs s
 - Any tool module can be imported directly in a test — the kwarg mismatch that would cause a `TypeError` at call time is already gone
 - Tests do **not** need a live controller or a mock permission system
 - Stage 3 enforcement (in `main.py`) is never reached in tests, so it can be safely absent
+- The decorated function is returned unchanged, so direct calls from tests run it. The MCP registration made at stage 2 for a tool with `permission_category` and `permission_action` denies every call, so a module imported before `main.py` cannot expose that tool ungated
+- Stages 2 and 3 both refuse to register a tool that is not annotated `readOnlyHint=True` unless it declares both `permission_category` and `permission_action`. Test-only tools registered through `server.tool` need read-only annotations
 
 **The permission/confirmation flow (Stage 3 in `main.py`):**
 

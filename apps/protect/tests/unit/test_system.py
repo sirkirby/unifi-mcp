@@ -51,9 +51,9 @@ def _make_nvr(**overrides):
     cpu.average_load = 0.42
     cpu.temperature = 55.0
     mem = MagicMock()
-    mem.available = 2_000_000_000
-    mem.free = 1_000_000_000
-    mem.total = 4_000_000_000
+    mem.available = 2_000_000
+    mem.free = 1_000_000
+    mem.total = 4_000_000
     stor = MagicMock()
     stor.available = 500_000_000
     stor.size = 1_000_000_000
@@ -228,7 +228,11 @@ class TestSystemManagerGetHealth:
 
         assert health["cpu"]["average_load"] == 0.42
         assert health["cpu"]["temperature_c"] == 55.0
-        assert health["memory"]["total_bytes"] == 4_000_000_000
+        assert health["memory"] == {
+            "available_bytes": 2_048_000_000,
+            "free_bytes": 1_024_000_000,
+            "total_bytes": 4_096_000_000,
+        }
         assert health["storage"]["size_bytes"] == 1_000_000_000
         assert health["is_updating"] is False
 
@@ -515,10 +519,12 @@ class TestProtectGetHealthTool:
     async def test_success(self, mock_system_manager):
         from unifi_protect_mcp.tools.system import protect_get_health
 
-        mock_system_manager.get_health = AsyncMock(return_value={"cpu": {"average_load": 0.1}})
+        mock_system_manager.get_health = AsyncMock(
+            return_value={"memory": {"total_bytes": 8_358_936_576, "free_bytes": 0, "available_bytes": None}}
+        )
         result = await protect_get_health()
         assert result["success"] is True
-        assert "cpu" in result["data"]
+        assert result["data"]["memory"] == {"total_bytes": 8_358_936_576, "free_bytes": 0, "available_bytes": None}
 
     @pytest.mark.asyncio
     async def test_error(self, mock_system_manager):

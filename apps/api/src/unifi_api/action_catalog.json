@@ -753,12 +753,12 @@
       "permission_action": "update",
       "read_only_hint": false,
       "auth_method": "local_only",
-      "manager_attr": "alarm_manager",
+      "manager_attr": "alarm_facade",
       "manager_method": "arm",
       "input_schema": {
         "properties": {
           "profile_id": {
-            "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
+            "description": "Arm profile id from protect_alarm_list_profiles (Global-mode consoles also accept the profile name; legacy consoles need the id). Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile). Must not be blank.",
             "type": "string"
           }
         },
@@ -819,10 +819,15 @@
       "permission_action": "update",
       "read_only_hint": false,
       "auth_method": "local_only",
-      "manager_attr": "alarm_manager",
+      "manager_attr": "alarm_facade",
       "manager_method": "disarm",
       "input_schema": {
-        "properties": {},
+        "properties": {
+          "profile_id": {
+            "description": "Arm profile id to disarm (Global-mode consoles also accept the profile name). Omit to disarm every active profile; must not be blank. Legacy consoles disarm system-wide and ignore this.",
+            "type": "string"
+          }
+        },
         "type": "object",
         "additionalProperties": false
       }
@@ -4075,12 +4080,24 @@
       "manager_method": "get_client_dpi_traffic",
       "input_schema": {
         "properties": {
+          "duration": {
+            "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+            "type": "string"
+          },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+            "type": "string"
+          },
           "group_by": {
             "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
             "type": "string"
           },
           "mac_address": {
             "description": "Client MAC address",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4161,8 +4178,16 @@
             "description": "Time period for stats: 'hourly' (last 1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
           },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+            "type": "string"
+          },
           "granularity": {
             "description": "Time resolution: '5minutes' (~12h retention), 'hourly' (default, ~7d), 'daily' (~1yr), 'monthly' (~1yr)",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -4884,8 +4909,20 @@
       "manager_method": "get_site_dpi_traffic",
       "input_schema": {
         "properties": {
+          "duration": {
+            "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
+            "type": "string"
+          },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+            "type": "string"
+          },
           "group_by": {
             "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
             "type": "string"
           }
         },
@@ -5076,9 +5113,25 @@
             "description": "Time period for stats: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
           },
+          "end": {
+            "description": "Window end (default now). Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+            "type": "string"
+          },
+          "granularity": {
+            "description": "Report resolution: '5minutes', 'hourly', 'daily', 'monthly'. Default: the finest the controller still retains for the window start",
+            "type": "string"
+          },
           "limit": {
             "description": "Maximum number of top clients to return (default 10)",
             "type": "integer"
+          },
+          "sort_by": {
+            "description": "Rank by 'total' (default), 'upload' (client sent) or 'download' (client received)",
+            "type": "string"
+          },
+          "start": {
+            "description": "Window start. Absolute window bound: ISO 8601 with a UTC offset, Z or +/-HH:MM (e.g. '2026-10-02T02:15:00-04:00'; a time without an offset is rejected as ambiguous), or epoch seconds/milliseconds. Omit it rather than passing an empty string. Takes precedence over duration.",
+            "type": "string"
           }
         },
         "type": "object",
@@ -5661,7 +5714,7 @@
       "input_schema": {
         "properties": {
           "categories": {
-            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
+            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). 'AUDIT' returns admin activity (configuration changes, admin logins) and is not in the default set. Ignored on legacy controllers",
             "type": "array"
           },
           "event_type": {

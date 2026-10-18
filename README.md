@@ -23,6 +23,19 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Protect](apps/protect/) | Stable | 63 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
+## Plugins
+
+Install these from the Claude Code, Codex or OpenClaw marketplace; [Quick Start](#quick-start) shows how.
+
+| Plugin | What you get |
+|--------|--------------|
+| `unifi-network` | The Network MCP server, its agent skills and guided setup |
+| `unifi-protect` | The Protect MCP server, its agent skills and guided setup |
+| `unifi-access` | The Access MCP server, its agent skills and guided setup |
+| `unifi-intelligence` | Cross-product investigations that use Network and Protect together, with every claim cited. Incident Investigation runs locally; Security Patrol and Visitor Audit need the [cloud worker](#cloud-relay). It requires the Network and Protect plugins |
+
+The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
+
 ## Choose an integration
 
 | What you are building | Use | Why |
@@ -114,59 +127,8 @@ OpenCode's built-in MCP support, and the current manual paths for Antigravity,
 Cursor, and Devin Desktop. A skills install adds agent guidance; it does not by
 itself register the MCP server.
 
-### What's new: the UniFi Intelligence plugin
-
-- **A new plugin, `unifi-intelligence` 1.0.0**, listed in the Claude Code and
-  Codex marketplaces. It ships skills only: Incident Investigation, Security
-  Patrol and Visitor Audit. It replaces the unlisted `cross-product` bundle.
-- **It needs the Network and Protect plugins.** Claude Code installs
-  `unifi-network` and `unifi-protect` with it; on Codex and OpenClaw, install
-  and set up those two first.
-- **Incident Investigation runs locally.** It investigates one Network device
-  incident with Protect camera context from the servers' read-only incident
-  evidence tools, and cites every claim.
-- **Security Patrol and Visitor Audit need the cloud worker**, which provides
-  the merged location timeline through a connected relay.
-
-### What's new in the 1.0.1 plugins
-
-- **A down controller no longer fails the plugin.** The servers answer the
-  client before the controller connects. While it is unreachable, tools say the
-  server is still connecting or cannot reach the controller, and recover on
-  their own once it is back.
-- **Connection errors name the real cause.** A network failure says the
-  controller is unreachable instead of asking you to check your credentials.
-- **Claude Code setup protects a keychain-held secret.** Claude Code cannot
-  clear a password or API key it holds in the system keychain, so setup refuses,
-  before writing, a change that would clear one. It says how to switch:
-  uninstall and reinstall the plugin, then run setup with the provider and the
-  options it lists.
-- The plugins pin `unifi-network-mcp` 0.37.2, `unifi-protect-mcp` 0.8.19 and
-  `unifi-access-mcp` 0.6.14.
-
-### What's new in the 1.0.0 plugins
-
-- **Claude Code keeps settings as plugin options.** The plugins no longer read
-  the project's `.claude/settings.local.json`; passwords and API keys entered
-  as options go to the system keychain. Existing users run the setup migration
-  once per plugin (`set-env.sh --target claude --migrate`). Options apply in
-  every project, so a project's own settings stop being used once another
-  project is migrated; the upgrade guide covers several projects.
-- **No secrets in chat or command arguments.** Setup uses a password or API-key
-  file or command provider, and every configuration write is validated and
-  atomic.
-- **Plugin versions are independent of server versions.** All plugins are now
-  1.0.0 and pin the current server releases.
-- **Server improvements.** The pinned servers (`unifi-network-mcp` 0.37.1,
-  `unifi-protect-mcp` 0.8.18, `unifi-access-mcp` 0.6.13) reconnect Access and
-  Protect after a failed start, read Codex's settings file, and start in setup
-  mode with a read-only `*_setup_status` tool instead of exiting when
-  unconfigured.
-- **Skills report their coverage** and give no all-clear from missing, partial
-  or capped data.
-
-Read the [plugin upgrade guide](docs/plugin-upgrade.md) before updating an
-existing install.
+See the [changelog](CHANGELOG.md) for what each plugin release changed, and the
+[plugin upgrade guide](docs/plugin-upgrade.md) before updating an existing install.
 
 ### Claude Code (recommended)
 

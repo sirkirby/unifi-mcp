@@ -1133,3 +1133,40 @@ def test_support_plugin_validates_only_existing_manifests(tmp_path, removed):
         (target / manifest).unlink(missing_ok=True)
     with pytest.raises(support_smoke.SupportSmokeError, match="plugin_manifest_required"):
         support_smoke.plugin_command(tmp_path, "network", {})
+
+
+@pytest.mark.parametrize(("landed", "expect_revert"), [(True, True), (False, False)])
+def test_gateway_settings_lifecycle_reverts_when_failed_apply_still_landed(monkeypatch, landed, expect_revert) -> None:
+    """Apply can report failure after the PUT landed; the harness must put it back."""
+    import live_smoke
+    from unifi_network_mcp import runtime
+
+    state = {"broadcast_ping": False}
+    mgr = SimpleNamespace(get_gateway_settings=AsyncMock(side_effect=lambda: dict(state)))
+    monkeypatch.setattr(runtime, "gateway_settings_manager", mgr, raising=False)
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    calls: list[tuple[dict, str]] = []
+    checks: list[tuple] = []
+
+    async def call(_tool: str, args: dict, phase: str):
+        calls.append((args, phase))
+        if phase == "lifecycle:apply":
+            if landed:
+                state.update(args["update_data"])
+            return SimpleNamespace(success=False, error="could not be re-read to verify it")
+        state.update(args["update_data"])
+        return SimpleNamespace(success=True, error=None)
+
+    runner.call = call
+    runner.skip = lambda *_args: None
+    runner.record_check = lambda *args: checks.append(args)
+
+    asyncio.run(runner.lifecycle_network_gateway_settings())
+
+    phases = [phase for _args, phase in calls]
+    assert phases == (["lifecycle:apply", "lifecycle:revert"] if expect_revert else ["lifecycle:apply"])
+    assert state["broadcast_ping"] is False
+    assert checks[0][1:3] == ("lifecycle:apply", False)
+    if expect_revert:
+        assert checks[-1][1:3] == ("lifecycle:revert", True)

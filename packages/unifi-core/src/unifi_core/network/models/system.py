@@ -454,6 +454,56 @@ class NetworkHealth(BaseModel):
         description="Transmitted bytes on this subsystem",
         json_schema_extra={"mutable": False},
     )
+    site_to_site_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether site-to-site VPN is enabled; false explains absent site-to-site counters",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_num_active: Optional[int] = Field(
+        default=None,
+        description="Number of active site-to-site VPN tunnels reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_num_inactive: Optional[int] = Field(
+        default=None,
+        description="Number of inactive site-to-site VPN tunnels reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_rx_bytes: Optional[int] = Field(
+        default=None,
+        description="Received bytes on site-to-site VPN tunnels",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_tx_bytes: Optional[int] = Field(
+        default=None,
+        description="Transmitted bytes on site-to-site VPN tunnels",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether remote-access VPN is enabled; false explains absent remote-user counters",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_num_active: Optional[int] = Field(
+        default=None,
+        description="Number of active remote-access VPN users reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_num_inactive: Optional[int] = Field(
+        default=None,
+        description="Number of inactive remote-access VPN users reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_rx_bytes: Optional[int] = Field(
+        default=None,
+        description="Received bytes for remote-access VPN users",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_tx_bytes: Optional[int] = Field(
+        default=None,
+        description="Transmitted bytes for remote-access VPN users",
+        json_schema_extra={"mutable": False},
+    )
 
 
 NETWORKHEALTH_MUTABLE_FIELDS: frozenset[str] = frozenset()
@@ -472,6 +522,16 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         num_iot=_get(raw, "num_iot"),
         rx_bytes=raw.get("rx_bytes-r") or raw.get("rx_bytes"),
         tx_bytes=raw.get("tx_bytes-r") or raw.get("tx_bytes"),
+        site_to_site_enabled=_as_bool(raw.get("site_to_site_enabled")),
+        site_to_site_num_active=_get(raw, "site_to_site_num_active"),
+        site_to_site_num_inactive=_get(raw, "site_to_site_num_inactive"),
+        site_to_site_rx_bytes=_get(raw, "site_to_site_rx_bytes"),
+        site_to_site_tx_bytes=_get(raw, "site_to_site_tx_bytes"),
+        remote_user_enabled=_as_bool(raw.get("remote_user_enabled")),
+        remote_user_num_active=_get(raw, "remote_user_num_active"),
+        remote_user_num_inactive=_get(raw, "remote_user_num_inactive"),
+        remote_user_rx_bytes=_get(raw, "remote_user_rx_bytes"),
+        remote_user_tx_bytes=_get(raw, "remote_user_tx_bytes"),
     )
 
 
@@ -738,17 +798,35 @@ class TopClient(BaseModel):
     )
     tx_bytes: Optional[int] = Field(
         default=None,
-        description="Bytes transmitted by this client",
+        description="Bytes the network transmitted to this client (the client's download)",
         json_schema_extra={"mutable": False},
     )
     rx_bytes: Optional[int] = Field(
         default=None,
-        description="Bytes received by this client",
+        description="Bytes the network received from this client (the client's upload)",
+        json_schema_extra={"mutable": False},
+    )
+    upload_bytes: Optional[int] = Field(
+        default=None,
+        description="Bytes uploaded by this client (same value as rx_bytes)",
+        json_schema_extra={"mutable": False},
+    )
+    download_bytes: Optional[int] = Field(
+        default=None,
+        description="Bytes downloaded by this client (same value as tx_bytes)",
         json_schema_extra={"mutable": False},
     )
     total_bytes: Optional[int] = Field(
         default=None,
-        description="Total bytes (tx + rx) for this client",
+        description="Total bytes (upload + download) for this client",
+        json_schema_extra={"mutable": False},
+    )
+    source: Optional[str] = Field(
+        default=None,
+        description=(
+            "Where the totals came from: 'report' (summed over the requested window) or "
+            "'live_counters' (cumulative since association, not scoped to the window)"
+        ),
         json_schema_extra={"mutable": False},
     )
 
@@ -766,7 +844,10 @@ def top_client_from_controller(raw: Any) -> TopClient:
         hostname=_get(raw, "name", "hostname"),
         tx_bytes=_get(raw, "tx_bytes"),
         rx_bytes=_get(raw, "rx_bytes"),
+        upload_bytes=_get(raw, "upload_bytes"),
+        download_bytes=_get(raw, "download_bytes"),
         total_bytes=_get(raw, "total_bytes", "bytes"),
+        source=_get(raw, "source"),
     )
 
 

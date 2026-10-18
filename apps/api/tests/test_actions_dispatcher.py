@@ -839,7 +839,10 @@ def test_dispatch_overrides_specific_targets() -> None:
 
     # Protect preview/execute split
     assert table["protect_reboot_camera"].method == "apply_reboot_camera"
+    assert table["protect_alarm_arm"].manager_attr == "alarm_facade"
     assert table["protect_alarm_arm"].method == "arm"
+    assert table["protect_alarm_disarm"].manager_attr == "alarm_facade"
+    assert table["protect_alarm_disarm"].method == "disarm"
     assert table["protect_acknowledge_event"].method == "apply_acknowledge_event"
     assert table["protect_update_sensor_settings"].manager_attr == "sensor_manager"
     assert table["protect_update_sensor_settings"].method == "apply_sensor_settings"
@@ -4051,9 +4054,24 @@ def test_omitted_public_defaults_are_injected_before_required_manager_calls() ->
     assert voucher_kwargs["quota"] == 1
 
 
-def test_top_clients_unknown_duration_matches_wrapper_one_hour_fallback() -> None:
-    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"]({"duration": "typo"})
-    assert kwargs == {"duration_hours": 1, "limit": 10}
+def test_top_clients_unknown_duration_is_rejected_like_the_wrapper() -> None:
+    # A silently substituted window returns plausible data for the wrong period,
+    # so both the MCP wrapper and this translator refuse unknown values.
+    with pytest.raises(ValueError, match="Invalid duration"):
+        DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"]({"duration": "typo"})
+
+
+def test_top_clients_forwards_absolute_window() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_top_clients"](
+        {"start": "2026-10-02T06:15:00Z", "end": "1790923200", "sort_by": "upload"}
+    )
+    assert kwargs == {
+        "duration_hours": 24,
+        "limit": 10,
+        "start_ms": 1790921700000,
+        "end_ms": 1790923200000,
+        "sort_by": "upload",
+    }
 
 
 def test_alarm_facade_result_adapter_unwraps_result_and_preserves_coverage() -> None:

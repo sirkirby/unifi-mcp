@@ -1825,7 +1825,7 @@ type ProtectQuery {
   alarmStatus(controller: ID!): AlarmStatus
 
   """
-  List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this read family; use arm_compatible to determine whether a profile can be passed to legacy arm actions.
+  List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Use arm_compatible to determine whether a profile id can be passed to the arm and disarm actions.
   """
   alarmProfiles(controller: ID!): AlarmProfileList
 
@@ -2232,9 +2232,24 @@ type ThreatPosture {
 type TopClient {
   mac: String
   hostname: String
-  txBytes: Int
-  rxBytes: Int
-  totalBytes: Int
+
+  """Bytes the network transmitted to this client (the client's download)."""
+  txBytes: BigInt
+
+  """Bytes the network received from this client (the client's upload)."""
+  rxBytes: BigInt
+
+  """Bytes uploaded by this client (same value as rx_bytes)."""
+  uploadBytes: BigInt
+
+  """Bytes downloaded by this client (same value as tx_bytes)."""
+  downloadBytes: BigInt
+  totalBytes: BigInt
+
+  """
+  'report' when summed over the requested window; 'live_counters' when cumulative since association and not scoped to the window.
+  """
+  source: String
 }
 
 """A single UniFi traffic-flow record."""
@@ -2693,7 +2708,7 @@ Read-only access to UniFi Protect resources.
 
 **Fields:**
 
-- `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this read family; use arm_compatible to determine whether a profile can be passed to legacy arm actions.
+- `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Use arm_compatible to determine whether a profile id can be passed to the arm and disarm actions.
 - `alarmRule: AlarmRule`  — Fetch a single alarm rule (automation) by id.
 - `alarmRules: AlarmRuleList`  — List configured alarm rules / Alarm Manager automations ({rules, count}).
 - `alarmStatus: AlarmStatus`  — Get the alarm system arm-state snapshot.

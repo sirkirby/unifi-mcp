@@ -66,6 +66,8 @@ If a required tool returns `success=false`, stop scoring and report the unavaila
 
 For richer per-policy detail (needed by HYG-02 conflict detection and HYG-05 shadowing), follow up with `unifi_get_firewall_policy_details` for each policy returned by `unifi_list_firewall_policies`. Batch these calls in parallel as well.
 
+For HYG-02 and HYG-05, also call `unifi_list_firewall_policies` with `include_predefined: true`, `summary: false` and `limit: 500`. The default call returns at most 50 user-defined policies, and only the full shape carries `predefined`, which marks UniFi's system policies. Administrators can't edit, reorder or delete those.
+
 ### 1a. Determine which firewall engine the site runs
 
 **Do this before evaluating any benchmark.** UniFi has two firewall engines and a site runs exactly one:
@@ -191,6 +193,7 @@ Format depends on user intent:
 - Per-category scores
 - Critical findings called out first, then warnings, then info
 - Top 3–5 prioritised recommendations with the `fix` tool name
+- System policy overrides (HYG-05): each user policy that deliberately overrides a predefined system policy, listed without affecting the score
 
 State the engine explicitly. A reader needs to know which ruleset was examined to trust a segmentation score, and on a legacy site the zone-based remediation templates do not apply.
 
