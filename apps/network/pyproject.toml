@@ -33,7 +33,8 @@ dependencies = [
     # Bounded incident evidence collection and its client view require Core 0.4.71.
     # AUDIT system-log events and the VPN health fields require Core 0.4.72.
     # Reading bare critical system-log rows as alarms requires Core 0.4.74.
-    "unifi-core[network]>=0.4.74,<0.5",
+    # Reporting an unverified gateway settings write requires Core 0.4.75.
+    "unifi-core[network]>=0.4.75,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
