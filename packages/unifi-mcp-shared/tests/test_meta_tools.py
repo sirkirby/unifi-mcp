@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -18,7 +19,9 @@ from mcp.types import (
 )
 from pydantic import BaseModel
 from unifi_core.jobs import JobStore
+from unifi_core.policy_gate import PolicyGateChecker
 from unifi_mcp_shared.meta_tools import is_meta_tool, register_load_tools, register_meta_tools
+from unifi_mcp_shared.permissioned_tool import create_permissioned_tool
 from unifi_mcp_shared.tool_index import TOOL_REGISTRY, get_tool_index, register_tool
 
 
@@ -540,3 +543,58 @@ async def test_tool_index_forwards_exact_name_and_schemas(prefix):
     assert result["count"] == 0
     registration = next(c for c in registry.call_args_list if c.kwargs["name"] == f"{prefix}_tool_index")
     assert registration.kwargs["input_schema"]["properties"]["name"]["type"] == "string"
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_execute_and_batch_reach_the_named_tools_policy_gate(prefix, monkeypatch):
+    """The meta-tools are readOnlyHint=false, but they skip no server-side check."""
+    monkeypatch.setenv("UNIFI_POLICY_TEST_CREATE", "false")
+    server = FastMCP(f"{prefix}-test")
+    store = JobStore()
+    calls = []
+    permissioned_tool = create_permissioned_tool(
+        original_tool_decorator=server.tool,
+        policy_gate_checker=PolicyGateChecker(server_prefix="test"),
+        server_prefix="TEST",
+        register_tool_fn=Mock(),
+        diagnostics_enabled_fn=lambda: False,
+        wrap_tool_fn=lambda func, name: func,
+        logger=logging.getLogger("test"),
+    )
+
+    @permissioned_tool(name=f"{prefix}_create_thing", permission_category="things", permission_action="create")
+    async def create_thing(confirm: bool = False) -> dict:
+        calls.append(confirm)
+        return {"success": True, "data": {}}
+
+    async def start_async_tool(executor, arguments):
+        return {"jobId": await store.start(executor(**arguments))}
+
+    register_meta_tools(
+        server=server,
+        tool_decorator=server.tool,
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=start_async_tool,
+        get_job_status=store.status,
+        register_tool=Mock(),
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
+        prefix=prefix,
+    )
+
+    execute = await server.call_tool(
+        f"{prefix}_execute", {"tool": f"{prefix}_create_thing", "arguments": {"confirm": True}}
+    )
+    assert json.loads(execute.content[0].text)["success"] is False
+    assert "UNIFI_POLICY_TEST_THINGS_CREATE" in execute.content[0].text
+
+    batch = await server.call_tool(
+        f"{prefix}_batch", {"operations": [{"tool": f"{prefix}_create_thing", "arguments": {"confirm": True}}]}
+    )
+    job_id = json.loads(batch.content[0].text)["jobs"][0]["jobId"]
+    for _ in range(10):
+        if (await store.status(job_id))["status"] == "done":
+            break
+        await asyncio.sleep(0)
+    assert (await store.status(job_id))["result"]["success"] is False
+
+    assert calls == []

@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "unifi-network": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-network-mcp==0.38.6"
+      ],
+      "env": {
+        "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/network.env"
+      },
+      "env_vars": [
+        "UNIFI_TOOL_REGISTRATION_MODE",
+        "UNIFI_POLICY_CREATE",
+        "UNIFI_POLICY_UPDATE",
+        "UNIFI_POLICY_DELETE",
+        "UNIFI_TOOL_PERMISSION_MODE"
+      ]
+    }
+  }
+}

@@ -150,7 +150,7 @@ Allows the work zone to reach a corporate IP range over the internet (which a se
 - Source: Work zone, `matching_target: ANY`
 - Destination: External zone, `matching_target: IP`, `matching_target_type: SPECIFIC`, `ips: <corporate_ips>`
 
-**Note:** Full split-tunnel configuration may also require static routes. Use `unifi_list_static_routes` to review existing routing configuration.
+**Note:** Full split-tunnel configuration may also require static routes. Use `unifi_list_routes` to review existing routing configuration.
 
 ---
 

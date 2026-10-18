@@ -7,12 +7,11 @@ Generic version extracted from the network app. The ``base_package``
 parameter is required (no default) so any MCP app can reuse this.
 """
 
-import asyncio
 import importlib
 import logging
 import pkgutil
 from types import ModuleType
-from typing import List, Optional, Set
+from typing import Awaitable, List, Optional, Set
 
 from unifi_mcp_shared.meta_tools import is_meta_tool
 
@@ -25,7 +24,7 @@ def auto_load_tools(
     enabled_tools: Optional[List[str]] = None,
     server=None,
     meta_tools: Optional[Set[str]] = None,
-) -> None:
+) -> Awaitable[None] | None:
     """Dynamically import tool modules from *base_package*.
 
     Importing each module triggers the ``@server.tool`` decorators inside them,
@@ -81,33 +80,33 @@ def auto_load_tools(
 
     logger.info("Loaded %d tool modules: %s", len(loaded_modules), loaded_modules)
 
-    # If enabled_tools is specified, remove any tools not in the list
+    # If enabled_tools is specified, return an awaitable that removes and then
+    # verifies disallowed tools. The startup caller must await it before
+    # exposing a transport so there is no temporarily unconfined tool surface.
     if enabled_tools and server:
         enabled_set = set(enabled_tools)
         enabled_set.update(meta_tools or set())
 
-        try:
+        async def filter_tools() -> None:
+            tools = await server.list_tools()
+            removed = []
+            for tool in tools:
+                if tool.name not in enabled_set and not is_meta_tool(tool.name):
+                    server.remove_tool(tool.name)
+                    removed.append(tool.name)
+            if removed:
+                logger.info("Removed %d tools not in enabled_tools list", len(removed))
+                logger.debug("Removed tools: %s", removed)
 
-            async def filter_tools():
-                tools = await server.list_tools()
-                removed = []
-                for tool in tools:
-                    if tool.name not in enabled_set and not is_meta_tool(tool.name):
-                        try:
-                            server.remove_tool(tool.name)
-                            removed.append(tool.name)
-                        except Exception as e:
-                            logger.warning("Failed to remove tool '%s': %s", tool.name, e)
-                if removed:
-                    logger.info("Removed %d tools not in enabled_tools list", len(removed))
-                    logger.debug("Removed tools: %s", removed)
+            remaining = await server.list_tools()
+            unexpected = [
+                tool.name for tool in remaining if tool.name not in enabled_set and not is_meta_tool(tool.name)
+            ]
+            if unexpected:
+                raise RuntimeError("enabled_tools filtering left non-allowlisted tools registered")
 
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(filter_tools())
-            else:
-                loop.run_until_complete(filter_tools())
-        except Exception as e:
-            logger.warning("Failed to filter tools by enabled_tools: %s", e)
+        logger.info("Finished auto-loading MCP tool modules; enabled_tools filtering pending")
+        return filter_tools()
 
     logger.info("Finished auto-loading MCP tool modules")
+    return None

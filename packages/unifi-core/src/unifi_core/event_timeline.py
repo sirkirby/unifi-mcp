@@ -3,6 +3,12 @@
 Provides normalized event dataclasses and merge/sort/filter utilities
 used by both single-product local timelines and the cross-product
 relay-level timeline tool.
+
+``NormalizedEvent`` is the legacy presentation shape. Evidence semantics
+(provenance, time states, coverage, failures, mapping) live in
+``unifi_core.incident_evidence``; new consumers build on that contract and
+use :func:`normalized_event_from_record` only where the legacy shape is still
+returned.
 """
 
 from __future__ import annotations
@@ -10,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+from unifi_core.incident_evidence import EvidenceRecord, parse_utc
 
 
 @dataclass
@@ -90,3 +98,30 @@ def filter_by_area(
 
     hint_lower = area_hint.lower()
     return [e for e in events if any(hint_lower in name.lower() for name in e.area_names)]
+
+
+def normalized_event_from_record(
+    record: EvidenceRecord,
+    *,
+    location_name: str | None = None,
+) -> NormalizedEvent | None:
+    """Project an evidence record onto the legacy timeline shape.
+
+    Returns ``None`` for records without a usable event time: the legacy shape
+    requires a timestamp, and collection time must never stand in for one.
+    Evidence fields that the legacy shape cannot carry (coverage, failures,
+    mapping) stay on the evidence set, so callers must not treat a projected
+    timeline as complete on its own.
+    """
+    if record.time.utc is None:
+        return None
+    return NormalizedEvent(
+        timestamp=parse_utc(record.time.utc),
+        product=record.provenance.product.value,
+        event_type=record.event_type or "unknown",
+        summary=record.summary or record.event_type or "event",
+        normalized_fields={"evidence_id": record.evidence_id, "time_status": record.time.status.value},
+        raw={},
+        location_id=record.provenance.scope.location_id,
+        location_name=location_name,
+    )

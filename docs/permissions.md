@@ -97,6 +97,12 @@ UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true
 
 The most specific variable wins, so the category-level override takes effect.
 
+The Claude Code plugins expose only the server-level gates
+(`UNIFI_POLICY_<SERVER>_<ACTION>`) as plugin options, so per-category overrides
+are not available there. Allow the action server-wide with confirmation mode
+on, or keep it off. Codex, OpenClaw and directly launched servers accept every
+level.
+
 ---
 
 ## Practical Scenarios

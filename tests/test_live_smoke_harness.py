@@ -424,7 +424,9 @@ def test_support_plugin_launcher_includes_skill_and_matching_pins(product):
     assert arguments[-1] == f"unifi-{product}-mcp=={version}"
 
 
-@pytest.mark.parametrize("defect", ["missing_skill", "modified_skill", "version", "launcher"])
+@pytest.mark.parametrize(
+    "defect", ["missing_skill", "modified_skill", "version", "launcher", "codex_launcher", "root_mcp_json"]
+)
 def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
     import shutil
 
@@ -443,8 +445,11 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
         data = json.loads(path.read_text())
         data["version"] = "999.0.0"
         path.write_text(json.dumps(data))
+    elif defect == "root_mcp_json":
+        # OpenClaw would merge a root .mcp.json into the bundled server it runs.
+        (target / ".mcp.json").write_text(json.dumps({"mcpServers": {}}))
     else:
-        path = target / ".mcp.json"
+        path = target / (".mcp.codex.json" if defect == "codex_launcher" else ".claude-plugin/plugin.json")
         data = json.loads(path.read_text())
         data["mcpServers"]["unifi-network"]["command"] = "arbitrary-command"
         path.write_text(json.dumps(data))
@@ -453,7 +458,7 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
 
 
 @pytest.mark.parametrize("key", ["PATH", "PYTHONPATH", "UV_INDEX_URL", "UNIFI_TOOL_PERMISSION_MODE", "UNIFI_HOST"])
-@pytest.mark.parametrize("manifest", [".mcp.json", ".claude-plugin/plugin.json", "both"])
+@pytest.mark.parametrize("manifest", [".mcp.codex.json", ".claude-plugin/plugin.json", "both"])
 def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_path, key, manifest):
     import shutil
 
@@ -461,10 +466,10 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
 
     target = tmp_path / "plugins/unifi-network"
     shutil.copytree(Path(__file__).resolve().parents[1] / "plugins/unifi-network", target)
-    for filename in [".mcp.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
+    for filename in [".mcp.codex.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
         path = target / filename
         data = json.loads(path.read_text())
-        data["mcpServers"]["unifi-network"]["env"][key] = "${ATTACKER_CONTROLLED:-evil}"
+        data["mcpServers"]["unifi-network"].setdefault("env", {})[key] = "${ATTACKER_CONTROLLED:-evil}"
         path.write_text(json.dumps(data))
     env = {"UNIFI_TOOL_PERMISSION_MODE": "confirm", "UNIFI_TOOL_REGISTRATION_MODE": "eager"}
     before = dict(env)
@@ -473,7 +478,7 @@ def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_pat
     assert env == before
 
 
-@pytest.mark.parametrize("manifest", [".mcp.json", ".claude-plugin/plugin.json"])
+@pytest.mark.parametrize("manifest", [".mcp.codex.json", ".claude-plugin/plugin.json"])
 @pytest.mark.parametrize("defect", ["extra_server", "transport", "url", "cwd", "hooks"])
 def test_support_plugin_rejects_additional_host_behavior(tmp_path, manifest, defect):
     import shutil
@@ -1083,3 +1088,85 @@ def test_live_smoke_protect_api_key_preview_skip_when_missing():
         None,
         "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY",
     )
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+@pytest.mark.parametrize("plugin_version", ["2.4.0", "2.4.0-rc.1+fixture"])
+def test_support_plugin_launches_server_pin_independently_of_plugin_version(tmp_path, product, plugin_version):
+    import shutil
+
+    import support_smoke
+
+    name = f"unifi-{product}"
+    target = tmp_path / "plugins" / name
+    shutil.copytree(Path(__file__).resolve().parents[1] / "plugins" / name, target)
+    for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        path = target / manifest
+        data = json.loads(path.read_text())
+        data["version"] = plugin_version
+        path.write_text(json.dumps(data))
+    for config in (".mcp.codex.json", ".claude-plugin/plugin.json"):
+        path = target / config
+        data = json.loads(path.read_text())
+        data["mcpServers"][name]["args"][-1] = f"{name}-mcp==0.30.7"
+        path.write_text(json.dumps(data))
+
+    command, arguments, version = support_smoke.plugin_command(tmp_path, product, {})
+    assert command == "uvx"
+    assert arguments == ["--python-preference", "system", f"{name}-mcp==0.30.7"]
+    assert version == "0.30.7"
+
+
+@pytest.mark.parametrize("removed", [".claude-plugin/plugin.json", ".codex-plugin/plugin.json"])
+def test_support_plugin_validates_only_existing_manifests(tmp_path, removed):
+    import shutil
+
+    import support_smoke
+
+    target = tmp_path / "plugins/unifi-network"
+    shutil.copytree(Path(__file__).resolve().parents[1] / "plugins/unifi-network", target)
+    (target / removed).unlink()
+    command, arguments, version = support_smoke.plugin_command(tmp_path, "network", {})
+    assert command == "uvx"
+    assert arguments[-1] == f"unifi-network-mcp=={version}"
+    for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        (target / manifest).unlink(missing_ok=True)
+    with pytest.raises(support_smoke.SupportSmokeError, match="plugin_manifest_required"):
+        support_smoke.plugin_command(tmp_path, "network", {})
+
+
+@pytest.mark.parametrize(("landed", "expect_revert"), [(True, True), (False, False)])
+def test_gateway_settings_lifecycle_reverts_when_failed_apply_still_landed(monkeypatch, landed, expect_revert) -> None:
+    """Apply can report failure after the PUT landed; the harness must put it back."""
+    import live_smoke
+    from unifi_network_mcp import runtime
+
+    state = {"broadcast_ping": False}
+    mgr = SimpleNamespace(get_gateway_settings=AsyncMock(side_effect=lambda: dict(state)))
+    monkeypatch.setattr(runtime, "gateway_settings_manager", mgr, raising=False)
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    calls: list[tuple[dict, str]] = []
+    checks: list[tuple] = []
+
+    async def call(_tool: str, args: dict, phase: str):
+        calls.append((args, phase))
+        if phase == "lifecycle:apply":
+            if landed:
+                state.update(args["update_data"])
+            return SimpleNamespace(success=False, error="could not be re-read to verify it")
+        state.update(args["update_data"])
+        return SimpleNamespace(success=True, error=None)
+
+    runner.call = call
+    runner.skip = lambda *_args: None
+    runner.record_check = lambda *args: checks.append(args)
+
+    asyncio.run(runner.lifecycle_network_gateway_settings())
+
+    phases = [phase for _args, phase in calls]
+    assert phases == (["lifecycle:apply", "lifecycle:revert"] if expect_revert else ["lifecycle:apply"])
+    assert state["broadcast_ping"] is False
+    assert checks[0][1:3] == ("lifecycle:apply", False)
+    if expect_revert:
+        assert checks[-1][1:3] == ("lifecycle:revert", True)

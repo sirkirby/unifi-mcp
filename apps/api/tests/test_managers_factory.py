@@ -123,7 +123,7 @@ async def _seed(tmp_path: Path, products: list[str] = ["network"]):
             Controller(
                 id=cid,
                 name="N",
-                base_url="https://10.0.0.1",
+                base_url="https://192.0.2.1",
                 product_kinds=",".join(products),
                 credentials_blob=creds,
                 verify_tls=False,

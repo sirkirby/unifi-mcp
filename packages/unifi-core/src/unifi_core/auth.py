@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import aiohttp
+from yarl import URL
 
 from unifi_core.exceptions import UniFiAuthError
 
@@ -76,25 +77,51 @@ class UniFiAuth:
     def set_local_provider(self, provider: LocalAuthProvider) -> None:
         self._local_provider = provider
 
-    async def get_api_key_session(self, **session_options: Any) -> aiohttp.ClientSession:
+    async def get_api_key_session(self, controller_url: str, **session_options: Any) -> aiohttp.ClientSession:
+        """Return a session that sends the API key only to *controller_url*'s origin.
+
+        The key is attached per request by session middleware, never as a default
+        header: aiohttp re-sends default headers on every redirect hop, so a redirect
+        to another host would carry the key with it. Middleware runs on every hop, so
+        a request that leaves the controller origin is refused before it is sent. A
+        per-request ``middlewares=`` override drops the key rather than leaking it.
+        """
         if not self.has_api_key:
             raise UniFiAuthError("API key authentication not configured. Set UNIFI_API_KEY environment variable.")
-        return aiohttp.ClientSession(headers={"X-API-Key": self._api_key}, **session_options)
+        target = URL(controller_url)
+        if not target.absolute or target.scheme not in {"http", "https"}:
+            raise UniFiAuthError("API key sessions require an absolute http(s) controller URL.")
+        origin = (target.scheme, target.host, target.port)
+        api_key = self._api_key
+
+        async def attach_api_key(request: aiohttp.ClientRequest, handler: Any) -> aiohttp.ClientResponse:
+            if (request.url.scheme, request.url.host, request.url.port) != origin:
+                raise UniFiAuthError("API-key requests cannot leave the configured controller.")
+            request.headers["X-API-Key"] = api_key
+            return await handler(request)
+
+        middlewares = (*session_options.pop("middlewares", ()), attach_api_key)
+        return aiohttp.ClientSession(middlewares=middlewares, **session_options)
 
     async def get_local_session(self) -> aiohttp.ClientSession:
         if not self.has_local:
             raise UniFiAuthError("Local authentication not configured. Set UNIFI_USERNAME and UNIFI_PASSWORD.")
         return await self._local_provider.get_session()
 
-    async def get_session(self, method: AuthMethod) -> aiohttp.ClientSession:
+    async def get_session(self, method: AuthMethod, controller_url: str | None = None) -> aiohttp.ClientSession:
         if method == AuthMethod.BOTH:
             raise UniFiAuthError("Both authentication paths are required; request each session explicitly.")
         if method == AuthMethod.API_KEY_ONLY:
-            return await self.get_api_key_session()
+            return await self._api_key_session_for(controller_url)
         elif method == AuthMethod.LOCAL_ONLY:
             return await self.get_local_session()
         elif method == AuthMethod.EITHER:
             if self.has_api_key:
-                return await self.get_api_key_session()
+                return await self._api_key_session_for(controller_url)
             return await self.get_local_session()
         raise UniFiAuthError(f"Unknown auth method: {method}")
+
+    async def _api_key_session_for(self, controller_url: str | None) -> aiohttp.ClientSession:
+        if controller_url is None:
+            raise UniFiAuthError("API key sessions require the controller URL the key may be sent to.")
+        return await self.get_api_key_session(controller_url)

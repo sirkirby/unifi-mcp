@@ -1,0 +1,48 @@
+name: "Core: Test"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+    branches: [ main, develop ]
+
+env:
+  # Fallback for branches without a core/v* tag in ancestry — hatch-vcs needs this
+  SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0.dev0"
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
+    # Same install and test command as release-core.yml, so a PR runs the gate the tag will.
+    - name: Install dependencies
+      run: uv sync --all-packages
+
+    - name: Run tests
+      run: uv run --package unifi-core pytest packages/unifi-core/tests -n auto -v --tb=short

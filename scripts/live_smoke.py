@@ -1188,6 +1188,24 @@ class LiveSmokeRunner:
             self.record_check(
                 "unifi_update_gateway_settings", "lifecycle:apply", False, f"apply failed: {apply_rec.error}"
             )
+            # The write may have landed even though apply reported failure (e.g. only
+            # the verifying re-read failed). Put the field back so the gateway isn't left changed.
+            try:
+                current = await mgr.get_gateway_settings()
+            except Exception:
+                current = None
+            if current is None or bool(current.get(field, False)) != original:
+                revert_rec = await self.call(
+                    "unifi_update_gateway_settings",
+                    {"update_data": {field: original}, "confirm": True},
+                    "lifecycle:revert",
+                )
+                self.record_check(
+                    "unifi_update_gateway_settings",
+                    "lifecycle:revert",
+                    bool(revert_rec.success),
+                    f"{field} restored to {original} after failed apply",
+                )
             return
 
         after = copy.deepcopy(await mgr.get_gateway_settings())

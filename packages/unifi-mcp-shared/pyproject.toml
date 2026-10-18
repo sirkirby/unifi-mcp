@@ -11,11 +11,12 @@ dependencies = [
     # floors explicit so upgrades cannot retain vulnerable installed versions.
     "cryptography>=50.0.1",
     "pydantic-settings>=2.14.2",
-    "PyJWT>=2.13.0",
+    "PyJWT>=2.15.0",
     "python-multipart>=0.0.31",
     "anyio>=4.14.2",
     "starlette>=1.7.0",
     "click>=8.3.3",
+    "multidict>=6.9.1",
     "omegaconf>=2.3.0",
     "pyyaml>=6.0",
     "jsonschema>=4.0.0",

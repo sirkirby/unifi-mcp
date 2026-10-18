@@ -71,13 +71,14 @@ class DpiManager:
         url = f"{base_url}/proxy/network/integration{path}"
 
         try:
-            session = await self._auth.get_api_key_session()
+            session = await self._auth.get_api_key_session(base_url)
             try:
                 async with session.get(
                     url,
                     params=params,
                     ssl=self._connection.verify_ssl,
                     timeout=aiohttp.ClientTimeout(total=10),
+                    allow_redirects=False,
                 ) as resp:
                     if resp.status == 200:
                         return await resp.json()

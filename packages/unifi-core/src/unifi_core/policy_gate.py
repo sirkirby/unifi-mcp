@@ -26,6 +26,11 @@ _SERVER_PREFIXES = frozenset({"NETWORK", "PROTECT", "ACCESS"})
 _MAX_REPORTED_UNKNOWN = 20
 _TRUTHY = frozenset(("true", "1", "yes", "on"))
 _FALSY = frozenset(("false", "0", "no", "off"))
+_AUTO_CONFIRM_BYPASS_WARNING = (
+    "[permissions] UNIFI_AUTO_CONFIRM is deprecated but still enabled: unless a permission mode is set, it makes "
+    "mutations bypass confirmation. Set UNIFI_TOOL_PERMISSION_MODE=bypass (or "
+    "UNIFI_%s_TOOL_PERMISSION_MODE=bypass for this server only) instead, then remove UNIFI_AUTO_CONFIRM."
+)
 
 
 class PolicyGateChecker:
@@ -111,7 +116,7 @@ def resolve_permission_mode(server_prefix: str) -> str:
     # 3. Backwards compat: UNIFI_AUTO_CONFIRM=true -> bypass
     auto_confirm = os.environ.get("UNIFI_AUTO_CONFIRM", "").strip().lower()
     if auto_confirm in _TRUTHY:
-        logger.warning("[permissions] UNIFI_AUTO_CONFIRM is deprecated. Use UNIFI_TOOL_PERMISSION_MODE=bypass instead.")
+        logger.warning(_AUTO_CONFIRM_BYPASS_WARNING, prefix_upper)
         return "bypass"
 
     # 4. Default
@@ -134,9 +139,15 @@ def check_deprecated_env_vars(server_prefix: str, logger) -> None:
                 new_key,
                 value,
             )
-    # Also check UNIFI_AUTO_CONFIRM
-    if os.environ.get("UNIFI_AUTO_CONFIRM"):
-        logger.warning("[permissions] UNIFI_AUTO_CONFIRM is deprecated. Use UNIFI_TOOL_PERMISSION_MODE=bypass instead.")
+    # Also check UNIFI_AUTO_CONFIRM. The value is never logged.
+    auto_confirm = os.environ.get("UNIFI_AUTO_CONFIRM", "").strip().lower()
+    if auto_confirm in _TRUTHY:
+        logger.warning(_AUTO_CONFIRM_BYPASS_WARNING, prefix_upper)
+    elif os.environ.get("UNIFI_AUTO_CONFIRM", "").strip():
+        logger.warning(
+            "[permissions] UNIFI_AUTO_CONFIRM is deprecated and its value does not enable bypass, so it has "
+            "no effect. It can be removed."
+        )
 
 
 def check_unknown_policy_env_vars(

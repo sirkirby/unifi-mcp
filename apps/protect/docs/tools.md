@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 62 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 63 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -20,7 +20,7 @@ In lazy mode, an additional meta-tool is available:
 ## Cameras (12 tools)
 
 - `protect_list_cameras` -- List all cameras with name, model, state, recording mode
-- `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ
+- `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ. Listed directly in lazy mode so read-only clients can read a camera's MAC.
 - `protect_get_snapshot` -- Fetch JPEG snapshot (base64 or resource reference)
 - `protect_get_camera_streams` -- RTSP/RTSPS stream URLs by channel (High/Medium/Low)
 - `protect_get_camera_analytics` -- Motion and smart detection analytics with timestamps
@@ -43,6 +43,10 @@ In lazy mode, an additional meta-tool is available:
 - `protect_recent_events` -- Get events from the in-memory websocket buffer (fast, no API call)
 - `protect_subscribe_events` -- Get instructions for real-time event subscription via MCP resources
 - `protect_acknowledge_event` -- Mark event as favorite/acknowledged (confirm required)
+
+## Incident Evidence (1 tool)
+
+- `protect_get_incident_evidence` -- Bounded, read-only event evidence for one incident window as a bounded `unifi-incident-evidence-view` by default, or the whole `unifi-incident-evidence` document with `detail="full"`; each camera ID (at most 5) is its own source (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
 
 ## Recordings (4 tools)
 
@@ -82,8 +86,8 @@ The alarm-rule tools are version-agnostic. `protect_alarm_list_rules` / `protect
 
 - `protect_alarm_list_profiles` -- List all configured arm profiles with id, name, armed state, default flag
 - `protect_alarm_get_status` -- Current armed/disarmed state across all profiles
-- `protect_alarm_arm` -- Arm the system for a given profile (confirm required; defaults to default profile)
-- `protect_alarm_disarm` -- Disarm the system for a given profile (confirm required; defaults to default profile)
+- `protect_alarm_arm` -- Arm a profile (confirm required). Global-mode consoles accept the profile id or name, arm via `POST /api/v2/alarms/profiles/{id}/actions/arm` and verify the result against the controller state; legacy (Local-mode) consoles need the legacy profile id and use `PATCH arm` + `POST arm/enable`. A blank `profile_id` is rejected
+- `protect_alarm_disarm` -- Disarm every active profile, or one `profile_id` (confirm required; a blank value is rejected). Global-mode consoles accept the id or name and use `POST /api/v2/alarms/profiles/{id}/actions/disarm`; legacy consoles disarm system-wide with `POST arm/disable`
 - `protect_alarm_list_rules` -- List alarm rules (normalized: id, title, enabled, triggers, actions, scope, stats), including AI alarms
 - `protect_alarm_get_rule` -- Fetch a single alarm rule by id (normalized)
 - `protect_alarm_create_rule` -- Create an alarm rule using the canonical shape returned by list/get (confirm required)

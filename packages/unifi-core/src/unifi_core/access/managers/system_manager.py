@@ -19,8 +19,7 @@ import asyncio
 import logging
 from typing import Any, Dict
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
-from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +51,7 @@ _STATS_EXPAND = (
 )
 
 
+@reconnects_on_demand
 class SystemManager:
     """Reads system-level data from the Access controller."""
 
@@ -109,7 +109,7 @@ class SystemManager:
                 logger.error("[system] Failed to get system info via proxy: %s", exc, exc_info=True)
                 raise
 
-        raise UniFiConnectionError("No auth path available for get_system_info")
+        raise self._cm.unavailable_error("No auth path available for get_system_info")
 
     async def get_health(self) -> Dict[str, Any]:
         """Return system health summary.
@@ -190,4 +190,4 @@ class SystemManager:
                 logger.error("[system] Failed to list users via users proxy: %s", exc, exc_info=True)
                 raise
 
-        raise UniFiConnectionError("No auth path available for list_users (proxy session required)")
+        raise self._cm.unavailable_error("No auth path available for list_users (proxy session required)")

@@ -1,0 +1,39 @@
+{
+  "name": "unifi-intelligence",
+  "version": "1.0.0",
+  "description": "UniFi Intelligence skills: investigate a Network device incident with Protect camera context, and audit area and visitor activity through the cloud worker. Requires the unifi-network and unifi-protect plugins; Codex does not install them for you",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "incident",
+    "investigation",
+    "security",
+    "network",
+    "protect"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "UniFi Intelligence",
+    "shortDescription": "Investigate UniFi incidents across Network and Protect",
+    "longDescription": "Read-only UniFi skills for Codex: investigate a Network device incident from the bounded incident evidence of the Network and Protect servers, and review area or visitor activity through the cloud worker's location timeline. Install the UniFi Network and UniFi Protect plugins first; this plugin ships no MCP server of its own.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Investigate why a UniFi switch went offline",
+      "What happened to my access point between 8 and 9 this morning?"
+    ],
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}

@@ -53,6 +53,24 @@ class TestEventManagerV2:
         assert api_request.data["searchText"] == ""
 
     @pytest.mark.asyncio
+    async def test_default_categories_keep_the_general_view(self, event_manager, mock_connection):
+        """Requests that do not ask for AUDIT are unchanged."""
+        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
+        await event_manager.get_events(categories=["SECURITY"])
+        assert mock_connection.request.call_args[0][0].data["type"] == "GENERAL"
+        await event_manager.get_events()
+        assert mock_connection.request.call_args[0][0].data["type"] == "GENERAL"
+
+    @pytest.mark.asyncio
+    async def test_audit_category_drops_the_general_view(self, event_manager, mock_connection):
+        """AUDIT records exist only outside the GENERAL view, so asking for them under it returns nothing."""
+        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
+        await event_manager.get_events(categories=["SECURITY", "AUDIT"])
+        payload = mock_connection.request.call_args[0][0].data
+        assert payload["categories"] == ["SECURITY", "AUDIT"]
+        assert "type" not in payload
+
+    @pytest.mark.asyncio
     async def test_get_events_paginates_past_v2_page_size_cap(self, event_manager, mock_connection):
         first_page = [{"id": f"evt{i}"} for i in range(100)]
         second_page = [{"id": f"evt{i}"} for i in range(100, 150)]
@@ -260,6 +278,7 @@ class TestEventManagerCommon:
         categories = event_manager.get_event_categories()
         assert len(categories) > 0
         assert any(c["category"] == "SECURITY" for c in categories)
+        assert any(c["category"] == "AUDIT" for c in categories)
         assert all("description" in c for c in categories)
 
     @pytest.mark.asyncio
@@ -309,7 +328,7 @@ class TestEventManagerCommon:
 
     @pytest.mark.asyncio
     async def test_failed_probe_logs_retry_without_caching_legacy(self, event_manager, mock_connection, caplog):
-        """An inconclusive failure logs its class and retry, while preserving diagnostics."""
+        """An inconclusive failure logs its class and retry; controller text is never kept."""
         mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
 
         with caplog.at_level("WARNING"):
@@ -319,13 +338,13 @@ class TestEventManagerCommon:
         assert "probe failed (Exception)" in caplog.text
         assert "retrying in" in caplog.text
         assert "unknown severity LOW" not in caplog.text
-        assert "unknown severity LOW" in event_manager._v2_probe_error
+        assert event_manager._v2_probe_error == "Exception"
 
     @pytest.mark.asyncio
     async def test_failed_probe_is_recorded_for_later_diagnosis(self, event_manager, mock_connection):
-        mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
+        mock_connection.request.side_effect = ResponseError("Call https://controller.example/x received 400")
         await event_manager._ensure_api_version()
-        assert "unknown severity LOW" in event_manager._v2_probe_error
+        assert event_manager._v2_probe_error == "ResponseError, HTTP 400"
 
     @pytest.mark.asyncio
     async def test_successful_probe_records_no_error(self, event_manager, mock_connection):
@@ -346,7 +365,9 @@ class TestEventManagerCommon:
 
         message = str(exc.value)
         assert "404" in message
-        assert "unknown severity LOW" in message, "the v2 probe failure must be surfaced, not swallowed"
+        assert "v2 system-log probe failed (Exception)" in message, "the v2 probe failure must be surfaced"
+        assert "unknown severity LOW" not in message, "controller text must not leave the manager"
+        assert exc.value.__suppress_context__ and exc.value.__cause__ is None
 
     @pytest.mark.asyncio
     async def test_legacy_alarms_404_after_failed_probe_explains_both(self, event_manager, mock_connection):
@@ -358,19 +379,20 @@ class TestEventManagerCommon:
         with pytest.raises(Exception) as exc:
             await event_manager.get_alarms()
 
-        assert "unknown severity LOW" in str(exc.value)
+        assert "v2 system-log probe failed (Exception)" in str(exc.value)
+        assert "unknown severity LOW" not in str(exc.value)
 
     @pytest.mark.asyncio
     async def test_legacy_failure_on_a_genuinely_old_controller_is_left_alone(self, event_manager, mock_connection):
         """No probe error recorded means legacy was a real choice — do not editorialise."""
         event_manager._use_v2 = False
         event_manager._v2_probe_error = None
-        mock_connection.request.side_effect = Exception("connection reset")
+        mock_connection.request.side_effect = Exception("connection reset by fixture-controller")
 
         with pytest.raises(Exception) as exc:
             await event_manager.get_events()
 
-        assert "connection reset" in str(exc.value)
+        assert str(exc.value) == "/stat/event failed (Exception)."
         assert "v2 system-log probe" not in str(exc.value)
 
 

@@ -115,7 +115,6 @@ async def test_stat_user_unknown_user_raises_not_found(mock_connection):
 
 @pytest.mark.asyncio
 async def test_stat_user_network_error_is_not_reported_as_not_found(mock_connection):
-
     mac = MAC
     cause = RuntimeError("boom")
     _route_stat_user(mock_connection, error=cause)

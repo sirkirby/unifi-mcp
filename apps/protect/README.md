@@ -32,10 +32,12 @@ The plugin installs the MCP server, an agent skill for tool discovery, and a gui
 Then run the interactive setup to configure your controller connection:
 
 ```
-/unifi-protect:setup
+/unifi-protect:unifi-protect-setup
 ```
 
-This walks you through entering your controller host, credentials, and permission preferences — then writes everything to `.claude/settings.local.json` so it persists across sessions. If you already have the Network plugin configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
+This walks you through entering your controller host, credentials, and permission preferences. Credentials are given as a file or command provider, never typed into chat. Setup saves the result as the plugin's Claude Code options, which apply in every project; a password or API key entered as an option is stored in the system keychain. Start a new Claude Code session after setup to connect.
+
+Upgrading from a plugin version before 1.0.0, which kept settings in the project's `.claude/settings.local.json`? Follow the [plugin upgrade guide](../../docs/plugin-upgrade.md).
 
 ### Codex
 
@@ -45,7 +47,7 @@ Register the marketplace, then install `unifi-protect` from Codex's `/plugins` U
 codex plugin marketplace add sirkirby/unifi-mcp
 ```
 
-After installing, ask Codex to use the UniFi Protect setup skill. The setup flow registers the MCP server with `codex mcp add`, stores your controller environment values in Codex's MCP configuration, and prompts you to restart Codex.
+After installing, ask Codex to use the UniFi Protect setup skill. Setup saves a version-pinned MCP server entry with your controller settings in Codex's `config.toml` and prompts you to restart Codex. After each plugin upgrade, re-run setup with `--refresh`.
 
 ### PyPI / Docker
 
@@ -84,7 +86,9 @@ All camera and event queries are read-only by default. Mutations (camera setting
 
 ## Configure
 
-Set these variables in the server's process environment. If you used `/unifi-protect:setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+Set these variables in the server's process environment. The plugin setup skill already does this for Codex and OpenClaw; in Claude Code the plugin maps its options onto these variables. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
+
+With no controller host configured, the server still starts in setup mode: it tells the client how to configure it, offers only the read-only `protect_setup_status` tool, and makes no controller connections.
 
 ```bash
 # Server-specific variables (recommended)
@@ -239,7 +243,7 @@ Compact mode is the recommended default when building summaries or feeding event
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Protect-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 62 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 63 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
 - [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, connection issues, SSL, missing tools
 

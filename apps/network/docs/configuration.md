@@ -67,9 +67,12 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 | `UNIFI_MCP_LOG_LEVEL` | `INFO` | Logging level |
 | `UNIFI_AUTO_CONFIRM` | `false` | Skip preview-then-confirm for mutations (for automation) |
 | `UNIFI_TOOL_REGISTRATION_MODE` | `lazy` | Tool loading: `lazy`, `eager`, or `meta_only` |
+| `UNIFI_DEFER_CONTROLLER_INIT` | `false` | By default the server answers the MCP client at once and connects to the controller in the background; tool calls wait for that connection for up to 15 seconds. Set `true` to make no connection at startup and connect on the first tool call instead. The real-time event listener starts in the background after the connection succeeds. |
+| `UNIFI_META_TOOLS_ENABLED` | `true` | Eager mode only. Set to `false` to omit indirect meta-tools, including `unifi_get_support_bundle`; `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is then required. |
 | `UNIFI_ENABLED_CATEGORIES` | — | Comma-separated tool categories to load (eager mode only) |
 | `UNIFI_ENABLED_TOOLS` | — | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | — | Path to a custom config YAML file |
+| `UNIFI_SETTINGS_FILE` | — | Absolute path to a per-user file of `UNIFI_*` settings, read at startup; the process environment wins ([details](../../../README.md#configuration)) |
 
 ## MCP Response Content
 
@@ -93,7 +96,7 @@ execution, batch orchestration, and optional direct registration. See [MCP Disco
 
 | Mode | Initial `tools/list` behavior | Best fit |
 |------|-------------------------------|----------|
-| `lazy` (default) | Meta-tools plus `unifi_load_tools`; domain tools load on demand | Production LLM clients with limited context |
+| `lazy` (default) | Meta-tools plus `unifi_load_tools`, and the read-only `unifi_get_incident_evidence` and `unifi_get_client_details`; other domain tools load on demand | Production LLM clients with limited context |
 | `eager` | Meta-tools plus all selected Network tools registered directly | Standard MCP clients and dev consoles |
 | `meta_only` | Core meta-tools only; use `unifi_execute` for operations | Maximum context control |
 
@@ -188,6 +191,8 @@ server:
   port: ${oc.env:UNIFI_MCP_PORT,3000}
   log_level: INFO
   tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
+  defer_controller_init: ${oc.env:UNIFI_DEFER_CONTROLLER_INIT,false}
+  meta_tools_enabled: ${oc.env:UNIFI_META_TOOLS_ENABLED,true}
 
   http:
     enabled: ${oc.env:UNIFI_MCP_HTTP_ENABLED,false}

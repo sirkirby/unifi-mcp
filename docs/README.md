@@ -8,6 +8,9 @@ Complete documentation for the UniFi MCP ecosystem.
 
 - **[Main README](../README.md)** - Project overview and installation
 - **[Quick Start](../QUICKSTART.md)** - Get started in 5 minutes
+- **[Plugin Support Matrix](plugin-support.md)** - Plugin prerequisites, versions and client verification status
+- **[Plugin Upgrade Guide](plugin-upgrade.md)** - Updating existing plugin installs, including the 1.0.0 Claude Code settings migration
+- **[Plugin Acceptance Procedure](plugin-acceptance.md)** - How real-client evidence for the support matrix is produced
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
@@ -177,6 +180,10 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 ### Core Documentation (docs/)
 - [context-optimization-comparison.md](context-optimization-comparison.md) - Mode comparison
 - [credential-providers.md](credential-providers.md) - Credential indirection contract
+- [agent-install.md](agent-install.md) - Installing UniFi MCP with an agent, per client
+- [plugin-support.md](plugin-support.md) - Plugin support matrix
+- [plugin-upgrade.md](plugin-upgrade.md) - Plugin upgrade guide
+- [plugin-acceptance.md](plugin-acceptance.md) - Real-client plugin acceptance procedure
 - [support-bundles.md](support-bundles.md) - Sanitized support-bundle workflow and privacy contract
 - [tool-index.md](tool-index.md) - Tool index documentation
 - [sponsor/](sponsor/) - Sponsorship landing page

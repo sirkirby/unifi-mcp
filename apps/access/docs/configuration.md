@@ -79,6 +79,7 @@ When both paths are available, each tool selects the appropriate one. Visitor li
 | `UNIFI_ENABLED_CATEGORIES` | -- | Comma-separated tool categories to load (eager mode only) |
 | `UNIFI_ENABLED_TOOLS` | -- | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | -- | Path to a custom config YAML file |
+| `UNIFI_SETTINGS_FILE` | -- | Absolute path to a per-user file of `UNIFI_*` settings, read at startup; the process environment wins ([details](../../../README.md#configuration)) |
 
 ## MCP Response Content
 

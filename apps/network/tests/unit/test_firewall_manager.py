@@ -546,8 +546,10 @@ class TestFirewallPolicyOrdering:
         def __init__(self, response):
             self.response = response
             self.closed = False
+            self.calls = []
 
         def request(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
             return TestFirewallPolicyOrdering._ResponseContext(self.response)
 
         async def close(self):
@@ -567,6 +569,31 @@ class TestFirewallPolicyOrdering:
     async def test_ordering_requires_api_key(self, firewall_manager):
         with pytest.raises(RuntimeError, match="requires a UniFi API key"):
             await firewall_manager._request_integration_api("get", "/v1/sites")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("verify_ssl", [True, False])
+    async def test_integration_api_binds_key_to_controller_without_redirects(self, mock_connection, verify_ssl):
+        mock_connection.verify_ssl = verify_ssl
+        response = self._Response(status=200, json_body={"data": []})
+        manager, session = self._manager_with_integration_response(mock_connection, response)
+
+        await manager._request_integration_api("get", "/v1/sites")
+
+        manager._auth.get_api_key_session.assert_awaited_once_with("https://127.0.0.1:443")
+        (_method, url), kwargs = session.calls[0]
+        assert url == "https://127.0.0.1:443/proxy/network/integration/v1/sites"
+        assert kwargs["ssl"] is verify_ssl
+        assert kwargs["allow_redirects"] is False
+
+    @pytest.mark.asyncio
+    async def test_integration_api_treats_redirect_as_error(self, mock_connection):
+        response = self._Response(status=302, json_error=ValueError("not json"), text_body="")
+        manager, session = self._manager_with_integration_response(mock_connection, response)
+
+        with pytest.raises(RuntimeError, match="Integration API returned 302"):
+            await manager._request_integration_api("get", "/v1/sites")
+
+        assert session.closed is True
 
     @pytest.mark.asyncio
     async def test_integration_api_reports_non_json_error_body(self, mock_connection):

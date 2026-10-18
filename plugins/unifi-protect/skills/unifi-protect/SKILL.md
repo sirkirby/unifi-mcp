@@ -5,7 +5,38 @@ description: How to manage UniFi Protect cameras and NVR — view cameras, smart
 
 # UniFi Protect MCP Server
 
-You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 62 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
+## Dependencies
+
+Requires: protect
+Optional: network
+
+Verify required tools through MCP discovery before collecting data; discovery alone
+does not prove controller connectivity or authorization. If a required server/tool
+is missing or a required read fails, stop and report it unavailable. Optional sources
+may be skipped only when the report visibly names the missing source and resulting
+coverage limits. Use the product setup skill for connection help; never request secrets.
+
+## Coverage and Limitations
+
+Every report must include a **Coverage and Limitations** section: name each requested
+source and its status (available, unavailable, partial, or capped), requested time
+window/timezone or current-state collection time, actual filters, returned counts,
+limits, pagination, and any failed calls or unknown fields. Counts describe retrieved
+records, not totals unless completeness is established. A successful empty query is
+an observation; a failed or missing source is unavailable, never an empty result.
+If a limit is reached, label the source capped unless further bounded reads establish
+coverage. If completeness cannot be established, label it partial. Do not claim
+complete coverage, all-clear, or overall health from unavailable, partial, or capped
+data; say “No concerning activity found in the retrieved records” when appropriate.
+
+Separate **Observations** (cite source/tool, record ID and timestamp when available),
+**Hypotheses** (correlations and alternative explanations), and **Identity** (only
+explicit source-backed credential/account attribution, with its limits). Timing,
+similar names, proximity, or absence of a matching event alone proves neither
+identity nor cause. A credential event identifies the recorded account, not who
+physically used it. Missing mappings or clock uncertainty limit correlations.
+
+You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 63 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
 
 ## Tool Discovery
 
@@ -54,7 +85,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 - **RTSP streams:** `protect_get_camera_streams` gives stream URL metadata for video player integration; raw URLs require redaction policy to be disabled for a trusted local process
 - **Smart detections:** `protect_list_smart_detections` filters by type (person, vehicle, animal, package, face, licensePlate). These are the highest-signal events — prioritize over raw motion.
 - **Find Anything search:** use `protect_detection_search_labels` to discover controller-supported label values, then pass those values to `protect_search_detections` for richer searches by vehicle type, color, device, or other Protect labels.
-- **Event camera names:** All event responses include `camera_name` alongside `camera_id` — no need to call `protect_list_cameras` separately to resolve names.
+- **Event camera identity:** Canonical historical event rows use `camera`; use `protect_list_cameras` to resolve missing names rather than assuming every event contains `camera_name`.
 - **Real-time events:** `protect_recent_events` reads from websocket buffer instantly (no API call). Buffer holds ~100 events with 5-minute TTL. Use `protect_list_events` for historical queries.
 - **Video export:** `protect_export_clip` returns metadata (not video data — too large for MCP). Max 2 hours, supports timelapse (fps: 4=60x, 8=120x, 20=300x)
 - **PTZ:** Only zoom works via API. For pan/tilt, use `protect_ptz_preset` with saved positions
@@ -67,7 +98,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 - **Use `protect_search_detections` for Find Anything questions** — if the user asks for "white vans", "animals in the driveway", or other attribute searches, discover labels first and reuse the returned `value` strings.
 - **`protect_recent_events` is fast but small** — only a few minutes of buffered data. For anything beyond real-time monitoring, use `protect_list_events` with time range filters.
 - **Limit results** — event queries default to 30 but can return large payloads. Use `limit` parameter to keep responses focused.
-- **Security digest** — for comprehensive event summaries, use the `security-digest` skill which handles batch calls, severity classification, and cross-product correlation.
+- **Security digest** — for coverage-aware event summaries, use the `security-digest` skill which handles batch calls, severity classification, and cross-product correlation.
 
 ## Authentication
 
@@ -90,4 +121,4 @@ Cameras are network clients — if a camera appears offline, the Network server 
 
 ## Tool Reference
 
-For the complete list of all 62 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.
+For the complete list of all 63 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.

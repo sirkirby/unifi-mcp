@@ -3,17 +3,27 @@
 
 Responsibilities:
 - configure permissions wrappers
-- initialise UniFi Protect connection
-- start FastMCP (stdio)
+- start FastMCP (stdio) and connect to UniFi Protect in the background
 """
 
-from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
+import asyncio
+from contextlib import suppress
+
+from unifi_core.policy_gate import PolicyGateChecker
+from unifi_mcp_shared.permissioned_tool import create_permissioned_tool
 from unifi_protect_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
     logger,
 )  # ensures logging/env setup early
-from unifi_protect_mcp.categories import PROTECT_CATEGORY_MAP, TOOL_MODULE_MAP, policy_gates, setup_lazy_loading
+from unifi_protect_mcp.categories import (
+    LAZY_DIRECT_TOOLS,
+    PROTECT_CATEGORY_MAP,
+    TOOL_MODULE_MAP,
+    policy_gates,
+    setup_lazy_loading,
+)
 from unifi_protect_mcp.jobs import get_job_status, start_async_tool
+from unifi_protect_mcp.reconnect import reconnecting_tool_decorator
 
 # Shared singletons
 from unifi_protect_mcp.runtime import (
@@ -31,9 +41,12 @@ from unifi_protect_mcp.utils.diagnostics import diagnostics_enabled, wrap_tool
 
 _original_tool_decorator = getattr(server, "_original_tool", server.tool)
 
-setup_permissioned_tool(
-    server=server,
-    category_map=PROTECT_CATEGORY_MAP,
+# Domain tools reconnect first when the controller was unavailable at start-up.
+# Meta-tools register with the plain decorator: discovery never contacts the
+# controller.
+server.tool = create_permissioned_tool(
+    original_tool_decorator=reconnecting_tool_decorator(_original_tool_decorator, connection_manager),
+    policy_gate_checker=PolicyGateChecker(server_prefix="protect", category_map=PROTECT_CATEGORY_MAP),
     server_prefix="protect",
     register_tool_fn=register_tool,
     diagnostics_enabled_fn=diagnostics_enabled,
@@ -46,11 +59,56 @@ logger.info("Using global ProtectConnectionManager instance.")
 logger.info("Using global Manager instances.")
 
 
+async def start_event_listener() -> None:
+    """Start the event websocket listener when it is enabled.
+
+    Runs after every successful connect, at start-up or on an automatic
+    reconnect, so real-time events resume as they would after a normal start.
+    """
+    ws_enabled_raw = config.protect.events.get("websocket_enabled", True) if hasattr(config, "protect") else True
+    if not parse_config_bool(ws_enabled_raw):
+        logger.info("Protect event websocket disabled via config.")
+        return
+    try:
+        event_manager.set_server(server)
+        await event_manager.start_listening()
+        logger.info("Protect event websocket listener started.")
+    except Exception as ws_exc:
+        logger.error(
+            "Failed to start event websocket listener: %s. "
+            "Real-time events will be unavailable; REST queries still work.",
+            ws_exc,
+            exc_info=True,
+        )
+
+
+async def connect_at_startup() -> bool:
+    """Connect to UniFi Protect in the background while the server answers MCP requests.
+
+    Domain tools wait for this connection within a bound. The event listener
+    starts from the connect hook, here or on a later automatic reconnect.
+    """
+    logger.info("Connecting to UniFi Protect in the background...")
+    try:
+        connected = await connection_manager.initialize()
+    except Exception as exc:
+        # Nothing awaits this task's result; a failure must still be reported.
+        logger.error("Unexpected error while connecting at startup: %s", type(exc).__name__)
+        connected = False
+    if not connected:
+        logger.error(
+            "Failed to connect to UniFi Protect. Tools report the connection error and try to reconnect on later calls."
+        )
+        return False
+    logger.info("Global Protect connection initialized successfully.")
+    return True
+
+
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
-    from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
+    from unifi_mcp_shared.setup_required import controller_host_configured, serve_setup_required
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.transport import resolve_http_config, run_transports
 
@@ -58,35 +116,27 @@ async def main_async():
     apply_log_level(config, "unifi-protect-mcp")
     check_deprecated_env_vars("protect", logger)
     check_unknown_policy_env_vars("protect", logger, policy_gates(), PROTECT_CATEGORY_MAP)
-    assert_credentials_configured(config, plugin_name="unifi-protect", env_prefix="PROTECT", logger=logger)
+    if not controller_host_configured(config):
+        # Answer initialize and explain setup instead of exiting; register no
+        # controller tools and open no controller connection.
+        await serve_setup_required(
+            server=server,
+            config=config,
+            plugin_name="unifi-protect",
+            env_prefix="PROTECT",
+            tool_prefix="protect",
+            default_port=3001,
+            logger=logger,
+        )
+        return
 
+    startup_connect = None
     try:
-        # Initialize the global Protect connection
-        logger.info("Initializing global Protect connection from main_async...")
-        if not await connection_manager.initialize():
-            logger.error("Failed to connect to UniFi Protect. Tool functionality may be impaired.")
-        else:
-            logger.info("Global Protect connection initialized successfully from main_async.")
-
-            # Start the websocket event listener if enabled and connection succeeded
-            ws_enabled_raw = (
-                config.protect.events.get("websocket_enabled", True) if hasattr(config, "protect") else True
-            )
-            ws_enabled = parse_config_bool(ws_enabled_raw)
-            if ws_enabled:
-                try:
-                    event_manager.set_server(server)
-                    await event_manager.start_listening()
-                    logger.info("Protect event websocket listener started.")
-                except Exception as ws_exc:
-                    logger.error(
-                        "Failed to start event websocket listener: %s. "
-                        "Real-time events will be unavailable; REST queries still work.",
-                        ws_exc,
-                        exc_info=True,
-                    )
-            else:
-                logger.info("Protect event websocket disabled via config.")
+        # Answer initialize before reaching the controller: clients enforce a
+        # short startup timeout. The event listener starts after this connect,
+        # or after a later automatic reconnect.
+        connection_manager.add_connect_hook(start_event_listener)
+        startup_connect = asyncio.create_task(connect_at_startup(), name="protect-startup-connect")
 
         # ---- Register MCP resources ----
         try:
@@ -114,6 +164,7 @@ async def main_async():
             support_bundle_handler=support_bundle_service.generate,
             prefix="protect",
             server_label="UniFi Protect",
+            lazy_direct_tools=LAZY_DIRECT_TOOLS,
         )
 
         # ---- Start transports ----
@@ -127,6 +178,10 @@ async def main_async():
             logger=logger,
         )
     finally:
+        if startup_connect is not None and not startup_connect.done():
+            startup_connect.cancel()
+            with suppress(asyncio.CancelledError):
+                await startup_connect
         try:
             await event_manager.stop_listening()
         finally:

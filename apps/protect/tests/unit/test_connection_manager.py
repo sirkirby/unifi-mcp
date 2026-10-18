@@ -11,7 +11,7 @@ from unifi_core.protect.managers.connection_manager import ProtectConnectionMana
 def cm():
     """Create a ProtectConnectionManager with test params."""
     return ProtectConnectionManager(
-        host="192.168.1.1",
+        host="192.0.2.1",
         username="admin",
         password="secret",
         port=443,
@@ -23,7 +23,7 @@ def cm():
 
 class TestInit:
     def test_stores_connection_params(self, cm):
-        assert cm.host == "192.168.1.1"
+        assert cm.host == "192.0.2.1"
         assert cm.username == "admin"
         assert cm.password == "secret"
         assert cm.port == 443
@@ -33,7 +33,6 @@ class TestInit:
 
     def test_initial_state(self, cm):
         assert cm._client is None
-        assert cm._api_session is None
         assert cm._ws_unsub is None
         assert cm._initialized is False
         assert cm.is_connected is False
@@ -82,32 +81,6 @@ class TestIsConnected:
         assert cm.is_connected is False
 
 
-class TestApiSession:
-    @pytest.mark.asyncio
-    async def test_creates_session_with_api_key(self, cm):
-        session = cm.api_session
-        assert session is not None
-        assert not session.closed
-        # Verify the API key header was set
-        assert session.headers.get("X-API-Key") == "test-api-key"
-        await session.close()
-
-    @pytest.mark.asyncio
-    async def test_creates_session_without_api_key(self):
-        cm = ProtectConnectionManager(host="h", username="u", password="p")
-        session = cm.api_session
-        assert session is not None
-        assert "X-API-Key" not in session.headers
-        await session.close()
-
-    @pytest.mark.asyncio
-    async def test_returns_same_session(self, cm):
-        s1 = cm.api_session
-        s2 = cm.api_session
-        assert s1 is s2
-        await s1.close()
-
-
 class TestInitialize:
     @pytest.mark.asyncio
     async def test_successful_initialization(self, cm):
@@ -124,7 +97,7 @@ class TestInitialize:
         assert cm._initialized is True
         assert cm._client is mock_client
         protect_client.assert_called_once_with(
-            host="192.168.1.1",
+            host="192.0.2.1",
             port=443,
             username="admin",
             password="secret",

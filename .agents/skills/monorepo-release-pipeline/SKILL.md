@@ -4,13 +4,15 @@ description: >-
   Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by
   analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent
   sibling-tag contamination, batching independent release tags while preserving real dependency
-  edges, coordinating consolidated plugin-manifest writebacks, configuring
+  edges, releasing plugins (independent versions, client update paths, writebacks), configuring
   scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows
   for OIDC trusted publishing,
   coordinating cross-package version bumps in pyproject.toml, understanding app vs. library
   versioning and writeback behavior, validating releases post-tag, and verifying shared package
   architecture constraints (DI-only rule, scope gate, relay sync) before releasing shared packages.
-  Apply when cutting any release, bumping unifi-core, or debugging a versioning failure.
+  The single authoritative procedure for releasing anything in this repo, plugins included.
+  Apply when cutting any release, changing shipped plugin files, bumping unifi-core, or
+  debugging a versioning failure.
   CRITICAL: All PRs require pin-alignment CI gate before merge (automated, cannot be skipped).
 managed_by: myco
 user-invocable: true
@@ -31,9 +33,10 @@ that bleed across package boundaries.
 ## Prerequisites
 
 - All feature PRs for the release are merged to `main`.
-- **All PRs targeting main must pass the pin-alignment CI gate (automated blocker).** This gate
-  runs on every PR and blocks stale transitive dependency pins that would cause fresh
-  installs to fail. See Procedure D, Step 0 for details.
+- **PRs that change any package's `pyproject.toml` or `src/` must pass the pin-alignment CI gate
+  (automated blocker).** The gate builds the workspace wheels and installs them the way a user
+  would, so a downstream floor that cannot work on PyPI fails before release. See Procedure D,
+  Step 0 for exactly what it covers and what it cannot see.
 - Working tree is clean: `git status` shows nothing staged or modified.
 - Remote is current: `git fetch origin && git log origin/main..HEAD` shows nothing.
 - PyPI credentials are **not** stored locally — publishing is handled entirely by
@@ -99,7 +102,7 @@ can lag or overstate changes.
 | `packages/unifi-core/` only | Scope includes `core/v*` and affected downstream packages, including `api/v*`; Procedure F decides batch boundaries |
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
 | Multiple apps | One tag per changed app; put independent tags in the same release batch |
-| Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
+| Plugin-only changes (any shipped file) | Independent plugin manifest bump; no package tag (Procedure E) |
 | Worker (`apps/worker/`) | `worker/v*` |
 
 **Negative corollary (skip-unchanged rule):** Do NOT tag a package simply because an upstream dependency was bumped, if the package's own code did not change AND its existing `pyproject.toml` bounds already accommodate the new upstream version. Check the declared version range in `pyproject.toml` first — if the new upstream version already satisfies the existing bounds and the app code is unchanged, no new tag is required.
@@ -114,9 +117,9 @@ can lag or overstate changes.
 
 **Decision rule:** Default to Minimal. Escalate to Standard when a shared library change requires every dependent to ship a new wheel. Use Full when recovering from a release failure.
 
-### Plugin-only Release and Cache Invalidation
+### Plugin releases
 
-When only the plugin manifest changes with no code changes, a patch release must still be cut to invalidate the marketplace cache. Existing deployed users remain pinned to their cached version until a new tagged release appears.
+Plugins release by merge, not by tag. Follow Procedure E.
 
 ### Shared package rule
 
@@ -163,8 +166,9 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
+- Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
-- `apps/*/server.json`
+- `apps/*/server.json` (server package version)
 
 **Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access).
 
@@ -200,9 +204,24 @@ Each package must declare both `tag_regex` and `git_describe_command` scoped to 
 
 ### Step 0: Pin-Alignment CI Gate (Automated Blocker)
 
-The pin-alignment CI gate runs on every PR and **cannot be skipped**. It validates that every downstream package's dependency bounds permit the versions of upstream packages on main. If your PR fails: look at the CI output for the specific package and bound that failed, update the offending bounds in `pyproject.toml`, commit and push.
+The pin-alignment CI gate (`scripts/check_pin_alignment.py`, workflow `check-pin-alignment.yml`) runs on a PR that touches any of: a package's `pyproject.toml`, anything under `apps/*/src/**` or `packages/*/src/**` (core, shared, relay and every app), the API's force-included `alembic` files, the gate script, the workflow, or `scripts/generate_api_action_catalog.py`. If your PR fails: read the CI output for the failing package and module, update the offending bounds in `pyproject.toml` (or split the change, see the floor-bump sequencing gotcha), commit and push.
 
-**CI gate gap — import-only PRs:** The pin-alignment gate fires only when `pyproject.toml` changes. A PR that adds code using a new cross-package API (new import from `unifi-core` or `unifi-mcp-shared`) without updating the floor bound in `pyproject.toml` passes CI even when the published upstream wheel's metadata would reject the resolved version at user install time. Manually verify dependency bounds for any PR that expands cross-package imports.
+**What the gate proves, against PyPI plus the workspace-built upstream wheels:**
+
+1. Every built wheel declares the advisory-safe dependency floors, the Network and API wheels exactly pin `aiounifi` / `aiohttp` consistently, and the prior vulnerable resolutions upgrade to safe versions.
+2. Each downstream wheel installs into a clean venv, with the declared ranges resolved from PyPI. Then **every module the wheel ships is imported**. The module list comes from the installed distribution's file list, so directories without an `__init__.py` (Network's `tools/` and `utils/`) are included. Any `ImportError` fails the gate: an undeclared dependency (`ModuleNotFoundError`) and a symbol the resolved upstream does not provide (`cannot import name`). Other import-time exceptions are ignored.
+3. Each downstream wheel is installed again against **exactly its declared minimum** `unifi-core` (and, for Protect, Access and Relay, its declared minimum `unifi-mcp-shared`). The same full module import runs against those floors, so a symbol imported from a newer upstream than the floor admits fails even though the latest upstream has it.
+4. An AST scan of the installed downstream source resolves every attribute reached through an `unifi_core` / `unifi_mcp_shared` import (`import unifi_core.x as x; x.new_helper`, `from unifi_core.x import Cls; Cls.new_method`) against those floor versions. This covers use that only fails when the line runs.
+5. Network and API additionally run manager-call contracts against the Core floor: every direct `<name>_manager.<method>` call in the Network tool modules, and every API catalog binding, must exist with a compatible signature.
+
+**What the gate cannot see (verify these by hand):**
+
+- **Calls on objects the scan cannot resolve statically.** Attribute access on instances, parameters, return values, or any name that is rebound in the same file (`client = Cls(); client.new_method()`) is skipped. Network and API are covered for manager calls by their contracts; Protect, Access and Relay have no equivalent, so a new Core method called on a manager instance without a floor bump passes. Review any PR that starts calling new upstream methods against the upstream's changelog.
+- **Behavior changes with the same API shape.** A floor is checked for symbol existence and signatures, not semantics.
+- **The Shared floor of Network and API.** Network is installed with the branch-built Shared candidate (the release being cut), and the API wheel declares no direct Shared dependency, so neither is tested against its minimum published Shared.
+- **Transitive chains.** Only each package's own declared bounds are validated; see the coverage limit below.
+- **Imports that do not run at import time.** An import inside a function body never runs when the module is imported, and an import under `try/except ImportError` has its failure swallowed; the attribute scan resolves neither. A symbol absent from the floor that is only imported that way passes.
+- **Import-time exceptions other than `ImportError`** (for example a module that needs a live controller at import) are ignored, so that module's imports after the failure point go unchecked.
 
 ### Align Cross-Package Dependency Bounds Before Tagging
 
@@ -223,15 +242,16 @@ Workspace `[tool.uv.sources]` overrides take precedence over the version range d
 
 `scripts/check_pin_alignment.py` validates the direct dependency bounds declared in each package's own `pyproject.toml` — it does not walk the full transitive/nested dependency chain (e.g., relay → shared → core, multiple hops deep). A downstream package can pass the gate while a deeper transitive package in the chain is still misaligned. When releasing a change that touches a multi-hop dependency chain, manually trace and verify bounds at each hop rather than trusting a single green run of this script.
 
-### `--api-core-floor-only` Flag — Cross-Package Bridge-Method Validation
+### Running one floor check locally: `--network-core-floor-only` and `--api-core-floor-only`
 
-When a downstream package (e.g., `unifi-api-server`) is changed to call new bridge methods added to an upstream shared package (`unifi-core`), run:
+The full gate takes several minutes because it builds every wheel and builds a venv per downstream. When a PR changes only how Network or the API uses upstream code, run just that wheel's floor check:
 
 ```bash
-python3 scripts/check_pin_alignment.py --api-core-floor-only
+uv run scripts/check_pin_alignment.py --network-core-floor-only
+uv run scripts/check_pin_alignment.py --api-core-floor-only
 ```
 
-This mode enforces that the downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the new bridge methods exist — catching the case where code was written against an unreleased Core API before the floor bound was raised to match. Run this whenever a PR adds calls to newly-added `unifi-core` methods, in addition to the standard (no-flag) pin-alignment check.
+Each mode builds that one wheel, installs it against exactly its declared `unifi-core` minimum, and runs the manager-call contract, the full module import, and the upstream attribute scan described in Step 0. A failure means the code was written against an upstream API newer than the floor admits: either raise the floor (after the upstream version is on PyPI) or remove the use. Protect, Access and Relay have no single-package flag; they are checked by the full gate.
 
 ### Pre-tag wheel-metadata check
 
@@ -249,11 +269,113 @@ done
 
 ---
 
-## Procedure E: Manifest Bumper — args[2] vs args[0] Correction
+## Procedure E: Plugin Releases
 
-The manifest bumper workflow (`bump-plugin-versions.yml`) must target `args[2]` (the version pin value), not `args[0]` (the flag name). The bumper must atomically update version fields in ALL plugin manifest copies — `plugin.json`, `server.json`, `.mcp.json` — in a single commit. Verify after a release that all manifest files show the updated version string.
+A plugin release is a plugin version bump landing on `main`. There is no publish
+step: every client reads the default branch unless the user pins a ref. Python
+packages and the Worker still release only by tag.
 
----
+### Triggers
+
+- **Plugin-only release:** a PR that bumps the plugin version merges to `main`.
+- **Server release:** a Network, Protect or Access tag runs `bump-plugin-versions.yml`,
+  which moves the server pin and bumps the plugin in one writeback commit.
+
+### Clients
+
+| Client | Reads | Detects an update by | Users update with |
+|---|---|---|---|
+| Claude Code | Marketplace on the default branch unless added as `owner/repo#ref` | Manifest `version`; the cache is keyed by it | `claude plugin marketplace update unifi-plugins`, then `claude plugin update <plugin>@unifi-plugins` (or `/plugin` → Installed → Update now), then a new session: the SessionStart notice does not run on `/reload-plugins`. Auto-update is off by default for our marketplace; a user can turn it on under `/plugin` → Marketplaces, and it then installs releases in the background during a session and prompts for `/reload-plugins`, which also skips the notice. |
+| Codex | `.agents/plugins/marketplace.json` on remote HEAD unless added as `owner/repo@ref` | Manifest `version`: Codex re-clones configured Git marketplaces at the start of every session (and on `codex plugin marketplace upgrade`) and reinstalls a plugin only on a version change | Nothing: Codex runs the bundled server, which reads the per-user settings file setup writes (`UNIFI_SETTINGS_FILE`), so a pin bump starts in the session after the one that installs the release. A `[mcp_servers.<plugin>]` entry from setup before plugin 1.0.0 shadows the bundled server until the user runs setup with `--refresh` once |
+| OpenClaw | `git:owner/repo[@ref]` or our Claude-format marketplace; treats the bundle as a Codex bundle and runs the server in `.mcp.codex.json`, merging in a root `.mcp.json` if one ships (so none does) | Commits, not `version` | `openclaw plugins update <id>` or `openclaw plugins update --all`; it asks for capability consent, or needs `--accept-capabilities` without a terminal. The bundled server reads the per-user settings file setup writes, so the pin moves at the next agent turn, without a Gateway restart. An `mcp.servers.<plugin>` entry from setup before plugin 1.0.0 replaces the bundled server until the user runs setup with `--target openclaw --refresh` once |
+| Hermes Agent | Cannot load the current layout (needs a root `plugin.json`, `skills/` and `mcp.json`) | Commits | Not supported |
+
+Sources: [Claude Code host a marketplace](https://code.claude.com/docs/en/plugins/host-marketplace.md),
+[loading](https://code.claude.com/docs/en/plugins/loading.md),
+[install](https://code.claude.com/docs/en/plugins/install.md),
+[marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md);
+[Codex plugins](https://developers.openai.com/plugins/build/plugins) and openai/codex
+`core-plugins/src/marketplace_upgrade.rs`, `loader.rs`;
+[OpenClaw install](https://docs.openclaw.ai/cli/plugins/install),
+[update](https://docs.openclaw.ai/cli/plugins/uninstall-and-update),
+[bundles](https://docs.openclaw.ai/plugins/bundles);
+Hermes Agent `plugins.md` and `plugin-catalog.md` (NousResearch/hermes-agent).
+
+### Rules
+
+- **One release, one merge.** Land every plugin change that makes up one release on
+  `main` together, never as a string of separate merges. Commit-tracking clients
+  (OpenClaw, Hermes) deliver every commit to their users.
+- **Never ahead of the server.** Land plugin content (skills, references, setup, MCP
+  config) that depends on a server feature only when, or after, that server version is
+  tagged and the pin moves; usually in or after the writeback.
+- **Enforcement.** `make check-plugin-versions` admits version bumps and pins;
+  `make check-plugin-tool-refs` fails when a shipped plugin file names a tool absent
+  from the release tag its product's plugin pins (unifi-intelligence: the product pins plus
+  the latest released cloud worker). Both run in `make pre-commit` and in the generated-artifacts
+  CI job. Never weaken either check to pass a PR; fix the plugin text or move the pin.
+- **Counts and references follow the pin.** Plugin skill tool counts and the generated
+  `references/*-tools.md` come from the manifest of the release tag each plugin pins
+  (`git show <tag>:<manifest>`), never the workspace: a server PR that adds a tool leaves
+  them unchanged, and the plugin release that moves the pin (the writeback runs
+  `generate_skill_references.py`) updates them. A new tool category needs its
+  `<!-- AUTO:tools:<category> -->` marker section added in that release.
+
+### Versioning
+
+- Each plugin has an independent SemVer describing everything it ships, separate from
+  the server pin. Set the same `version` in every existing Claude and Codex manifest
+  (at least one). The skills-only `unifi-intelligence` bundle has both manifests, no MCP
+  config and no pin, and names the MCP plugins it needs in the Claude manifest's
+  `dependencies`; Codex and OpenClaw install no dependencies, so its descriptions say so.
+  Keep `version` out of marketplace entries.
+- A renamed plugin is a new identity to every client, so it starts at `1.0.0`. The guard
+  checks a plugin with no files at the merge base as new and skips a removed one; say in
+  the upgrade guide what users of the old name do.
+- Bump every affected plugin in the same PR whenever any file under `plugins/<name>/`
+  changes, including skills, references, setup scripts, MCP configs and docs. Version-only
+  bumps are allowed.
+- Patch: plugin-only fixes or docs, and patch server pin moves. Minor: new
+  skills/capabilities, and minor server pin moves. Major: breaking setup/configuration,
+  and major server pin moves. Before 1.0, breaking changes advance minor and additive
+  changes advance patch (SemVer 0.x).
+- Keep the server pin identical in the inline Claude `mcpServers` of
+  `.claude-plugin/plugin.json` and in `.mcp.codex.json`; it must name a release tag.
+  Never ship a root `.mcp.json`: OpenClaw would merge it into the server it runs.
+- Writeback: `bump-plugin-versions.yml` runs
+  `python3 scripts/plugin_versions.py sync --releasing <package-tag>`. It moves the inline
+  Claude pin and the `.mcp.codex.json` pin, bumps the plugin by the size of the server move,
+  regenerates `apps/<product>/server.json` with the **server** version, and inserts one
+  `CHANGELOG.md` entry naming every plugin it bumped and linking each server release.
+  Retrying an already-synced pin does not bump again. Core, Shared and Relay triggers only coalesce
+  outstanding product tags, otherwise they write nothing.
+- `make check-plugin-versions` runs `scripts/plugin_versions.py check --base origin/main`;
+  PR CI uses the PR base SHA. Fetch base history and tags first; a missing base fails.
+  Changed plugin versions must be valid SemVer, agree across manifests and exceed the
+  merge-base version, and `CHANGELOG.md` needs an entry heading naming `<plugin> <version>`
+  for each changed or new plugin. Pins must agree and name release tags; only the workflow's exact
+  `--releasing` tag may stand in for a tag not yet discovered locally.
+
+### Release checklist
+
+1. Bump the version by the rules above and add a `CHANGELOG.md` entry below its marker:
+   `## <YYYY-MM-DD UTC> — <plugin> <version>[, <plugin> <version>…]`, then the user-visible
+   changes in plain language (what users notice, not how it was built). Repeat them in the
+   PR description. The README describes what each plugin is; never put release notes there.
+2. Run `make pre-commit` (both plugin checks included).
+3. Merge as one squash merge.
+4. Tell users how to update, per the client table: Claude Code users update the
+   marketplace and plugin themselves (unless they turned on auto-update), then start a
+   new session; Codex installs the release and its pinned server at the next session
+   start (users whose `config.toml` entry predates plugin 1.0.0 run setup with
+   `--refresh` once);
+   OpenClaw users run
+   `openclaw plugins update`.
+5. From `main`, after the merge, run the real-client acceptance procedure in
+   `docs/plugin-acceptance.md`.
+6. Roll back by reverting the merge, then bumping the version again above the bad
+   release; the version guard requires the higher version and clients keyed by version
+   need the change to reinstall.
 
 ## Procedure F: Dependency-Aware Release Batching
 
@@ -303,7 +425,7 @@ failure.
 ### Consolidated plugin-manifest writebacks
 
 `bump-plugin-versions.yml` reads the current release tags and synchronizes all Network, Protect, and
-Access manifest copies. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
+Access server pins and independently bumps each changed plugin. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
 cancelled, and the last run writes one commit containing every app version visible at that point.
 Cancelled superseded runs are expected; the final run must succeed.
 
@@ -312,8 +434,9 @@ After a batch containing at least one namespace configured under
 
 1. Wait for the last `bump-plugin-versions.yml` run to complete.
 2. For a batch with Network, Protect, or Access tags, fetch `origin/main`, inspect the consolidated
-   writeback commit, and verify `apps/<app>/server.json` plus all three plugin manifest copies contain
-   each released app version.
+   writeback commit, and verify `apps/<app>/server.json` and both MCP configs contain
+   each released server version; existing plugin manifests must agree on the independently bumped
+   plugin version. Run `make check-plugin-versions` against the parent of the writeback commit.
 3. For a library-only trigger batch containing Core, Shared, or Relay, require the sync run to
    succeed but allow `No version changes to commit`. Inspect a commit only if the run found an
    outstanding app-version change.
@@ -468,7 +591,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **Missing tag causes broken downstream install.** If `unifi-core` code is merged but the tag is never pushed, downstream packages requesting that version fail to install. Check PyPI before debugging code.
 
-**Main-only merges are invisible to existing users.** Cache invalidation requires a tagged release. If a manifest change is urgent, cut a patch release immediately.
+**Plugin updates need a version change.** Claude Code and Codex install a merged plugin change only when its manifest version changes. Keep the bump in the same PR as the shipped-file change (Procedure E).
 
 **Malformed git tag — missing 'v' prefix.** A tag like `protect/0.4.2` (no 'v') is syntactically wrong and ignored by hatch-vcs. Validate before pushing: `git tag -l | grep -E 'network|protect|access|relay|core|shared|api' | sort -V` — every line must contain `/v`.
 

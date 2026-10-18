@@ -46,6 +46,9 @@ TOOL_ROUTE_OVERRIDES: dict[str, str] = {
     "unifi_get_rf_scan_results": "list_rf_scan_results",
     "unifi_get_switch_ports": "list_switch_ports",
     # Network — usergroup tool name (one word) vs. user_group route function (snake).
+    # Incident evidence — product-prefixed route functions, one per product.
+    "unifi_get_incident_evidence": "get_network_incident_evidence",
+    "protect_get_incident_evidence": "get_protect_incident_evidence",
     "unifi_get_usergroup_details": "get_user_group_details",
     "unifi_list_usergroups": "list_user_groups",
 }

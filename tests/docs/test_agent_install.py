@@ -24,7 +24,7 @@ def test_readme_agent_prompt_points_to_canonical_guide() -> None:
 def test_skills_install_examples_are_scoped_to_public_product_trees() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
 
-    for product in ("unifi-network", "unifi-protect", "unifi-access", "cross-product"):
+    for product in ("unifi-network", "unifi-protect", "unifi-access", "unifi-intelligence"):
         assert f"npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/{product}" in guide
 
     assert "Do not use `npx skills add sirkirby/unifi-mcp`" in guide

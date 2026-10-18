@@ -16,7 +16,7 @@ class TestDpiManager:
         """Create a mock ConnectionManager."""
         conn = MagicMock()
         conn.site = "default"
-        conn.host = "192.168.1.1"
+        conn.host = "192.0.2.1"
         conn.port = 443
         conn.get_cached = MagicMock(return_value=None)
         conn._update_cache = MagicMock()

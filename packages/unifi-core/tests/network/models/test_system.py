@@ -328,6 +328,46 @@ class TestNetworkHealthFromController:
         assert nh.rx_bytes == 1024
         assert nh.tx_bytes == 2048
 
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "site_to_site_num_active",
+            "site_to_site_num_inactive",
+            "site_to_site_rx_bytes",
+            "site_to_site_tx_bytes",
+            "remote_user_num_active",
+            "remote_user_num_inactive",
+            "remote_user_rx_bytes",
+            "remote_user_tx_bytes",
+        ],
+    )
+    @pytest.mark.parametrize("value", [0, 2048])
+    def test_vpn_diagnostics_survive_serialization(self, field: str, value: int) -> None:
+        raw = {"subsystem": "vpn", "status": "error", field: value}
+        result = network_health_from_controller(raw).model_dump(exclude_none=False)
+        assert result[field] == value
+        assert result["status"] == "error"
+
+    def test_missing_vpn_diagnostics_remain_unknown(self) -> None:
+        result = network_health_from_controller({"subsystem": "vpn"}).model_dump(exclude_none=False)
+        assert result["site_to_site_num_active"] is None
+        assert result["site_to_site_num_inactive"] is None
+        assert result["site_to_site_rx_bytes"] is None
+        assert result["site_to_site_tx_bytes"] is None
+        assert result["remote_user_num_active"] is None
+        assert result["remote_user_rx_bytes"] is None
+        assert result["remote_user_tx_bytes"] is None
+        assert result["remote_user_num_inactive"] is None
+        assert result["site_to_site_enabled"] is None
+        assert result["remote_user_enabled"] is None
+
+    @pytest.mark.parametrize("field", ["site_to_site_enabled", "remote_user_enabled"])
+    @pytest.mark.parametrize("value", [True, False])
+    def test_vpn_enabled_flags_survive_serialization(self, field: str, value: bool) -> None:
+        raw = {"subsystem": "vpn", "status": "ok", field: value}
+        result = network_health_from_controller(raw).model_dump(exclude_none=False)
+        assert result[field] is value
+
     def test_rx_tx_fallback_keys(self) -> None:
         raw = {"rx_bytes": 500, "tx_bytes": 700}
         nh = network_health_from_controller(raw)

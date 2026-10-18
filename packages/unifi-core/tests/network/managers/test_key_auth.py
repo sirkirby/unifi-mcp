@@ -63,7 +63,7 @@ async def test_key_only_legacy_inventory_preserves_ids_without_login(monkeypatch
             assert cm.authentication_status.api_key_available is True
             assert not cm.authentication_status.session_available
             assert not cm.integration_inventory_only
-            assert cm._aiohttp_session.headers["X-API-Key"] == "synthetic-key"
+            assert "X-API-Key" not in cm._aiohttp_session.headers
             assert len(cm._aiohttp_session.cookie_jar) == 0
             assert not cm.controller.connectivity.can_retry_login
             login.assert_not_awaited()
@@ -224,8 +224,9 @@ async def test_cancelled_key_probe_closes_unowned_session(monkeypatch):
     session.get.side_effect = asyncio.CancelledError
     session.close = AsyncMock()
     with patch.object(cm.unifi_auth, "get_api_key_session", new=AsyncMock(return_value=session)):
-        with pytest.raises(asyncio.CancelledError):
-            await cm.initialize()
+        # The probe runs as the manager's shared attempt: cancelling it ends
+        # that attempt, and the caller waiting on it sees a failed connect.
+        assert await cm.initialize() is False
     session.close.assert_awaited_once()
 
 

@@ -109,7 +109,7 @@ class AlarmProfile(BaseModel):
     )
     arm_compatible: Optional[bool] = Field(
         default=None,
-        description="Whether this profile ID can be passed to protect_alarm_arm",
+        description="Whether this profile ID can be passed to protect_alarm_arm and protect_alarm_disarm",
         json_schema_extra={"mutable": False},
     )
 

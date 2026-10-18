@@ -1,0 +1,983 @@
+{
+  "case": "mapping_outcomes",
+  "views": [
+    {
+      "max_records_returned": 25,
+      "resume_after": null,
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "complete",
+        "coverage_complete": true,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": [
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000b",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_station",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:fe",
+              "role": null
+            },
+            "target": {
+              "kind": "location",
+              "id_kind": "location_id",
+              "id": "loc-fixture-1",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "product_inventory"
+          }
+        ],
+        "sources": [
+          {
+            "source_id": "network.events",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": "default",
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T11:04:59.000000Z",
+                "end": "2026-08-08T13:04:59.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:25:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:27:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": 0,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 3,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 3,
+                "accepted": 3,
+                "in_window": 3,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 3
+            },
+            "truncated": {}
+          },
+          {
+            "source_id": "protect.events",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": null,
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:26:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:26:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": null,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 2,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 2,
+                "accepted": 2,
+                "in_window": 2,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 2
+            },
+            "truncated": {}
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "network.events|str|evt-net-1101",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": "evt-net-1101",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:25:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "timestamp",
+              "original_type": "integer",
+              "original_value": 1786191900000
+            },
+            "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+            "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
+            "entity_ids": [
+              "aa:bb:cc:00:20:01",
+              "aa:bb:cc:00:10:01"
+            ],
+            "mapping": {
+              "status": "ambiguous",
+              "target_ids": [
+                "cam-fixture-000a",
+                "cam-fixture-000b"
+              ],
+              "sources": [
+                "operator_input"
+              ]
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.events|str|evt-net-1102",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": "evt-net-1102",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "timestamp",
+              "original_type": "integer",
+              "original_value": 1786191960000
+            },
+            "event_type": "DEVICE_DISCONNECTED_AP",
+            "summary": "aa:bb:cc:00:10:02 disconnected.",
+            "entity_ids": [
+              "aa:bb:cc:00:10:02"
+            ],
+            "mapping": {
+              "status": "missing",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "protect.events|str|evt-protect-1101",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": "evt-protect-1101",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "string",
+              "original_value": "2026-08-08T12:26:00+00:00"
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [
+              "cam-fixture-000a"
+            ],
+            "mapping": {
+              "status": "verified",
+              "target_ids": [
+                "cam-fixture-000a"
+              ],
+              "sources": [
+                "product_inventory"
+              ]
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "protect.events|str|evt-protect-1102",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": "evt-protect-1102",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "string",
+              "original_value": "2026-08-08T12:26:00+00:00"
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [
+              "cam-fixture-unmapped"
+            ],
+            "mapping": {
+              "status": "missing",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.events|str|evt-net-1103",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": "evt-net-1103",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:27:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "time",
+              "original_type": "integer",
+              "original_value": 1786192020000
+            },
+            "event_type": "K",
+            "summary": "uppercase dashed MAC still matches exactly",
+            "entity_ids": [
+              "AA-BB-CC-00-10-FE"
+            ],
+            "mapping": {
+              "status": "verified",
+              "target_ids": [
+                "loc-fixture-1"
+              ],
+              "sources": [
+                "operator_input"
+              ]
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 25,
+          "omission": "presentation_limit",
+          "resume_after": null,
+          "collected": {
+            "total": 5,
+            "in_window": 5,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 5,
+            "in_window": 5,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": null,
+          "next_cursor": null
+        }
+      }
+    },
+    {
+      "max_records_returned": 2,
+      "resume_after": null,
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "complete",
+        "coverage_complete": true,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": [
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000b",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_station",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:fe",
+              "role": null
+            },
+            "target": {
+              "kind": "location",
+              "id_kind": "location_id",
+              "id": "loc-fixture-1",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "product_inventory"
+          }
+        ],
+        "sources": [
+          {
+            "source_id": "network.events",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": "default",
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T11:04:59.000000Z",
+                "end": "2026-08-08T13:04:59.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:25:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:27:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": 0,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 3,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 3,
+                "accepted": 3,
+                "in_window": 3,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 3
+            },
+            "truncated": {}
+          },
+          {
+            "source_id": "protect.events",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": null,
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:26:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:26:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": null,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 2,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 2,
+                "accepted": 2,
+                "in_window": 2,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 2
+            },
+            "truncated": {}
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "network.events|str|evt-net-1101",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": "evt-net-1101",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:25:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "timestamp",
+              "original_type": "integer",
+              "original_value": 1786191900000
+            },
+            "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+            "summary": "aa:bb:cc:00:20:01 has connected to aa:bb:cc:00:10:01.",
+            "entity_ids": [
+              "aa:bb:cc:00:20:01",
+              "aa:bb:cc:00:10:01"
+            ],
+            "mapping": {
+              "status": "ambiguous",
+              "target_ids": [
+                "cam-fixture-000a",
+                "cam-fixture-000b"
+              ],
+              "sources": [
+                "operator_input"
+              ]
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "network.events|str|evt-net-1102",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "source_record_id": "evt-net-1102",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "timestamp",
+              "original_type": "integer",
+              "original_value": 1786191960000
+            },
+            "event_type": "DEVICE_DISCONNECTED_AP",
+            "summary": "aa:bb:cc:00:10:02 disconnected.",
+            "entity_ids": [
+              "aa:bb:cc:00:10:02"
+            ],
+            "mapping": {
+              "status": "missing",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 2,
+          "omission": "presentation_limit",
+          "resume_after": null,
+          "collected": {
+            "total": 5,
+            "in_window": 5,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 3,
+            "in_window": 3,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:26:00.000000Z|network.events|str|evt-net-1102"
+        }
+      }
+    },
+    {
+      "max_records_returned": 2,
+      "resume_after": "0|2026-08-08T12:26:00.000000Z|network.events|str|evt-net-1102",
+      "expected": {
+        "schema": "unifi-incident-evidence-view",
+        "schema_version": 1,
+        "evidence_schema_version": 1,
+        "requested_window": {
+          "start": "2026-08-08T12:00:00.000000Z",
+          "end": "2026-08-08T13:00:00.000000Z",
+          "start_inclusive": true,
+          "end_inclusive": false
+        },
+        "overall": "complete",
+        "coverage_complete": true,
+        "budgets": {
+          "limits": {
+            "window_seconds": 7200,
+            "events": 500,
+            "calls": 10,
+            "elapsed_ms": 60000
+          },
+          "usage": {
+            "events": 0,
+            "calls": 2,
+            "elapsed_ms": 850
+          },
+          "exhausted": []
+        },
+        "mappings": [
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_device",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:01",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000b",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "network_station",
+              "id_kind": "mac",
+              "id": "aa:bb:cc:00:10:fe",
+              "role": null
+            },
+            "target": {
+              "kind": "location",
+              "id_kind": "location_id",
+              "id": "loc-fixture-1",
+              "role": null
+            },
+            "source": "operator_input"
+          },
+          {
+            "entity": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "target": {
+              "kind": "camera",
+              "id_kind": "protect_camera_id",
+              "id": "cam-fixture-000a",
+              "role": null
+            },
+            "source": "product_inventory"
+          }
+        ],
+        "sources": [
+          {
+            "source_id": "network.events",
+            "product": "network",
+            "source_tool": "unifi_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": "default",
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T11:04:59.000000Z",
+                "end": "2026-08-08T13:04:59.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:25:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:27:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": 0,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 3,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 3,
+                "accepted": 3,
+                "in_window": 3,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 3
+            },
+            "truncated": {}
+          },
+          {
+            "source_id": "protect.events",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "scope": {
+              "controller_id": null,
+              "site": null,
+              "location_id": null
+            },
+            "outcome": "complete",
+            "failure": null,
+            "partial_reasons": [],
+            "coverage": {
+              "requested_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "queried_window": {
+                "start": "2026-08-08T12:00:00.000000Z",
+                "end": "2026-08-08T13:00:00.000000Z",
+                "start_inclusive": true,
+                "end_inclusive": false
+              },
+              "window_coverage": "covered",
+              "observed_first_utc": "2026-08-08T12:26:00.000000Z",
+              "observed_last_utc": "2026-08-08T12:26:00.000000Z",
+              "filters": {},
+              "pagination": {
+                "offset": null,
+                "requested_cap": 100,
+                "cap": 100,
+                "returned": 2,
+                "has_more": false,
+                "total_reported": null,
+                "post_filtered": false,
+                "interrupted": false
+              },
+              "truncation": "not_truncated",
+              "retention_coverage": "unknown",
+              "counts": {
+                "received": 2,
+                "accepted": 2,
+                "in_window": 2,
+                "out_of_window": 0,
+                "untimed": 0,
+                "malformed_dropped": 0,
+                "duplicates_dropped": 0,
+                "conflicting": 0,
+                "boundary_uncertain": 0
+              },
+              "complete": true,
+              "population_total": 2
+            },
+            "truncated": {}
+          }
+        ],
+        "records": [
+          {
+            "evidence_id": "protect.events|str|evt-protect-1101",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": "evt-protect-1101",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "string",
+              "original_value": "2026-08-08T12:26:00+00:00"
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [
+              "cam-fixture-000a"
+            ],
+            "mapping": {
+              "status": "verified",
+              "target_ids": [
+                "cam-fixture-000a"
+              ],
+              "sources": [
+                "product_inventory"
+              ]
+            },
+            "truncated": {}
+          },
+          {
+            "evidence_id": "protect.events|str|evt-protect-1102",
+            "product": "protect",
+            "source_tool": "protect_list_events",
+            "source_record_id": "evt-protect-1102",
+            "time": {
+              "status": "in_window",
+              "utc": "2026-08-08T12:26:00.000000Z",
+              "boundary_uncertain": false,
+              "original_field": "start",
+              "original_type": "string",
+              "original_value": "2026-08-08T12:26:00+00:00"
+            },
+            "event_type": "motion",
+            "summary": "motion",
+            "entity_ids": [
+              "cam-fixture-unmapped"
+            ],
+            "mapping": {
+              "status": "missing",
+              "target_ids": [],
+              "sources": []
+            },
+            "truncated": {}
+          }
+        ],
+        "record_selection": {
+          "max_records_returned": 2,
+          "omission": "presentation_limit",
+          "resume_after": "0|2026-08-08T12:26:00.000000Z|network.events|str|evt-net-1102",
+          "collected": {
+            "total": 5,
+            "in_window": 5,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "before_resume": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "returned": {
+            "total": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "omitted": {
+            "total": 1,
+            "in_window": 1,
+            "out_of_window": 0,
+            "untimed": 0
+          },
+          "too_large": 0,
+          "limited_by": "max_records_returned",
+          "next_cursor": "0|2026-08-08T12:26:00.000000Z|protect.events|str|evt-protect-1102"
+        }
+      }
+    }
+  ]
+}

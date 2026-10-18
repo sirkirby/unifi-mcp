@@ -10,17 +10,17 @@ dependencies = [
     # floors explicit so upgrades cannot retain vulnerable installed versions.
     "cryptography>=50.0.1",
     "pydantic-settings>=2.14.2",
-    "PyJWT>=2.13.0",
+    "PyJWT>=2.15.0",
     "python-multipart>=0.0.31",
     "anyio>=4.14.2",
     "starlette>=1.7.0",
     "click>=8.3.3",
+    "multidict>=6.9.1",
     "aiohttp>=3.14.3",
     "python-dotenv>=1.2.2",
     "unifi-mcp-shared>=0.6.18,<0.7",
-    # location_timeline.py imports unifi_core.event_timeline directly. This resolves
-    # today only as a transitive of unifi-mcp-shared; declare it so it does not.
-    # Controller credential redaction requires Core 0.4.51.
+    # The relay imports no unifi_core module; unifi-mcp-shared does. Declare the
+    # floor so relay installs get controller credential redaction (Core 0.4.51).
     "unifi-core>=0.4.51,<0.5",
 ]
 

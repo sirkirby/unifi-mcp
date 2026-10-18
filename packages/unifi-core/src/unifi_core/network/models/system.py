@@ -454,6 +454,56 @@ class NetworkHealth(BaseModel):
         description="Transmitted bytes on this subsystem",
         json_schema_extra={"mutable": False},
     )
+    site_to_site_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether site-to-site VPN is enabled; false explains absent site-to-site counters",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_num_active: Optional[int] = Field(
+        default=None,
+        description="Number of active site-to-site VPN tunnels reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_num_inactive: Optional[int] = Field(
+        default=None,
+        description="Number of inactive site-to-site VPN tunnels reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_rx_bytes: Optional[int] = Field(
+        default=None,
+        description="Received bytes on site-to-site VPN tunnels",
+        json_schema_extra={"mutable": False},
+    )
+    site_to_site_tx_bytes: Optional[int] = Field(
+        default=None,
+        description="Transmitted bytes on site-to-site VPN tunnels",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether remote-access VPN is enabled; false explains absent remote-user counters",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_num_active: Optional[int] = Field(
+        default=None,
+        description="Number of active remote-access VPN users reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_num_inactive: Optional[int] = Field(
+        default=None,
+        description="Number of inactive remote-access VPN users reported by the controller",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_rx_bytes: Optional[int] = Field(
+        default=None,
+        description="Received bytes for remote-access VPN users",
+        json_schema_extra={"mutable": False},
+    )
+    remote_user_tx_bytes: Optional[int] = Field(
+        default=None,
+        description="Transmitted bytes for remote-access VPN users",
+        json_schema_extra={"mutable": False},
+    )
 
 
 NETWORKHEALTH_MUTABLE_FIELDS: frozenset[str] = frozenset()
@@ -472,6 +522,16 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         num_iot=_get(raw, "num_iot"),
         rx_bytes=raw.get("rx_bytes-r") or raw.get("rx_bytes"),
         tx_bytes=raw.get("tx_bytes-r") or raw.get("tx_bytes"),
+        site_to_site_enabled=_as_bool(raw.get("site_to_site_enabled")),
+        site_to_site_num_active=_get(raw, "site_to_site_num_active"),
+        site_to_site_num_inactive=_get(raw, "site_to_site_num_inactive"),
+        site_to_site_rx_bytes=_get(raw, "site_to_site_rx_bytes"),
+        site_to_site_tx_bytes=_get(raw, "site_to_site_tx_bytes"),
+        remote_user_enabled=_as_bool(raw.get("remote_user_enabled")),
+        remote_user_num_active=_get(raw, "remote_user_num_active"),
+        remote_user_num_inactive=_get(raw, "remote_user_num_inactive"),
+        remote_user_rx_bytes=_get(raw, "remote_user_rx_bytes"),
+        remote_user_tx_bytes=_get(raw, "remote_user_tx_bytes"),
     )
 
 

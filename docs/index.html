@@ -119,13 +119,13 @@
             </div>
           </div>
           <div class="server-list">
-            <div class="server-row network" data-product="network" data-tool-count="209">
+            <div class="server-row network" data-product="network" data-tool-count="210">
               <div><h4>Network <span>Stable</span></h4><p>Inventory, clients, routing, Wi-Fi, firewall policy, traffic, and controlled configuration.</p></div>
-              <div class="server-meta"><strong>209 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/network">unifi-network-mcp</a></div>
+              <div class="server-meta"><strong>210 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/network">unifi-network-mcp</a></div>
             </div>
-            <div class="server-row protect" data-product="protect" data-tool-count="62">
+            <div class="server-row protect" data-product="protect" data-tool-count="63">
               <div><h4>Protect <span>Stable</span></h4><p>Cameras, events, detections, recordings, devices, and incident investigation workflows.</p></div>
-              <div class="server-meta"><strong>62 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect">unifi-protect-mcp</a></div>
+              <div class="server-meta"><strong>63 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect">unifi-protect-mcp</a></div>
             </div>
             <div class="server-row access" data-product="access" data-tool-count="37">
               <div><h4>Access <span>Stable</span></h4><p>Doors, visitors, credentials, policies, devices, and activity records.</p></div>
@@ -231,7 +231,7 @@
         <div class="section-intro">
           <p class="kicker">Install</p>
           <h2>Start with the MCP path that fits your client.</h2>
-          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent.</p>
+          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent. Already using the plugins? Read the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md">plugin upgrade guide</a> before updating.</p>
         </div>
         <div class="install-card">
           <div class="install-tabs" role="tablist" aria-label="MCP installation methods">
@@ -254,11 +254,12 @@
           </div>
           <div role="tabpanel" id="panel-openclaw" aria-labelledby="tab-openclaw" class="install-panel" data-install-panel="openclaw" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>
-<pre><code>openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
+<pre><code><span class="comment"># Confirms the source and capabilities; without a terminal add --force --accept-capabilities</span>
+openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
 openclaw gateway restart
 
-<span class="comment"># Use the setup skill, or register the MCP server directly</span>
-openclaw mcp set <span class="value">unifi-network</span> <span class="value">'{"command":"uvx","args":["unifi-network-mcp@latest"]}'</span></code></pre>
+<span class="comment"># Run its setup skill; it saves the settings the plugin's own server reads</span>
+<span class="command">unifi-network-setup</span></code></pre>
           </div>
           <div role="tabpanel" id="panel-uvx" aria-labelledby="tab-uvx" class="install-panel" data-install-panel="uvx" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>

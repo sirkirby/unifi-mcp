@@ -753,12 +753,12 @@
       "permission_action": "update",
       "read_only_hint": false,
       "auth_method": "local_only",
-      "manager_attr": "alarm_manager",
+      "manager_attr": "alarm_facade",
       "manager_method": "arm",
       "input_schema": {
         "properties": {
           "profile_id": {
-            "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
+            "description": "Arm profile id from protect_alarm_list_profiles (Global-mode consoles also accept the profile name; legacy consoles need the id). Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile). Must not be blank.",
             "type": "string"
           }
         },
@@ -819,10 +819,15 @@
       "permission_action": "update",
       "read_only_hint": false,
       "auth_method": "local_only",
-      "manager_attr": "alarm_manager",
+      "manager_attr": "alarm_facade",
       "manager_method": "disarm",
       "input_schema": {
-        "properties": {},
+        "properties": {
+          "profile_id": {
+            "description": "Arm profile id to disarm (Global-mode consoles also accept the profile name). Omit to disarm every active profile; must not be blank. Legacy consoles disarm system-wide and ignore this.",
+            "type": "string"
+          }
+        },
         "type": "object",
         "additionalProperties": false
       }
@@ -5661,7 +5666,7 @@
       "input_schema": {
         "properties": {
           "categories": {
-            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
+            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). 'AUDIT' returns admin activity (configuration changes, admin logins) and is not in the default set. Ignored on legacy controllers",
             "type": "array"
           },
           "event_type": {
@@ -8157,6 +8162,11 @@
       "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
     },
     {
+      "name": "protect_get_incident_evidence",
+      "product": "protect",
+      "reason": "bounded multi-read evidence collection is served by dedicated incident-evidence routes; the action dispatcher invokes a single manager method"
+    },
+    {
       "name": "protect_subscribe_events",
       "product": "protect",
       "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
@@ -8165,6 +8175,11 @@
       "name": "unifi_create_traffic_route",
       "product": "network",
       "reason": "requires controller-payload construction that the REST action dispatcher does not provide"
+    },
+    {
+      "name": "unifi_get_incident_evidence",
+      "product": "network",
+      "reason": "bounded multi-read evidence collection is served by dedicated incident-evidence routes; the action dispatcher invokes a single manager method"
     },
     {
       "name": "unifi_subscribe_events",

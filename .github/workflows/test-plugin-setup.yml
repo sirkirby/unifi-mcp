@@ -9,6 +9,7 @@ on:
     paths:
       - "plugins/*/scripts/**"
       - "scripts/smoke-plugin-setup.*"
+      - "scripts/plugin_setup_fixtures.py"
       - ".github/workflows/test-plugin-setup.yml"
   pull_request:
     types: [opened, synchronize, reopened]
@@ -16,15 +17,33 @@ on:
     paths:
       - "plugins/*/scripts/**"
       - "scripts/smoke-plugin-setup.*"
+      - "scripts/plugin_setup_fixtures.py"
       - ".github/workflows/test-plugin-setup.yml"
 
 jobs:
+  bash:
+    name: Bash compatibility (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Run system Bash fixtures
+        run: /bin/bash scripts/smoke-plugin-setup.sh
+
   windows-powershell-51:
     name: Windows PowerShell 5.1 compatibility
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
 
       - name: Run with Windows PowerShell 5.1
         shell: powershell
@@ -36,6 +55,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
 
       - name: Run with PowerShell 7
         shell: pwsh

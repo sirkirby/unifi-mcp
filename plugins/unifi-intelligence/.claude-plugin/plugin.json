@@ -1,0 +1,23 @@
+{
+  "name": "unifi-intelligence",
+  "displayName": "UniFi Intelligence",
+  "version": "1.0.0",
+  "description": "UniFi Intelligence skills: investigate a Network device incident with Protect camera context, and audit area and visitor activity through the cloud worker. Requires the unifi-network and unifi-protect plugins",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "incident",
+    "investigation",
+    "security",
+    "network",
+    "protect"
+  ],
+  "dependencies": [
+    "unifi-network",
+    "unifi-protect"
+  ]
+}

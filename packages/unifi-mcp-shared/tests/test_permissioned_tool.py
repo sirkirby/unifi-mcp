@@ -14,7 +14,13 @@ from unifi_mcp_shared.output_schema import (
     UniFiToolResponse,
     get_unifi_tool_response_output_schema,
 )
-from unifi_mcp_shared.permissioned_tool import _infer_input_schema, create_permissioned_tool
+from unifi_mcp_shared.permissioned_tool import (
+    _infer_input_schema,
+    create_import_time_tool_decorator,
+    create_permissioned_tool,
+)
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 
 
 @pytest.fixture
@@ -96,7 +102,7 @@ class TestCreatePermissionedTool:
     def test_registers_tool_without_permissions(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="test_tool", description="A test")
+        @pt(name="test_tool", description="A test", annotations=READ_ONLY)
         async def test_tool():
             return {"success": True}
 
@@ -177,7 +183,7 @@ class TestCreatePermissionedTool:
     def test_absent_annotations_remain_absent_in_registry(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="unannotated_tool", description="test")
+        @pt(name="unannotated_tool", description="test", permission_category="cat", permission_action="read")
         async def unannotated_tool():
             return {"success": True}
 
@@ -186,7 +192,7 @@ class TestCreatePermissionedTool:
     def test_registers_default_output_schema_for_standard_tools(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="schema_tool", description="test")
+        @pt(name="schema_tool", description="test", annotations=READ_ONLY)
         async def schema_tool():
             return {"success": True, "data": {"id": "abc"}}
 
@@ -197,7 +203,7 @@ class TestCreatePermissionedTool:
     def test_generates_title_metadata_from_tool_name(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="unifi_list_clients", description="test")
+        @pt(name="unifi_list_clients", description="test", annotations=READ_ONLY)
         async def list_clients():
             return {"success": True}
 
@@ -207,7 +213,7 @@ class TestCreatePermissionedTool:
     def test_preserves_explicit_title_metadata(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="unifi_tool_index", title="UniFi Tool Index", description="test")
+        @pt(name="unifi_tool_index", title="UniFi Tool Index", description="test", annotations=READ_ONLY)
         async def tool_index():
             return {"tools": []}
 
@@ -224,7 +230,7 @@ class TestCreatePermissionedTool:
             },
         }
 
-        @pt(name="custom_schema_tool", description="test", output_schema=custom_schema)
+        @pt(name="custom_schema_tool", description="test", output_schema=custom_schema, annotations=READ_ONLY)
         async def custom_schema_tool():
             return {"loaded": ["a"], "errors": []}
 
@@ -233,7 +239,7 @@ class TestCreatePermissionedTool:
     def test_mcp_registration_enables_structured_output_with_response_model(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(name="structured_schema_tool", description="test")
+        @pt(name="structured_schema_tool", description="test", annotations=READ_ONLY)
         async def structured_schema_tool():
             return {"success": True}
 
@@ -250,7 +256,7 @@ class TestCreatePermissionedTool:
         }
         pt = _create_pt(mock_deps)
 
-        @pt(name="fastmcp_schema_tool", description="test")
+        @pt(name="fastmcp_schema_tool", description="test", annotations=READ_ONLY)
         async def fastmcp_schema_tool():
             return {"success": True, "data": {"id": "abc"}}
 
@@ -267,7 +273,7 @@ class TestCreatePermissionedTool:
     def test_uses_function_name_when_no_name_given(self, mock_deps):
         pt = _create_pt(mock_deps)
 
-        @pt(description="test")
+        @pt(description="test", annotations=READ_ONLY)
         async def my_auto_named_tool():
             return {}
 
@@ -368,7 +374,7 @@ class TestCreatePermissionedTool:
         """Tools without permission_category/action go through fast path (no wrapper)."""
         pt = _create_pt(mock_deps)
 
-        @pt(name="simple_tool", description="test")
+        @pt(name="simple_tool", description="test", annotations=READ_ONLY)
         async def simple_tool():
             return {"success": True}
 
@@ -407,11 +413,175 @@ class TestCreatePermissionedTool:
         mock_deps["wrap_tool_fn"] = tracking_wrap
         pt = _create_pt(mock_deps)
 
-        @pt(name="simple_tool", description="test")
+        @pt(name="simple_tool", description="test", annotations=READ_ONLY)
         async def simple_tool():
             return {"success": True}
 
         assert "simple_tool" in wrap_calls
+
+
+class TestRegistrationRequiresPolicyCheck:
+    """A tool with no permission_action is never policy-checked, so it must be read-only."""
+
+    @pytest.mark.parametrize(
+        "annotations",
+        [
+            None,
+            ToolAnnotations(openWorldHint=False),
+            ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+        ],
+        ids=["absent", "no-read-only-hint", "read-only-false"],
+    )
+    def test_rejects_ungated_tool_not_annotated_read_only(self, mock_deps, annotations):
+        pt = _create_pt(mock_deps)
+
+        with pytest.raises(ValueError, match="'mutating_tool' is not annotated readOnlyHint=True"):
+
+            @pt(name="mutating_tool", description="test", annotations=annotations)
+            async def mutating_tool():
+                return {"success": True}
+
+        assert "mutating_tool" not in mock_deps["registered_tools"]
+        assert "mutating_tool" not in mock_deps["mcp_registered"]
+
+    @pytest.mark.parametrize(
+        "permission_kwargs",
+        [{"permission_category": "cat"}, {"permission_action": "delete"}],
+        ids=["category-only", "action-only"],
+    )
+    def test_half_declared_permission_is_not_gated(self, mock_deps, permission_kwargs):
+        pt = _create_pt(mock_deps)
+        mutating = ToolAnnotations(readOnlyHint=False, openWorldHint=False)
+
+        with pytest.raises(ValueError, match="readOnlyHint=True"):
+
+            @pt(name="half_tool", description="test", annotations=mutating, **permission_kwargs)
+            async def half_tool():
+                return {"success": True}
+
+        @pt(name="half_read_tool", description="test", annotations=READ_ONLY, **permission_kwargs)
+        async def half_read_tool():
+            return {"success": True}
+
+        assert "half_tool" not in mock_deps["mcp_registered"]
+        assert mock_deps["registered_tools"]["half_read_tool"]["permission_action"] is None
+
+    def test_gated_mutating_tool_registers(self, mock_deps):
+        pt = _create_pt(mock_deps)
+        annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False)
+
+        @pt(
+            name="delete_tool",
+            description="test",
+            annotations=annotations,
+            permission_category="cat",
+            permission_action="delete",
+        )
+        async def delete_tool():
+            return {"success": True}
+
+        assert "delete_tool" in mock_deps["mcp_registered"]
+
+
+class TestImportTimeToolDecorator:
+    """The stand-in server.tool used before main.py installs permissioned_tool."""
+
+    @pytest.mark.asyncio
+    async def test_gated_tool_denies_every_mcp_call(self):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+        calls = []
+
+        @placeholder(
+            name="delete_tool",
+            description="test",
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+            permission_category="cat",
+            permission_action="delete",
+            auth="either",
+        )
+        async def delete_tool(confirm: bool = False) -> dict:
+            calls.append(confirm)
+            return {"success": True}
+
+        result = await server.call_tool("delete_tool", {"confirm": True})
+
+        assert calls == []
+        assert '"success": false' in result.content[0].text
+        assert "registered before permissions were initialized" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_gated_tool_keeps_its_input_schema(self):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+
+        @placeholder(name="update_tool", annotations=READ_ONLY, permission_category="cat", permission_action="read")
+        async def update_tool(name: str, confirm: bool = False) -> dict:
+            return {"success": True}
+
+        tool = next(t for t in await server.list_tools() if t.name == "update_tool")
+        assert set(tool.input_schema["properties"]) == {"name", "confirm"}
+
+    def test_returns_undecorated_function_for_direct_calls(self):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+
+        async def create_tool() -> dict:
+            return {"success": True}
+
+        decorated = placeholder(
+            name="create_tool",
+            annotations=READ_ONLY,
+            permission_category="cat",
+            permission_action="create",
+        )(create_tool)
+
+        assert decorated is create_tool
+        assert asyncio.run(decorated()) == {"success": True}
+
+    @pytest.mark.asyncio
+    async def test_ungated_read_only_tool_runs(self):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+
+        @placeholder(name="list_tool", annotations=READ_ONLY)
+        async def list_tool() -> dict:
+            return {"success": True, "data": []}
+
+        result = await server.call_tool("list_tool", {})
+        assert '"success": true' in result.content[0].text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "permission_kwargs",
+        [{}, {"permission_category": "cat", "permission_action": "read"}],
+        ids=["ungated", "gated"],
+    )
+    async def test_accepts_project_level_schema_kwargs(self, permission_kwargs):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+
+        @placeholder(
+            name="schema_tool",
+            annotations=READ_ONLY,
+            input_schema={"type": "object", "properties": {}},
+            output_schema={"type": "object"},
+            **permission_kwargs,
+        )
+        async def schema_tool() -> dict:
+            return {"success": True}
+
+        assert "schema_tool" in {t.name for t in await server.list_tools()}
+
+    def test_rejects_ungated_tool_not_annotated_read_only(self):
+        server = FastMCP("test")
+        placeholder = create_import_time_tool_decorator(server.tool, logger=logging.getLogger("test"))
+
+        with pytest.raises(ValueError, match="readOnlyHint=True"):
+
+            @placeholder(name="mutating_tool", annotations=ToolAnnotations(readOnlyHint=False))
+            async def mutating_tool() -> dict:
+                return {"success": True}
 
 
 class TestInferInputSchema:

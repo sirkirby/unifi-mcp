@@ -161,7 +161,7 @@ class FirewallManager:
 
         # get_api_key_session() supplies the required X-API-Key header. The
         # integration endpoints reject the local controller cookie session.
-        session = await self._auth.get_api_key_session()
+        session = await self._auth.get_api_key_session(base_url)
 
         try:
             async with session.request(
@@ -169,8 +169,9 @@ class FirewallManager:
                 url,
                 params=params,
                 json=data,
-                ssl=False,
+                ssl=self._connection.verify_ssl,
                 timeout=timeout,
+                allow_redirects=False,
             ) as resp:
                 try:
                     body = await resp.json(content_type=None)

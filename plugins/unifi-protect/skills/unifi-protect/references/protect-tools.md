@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (62 tools)
+# Protect Server Tool Reference (63 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -8,6 +8,7 @@ Permission variables use the server's config keys (`CAMERAS`, `LIGHTS`, `CHIMES`
 - [Meta-Tools](#meta-tools)
 - [Cameras](#cameras)
 - [Events](#events)
+- [Incident Evidence](#incident-evidence)
 - [Recordings](#recordings)
 - [Devices: Lights, Sensors, Chimes](#devices-lights-sensors-chimes)
 - [Liveviews](#liveviews)
@@ -89,6 +90,18 @@ Always available, regardless of registration mode.
 - `min_confidence` parameter filters out low-confidence detections (default threshold: 50)
 - Event types for filtering: `motion`, `smartDetectZone`, `ring`, `sensorMotion`, `sensorContact`, `sensorDoorbell`
 - Time parameters use ISO 8601 format: `2026-03-17T00:00:00Z`
+
+---
+
+## Incident Evidence
+
+<!-- AUTO:tools:incident_evidence -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `protect_get_incident_evidence` | Read | Collects bounded, read-only Protect event evidence for one incident window. |
+<!-- /AUTO:tools:incident_evidence -->
 
 ---
 
@@ -185,10 +198,10 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles c
 | `protect_alarm_get_status` | Read | Returns the current armed/disarmed state of the UniFi Protect Alarm Manager, including the active profile, raw status string, armed-at ti... |
 | `protect_alarm_list_profiles` | Read | Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule ... |
 | `protect_alarm_list_rules` | Read | Lists every UniFi Protect alarm rule, including AI-powered alarms (e.g. |
-| `protect_alarm_arm` | Mutate | Arms the UniFi Protect Alarm Manager. |
+| `protect_alarm_arm` | Mutate | Arms a UniFi Protect Alarm Manager profile. |
 | `protect_alarm_create_rule` | Mutate | Creates a new alarm rule via POST. |
 | `protect_alarm_delete_rule` | Mutate | Deletes an alarm rule (automation) by id. |
-| `protect_alarm_disarm` | Mutate | Disarms the UniFi Protect Alarm Manager system-wide via POST arm/disable. |
+| `protect_alarm_disarm` | Mutate | Disarms the UniFi Protect Alarm Manager. |
 | `protect_alarm_update_rule` | Mutate | Updates an alarm rule. |
 <!-- /AUTO:tools:alarm -->
 
@@ -244,7 +257,7 @@ Lists and manages UniFi Protect Known Faces / named face recognition groups. Rea
 
 ### "Check NVR health"
 ```
-protect_batch(tools=[
+protect_batch(operations=[
     {"tool": "protect_get_system_info"},
     {"tool": "protect_get_health"},
     {"tool": "protect_get_firmware_status"},
@@ -255,7 +268,7 @@ protect_batch(tools=[
 ### "A camera seems offline"
 1. `protect_list_cameras` → check connection state
 2. `protect_get_camera(camera_id="...")` → detailed status including IP and MAC
-3. Cross-reference with Network: `unifi_lookup_by_ip(ip="<camera IP>")` → network-level status
+3. Cross-reference with Network: `unifi_lookup_by_ip(ip_address="<camera IP>")` → network-level status
 4. If needed: `protect_reboot_camera(camera_id="...", confirm=true)` → reboot (requires permission)
 
 ---

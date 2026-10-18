@@ -30,6 +30,7 @@ from typing import Any, Callable, Coroutine
 from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from unifi_core.request_budget import create_uncharged_task
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
@@ -322,11 +323,13 @@ class ManagerFactory:
                 logger.warning(
                     "Failed to close %s connection after initialization error: %s",
                     product,
-                    cleanup_error,
+                    type(cleanup_error).__name__,
                 )
             raise
         if initialized is True:
             return cm
+        # A fixed-text failure that keeps its category (auth, permission, timeout) and status.
+        failure = getattr(cm, "initialization_failure", None)
         detail = getattr(cm, "last_connection_error", None)
         try:
             await cls._close_connection_manager(cm)
@@ -334,8 +337,10 @@ class ManagerFactory:
             logger.warning(
                 "Failed to close %s connection after unsuccessful initialization: %s",
                 product,
-                cleanup_error,
+                type(cleanup_error).__name__,
             )
+        if isinstance(failure, ConnectionError):
+            raise failure
         suffix = f": {detail}" if detail else ""
         raise ConnectionError(f"Failed to initialize {product} controller connection{suffix}")
 
@@ -530,10 +535,38 @@ class ManagerFactory:
             instance = builder(cm)
         self._domain_cache[key] = instance
         if attr_name == "event_manager" and callable(getattr(instance, "start_listening", None)):
-            self._listener_tasks[id(instance)] = asyncio.create_task(
+            # Uncharged: a listener started while a bounded read runs must never draw on its budget.
+            self._listener_tasks[id(instance)] = create_uncharged_task(
                 self._start_listener(instance), name="api-event-listener"
             )
         return instance
+
+    async def get_event_reader(
+        self,
+        session: AsyncSession,
+        controller_id: str,
+        product: str,
+        *,
+        site: str | None = None,
+    ) -> Any:
+        """An event manager for one bounded, one-shot read, never starting a listener.
+
+        Reuses the cached event manager when a route already built one (its
+        listener is already owned by the factory). Otherwise builds an uncached
+        instance on the cached connection: bounded evidence collection must not
+        leave a background websocket listener behind.
+        """
+        site_scope = self._site_scope(product, site)
+        key = (controller_id, product, "event_manager", site_scope)
+        cached = self._domain_cache.get(key)
+        if cached is not None:
+            return cached
+        builder = self._builders_for(product).get("event_manager")
+        if builder is None:
+            raise UnknownManager(f"product '{product}' has no domain manager named 'event_manager'")
+        cm = await self.get_connection_manager(session, controller_id, product, site=site_scope)
+        # A route may have built the cached manager while the connection initialized.
+        return self._domain_cache.get(key) or builder(cm)
 
     async def probe_controller(self, controller_id: str) -> dict:
         """Live connectivity probe across all products the controller advertises.

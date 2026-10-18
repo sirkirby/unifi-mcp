@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from unifi_core.access.managers.connection_manager import AccessConnectionManager
+from unifi_core.access.managers.connection_manager import AccessConnectionManager, reconnects_on_demand
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ _TOKEN_REMEDIATION = (
 )
 
 
+@reconnects_on_demand
 class VisitorManager:
     """Reads and mutates the Access Developer API visitor family."""
 

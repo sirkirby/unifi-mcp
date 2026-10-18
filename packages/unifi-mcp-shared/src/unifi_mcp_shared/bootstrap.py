@@ -25,6 +25,8 @@ from typing import Any, NoReturn, Sequence
 
 from unifi_core.redaction import is_sensitive_key, redact_sensitive_fields
 
+from unifi_mcp_shared.settings_file import SETTINGS_FILE_VAR, SettingsFileReport, apply_settings_file
+
 # Exit code used when a credential indirection cannot be resolved.
 EXIT_SECRET_UNRESOLVED = 6
 
@@ -42,6 +44,9 @@ _SECRET_COMMAND_REAP_S = 0.2
 # load_process_env() at startup. ``None`` means no snapshot
 # was taken and the current environment is trusted as is.
 _TRUSTED_VARS: frozenset[str] | None = None
+
+# What load_process_env() did with UNIFI_SETTINGS_FILE; ``None`` until it runs.
+_SETTINGS_REPORT: SettingsFileReport | None = None
 
 
 def snapshot_process_env() -> None:
@@ -66,8 +71,32 @@ def load_process_env() -> None:
     and even values read later through YAML interpolation. Operators who use an
     env file must explicitly load a trusted file in their launcher (for example,
     Docker ``env_file`` or ``uv run --env-file /absolute/trusted.env``).
+
+    The one file read here is the per-user settings file the launcher names in
+    ``UNIFI_SETTINGS_FILE`` (see :mod:`unifi_mcp_shared.settings_file`). It is
+    applied before the snapshot, so its keys count as launcher-supplied: its
+    ``_FILE``/``_COMMAND`` spellings are honoured and a credential helper
+    inherits them, exactly as for an exported variable. Only ``UNIFI_`` keys are
+    accepted, so it cannot introduce loader variables such as ``PYTHONPATH``.
+    The first call loads the file; later calls do nothing.
     """
+    global _SETTINGS_REPORT
+    if _SETTINGS_REPORT is None:
+        _SETTINGS_REPORT = apply_settings_file()
     snapshot_process_env()
+
+
+def report_settings_file(logger: logging.Logger) -> None:
+    """Log what :func:`load_process_env` did with the settings file, once.
+
+    The file is loaded before logging is configured (it may set the log level),
+    so its messages wait for the server's logger.
+    """
+    if _SETTINGS_REPORT is None:
+        return
+    for level, message, args in _SETTINGS_REPORT.messages:
+        logger.log(level, message, *args)
+    _SETTINGS_REPORT.messages.clear()
 
 
 _INTERPOLATION_START = re.compile(r"(\\*)(\$\{)")
@@ -715,48 +744,30 @@ def assert_credentials_configured(
 ) -> None:
     """Refuse to start if no controller host has been configured.
 
-    Empty host is the universal "user hasn't run setup yet" signal — without it
-    every tool call will fail with an unhelpful connection error. Surfacing the
-    problem at startup makes the server appear as failed in ``/mcp`` instead of
-    "connected but every tool errors", which is the most common new-user
-    confusion mode.
-
-    Args:
-        cfg: Loaded OmegaConf config (must have a ``unifi`` section).
-        plugin_name: Human-facing plugin name (e.g. ``"unifi-network"``).
-        env_prefix: Server-specific env prefix without ``UNIFI_`` and trailing
-                    ``_`` (e.g. ``"NETWORK"``).
-        logger: Logger to write the error to.
+    Retained for server releases built before setup mode; current servers call
+    :func:`unifi_mcp_shared.setup_required.serve_setup_required` instead, so the
+    client sees a connected server that explains how to configure it rather
+    than a failed one with no reason.
 
     Raises:
-        SystemExit: with code 5 when host is unconfigured. The MCP harness will
-                    show the server as failed, which is the desired UX.
+        SystemExit: with code 5 when host is unconfigured.
     """
-    host = ""
-    try:
-        host = str(cfg.unifi.get("host", "") or "").strip()
-    except Exception:
-        pass
+    from unifi_mcp_shared.setup_required import controller_host_configured, setup_required_message
 
-    if host:
+    if controller_host_configured(cfg):
         return
 
-    var_prefix = f"UNIFI_{env_prefix}_"
     bar = "=" * 72
     logger.error(bar)
     logger.error("[%s] No controller host configured — refusing to start.", plugin_name)
     logger.error("")
-    logger.error("Set these environment variables before starting the server:")
-    logger.error("  %sHOST=<your-controller-ip-or-hostname>", var_prefix)
-    logger.error("  %sUSERNAME=<local-admin-username>", var_prefix)
-    logger.error("  %sPASSWORD=<local-admin-password>", var_prefix)
-    logger.error("")
-    logger.error("How to set them depends on your runtime:")
-    logger.error("  Claude Code plugin -> run the /setup skill")
-    logger.error("  Docker             -> docker-compose .env or `environment:`")
-    logger.error("  Direct uvx / shell -> export them before launching")
-    logger.error("")
-    logger.error("Then restart the server.")
+    for line in setup_required_message(
+        plugin_name=plugin_name, env_prefix=env_prefix, report=_SETTINGS_REPORT
+    ).splitlines():
+        logger.error("%s", line)
+    report = _SETTINGS_REPORT
+    if report is not None and report.state in {"missing", "ignored"}:
+        logger.error("%s names %s.", SETTINGS_FILE_VAR, report.path)
     logger.error(bar)
     raise SystemExit(5)
 

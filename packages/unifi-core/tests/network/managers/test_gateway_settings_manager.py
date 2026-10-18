@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_core.network.managers.gateway_settings_manager import (
+    UNVERIFIED_UPDATE_ERROR,
     GatewaySettingsManager,
     _unpersisted_fields,
 )
@@ -84,6 +85,29 @@ async def test_update_fails_when_not_persisted():
     ok, err = await mgr.update_gateway_settings({"upnp_enabled": True})
     assert ok is False
     assert err is not None and "upnp_enabled" in err
+
+
+async def test_update_reports_unverified_when_reread_fails_after_put():
+    """The PUT landed, then the verifying re-read failed (e.g. a transient 503).
+    That must not read as a plain failure, since the change may be live."""
+    conn = _make_connection()
+    mgr = GatewaySettingsManager(conn)
+    conn.request.side_effect = [[_usg()], {}, RuntimeError("503 Service Unavailable")]
+    ok, err = await mgr.update_gateway_settings({"upnp_enabled": True})
+    assert ok is False
+    assert err is not None and err.startswith(UNVERIFIED_UPDATE_ERROR)
+    assert "503 Service Unavailable" in err
+    assert "may have been applied" in err
+    assert conn.request.call_args_list[1][0][0].method == "put"
+
+
+async def test_update_still_raises_when_put_fails():
+    """A failed PUT is a real failure, not an unverified write."""
+    conn = _make_connection()
+    mgr = GatewaySettingsManager(conn)
+    conn.request.side_effect = [[_usg()], RuntimeError("500 Internal Server Error")]
+    with pytest.raises(RuntimeError, match="500"):
+        await mgr.update_gateway_settings({"upnp_enabled": True})
 
 
 async def test_update_deep_merges_nested_without_wiping_siblings():

@@ -234,8 +234,22 @@ def connection_attempt_succeeded() -> dict[str, Any]:
     return SafeConnectionAttempt(status=AttemptStatus.SUCCEEDED).model_dump(mode="json")
 
 
-def connection_attempt_failed(exc: BaseException) -> dict[str, Any]:
-    category, status, remediation = classify_error(exc)
+_REMEDIATION_BY_CATEGORY = {
+    ErrorCategory.AUTHENTICATION: RemediationCode.CHECK_CREDENTIALS,
+    ErrorCategory.PERMISSION: RemediationCode.CHECK_PERMISSIONS,
+    ErrorCategory.RATE_LIMITED: RemediationCode.WAIT_AND_RETRY,
+    ErrorCategory.TIMEOUT: RemediationCode.CHECK_CONNECTIVITY,
+    ErrorCategory.CONNECTION: RemediationCode.CHECK_CONNECTIVITY,
+}
+
+
+def connection_attempt_failed(exc: BaseException, *, category: ErrorCategory | None = None) -> dict[str, Any]:
+    """A failed attempt record; ``category`` overrides the classification when the caller knows it."""
+    classified, status, remediation = classify_error(exc)
+    if category is not None and category is not classified:
+        remediation = _REMEDIATION_BY_CATEGORY.get(category, RemediationCode.UPDATE_DEPENDENCIES)
+    else:
+        category = classified
     return SafeConnectionAttempt(
         status=AttemptStatus.FAILED,
         error_category=category,

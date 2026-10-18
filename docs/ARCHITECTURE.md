@@ -33,6 +33,9 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `detection.py` | Controller type detection (UniFi OS vs standalone) |
 | `retry.py` | Retry logic with exponential backoff |
 | `exceptions.py` | Shared exception types |
+| `incident_evidence.py` | Versioned cross-product incident evidence contract ([details](incident-evidence.md)); Network and Protect normalizers live in `network/` and `protect/` |
+| `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
+| `event_timeline.py` | Legacy timeline shape, with a projection from evidence records |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/api`.
 
@@ -56,7 +59,7 @@ Used by: `apps/network`, `apps/protect`, `apps/access`.
 
 ### apps/network
 
-The UniFi Network MCP server. 209 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
+The UniFi Network MCP server. 210 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
 
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -71,7 +74,7 @@ The UniFi Network MCP server. 209 tools covering firewall, clients, devices, net
 
 ### apps/protect
 
-The UniFi Protect MCP server. 62 tools across 8 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
+The UniFi Protect MCP server. 63 tools across 9 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
 
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -128,7 +131,7 @@ A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, or `apps/access`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, plus timeline normalization from `unifi-core`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
+The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, or `apps/access`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 

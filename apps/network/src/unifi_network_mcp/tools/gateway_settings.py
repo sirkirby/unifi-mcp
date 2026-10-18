@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import update_preview
+from unifi_core.network.managers.gateway_settings_manager import UNVERIFIED_UPDATE_ERROR
 from unifi_core.network.models.gateway_settings import (
     from_controller as gw_from_controller,
 )
@@ -198,6 +199,10 @@ async def update_gateway_settings(
                 },
                 redact_sensitive=redact_sensitive,
             )
+        if error_detail and error_detail.startswith(UNVERIFIED_UPDATE_ERROR):
+            # Not a failed write: the change may be live, so say so instead of "failed".
+            logger.warning("Gateway settings update could not be verified: %s", error_detail)
+            return {"success": False, "mutation_applied": None, "error": error_detail}
         logger.error("Failed to update gateway settings: %s", error_detail)
         return {"success": False, "error": f"Failed to update gateway settings: {error_detail}"}
     except Exception as e:

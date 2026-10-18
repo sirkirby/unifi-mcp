@@ -1,0 +1,75 @@
+name: "Security: dependency audit and Bandit"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+  schedule:
+    # Weekly, so an advisory published against an unchanged lock still surfaces.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  python-dependencies:
+    name: pip-audit (uv.lock)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
+    # Audit exactly what the lock pins, with hashes, across every workspace
+    # member. Workspace packages themselves are not on PyPI, so they are left out.
+    - name: Export locked requirements
+      run: uv export --frozen --all-packages --no-emit-workspace -o "$RUNNER_TEMP/requirements.txt"
+
+    - name: Audit
+      run: uvx pip-audit==2.10.1 --strict --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+
+  node-dependencies:
+    name: npm audit (worker)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [apps/worker, apps/worker/worker]
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: "22"
+
+    - name: Audit production dependencies
+      working-directory: ${{ matrix.directory }}
+      run: npm audit --omit=dev --audit-level=high
+
+  bandit:
+    name: Bandit (high severity)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
+    # High severity only for now. At medium, Bandit also reports B104 for the API
+    # server's 0.0.0.0 default bind (apps/api/src/unifi_api/config.py) and a B608
+    # false positive on a preview message (unifi_core/confirmation.py); settle
+    # those before lowering the threshold.
+    - name: Scan
+      run: uvx bandit==1.9.4 -r apps packages -x '*/tests/*,*/node_modules/*' --severity-level high

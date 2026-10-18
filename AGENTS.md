@@ -145,6 +145,13 @@ controller or infer write/websocket support from successful reads.
 
 **Skill:** `add-integration-api-tool` (full procedure for contributors).
 
+### Plugin Bundles
+
+- Plugin MCP configs launch the server over stdio only. Never set `UNIFI_MCP_HTTP_ENABLED` or `UNIFI_MCP_HTTP_FORCE` in a plugin, and keep `http.force` defaulting to `false` in every app `config.yaml`: forcing HTTP binds a listener from client-launched (non-PID-1) processes.
+- Shell scripts under `plugins/` MUST run on macOS `/bin/bash` 3.2 (no `declare -A`, `mapfile` or `readarray`). Setup scripts ship a PowerShell equivalent for Windows.
+- Declare Claude Code's MCP server inline in `.claude-plugin/plugin.json`; Codex and OpenClaw run `.mcp.codex.json`. Never ship a root `.mcp.json`: OpenClaw merges it into the server it runs, and its `${user_config.*}` templates arrive as literal values.
+- Plugin skill directory names MUST be unique across all bundles and distinct from `.agents/skills/` names: standalone skill installers place skills in one flat directory.
+
 ## Permission System
 
 Two concepts:
@@ -182,7 +189,7 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 4. Run `make manifest`
 5. Add tests in `apps/<server>/tests/unit/test_<category>.py`
 6. Add `ToolAnnotations` to the `@server.tool()` decorator
-7. Commit code + manifest + tests together
+7. Commit code + manifest + tests together. Plugin skill counts and generated plugin references follow the server release the plugin pins, so they stay unchanged here and change in the plugin release that moves the pin (a new category needs its reference marker section then).
 
 ### Add a new tool category
 
@@ -290,10 +297,18 @@ make pre-commit   # format + lint + sync-skills + test
 - [ ] `.env.example` updated
 - [ ] README.md configuration table updated
 
+### Test Isolation
+
+- Tests MUST NOT reach a real controller. Use loopback stubs or mocks.
+- Every pytest suite's `conftest.py` MUST load `testsupport/unifi_test_guard.py` before importing code under test; unittest suites run through `testsupport/run_unittest.py`.
+- Fixture controller hosts MUST use TEST-NET (`192.0.2.0/24`), never private-range or real gateway addresses.
+- Tests that need a real login or reconnect path MUST opt in with `@pytest.mark.real_reconnect` and mock the transport.
+
 ### Version and Manifest Rules
 
 - Version is derived from git tags via `hatch-vcs`. MUST NOT manually edit version in `pyproject.toml`.
 - Before release tags, update downstream `pyproject.toml` dependency ranges when a downstream package requires newly tagged `unifi-core` or `unifi-mcp-shared` code; pip only installs versions allowed by the published wheel metadata.
+- Plugins carry independent semantic versions in their Claude/Codex manifests, never in marketplace entries. Every shipped-file change under `plugins/<name>/` MUST bump that plugin in the same PR; a plugin release is that bump merging to `main`. `make check-plugin-versions` and `make check-plugin-tool-refs` enforce versions, pins and tool references against the pinned release. Bump sizes, writebacks, client updates and release rules live in `monorepo-release-pipeline` (Procedure E).
 - Each app's `tools_manifest.json` MUST be regenerated (`make manifest`) and committed before release.
 - The Cloudflare worker lives in `apps/worker/` as a self-contained Node/TypeScript app. It is intentionally excluded from the uv workspace and released from `worker/v*` tags via npm; run `make worker-check` for focused worker changes and root `make check` before merging worker or relay protocol changes.
 

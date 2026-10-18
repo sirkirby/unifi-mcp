@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import sys
 import unittest
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
@@ -48,22 +50,26 @@ COUNT_SURFACES = {
         Path("docs/ARCHITECTURE.md"),
         Path("apps/network/README.md"),
         Path("apps/network/docs/tools.md"),
-        Path("plugins/unifi-network/skills/unifi-network/SKILL.md"),
     ],
     "protect": [
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
         Path("apps/protect/README.md"),
         Path("apps/protect/docs/tools.md"),
-        Path("plugins/unifi-protect/skills/unifi-protect/SKILL.md"),
     ],
     "access": [
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
         Path("apps/access/README.md"),
         Path("apps/access/docs/tools.md"),
-        Path("plugins/unifi-access/skills/unifi-access/SKILL.md"),
     ],
+}
+
+# Plugin skills describe the server release their plugin pins, not the
+# workspace server: their counts move in the plugin release that moves the pin.
+PLUGIN_COUNT_SURFACES = {
+    product: [Path(f"plugins/unifi-{product}/skills/unifi-{product}/SKILL.md")]
+    for product in ("network", "protect", "access")
 }
 
 DISCOVERY_FILES = (
@@ -168,6 +174,31 @@ def meta_content(parser: SiteHTMLParser, attribute: str, value: str) -> list[str
         for attributes in parser.attributes_for("meta")
         if attributes.get(attribute) == value
     ]
+
+
+def _plugin_tool_refs():
+    """``scripts/plugin_tool_refs.py``, which resolves each plugin's pinned server release."""
+    scripts = Path("scripts").resolve()
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    if "plugin_tool_refs" in sys.modules:
+        return sys.modules["plugin_tool_refs"]
+    spec = importlib.util.spec_from_file_location("plugin_tool_refs", scripts / "plugin_tool_refs.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def states_count(content: str, count: int) -> bool:
+    """Whether ``content`` states ``count`` as a whole number."""
+    return re.search(rf"(?<!\d){count}(?!\d)", content) is not None
+
+
+def pinned_counts(root: Path = Path(".")) -> dict[str, int]:
+    """Tool counts of the server releases the product plugins pin, read from their release tags."""
+    refs = _plugin_tool_refs()
+    return {product: refs.pinned_tool_count(root.resolve(), product) for product in PLUGIN_COUNT_SURFACES}
 
 
 def manifest_counts() -> dict[str, int]:
@@ -705,10 +736,21 @@ class ContentReconciliationTests(unittest.TestCase):
             for path in paths:
                 with self.subTest(product=product, path=path):
                     content = path.read_text(encoding="utf-8")
-                    self.assertRegex(
-                        content,
-                        rf"(?<!\d){counts[product]}(?!\d)",
-                        f"{path} must state the current {product} tool count",
+                    self.assertTrue(
+                        states_count(content, counts[product]),
+                        f"{path} must state the current {product} tool count ({counts[product]})",
+                    )
+
+    def test_plugin_count_surfaces_match_the_pinned_server(self):
+        counts = pinned_counts()
+        for product, paths in PLUGIN_COUNT_SURFACES.items():
+            for path in paths:
+                with self.subTest(product=product, path=path):
+                    content = path.read_text(encoding="utf-8")
+                    self.assertTrue(
+                        states_count(content, counts[product]),
+                        f"{path} must state the tool count of the {product} release its plugin pins "
+                        f"({counts[product]})",
                     )
 
     def test_network_traffic_route_catalog_matches_manifest(self):

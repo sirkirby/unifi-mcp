@@ -84,14 +84,19 @@ class AlarmArmInput(BaseModel):
 
     profile_id: Optional[str] = Field(
         default=None,
-        description="Arm profile UUID; omit to use the currently selected profile",
+        description="Arm profile id or name; omit for the only profile (legacy: the selected profile)",
     )
 
 
 class AlarmDisarmInput(BaseModel):
-    """Input for ``protect_alarm_disarm`` (no parameters)."""
+    """Input for ``protect_alarm_disarm``."""
 
     __action_input__: ClassVar[bool] = True
+
+    profile_id: Optional[str] = Field(
+        default=None,
+        description="Arm profile id or name to disarm; omit to disarm every active profile (legacy: system-wide)",
+    )
 
 
 class AlarmGetRuleInput(BaseModel):

@@ -152,10 +152,10 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # =========================================================================
     # Protect — preview/execute split (preview_X + X, X + apply_X patterns)
     # =========================================================================
-    "protect_alarm_arm": ("alarm_manager", "arm"),
-    "protect_alarm_disarm": ("alarm_manager", "disarm"),
-    # Alarm rule CRUD uses the facade so v2 UUID rules and legacy ObjectID rules
-    # route through the same family-aware path as the Protect MCP tools.
+    # Arm/disarm and alarm rule CRUD use the facade so Global-mode (v2) consoles
+    # and legacy consoles route through the same path as the Protect MCP tools.
+    "protect_alarm_arm": ("alarm_facade", "arm"),
+    "protect_alarm_disarm": ("alarm_facade", "disarm"),
     "protect_alarm_update_rule": ("alarm_facade", "update_rule"),
     "protect_alarm_delete_rule": ("alarm_facade", "delete_rule"),
     "protect_ptz_move": ("camera_manager", "ptz_move"),
@@ -238,10 +238,16 @@ _MCP_SUBSCRIPTION_EXCLUSION_REASON = (
 _TRAFFIC_ROUTE_CREATE_ACTION_EXCLUSION_REASON = (
     "requires controller-payload construction that the REST action dispatcher does not provide"
 )
+_INCIDENT_EVIDENCE_EXCLUSION_REASON = (
+    "bounded multi-read evidence collection is served by dedicated incident-evidence routes; "
+    "the action dispatcher invokes a single manager method"
+)
 API_ACTION_EXCLUSIONS: dict[str, ActionExclusion] = {
     "access_subscribe_events": ActionExclusion("access", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
     "protect_subscribe_events": ActionExclusion("protect", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
     "unifi_create_traffic_route": ActionExclusion("network", _TRAFFIC_ROUTE_CREATE_ACTION_EXCLUSION_REASON),
+    "unifi_get_incident_evidence": ActionExclusion("network", _INCIDENT_EVIDENCE_EXCLUSION_REASON),
+    "protect_get_incident_evidence": ActionExclusion("protect", _INCIDENT_EVIDENCE_EXCLUSION_REASON),
     "unifi_subscribe_events": ActionExclusion("network", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
 }
 

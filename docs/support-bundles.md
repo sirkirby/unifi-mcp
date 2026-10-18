@@ -129,7 +129,7 @@ Automated triage publishes fixed trusted text for label suggestions and relation
 
 If the support tool is missing:
 
-1. Update the matching plugin or MCP package.
+1. Update the matching plugin ([plugin upgrade guide](plugin-upgrade.md)) or MCP package.
 2. Restart the MCP client so its tool catalog refreshes.
 3. Use `$unifi-network-setup`, `$unifi-protect-setup`, or `$unifi-access-setup` for product setup help.
 
@@ -162,8 +162,8 @@ This uses that interpreter's installed app entrypoints, not workspace imports.
 
 After release/version sync, add `--support-plugin-root /path/to/fresh/marketplace-checkout` to validate the
 complete packaged support skills and both host manifests against the repository's canonical artifacts
-(allowing release-version/pin changes only), then launch the actual `.mcp.json`
-commands through `uvx` with a fresh temporary cache. The returned bundle version must match the plugin pin.
+(allowing release-version/pin changes only), then launch the actual Claude Code launcher declared in
+`.claude-plugin/plugin.json` through `uvx` with a fresh temporary cache. The returned bundle version must match the plugin pin.
 This verifies the packaged skill/tool pair; separately check skill discovery in the MCP host after install/upgrade.
 Unit coverage is in `tests/test_live_smoke_harness.py`. The broader readonly/preview/disposable-resource and API
 release matrix remains a separate gate; ordinary `--phase safe` alone does not prove support acceptance.

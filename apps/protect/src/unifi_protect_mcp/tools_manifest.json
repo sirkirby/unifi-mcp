@@ -1,5 +1,5 @@
 {
-  "count": 62,
+  "count": 63,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -26,6 +26,7 @@
     "protect_get_event_thumbnail": "unifi_protect_mcp.tools.events",
     "protect_get_firmware_status": "unifi_protect_mcp.tools.system",
     "protect_get_health": "unifi_protect_mcp.tools.system",
+    "protect_get_incident_evidence": "unifi_protect_mcp.tools.incident_evidence",
     "protect_get_recording_status": "unifi_protect_mcp.tools.recordings",
     "protect_get_snapshot": "unifi_protect_mcp.tools.cameras",
     "protect_get_system_info": "unifi_protect_mcp.tools.system",
@@ -169,7 +170,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Arms the UniFi Protect Alarm Manager. When profile_id is provided, the system first selects that profile (PATCH arm) and then activates it (POST arm/enable). When omitted, the currently selected profile is used. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Arms a UniFi Protect Alarm Manager profile. On consoles running the UniFi OS Alarm Manager (Global mode) the profile is armed through its v2 action endpoint and the result is verified against the controller state (arming/armed); legacy consoles use PATCH arm + POST arm/enable. profile_id is a profile id from protect_alarm_list_profiles; Global-mode consoles also accept the profile name, legacy consoles need the id. Omit it when there is a single profile (legacy: the selected profile); a blank value is rejected. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_arm",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -181,7 +182,7 @@
               "type": "boolean"
             },
             "profile_id": {
-              "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
+              "description": "Arm profile id from protect_alarm_list_profiles (Global-mode consoles also accept the profile name; legacy consoles need the id). Required when the console has several profiles; omit for the only profile (legacy consoles: the currently selected profile). Must not be blank.",
               "type": "string"
             }
           },
@@ -469,7 +470,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Disarms the UniFi Protect Alarm Manager system-wide via POST arm/disable. No profile id is required (or accepted) by the disarm endpoint. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Disarms the UniFi Protect Alarm Manager. On consoles running the UniFi OS Alarm Manager (Global mode) every active profile is disarmed through its v2 action endpoint, or only profile_id when given (an id or, in Global mode, a name; a blank value is rejected), and the result is verified against the controller state; legacy consoles use POST arm/disable system-wide. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_disarm",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -479,6 +480,10 @@
             "confirm": {
               "description": "When true, disarms the system. When false (default), returns a preview.",
               "type": "boolean"
+            },
+            "profile_id": {
+              "description": "Arm profile id to disarm (Global-mode consoles also accept the profile name). Omit to disarm every active profile; must not be blank. Legacy consoles disarm system-wide and ignore this.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -739,7 +744,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule count, automation count, id_family, and arm_compatible flag. Alarm Manager v2 profile IDs are scoped to this read family and are not accepted by protect_alarm_arm; only profiles marked arm_compatible can be used with that legacy arm action. Requires Protect 6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses include _meta with complete=false because v2-only fields are unavailable.",
+      "description": "Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule count, automation count, id_family, and arm_compatible flag. On Global-mode consoles (id_family alarm_manager_v2) protect_alarm_arm and protect_alarm_disarm take these profile ids or names; on legacy (Local-mode) consoles they take the legacy profile id. Requires Protect 6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses include _meta with complete=false because v2-only fields are unavailable.",
       "name": "protect_alarm_list_profiles",
       "schema": {
         "input": {
@@ -2530,6 +2535,144 @@
         }
       },
       "title": "Get Health"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Collects bounded, read-only Protect event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus a bounded list of record citations, with omitted records counted; detail='full' returns the whole unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+      "name": "protect_get_incident_evidence",
+      "schema": {
+        "input": {
+          "properties": {
+            "camera_ids": {
+              "description": "Exact Protect camera IDs (at most 5), each read as its own source; omit for every camera",
+              "type": "array"
+            },
+            "detail": {
+              "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "type": "string"
+            },
+            "end": {
+              "description": "Window end, ISO 8601 with a UTC offset (exclusive)",
+              "type": "string"
+            },
+            "location_id": {
+              "description": "Your label for the investigated location, recorded in source scope",
+              "type": "string"
+            },
+            "mappings": {
+              "description": "Explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
+              "type": "array"
+            },
+            "max_calls": {
+              "description": "Most HTTP requests to the NVR across cameras, retries included (1-100)",
+              "type": "integer"
+            },
+            "max_elapsed_ms": {
+              "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
+              "type": "integer"
+            },
+            "max_events": {
+              "description": "Most event rows to read across cameras (1-10000)",
+              "type": "integer"
+            },
+            "max_records_returned": {
+              "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
+              "type": "integer"
+            },
+            "max_window_seconds": {
+              "description": "Longest window to read; a longer window is not read (1-2592000)",
+              "type": "integer"
+            },
+            "resume_after": {
+              "description": "record_selection.next_cursor from an earlier view of the same request; returns the records after it. View only",
+              "type": "string"
+            },
+            "start": {
+              "description": "Window start, ISO 8601 with a UTC offset (inclusive)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Incident Evidence"
     },
     {
       "annotations": {

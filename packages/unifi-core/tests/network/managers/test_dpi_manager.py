@@ -173,4 +173,6 @@ async def test_integration_request_propagates_tls_verification(connection, auth,
 
     session.get.assert_called_once()
     assert session.get.call_args.kwargs["ssl"] is verify_ssl
+    assert session.get.call_args.kwargs["allow_redirects"] is False
+    auth.get_api_key_session.assert_awaited_once_with("https://192.168.1.1:443")
     session.close.assert_awaited_once()

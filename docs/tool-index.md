@@ -125,7 +125,7 @@ registered with MCP.
 | Mode | Initial `tools/list` behavior | Full catalog access | Best fit |
 |------|-------------------------------|---------------------|----------|
 | `eager` | Meta-tools plus all selected domain tools are registered directly | Standard `tools/list`; optional `*_tool_index` for compact filtering | Clients that handle large tool lists well, dev consoles, and parity checks |
-| `lazy` (default) | Meta-tools plus `*_load_tools` are registered initially | `*_tool_index` plus `*_execute`, or `*_load_tools` followed by `tools/list` refresh | Production LLM clients with limited context |
+| `lazy` (default) | Meta-tools plus `*_load_tools` are registered initially, with a few read-only domain tools listed directly (each app's `LAZY_DIRECT_TOOLS`) | `*_tool_index` plus `*_execute`, or `*_load_tools` followed by `tools/list` refresh | Production LLM clients with limited context |
 | `meta_only` | Only the core meta-tools are registered and indexed initially; executed domain modules are then registered | `*_execute`/`*_batch` with already-known domain tool names | Maximum initial context control; clients that already know the domain tools they need |
 
 Standard MCP-only clients remain supported in `eager` mode. In `lazy` and
