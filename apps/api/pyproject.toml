@@ -31,7 +31,7 @@ dependencies = [
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
     "aiounifi==95",
-    "aiohttp==3.14.3",
+    "aiohttp==3.14.5",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.54.0",
     "sqlalchemy[asyncio]>=2.1.1",
