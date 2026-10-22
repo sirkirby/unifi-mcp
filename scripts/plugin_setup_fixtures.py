@@ -122,7 +122,10 @@ def fake_claude(args):
 
     Options live in settings.json and sensitive values in a fake keychain, which keeps
     a value sent empty. FIXTURE_CLAUDE_VERSION and FIXTURE_CLAUDE_CLEARS model a later
-    release, one that clears it.
+    release, one that clears it. FIXTURE_CLAUDE_FAULT injects a configure failure,
+    counted from the calls logged since fixture-calls was last removed: "halt:N" fails
+    every call after N writes (an interrupted setup), "write:N" applies write N and then
+    fails, and "read:N" fails the reads after write N.
     """
     if args == ["--version"]:
         print(os.environ.get("FIXTURE_CLAUDE_VERSION", "2.1.296 (Claude Code)"))
@@ -139,6 +142,16 @@ def fake_claude(args):
     # Client calls may block or be forcibly terminated. Retained project secrets
     # must stay in memory until replacement, with no settings copy here.
     assert not list((Path.cwd() / ".claude").glob(".unifi-setup-*")), "project settings staged during configure"
+    calls_path = config / "fixture-calls"
+    writes = calls_path.read_text(encoding="utf-8").split().count("write") if calls_path.exists() else 0
+    writing = args[3:] == ["--values-stdin"]
+    config.mkdir(parents=True, exist_ok=True)
+    with calls_path.open("a", encoding="utf-8") as handle:
+        handle.write("write\n" if writing else "read\n")
+    fault, _, at = os.environ.get("FIXTURE_CLAUDE_FAULT", "").partition(":")
+    if (fault == "halt" and writes >= int(at)) or (fault == "read" and not writing and writes >= int(at)):
+        sys.exit(1)
+    fail_after_write = fault == "write" and writing and writes + 1 == int(at)
     schema = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["userConfig"]
     settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
     keychain = json.loads(keychain_path.read_text(encoding="utf-8")) if keychain_path.exists() else {}
@@ -198,9 +211,10 @@ def fake_claude(args):
             options[key] = int(value)
         else:
             options[key] = value
-    config.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
     keychain_path.write_text(json.dumps(keychain), encoding="utf-8")
+    if fail_after_write:
+        sys.exit(1)
 
 
 def executable(directory, name, source):
@@ -409,7 +423,9 @@ class Fixtures:
                 capture_output=True,
                 timeout=60,
             )
-            self.check(result.returncode == expected if expected == 0 else result.returncode != 0, "setup exit status")
+            if expected is not None:
+                status_ok = result.returncode == expected if expected == 0 else result.returncode != 0
+                self.check(status_ok, "setup exit status")
             self.check(sample_value.encode() not in result.stdout + result.stderr, "no secret in stdout/stderr")
             argv_path = workspace / "argv.jsonl"
             if argv_path.exists():
@@ -593,19 +609,28 @@ class Fixtures:
             1,
         )
         self.check(state() == snapshot and writes() == count, "dry run refuses a keychain clear")
-        # A release newer than the newest known one: clearing is tried alone first, so
-        # one that ignores the empty value changes nothing, and one that honours it works.
+
+        # A release newer than the newest known one: the provider is saved and verified,
+        # then the secret is cleared alone. One that ignores the empty value is rolled
+        # back to the previous options, and one that honours it switches.
+        def effective():
+            return {key: value for key, value in options().items() if value not in ("", None)}
+
         for variable, other in ((base, api_key), (api_key, base)):
             for version in ("2.2.0 (Claude Code)", "unrecognized"):
-                snapshot, count = state(), writes()
+                before, count = effective(), writes()
                 result = invoke({variable + "_FILE": filename}, 1, {"FIXTURE_CLAUDE_VERSION": version})
-                self.check(state() == snapshot and writes() == count + 1, "a kept secret changes nothing")
+                self.check(effective() == before and writes() == count + 3, "a kept secret rolls the provider back")
                 self.check(
                     b"kept " + variable.encode() + b" in the system keychain" in result.stderr
-                    and b"No settings were changed" in result.stderr,
+                    and b"Previous non-secret options were restored" in result.stderr,
                     "the post-write refusal names the secret Claude Code kept",
                 )
                 refused_clear(result, variable, other, "kept secret refusal")
+                snapshot, count = state(), writes()
+                result = invoke({variable: None}, 1, {"FIXTURE_CLAUDE_VERSION": version})
+                self.check(state() == snapshot and writes() == count + 1, "a kept secret deletion changes nothing")
+                self.check(b"No settings were changed" in result.stderr, "a kept deletion reports no change")
         newer = {"FIXTURE_CLAUDE_VERSION": "2.2.0 (Claude Code)", "FIXTURE_CLAUDE_CLEARS": "1"}
         count = writes()
         invoke({api_key + "_FILE": filename}, extra=newer)
@@ -614,8 +639,43 @@ class Fixtures:
             "api_key" not in saved and saved["api_key_file"] == filename and saved["password"] == "1234",
             "a release that clears keychain values switches to a provider",
         )
-        self.check(writes() == count + 2, "the keychain value is cleared alone, before the provider is saved")
+        self.check(writes() == count + 2, "the provider is saved before the keychain value is cleared alone")
         invoke({api_key + "_FILE": None})
+        # A failed or interrupted switch on such a release never leaves the credential
+        # without a saved value: the keychain secret stays until the provider is verified.
+        secrets = {base: ("password", "1234"), api_key: ("api_key", "FAKE-api-key-value")}
+        for variable, (option, secret) in secrets.items():
+            for version in ("2.2.0 (Claude Code)", "unrecognized"):
+                for fault in ("halt:1", "halt:2", "write:1", "write:2", "read:1", "read:2"):
+                    seed()
+                    invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key: "FAKE-api-key-value"})
+                    (config / "fixture-calls").unlink(missing_ok=True)
+                    extra = dict(newer, FIXTURE_CLAUDE_VERSION=version, FIXTURE_CLAUDE_FAULT=fault)
+                    result = run(
+                        wrapper("set-env", "-InputJson" if self.powershell else "--input-json"),
+                        {variable + "_FILE": filename},
+                        None,
+                        extra,
+                    )
+                    saved = options()
+                    kept, replaced = saved.get(option) == secret, saved.get(option + "_file") == filename
+                    label = f"{option} switch with {fault} on {version.split()[0]}"
+                    self.check(kept or replaced, label + " keeps the secret or a verified provider")
+                    if result.returncode == 0:
+                        self.check(replaced and not kept, label + " reports success only after switching")
+                    else:
+                        message = result.stderr.decode("utf-8", "replace")
+                        self.check(
+                            "Existing configuration is unchanged" not in message or (kept and not replaced),
+                            label + " claims nothing unchanged after a write",
+                        )
+                    self.check(saved.get("host") == "192.0.2.1", label + " keeps unrelated options")
+                    invoke({variable + "_FILE": filename}, extra=dict(newer, FIXTURE_CLAUDE_VERSION=version))
+                    saved = options()
+                    self.check(
+                        saved.get(option, "") == "" and saved.get(option + "_file") == filename,
+                        label + " finishes when setup is rerun",
+                    )
         # Stand-in for uninstalling and reinstalling the plugin: every option cleared.
         seed()
         invoke({base + "_FILE": filename})

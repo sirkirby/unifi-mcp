@@ -97,9 +97,9 @@ alone can reactivate shared credentials. Inherited environment providers must
 also be corrected in the launcher. Never delete a working provider in a separate
 preparatory write.
 
-Claude Code is the exception for a raw password or API key it holds in the
-system keychain: it cannot clear one through `claude plugin configure` or the
-options dialog. Setup therefore refuses, with nothing changed, any change that
+Claude Code 2.1.296 and earlier are the exception for a raw password or API
+key held in the system keychain: they cannot clear one through `claude plugin
+configure` or the options dialog. Setup therefore refuses, with nothing changed, any change that
 would clear it, such as selecting a `_FILE` or `_COMMAND` provider for that
 credential or a null deletion. The message names the variable and the choices:
 keep the saved secret, or run `claude plugin uninstall` and `claude plugin
@@ -107,6 +107,14 @@ install` with the plugin id it names (usually `unifi-protect@unifi-plugins`),
 then rerun setup with the provider and the options the message lists.
 Uninstalling clears every option of the plugin, so offer it to the user and
 never run it without their consent.
+
+On a newer or unrecognized Claude Code release, setup instead saves and
+verifies the new options first, then clears the keychain secret alone. If
+Claude Code keeps the secret, setup restores the previous options and refuses
+with the same choices. If a step fails or is interrupted, the credential still
+has a saved value: rerun setup with the same settings to finish the switch.
+Until then the server refuses to start if two spellings of the credential
+are set.
 
 Before changing or skipping API-key setup, remove obsolete
 `UNIFI_PROTECT_API_KEY`, `UNIFI_PROTECT_API_KEY_FILE`, and

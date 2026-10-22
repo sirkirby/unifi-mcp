@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-10-22 — unifi-network 1.2.5, unifi-protect 1.1.9, unifi-access 1.0.7
+
+- Claude Code setup no longer risks losing a password or API key held in the system keychain when you switch it to a `_FILE` or `_COMMAND` provider on a newer Claude Code release. Setup now saves and verifies the new provider before it clears the secret, rolls back if Claude Code keeps the secret, and keeps a saved credential if a step fails or is interrupted; rerunning setup finishes the switch.
+
+
 ## 2026-10-22 — unifi-access 1.0.6
 
 - Pins `unifi-access-mcp` [0.6.17](https://github.com/sirkirby/unifi-mcp/releases/tag/access/v0.6.17).
