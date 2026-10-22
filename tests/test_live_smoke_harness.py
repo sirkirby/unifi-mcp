@@ -827,6 +827,54 @@ def test_live_smoke_protect_capability_preview_args_from_seeded_inventory():
     )
 
 
+def test_live_smoke_traffic_route_preview_skips_internet_routes():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember(
+        "unifi_list_traffic_routes",
+        {
+            "success": True,
+            "data": {
+                "traffic_routes": [
+                    {"_id": "route-internet", "matching_target": "INTERNET"},
+                    {"_id": "route-domain", "matching_target": "DOMAIN"},
+                ]
+            },
+        },
+    )
+
+    assert runner.preview_args("unifi_update_traffic_route") == (
+        {"route_id": "route-domain", "target_devices": [{"type": "ALL_CLIENTS"}]},
+        "",
+    )
+
+
+def test_live_smoke_traffic_route_preview_seeds_route_inventory():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.args = SimpleNamespace(tool=["unifi_update_traffic_route"])
+    runner.manifest = {"tools": [{"name": "unifi_update_traffic_route"}, {"name": "unifi_list_traffic_routes"}]}
+    assert runner.preview_seed_tool_names() == {"unifi_list_traffic_routes"}
+
+
+def test_live_smoke_traffic_route_preview_skips_when_only_internet_routes():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember(
+        "unifi_list_traffic_routes",
+        {"success": True, "data": {"traffic_routes": [{"_id": "route-internet", "matching_target": "INTERNET"}]}},
+    )
+
+    preview, reason = runner.preview_args("unifi_update_traffic_route")
+    assert preview is None
+    assert "INTERNET" in reason
+
+
 def test_live_smoke_firewall_group_uses_public_contract() -> None:
     import live_smoke
 
