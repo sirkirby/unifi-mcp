@@ -672,7 +672,8 @@ def claude_main(args, root, name, product):
         merge_env(saved, {}, product, inherited)
         if notice:
             print(notice)
-        others_left = [k for k in legacy_data["env"] if k.startswith(other_prefixes(product))] if legacy_data else []
+        legacy_env = legacy_data.get("env", {}) if legacy_data else {}
+        others_left = [k for k in legacy_env if k.startswith(other_prefixes(product))]
         if shared and not owned and not others_left:
             print(
                 "Notice: no UniFi plugin settings remain in .claude/settings.local.json, but it still holds shared "
