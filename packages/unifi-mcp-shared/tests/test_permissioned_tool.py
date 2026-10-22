@@ -270,6 +270,27 @@ class TestCreatePermissionedTool:
         assert '"success": true' in result.content[0].text
         assert result.structured_content == {"success": True, "data": {"id": "abc"}}
 
+    @pytest.mark.asyncio
+    async def test_fastmcp_keeps_unknown_mutation_outcome(self, mock_deps):
+        server = FastMCP("test")
+        mock_deps = {
+            **mock_deps,
+            "original_tool_decorator": server.tool,
+        }
+        pt = _create_pt(mock_deps)
+
+        @pt(name="unverified_write_tool", description="test", permission_category="cat", permission_action="update")
+        async def unverified_write_tool():
+            return {"success": False, "mutation_applied": None, "error": "write sent but not verified", "data": None}
+
+        result = await server.call_tool("unverified_write_tool", {})
+        assert result.structured_content == {
+            "success": False,
+            "mutation_applied": None,
+            "error": "write sent but not verified",
+        }
+        assert '"mutation_applied": null' in result.content[0].text
+
     def test_uses_function_name_when_no_name_given(self, mock_deps):
         pt = _create_pt(mock_deps)
 
@@ -700,3 +721,25 @@ class TestInferInputSchema:
 
         assert schema["properties"]["callback"] == {"type": "string"}
         assert schema["properties"]["limit"] == {"type": "integer", "minimum": 1}
+
+
+class TestUniFiToolResponseDump:
+    def test_explicit_unknown_mutation_outcome_is_kept(self):
+        response = UniFiToolResponse.model_validate({"success": False, "mutation_applied": None, "error": "x"})
+
+        assert response.model_dump() == {"success": False, "mutation_applied": None, "error": "x"}
+
+    def test_known_mutation_outcome_is_kept(self):
+        response = UniFiToolResponse.model_validate({"success": False, "mutation_applied": False, "error": "x"})
+
+        assert response.model_dump() == {"success": False, "mutation_applied": False, "error": "x"}
+
+    def test_absent_fields_stay_omitted(self):
+        response = UniFiToolResponse.model_validate({"success": True, "data": None, "preview": None})
+
+        assert response.model_dump() == {"success": True}
+
+    def test_caller_can_still_request_every_field(self):
+        response = UniFiToolResponse.model_validate({"success": True})
+
+        assert response.model_dump(exclude_none=False)["mutation_applied"] is None

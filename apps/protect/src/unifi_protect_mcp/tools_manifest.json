@@ -118,6 +118,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -215,6 +228,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -317,6 +343,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -418,6 +457,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -516,6 +568,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -609,6 +674,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -693,6 +771,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -779,6 +870,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -863,6 +967,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -969,6 +1086,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -1202,6 +1332,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -1301,6 +1444,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -1402,6 +1558,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -1501,6 +1670,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -1612,6 +1794,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -1696,6 +1891,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -1845,6 +2053,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -1937,6 +2158,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2031,6 +2265,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -2123,6 +2370,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2220,6 +2480,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2322,6 +2595,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -2407,6 +2693,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -2491,6 +2790,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2630,6 +2942,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -2719,6 +3044,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2824,6 +3162,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -2962,6 +3313,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3047,6 +3411,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3131,6 +3508,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -3245,6 +3635,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -3364,6 +3767,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3482,6 +3898,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3567,6 +3996,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3651,6 +4093,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -3753,6 +4208,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -3837,6 +4305,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -3956,6 +4437,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -4040,6 +4534,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -4196,6 +4703,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -4311,6 +4831,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -4416,6 +4949,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -4530,6 +5076,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -4629,6 +5188,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -4735,6 +5307,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -4855,6 +5440,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -4939,6 +5537,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -5043,6 +5654,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -5153,6 +5777,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -5321,6 +5958,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -5427,6 +6077,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -5532,6 +6195,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -5673,6 +6349,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -5813,6 +6502,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -5918,6 +6620,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
@@ -6025,6 +6740,19 @@
               "description": "Actionable error message for handled failures.",
               "title": "Error"
             },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
             "preview": {
               "anyOf": [
                 {},
@@ -6130,6 +6858,19 @@
               "default": null,
               "description": "Actionable error message for handled failures.",
               "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
             },
             "preview": {
               "anyOf": [
