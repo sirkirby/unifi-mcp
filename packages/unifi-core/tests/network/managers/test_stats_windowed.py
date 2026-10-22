@@ -1,11 +1,14 @@
 """Windowed statistics in the stats manager: top clients, v2 DPI, IPS and window parsing."""
 
 import json
+import traceback
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiounifi.errors import Forbidden, ResponseError
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiOperationError, UniFiPermissionError
 from unifi_core.network.managers import stats_manager as stats_module
 from unifi_core.network.managers.stats_manager import StatsManager
 from unifi_core.network.time_window import parse_window_bound
@@ -402,12 +405,14 @@ def _system_log_fixture() -> Dict[str, Any]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("envelope", ["dict", "list"])
+@pytest.mark.parametrize("envelope", ["dict", "list", "logs", "logs-list"])
 async def test_ips_fallback_returns_only_intrusion_prevention_rows(envelope: str) -> None:
     """The SECURITY category also holds firewall blocks; with limit=1 the threat must still win."""
     page = _system_log_fixture()
+    if envelope.startswith("logs"):
+        page = {"logs": page["data"]}
     manager, connection = _manager()
-    connection.request.side_effect = [[], page if envelope == "dict" else [page]]
+    connection.request.side_effect = [[], [page] if envelope in {"list", "logs-list"} else page]
 
     result = await manager.get_ips_events(limit=1)
 
@@ -488,6 +493,91 @@ async def test_ips_fallback_junk_row_does_not_end_paging_early() -> None:
     connection.request.side_effect = [[], page, {"data": [threat]}]
 
     assert await manager.get_ips_events(limit=5) == [threat]
+
+
+@pytest.mark.asyncio
+async def test_ips_fallback_unreadable_row_beside_readable_rows_is_skipped() -> None:
+    threat = {"category": "SECURITY", "subcategory": "SECURITY_INTRUSION_PREVENTION", "id": "t3"}
+    manager, connection = _manager()
+    connection.request.side_effect = [[], {"data": [{"unexpected": []}, threat]}]
+
+    assert await manager.get_ips_events(limit=5) == [threat]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [[], {"unexpected": "legacy envelope"}])
+@pytest.mark.parametrize(
+    "error,expected,status",
+    [
+        (Forbidden("PRIVATE_CONTROLLER_TEXT"), UniFiPermissionError, None),
+        (TimeoutError("PRIVATE_CONTROLLER_TEXT"), TimeoutError, None),
+        (ResponseError("Call https://fixture.invalid received 403 PRIVATE_CONTROLLER_TEXT"), UniFiOperationError, 403),
+        (ResponseError("Call https://fixture.invalid received 404 PRIVATE_CONTROLLER_TEXT"), UniFiOperationError, 404),
+        (ResponseError("Call https://fixture.invalid received 503 PRIVATE_CONTROLLER_TEXT"), UniFiOperationError, 503),
+    ],
+)
+async def test_ips_fallback_failure_is_not_an_empty_success(legacy, error, expected, status, caplog) -> None:
+    manager, connection = _manager()
+    connection.request.side_effect = [legacy, error]
+
+    with pytest.raises(expected, match="IPS events") as caught:
+        await manager.get_ips_events(limit=1)
+
+    assert caught.value.status == status
+    assert "PRIVATE_CONTROLLER_TEXT" not in str(caught.value)
+    assert "PRIVATE_CONTROLLER_TEXT" not in caplog.text
+    connection._update_cache.assert_not_called()
+    assert connection.request.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "page",
+    [
+        None,
+        42,
+        {"unexpected": []},
+        {"data": None},
+        [{"data": "not rows"}],
+        [{"unexpected": []}],
+        [{"total_element_count": 1}],
+        {"data": [{"unexpected": []}]},
+        ["not a log row"],
+        [{"data": []}, {"data": []}],
+    ],
+)
+async def test_ips_fallback_malformed_page_is_not_empty(page) -> None:
+    manager, connection = _manager()
+    connection.request.side_effect = [[], page]
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await manager.get_ips_events(limit=1)
+
+    connection._update_cache.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ips_malformed_fallback_suppresses_private_legacy_exception_context(caplog) -> None:
+    manager, connection = _manager()
+    connection.request.side_effect = [RuntimeError("PRIVATE_LEGACY_TEXT"), [{"data": None}]]
+
+    with pytest.raises(UniFiMalformedResponseError) as caught:
+        await manager.get_ips_events(limit=1)
+
+    assert "PRIVATE_LEGACY_TEXT" not in "".join(traceback.format_exception(caught.value))
+    assert "PRIVATE_LEGACY_TEXT" not in caplog.text
+    connection._update_cache.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("page", [[], {"data": []}, {"logs": []}, [{"data": []}], [{"logs": []}]])
+async def test_ips_fallback_valid_empty_page_remains_cacheable(page) -> None:
+    manager, connection = _manager(cached=True)
+    connection.request.side_effect = [[], page]
+
+    assert await manager.get_ips_events(limit=1) == []
+    assert await manager.get_ips_events(limit=1) == []
+    assert connection.request.await_count == 2
 
 
 # --- window bound parsing -------------------------------------------------------------

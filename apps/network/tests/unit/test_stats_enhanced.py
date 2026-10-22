@@ -305,17 +305,13 @@ class TestStatsManagerEnhanced:
         assert mock_connection.request.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_get_ips_events_v2_failure_after_empty_legacy_returns_empty(self, stats_manager, mock_connection):
-        """A failing v2 fallback must not turn an empty result into an exception.
-
-        A controller old enough to have no v2 endpoint answers exactly this way,
-        so raising here would break setups the legacy endpoint still serves.
-        """
+    async def test_get_ips_events_v2_failure_after_empty_legacy_raises(self, stats_manager, mock_connection):
+        """An empty legacy feed cannot establish that a failed v2 read contained no threats."""
         mock_connection.request.side_effect = [[], Exception("v2 unavailable")]
 
-        result = await stats_manager.get_ips_events()
+        with pytest.raises(Exception, match="IPS events"):
+            await stats_manager.get_ips_events()
 
-        assert result == []
         assert mock_connection.request.call_count == 2
 
     @pytest.mark.asyncio
@@ -323,7 +319,8 @@ class TestStatsManagerEnhanced:
         """A degraded empty result must not be cached as a confirmed quiet period."""
         mock_connection.request.side_effect = [[], Exception("v2 unavailable")]
 
-        await stats_manager.get_ips_events()
+        with pytest.raises(Exception, match="IPS events"):
+            await stats_manager.get_ips_events()
 
         mock_connection._update_cache.assert_not_called()
 

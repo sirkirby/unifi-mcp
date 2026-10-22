@@ -9,10 +9,12 @@ from aiounifi.models.dpi_restriction_group import (
     DPIRestrictionGroup,
 )  # Import DPIGroup model
 
+from unifi_core.exceptions import UniFiMalformedResponseError
 from unifi_core.mac import mac_equal, normalize_mac
 from unifi_core.network.managers.client_manager import ClientManager  # Needed for get_top_clients
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.device_manager import DeviceManager
+from unifi_core.network.managers.event_manager import safe_request_error
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -127,6 +129,7 @@ def _auto_granularity(start_ms: int, now_ms: int) -> str:
 _IPS_SUBCATEGORY = "SECURITY_INTRUSION_PREVENTION"
 _IPS_V2_PAGE_SIZE = 100
 _IPS_V2_MAX_PAGES = 10
+_LOG_ROW_FIELDS = frozenset({"category", "subcategory", "event", "key"})
 
 
 def _system_log_page(response: Any) -> tuple[List[Dict[str, Any]], int]:
@@ -135,15 +138,22 @@ def _system_log_page(response: Any) -> tuple[List[Dict[str, Any]], int]:
     Returns the dict rows and the page's raw row count, so a junk row doesn't make a
     full page look short.
     """
-    if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-        data: Any = response[0]["data"]
-    elif isinstance(response, dict):
-        data = response.get("data", response.get("logs", []))
-    else:
-        data = response
+    if isinstance(response, list) and response and isinstance(response[0], dict):
+        if "data" in response[0] or "logs" in response[0]:
+            if len(response) != 1:
+                raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
+            response = response[0]
+    data: Any = response
+    if isinstance(response, dict):
+        if "data" not in response and "logs" not in response:
+            raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
+        data = response["data"] if "data" in response else response["logs"]
     if not isinstance(data, list):
-        return [], 0
-    return [row for row in data if isinstance(row, dict)], len(data)
+        raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
+    rows = [row for row in data if isinstance(row, dict) and _LOG_ROW_FIELDS.intersection(row)]
+    if data and not rows:
+        raise UniFiMalformedResponseError("Unreadable rows in response from /system-log/all")
+    return rows, len(data)
 
 
 def _is_ips_event(row: Dict[str, Any]) -> bool:
@@ -828,7 +838,9 @@ class StatsManager:
             try:
                 response = await self._connection.request(api_request)
             except Exception as legacy_error:
-                logger.debug("Legacy IPS endpoint failed, falling back to v2 security logs: %s", legacy_error)
+                logger.debug(
+                    "Legacy IPS endpoint failed, falling back to v2 security logs: %s", type(legacy_error).__name__
+                )
                 response, complete = await self._get_security_events_v2(start_time, end_time, limit)
                 if not complete:
                     return response
@@ -838,24 +850,20 @@ class StatsManager:
                 # fallback above never fires on the versions it exists for.
                 if not isinstance(response, list) or not response:
                     logger.debug("Legacy IPS endpoint returned no events, trying v2 security logs")
-                    try:
-                        response, complete = await self._get_security_events_v2(start_time, end_time, limit)
-                    except Exception as v2_error:
-                        # Deliberately not raising, unlike the branch above: legacy did
-                        # answer here, and a controller old enough to have no v2 endpoint
-                        # answers exactly this way. Returning early leaves the result
-                        # uncached, so a transient v2 outage is retried on the next call
-                        # rather than held as "no threats" for the whole TTL.
-                        logger.debug("v2 security log fallback failed: %s", v2_error)
-                        return []
+                    # Empty legacy data is inconclusive on controllers using v2.
+                    # A failed fallback must remain an unavailable read, not "no threats".
+                    response, complete = await self._get_security_events_v2(start_time, end_time, limit)
                     if not complete:
                         return response
             result = response if isinstance(response, list) else []
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
+        except UniFiMalformedResponseError as e:
+            logger.error("Error getting IPS events: malformed response")
+            raise e from None
         except Exception as e:
-            logger.error("Error getting IPS events: %s", e)
-            raise
+            logger.error("Error getting IPS events: %s", type(e).__name__)
+            raise safe_request_error("IPS events", e) from None
 
     async def _get_security_events_v2(
         self, start_time: int, end_time: int, limit: int
