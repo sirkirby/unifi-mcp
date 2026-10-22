@@ -38,6 +38,11 @@ KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 # Package pins track server versions independently of plugin versions.
 PACKAGE_PIN = re.compile(r"^(unifi-[a-z]+-mcp)==(.+)$")
+# Advisory plugin-directory checks in `claude plugin validate`; the CLI states they don't change the result.
+DIRECTORY_CHECKS = re.compile(
+    r"^Plugin directory checks for .*?^These plugin directory checks do not change the result below\.[^\n]*$",
+    re.MULTILINE | re.DOTALL,
+)
 USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
 # Variables the servers resolve with resolve_env, where an empty value counts as unset.
 EMPTY_IS_UNSET = re.compile(
@@ -846,7 +851,7 @@ def test_claude_plugin_validate_passes(tmp_path: Path, name: str) -> None:
     )
 
     assert result.returncode == 0 and "Validation passed" in result.stdout, result.stdout + result.stderr
-    assert "warning" not in result.stdout.lower(), result.stdout
+    assert "warning" not in DIRECTORY_CHECKS.sub("", result.stdout).lower(), result.stdout
 
 
 def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
