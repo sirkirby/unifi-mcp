@@ -9,7 +9,8 @@ dependencies = [
     # The settings-file startup report and setup mode require Shared 0.6.28.
     # Listing incident evidence directly in lazy mode requires Shared 0.6.31.
     # The fail-closed import-time tool decorator requires Shared 0.6.34.
-    "unifi-mcp-shared>=0.6.34,<0.7",
+    # Keeping an unknown write outcome (mutation_applied: null) in structured responses requires Shared 0.6.35.
+    "unifi-mcp-shared>=0.6.35,<0.7",
     # Network managers in unifi-core import aiounifi; the [network] extra
     # declares the compatibility floor for library consumers. This deployable
     # app also pins the auth client exactly so one MCP release always resolves
