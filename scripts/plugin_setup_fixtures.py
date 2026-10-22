@@ -122,10 +122,11 @@ def fake_claude(args):
 
     Options live in settings.json and sensitive values in a fake keychain, which keeps
     a value sent empty. FIXTURE_CLAUDE_VERSION and FIXTURE_CLAUDE_CLEARS model a later
-    release, one that clears it. FIXTURE_CLAUDE_FAULT injects a configure failure,
-    counted from the calls logged since fixture-calls was last removed: "halt:N" fails
-    every call after N writes (an interrupted setup), "write:N" applies write N and then
-    fails, and "read:N" fails the reads after write N.
+    release, one that clears every value ("1") or only the named option.
+    FIXTURE_CLAUDE_FAULT injects a configure failure, counted from the calls logged
+    since fixture-calls was last removed: "halt:N" fails every call after N writes (an
+    interrupted setup), "write:N" applies write N and then fails, and "read:N" fails
+    the reads after write N.
     """
     if args == ["--version"]:
         print(os.environ.get("FIXTURE_CLAUDE_VERSION", "2.1.296 (Claude Code)"))
@@ -203,7 +204,7 @@ def fake_claude(args):
         if entry.get("sensitive"):
             if value:
                 keychain_values[key] = value
-            elif os.environ.get("FIXTURE_CLAUDE_CLEARS"):
+            elif os.environ.get("FIXTURE_CLAUDE_CLEARS") in ("1", key):
                 keychain_values.pop(key, None)
         elif entry["type"] == "boolean" and value in ("true", "false"):
             options[key] = value == "true"
@@ -676,6 +677,40 @@ class Fixtures:
                         saved.get(option, "") == "" and saved.get(option + "_file") == filename,
                         label + " finishes when setup is rerun",
                     )
+        # Switching both credentials where Claude Code clears only one secret keeps the
+        # cleared one's new provider (its only saved value) and rolls back the other.
+        for cleared_option, kept_option in (("password", "api_key"), ("api_key", "password")):
+            seed()
+            invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key: "FAKE-api-key-value"})
+            result = invoke(
+                {base + "_FILE": filename, api_key + "_FILE": filename},
+                1,
+                dict(newer, FIXTURE_CLAUDE_CLEARS=cleared_option),
+            )
+            saved = options()
+            label = f"mixed clear of {cleared_option}"
+            self.check(
+                saved.get(cleared_option, "") == "" and saved.get(cleared_option + "_file") == filename,
+                label + " keeps the cleared credential's provider",
+            )
+            self.check(
+                saved.get(kept_option) == secrets[base if kept_option == "password" else api_key][1]
+                and saved.get(kept_option + "_file", "") == "",
+                label + " rolls back the kept credential's provider",
+            )
+            message = result.stderr.decode("utf-8", "replace")
+            self.check("whose new settings are kept" in message, label + " reports the partial outcome")
+        # A deletion whose clear is applied but not confirmed reports an unknown outcome.
+        for fault in ("halt:1", "read:1"):
+            seed()
+            invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key: "FAKE-api-key-value"})
+            (config / "fixture-calls").unlink(missing_ok=True)
+            result = invoke({api_key: None}, 1, dict(newer, FIXTURE_CLAUDE_FAULT=fault))
+            message = result.stderr.decode("utf-8", "replace")
+            self.check(
+                "is unknown" in message and "still has a saved value" not in message,
+                f"deletion with {fault} reports an unknown outcome",
+            )
         # Stand-in for uninstalling and reinstalling the plugin: every option cleared.
         seed()
         invoke({base + "_FILE": filename})

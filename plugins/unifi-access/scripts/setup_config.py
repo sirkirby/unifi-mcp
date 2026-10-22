@@ -791,20 +791,27 @@ def claude_main(args, root, name, product):
         clears = {mapping[variable]: "" for variable in cleared} if probe else {}
         staged = {option: value for option, value in changes.items() if option not in clears}
         restore = {o: before[o] for o in staged if before[o] != KEYCHAIN and not schema[o].get("sensitive")}
-        unconfirmed = (
-            "Claude Code did not confirm the change. "
-            + ", ".join(cleared)
-            + " stays in the system keychain until its replacement is saved and verified, so the "
-            "credential still has a saved value. Rerun setup with the same settings to finish; until then the "
-            "server refuses to start if two spellings of the credential are set."
-        )
+        variable_of = {option: variable for variable, option in mapping.items()}
+
+        def credential_of(option):
+            match = secret_base(variable_of[option])
+            return match[1] if match else None
+
+        with_replacement = [v for v in cleared if any(credential_of(o) == v and value for o, value in staged.items())]
+        without_replacement = [v for v in cleared if v not in with_replacement]
+        both_note = "; until then the server refuses to start if two spellings of a credential are set."
         if staged:
             try:
                 configure(staged)
                 after = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
             except SetupError:
                 if probe:
-                    refuse(unconfirmed)
+                    refuse(
+                        "Claude Code did not confirm saving the new options; "
+                        + ", ".join(cleared)
+                        + " was not cleared from the system keychain. Rerun setup with the same settings to finish"
+                        + both_note
+                    )
                 raise
             retained = all(
                 (after[option] == KEYCHAIN) == bool(value)
@@ -828,12 +835,33 @@ def claude_main(args, root, name, product):
                 configure(clears)
                 current = claude_saved(plugin_id, environment, mapping, schema)
             except SetupError:
-                refuse(unconfirmed)
+                outcome = []
+                if with_replacement:
+                    outcome.append(
+                        ", ".join(with_replacement)
+                        + " still has a saved value: the keychain secret or its verified replacement."
+                    )
+                if without_replacement:
+                    outcome.append(
+                        "Whether "
+                        + ", ".join(without_replacement)
+                        + " was cleared from the system keychain is unknown."
+                    )
+                refuse(
+                    "Claude Code did not confirm the change. "
+                    + " ".join(outcome)
+                    + " Rerun setup with the same settings to finish"
+                    + (both_note if with_replacement else ".")
+                )
             kept = [variable for variable in cleared if current.get(variable) == KEYCHAIN]
             if kept:
+                # Keep the new settings of a credential whose secret was cleared: they
+                # are its only saved value now. Roll back only the rest.
+                switched = [variable for variable in cleared if variable not in kept]
+                undo = {o: v for o, v in restore.items() if not switched or credential_of(o) in kept}
                 try:
-                    if restore:
-                        configure(restore)
+                    if undo:
+                        configure(undo)
                 except SetupError:
                     refuse(
                         kept_message(
@@ -842,11 +870,18 @@ def claude_main(args, root, name, product):
                             "to null to restore them.",
                         )
                     )
-                refuse(
-                    kept_message(
-                        kept, "Previous non-secret options were restored." if restore else "No settings were changed."
+                if switched:
+                    outcome = (
+                        "It cleared "
+                        + ", ".join(switched)
+                        + ", whose new settings are kept"
+                        + ("; the previous options for " + ", ".join(kept) + " were restored." if undo else ".")
                     )
-                )
+                elif undo:
+                    outcome = "Previous non-secret options were restored."
+                else:
+                    outcome = "No settings were changed."
+                refuse(kept_message(kept, outcome))
     if remaining is not None:
         replace_project_settings(legacy_path, original, remaining)
     if args.migrate:
