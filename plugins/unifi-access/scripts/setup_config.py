@@ -863,25 +863,29 @@ def claude_main(args, root, name, product):
                     for o in mapping.values()
                     if credential_of(o) == variable and o != mapping[variable] and current[o] != ""
                 }
-                try:
-                    if spellings:
-                        configure(spellings)
-                except SetupError:
-                    refuse(
-                        kept_message(
-                            [variable],
-                            "Removing its provider also failed; rerun setup with the provider set to null to "
-                            "remove it.",
-                        )
-                    )
-                outcome = "No settings were changed."
+                unconfirmed = kept_message(
+                    [variable],
+                    "Removing its provider was not confirmed; rerun setup with the provider set to null to remove it.",
+                )
                 if spellings:
+                    try:
+                        configure(spellings)
+                        current = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
+                    except SetupError:
+                        refuse(unconfirmed)
+                    if any(current[o] != "" for o in spellings):
+                        refuse(unconfirmed)
+                removed = set(spellings) | {o for o in staged if staged[o] == "" and before[o] not in ("", KEYCHAIN)}
+                if not spellings and not staged:
+                    outcome = "No settings were changed."
+                elif any(before[o] not in ("", KEYCHAIN) for o in removed):
+                    outcome = (
+                        "The provider saved earlier for "
+                        + variable
+                        + " was removed, so it uses only its keychain secret."
+                    )
+                else:
                     outcome = "Previous non-secret options were restored."
-                    if any(before[o] != "" for o in spellings):
-                        outcome += (
-                            " The provider an earlier run saved for " + variable + " was removed, so it uses only "
-                            "its keychain secret."
-                        )
                 refuse(kept_message([variable], outcome))
     if remaining is not None:
         replace_project_settings(legacy_path, original, remaining)

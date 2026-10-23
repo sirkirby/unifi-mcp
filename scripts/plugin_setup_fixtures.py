@@ -729,18 +729,34 @@ class Fixtures:
                         label + " leaves only the kept secret",
                     )
                     message = result.stderr.decode("utf-8", "replace")
-                    self.check("earlier run saved" in message, label + " reports the removed provider")
+                    self.check("saved earlier" in message, label + " reports the removed provider")
         # Deleting every spelling from that state also leaves only the kept secret.
         for variable, (option, secret) in secrets.items():
             reseed()
             (config / "fixture-calls").unlink(missing_ok=True)
             ignores = {"FIXTURE_CLAUDE_VERSION": "2.2.0 (Claude Code)"}
             invoke({variable + "_FILE": filename}, 1, dict(ignores, FIXTURE_CLAUDE_FAULT="read:1"))
-            invoke({variable: None, variable + "_FILE": None, variable + "_COMMAND": None}, 1, ignores)
+            result = invoke({variable: None, variable + "_FILE": None, variable + "_COMMAND": None}, 1, ignores)
             saved = options()
             self.check(
                 saved.get(option) == secret and saved.get(option + "_file", "") == "",
                 f"{option} deletion after an interrupted switch leaves only the kept secret",
+            )
+            message = result.stderr.decode("utf-8", "replace")
+            self.check(
+                "saved earlier" in message and "No settings were changed" not in message,
+                f"{option} deletion after an interrupted switch reports the removed provider",
+            )
+            # A provider removal that Claude Code does not retain is reported, not claimed.
+            reseed()
+            (config / "fixture-calls").unlink(missing_ok=True)
+            invoke({variable + "_FILE": filename}, 1, dict(ignores, FIXTURE_CLAUDE_FAULT="read:1"))
+            (config / "not-retained").unlink(missing_ok=True)
+            result = invoke({variable + "_FILE": filename}, 1, dict(ignores, FIXTURE_FAIL="validate"))
+            message = result.stderr.decode("utf-8", "replace")
+            self.check(
+                "was not confirmed" in message and "uses only its keychain secret" not in message,
+                f"{option} unretained provider removal is reported",
             )
         # A deletion whose clear is applied but not confirmed reports an unknown outcome.
         for fault in ("halt:1", "read:1"):
