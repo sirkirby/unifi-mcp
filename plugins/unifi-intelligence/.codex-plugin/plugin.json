@@ -1,6 +1,6 @@
 {
   "name": "unifi-intelligence",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "UniFi Intelligence skills: investigate a Network device incident with Protect camera context, and audit area and visitor activity through the cloud worker. Requires the unifi-network and unifi-protect plugins; Codex does not install them for you",
   "author": {
     "name": "sirkirby",
@@ -33,6 +33,8 @@
       "Investigate why a UniFi switch went offline",
       "What happened to my access point between 8 and 9 this morning?"
     ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
     "brandColor": "#006FFF",
     "screenshots": []
   }
