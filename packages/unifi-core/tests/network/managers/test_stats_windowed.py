@@ -541,6 +541,17 @@ async def test_ips_fallback_failure_is_not_an_empty_success(legacy, error, expec
         [{"data": "not rows"}],
         [{"unexpected": []}],
         [{"total_element_count": 1}],
+        {"totalElementCount": 1},
+        {"total_element_count": False},
+        [{"totalElementCount": False}],
+        {"total_element_count": "0"},
+        [{"total_element_count": -1}],
+        {"total_page_count": 0},
+        [{"totalPageCount": 0}],
+        {"data": None, "total_element_count": 0},
+        [{"logs": None, "totalElementCount": 0}],
+        [{"total_element_count": 0}, {"total_element_count": 0}],
+        [{"totalElementCount": 0}, {"category": "SECURITY"}],
         {"data": [{"unexpected": []}]},
         ["not a log row"],
         [{"data": []}, {"data": []}],
@@ -570,7 +581,24 @@ async def test_ips_malformed_fallback_suppresses_private_legacy_exception_contex
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("page", [[], {"data": []}, {"logs": []}, [{"data": []}], [{"logs": []}]])
+@pytest.mark.parametrize(
+    "page",
+    [
+        [],
+        {"data": []},
+        {"logs": []},
+        [{"data": []}],
+        [{"logs": []}],
+        {"total_element_count": 0},
+        [{"total_element_count": 0}],
+        {"total_element_count": 0, "total_page_count": 0},
+        [{"total_element_count": 0, "total_page_count": 0}],
+        {"totalElementCount": 0},
+        [{"totalElementCount": 0}],
+        {"totalElementCount": 0, "totalPageCount": 0},
+        [{"totalElementCount": 0, "totalPageCount": 0}],
+    ],
+)
 async def test_ips_fallback_valid_empty_page_remains_cacheable(page) -> None:
     manager, connection = _manager(cached=True)
     connection.request.side_effect = [[], page]

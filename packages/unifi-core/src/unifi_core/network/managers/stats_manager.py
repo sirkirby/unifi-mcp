@@ -14,7 +14,7 @@ from unifi_core.mac import mac_equal, normalize_mac
 from unifi_core.network.managers.client_manager import ClientManager  # Needed for get_top_clients
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.device_manager import DeviceManager
-from unifi_core.network.managers.event_manager import safe_request_error
+from unifi_core.network.managers.event_manager import _V2_ENVELOPE_KEYS, _v2_page, safe_request_error
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -139,15 +139,14 @@ def _system_log_page(response: Any) -> tuple[List[Dict[str, Any]], int]:
     full page look short.
     """
     if isinstance(response, list) and response and isinstance(response[0], dict):
-        if "data" in response[0] or "logs" in response[0]:
+        if _V2_ENVELOPE_KEYS.intersection(response[0]):
             if len(response) != 1:
                 raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
             response = response[0]
     data: Any = response
     if isinstance(response, dict):
-        if "data" not in response and "logs" not in response:
-            raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
-        data = response["data"] if "data" in response else response["logs"]
+        # Share count-only empty-envelope handling with event/alarm reads.
+        data = _v2_page(response, "/system-log/all").rows
     if not isinstance(data, list):
         raise UniFiMalformedResponseError("Unexpected response shape from /system-log/all")
     rows = [row for row in data if isinstance(row, dict) and _LOG_ROW_FIELDS.intersection(row)]
