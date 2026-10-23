@@ -121,9 +121,11 @@ then other settings in a second run. Setup refuses a combined patch with
 nothing changed. It saves and verifies the new options first, then clears the
 secret. If Claude Code keeps the secret, setup removes the credential's
 providers so only the secret remains, and refuses with the same choices. If a
-step fails or is interrupted, the credential still has a saved value: rerun
-setup with the same settings to finish the switch. Until then the server
-refuses to start if two spellings of the credential are set.
+step of a provider switch fails or is interrupted, the credential still has a
+saved value: rerun setup with the same settings to finish the switch. Until
+then the server refuses to start if two spellings of the credential are set.
+A deletion has no replacement: if its step fails, setup reports that whether
+the secret was cleared is unknown.
 
 Before changing or skipping API-key setup, remove obsolete
 `UNIFI_ACCESS_API_KEY`, `UNIFI_ACCESS_API_KEY_FILE`, and
