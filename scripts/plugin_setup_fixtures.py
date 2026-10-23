@@ -677,57 +677,36 @@ class Fixtures:
                         saved.get(option, "") == "" and saved.get(option + "_file") == filename,
                         label + " finishes when setup is rerun",
                     )
-        # Switching both credentials where Claude Code clears only one secret keeps the
-        # cleared one's new provider (its only saved value) and rolls back the other.
-        for cleared_option, kept_option in (("password", "api_key"), ("api_key", "password")):
+
+        # On such a release, a keychain clear runs only in a setup run that changes that one
+        # credential; compound changes are refused before any write.
+        def reseed():
             seed()
             invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key: "FAKE-api-key-value"})
-            result = invoke(
-                {base + "_FILE": filename, api_key + "_FILE": filename},
-                1,
-                dict(newer, FIXTURE_CLAUDE_CLEARS=cleared_option),
-            )
-            saved = options()
-            label = f"mixed clear of {cleared_option}"
-            self.check(
-                saved.get(cleared_option, "") == "" and saved.get(cleared_option + "_file") == filename,
-                label + " keeps the cleared credential's provider",
-            )
-            self.check(
-                saved.get(kept_option) == secrets[base if kept_option == "password" else api_key][1]
-                and saved.get(kept_option + "_file", "") == "",
-                label + " rolls back the kept credential's provider",
-            )
+
+        for patch, label in (
+            ({base + "_FILE": filename, api_key + "_FILE": filename}, "both credentials"),
+            ({base + "_FILE": filename, f"UNIFI_{upper}_HOST": "192.0.2.9"}, "a credential and the host"),
+            ({api_key + "_FILE": filename, base: "FAKE-new-password"}, "opposite directions"),
+        ):
+            reseed()
+            snapshot, count = state(), writes()
+            result = invoke(patch, 1, newer)
+            self.check(state() == snapshot and writes() == count, "a keychain clear with " + label + " writes nothing")
             message = result.stderr.decode("utf-8", "replace")
-            self.check("which are kept" in message, label + " reports the partial outcome")
-        # A password moving to a provider while the API key moves to a raw secret: where
-        # Claude Code keeps the password, only the password's provider is rolled back. The
-        # new API key cannot be unsaved, so its old provider must not come back beside it.
-        for clears in ("", "1"):
-            seed()
-            invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key + "_FILE": filename})
-            result = invoke(
-                {base + "_FILE": filename, api_key: "FAKE-new-api-key", api_key + "_FILE": None},
-                1 if not clears else 0,
-                dict(newer, FIXTURE_CLAUDE_CLEARS=clears),
-            )
-            saved = options()
-            label = "mixed-direction switch " + ("with a kept password" if not clears else "with cleared secrets")
             self.check(
-                saved.get("api_key") == "FAKE-new-api-key" and saved.get("api_key_file", "") == "",
-                label + " leaves one API-key spelling",
+                "needs" in message and "No settings were changed" in message,
+                "a keychain clear with " + label + " names the one-credential route",
             )
-            if clears:
-                self.check(
-                    saved.get("password", "") == "" and saved.get("password_file") == filename,
-                    label + " switches the password",
-                )
-            else:
-                self.check(
-                    saved.get("password") == "1234" and saved.get("password_file", "") == "",
-                    label + " rolls back only the password's provider",
-                )
-                self.check("which are kept" in result.stderr.decode("utf-8", "replace"), label + " is reported")
+        # Settings that are not retained while switching are restored; the secret stays.
+        reseed()
+        (config / "not-retained").unlink(missing_ok=True)
+        invoke({base + "_FILE": filename}, 1, dict(newer, FIXTURE_FAIL="validate"))
+        saved = options()
+        self.check(
+            saved.get("password") == "1234" and saved.get("password_file", "") == "",
+            "an unretained provider is restored and the secret kept",
+        )
         # Retrying an interrupted switch on a release that ignores the clear: the provider
         # saved beside the kept secret is removed, leaving one startable spelling.
         for variable, (option, secret) in secrets.items():
@@ -751,6 +730,18 @@ class Fixtures:
                     )
                     message = result.stderr.decode("utf-8", "replace")
                     self.check("earlier run saved" in message, label + " reports the removed provider")
+        # Deleting every spelling from that state also leaves only the kept secret.
+        for variable, (option, secret) in secrets.items():
+            reseed()
+            (config / "fixture-calls").unlink(missing_ok=True)
+            ignores = {"FIXTURE_CLAUDE_VERSION": "2.2.0 (Claude Code)"}
+            invoke({variable + "_FILE": filename}, 1, dict(ignores, FIXTURE_CLAUDE_FAULT="read:1"))
+            invoke({variable: None, variable + "_FILE": None, variable + "_COMMAND": None}, 1, ignores)
+            saved = options()
+            self.check(
+                saved.get(option) == secret and saved.get(option + "_file", "") == "",
+                f"{option} deletion after an interrupted switch leaves only the kept secret",
+            )
         # A deletion whose clear is applied but not confirmed reports an unknown outcome.
         for fault in ("halt:1", "read:1"):
             seed()

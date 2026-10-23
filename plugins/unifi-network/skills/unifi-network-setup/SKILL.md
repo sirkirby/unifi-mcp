@@ -111,13 +111,15 @@ then rerun setup with the provider and the options the message lists.
 Uninstalling clears every option of the plugin, so offer it to the user and
 never run it without their consent.
 
-On a newer or unrecognized Claude Code release, setup instead saves and
-verifies the new options first, then clears the keychain secret alone. If
-Claude Code keeps the secret, setup restores the previous options and refuses
-with the same choices. If a step fails or is interrupted, the credential still
-has a saved value: rerun setup with the same settings to finish the switch.
-Until then the server refuses to start if two spellings of the credential
-are set.
+On a newer or unrecognized Claude Code release, setup clears a keychain
+secret only in a run that changes that one credential: send its patch alone,
+then other settings in a second run. Setup refuses a combined patch with
+nothing changed. It saves and verifies the new options first, then clears the
+secret. If Claude Code keeps the secret, setup removes the credential's
+providers so only the secret remains, and refuses with the same choices. If a
+step fails or is interrupted, the credential still has a saved value: rerun
+setup with the same settings to finish the switch. Until then the server
+refuses to start if two spellings of the credential are set.
 
 Before changing or skipping API-key setup, remove obsolete
 `UNIFI_NETWORK_API_KEY`, `UNIFI_NETWORK_API_KEY_FILE`, and
