@@ -195,7 +195,9 @@ def fake_claude(args):
         if not valid:
             sys.exit(1)  # Claude validates every value before writing any of them.
     # Report success without retaining the values once; the restore write then succeeds.
-    corrupt = os.environ.get("FIXTURE_FAIL") == "validate" and not (config / "not-retained").exists()
+    corrupt = os.environ.get("FIXTURE_FAIL") == "validate-all" or (
+        os.environ.get("FIXTURE_FAIL") == "validate" and not (config / "not-retained").exists()
+    )
     for key, value in values.items():
         entry = schema[key]
         if corrupt and not entry.get("sensitive"):
@@ -706,6 +708,13 @@ class Fixtures:
         self.check(
             saved.get("password") == "1234" and saved.get("password_file", "") == "",
             "an unretained provider is restored and the secret kept",
+        )
+        reseed()
+        result = invoke({base + "_FILE": filename}, 1, dict(newer, FIXTURE_FAIL="validate-all"))
+        message = result.stderr.decode("utf-8", "replace")
+        self.check(
+            "restoring the previous options was not confirmed" in message and options().get("password") == "1234",
+            "an unretained restore is reported and the secret kept",
         )
         # Retrying an interrupted switch on a release that ignores the clear: the provider
         # saved beside the kept secret is removed, leaving one startable spelling.

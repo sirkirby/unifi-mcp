@@ -830,7 +830,18 @@ def claude_main(args, root, name, product):
             if not retained:
                 restore = {o: before[o] for o in staged if before[o] != KEYCHAIN and not schema[o].get("sensitive")}
                 if restore:
-                    configure(restore)
+                    try:
+                        configure(restore)
+                        restored = claude_values(claude_saved(plugin_id, environment, mapping, schema), mapping, schema)
+                    except SetupError:
+                        restored = None
+                    if restored is None or any(restored[o] != value for o, value in restore.items()):
+                        refuse(
+                            "Claude Code did not retain the requested options, and restoring the previous options "
+                            "was not confirmed. Check them with claude plugin configure "
+                            + plugin_id
+                            + " --json and rerun setup with the settings you want; set a provider to null to remove it."
+                        )
                 kept = sorted(
                     variable
                     for variable, option in mapping.items()
