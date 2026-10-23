@@ -882,8 +882,18 @@ def claude_main(args, root, name, product):
                 # Keep the new settings of a credential whose secret was cleared (they are
                 # its only saved value now) or replaced by a new raw secret. Roll back the rest.
                 switched = [variable for variable in cleared if variable not in kept]
-                committed = set(switched) | saved_secrets(claude_values(current, mapping, schema))
+                current_values = claude_values(current, mapping, schema)
+                committed = set(switched) | saved_secrets(current_values)
                 undo = undo_for(committed)
+                # Claude Code cannot clear a kept secret, so a provider beside it, saved now or
+                # by an interrupted earlier run, would stop the server: remove it.
+                spellings = {
+                    o: ""
+                    for o in mapping.values()
+                    if credential_of(o) in kept and not schema[o].get("sensitive") and current_values[o] != ""
+                }
+                pending = sorted({credential_of(o) for o in spellings if before[o] != ""})
+                undo.update(spellings)
                 try:
                     if undo:
                         configure(undo)
@@ -904,6 +914,12 @@ def claude_main(args, root, name, product):
                     )
                 elif undo:
                     outcome = "Previous non-secret options were restored."
+                    if pending:
+                        outcome += (
+                            " The provider an earlier run saved for "
+                            + ", ".join(pending)
+                            + " was removed, so it uses only its keychain secret."
+                        )
                 else:
                     outcome = "No settings were changed."
                 refuse(kept_message(kept, outcome))

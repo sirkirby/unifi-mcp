@@ -728,6 +728,29 @@ class Fixtures:
                     label + " rolls back only the password's provider",
                 )
                 self.check("which are kept" in result.stderr.decode("utf-8", "replace"), label + " is reported")
+        # Retrying an interrupted switch on a release that ignores the clear: the provider
+        # saved beside the kept secret is removed, leaving one startable spelling.
+        for variable, (option, secret) in secrets.items():
+            for version in ("2.2.0 (Claude Code)", "unrecognized"):
+                for fault in ("write:1", "read:1"):
+                    seed()
+                    invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key: "FAKE-api-key-value"})
+                    (config / "fixture-calls").unlink(missing_ok=True)
+                    ignores = {"FIXTURE_CLAUDE_VERSION": version}
+                    invoke({variable + "_FILE": filename}, 1, dict(ignores, FIXTURE_CLAUDE_FAULT=fault))
+                    label = f"{option} retry after {fault} on {version.split()[0]}"
+                    self.check(
+                        options().get(option) == secret and options().get(option + "_file") == filename,
+                        label + " starts from both spellings",
+                    )
+                    result = invoke({variable + "_FILE": filename}, 1, ignores)
+                    saved = options()
+                    self.check(
+                        saved.get(option) == secret and saved.get(option + "_file", "") == "",
+                        label + " leaves only the kept secret",
+                    )
+                    message = result.stderr.decode("utf-8", "replace")
+                    self.check("earlier run saved" in message, label + " reports the removed provider")
         # A deletion whose clear is applied but not confirmed reports an unknown outcome.
         for fault in ("halt:1", "read:1"):
             seed()
