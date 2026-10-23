@@ -797,6 +797,21 @@ def claude_main(args, root, name, product):
             match = secret_base(variable_of[option])
             return match[1] if match else None
 
+        def undo_for(committed):
+            """Previous non-secret options to restore, keeping every option of a committed credential.
+
+            A credential is committed once its secret was cleared or a new raw secret was
+            saved: neither can be undone, so its new settings stay and the outcome is partial.
+            """
+            return {o: v for o, v in restore.items() if credential_of(o) not in committed}
+
+        def saved_secrets(current):
+            return {
+                credential_of(o)
+                for o, value in staged.items()
+                if schema[o].get("sensitive") and value and current[o] == KEYCHAIN and credential_of(o)
+            }
+
         with_replacement = [v for v in cleared if any(credential_of(o) == v and value for o, value in staged.items())]
         without_replacement = [v for v in cleared if v not in with_replacement]
         both_note = "; until then the server refuses to start if two spellings of a credential are set."
@@ -820,16 +835,25 @@ def claude_main(args, root, name, product):
                 for option, value in staged.items()
             )
             if not retained:
-                if restore:
-                    configure(restore)
+                committed = saved_secrets(after)
+                undo = undo_for(committed)
+                if undo:
+                    configure(undo)
+                restored = "Previous non-secret options were restored."
+                if committed:
+                    restored = (
+                        "The new secret for "
+                        + ", ".join(sorted(committed))
+                        + " was saved and its settings were kept; other previous non-secret options were restored."
+                    )
                 kept = sorted(
                     variable
                     for variable, option in mapping.items()
                     if schema[option].get("sensitive") and staged.get(option) == "" and after[option] == KEYCHAIN
                 )
                 if kept:
-                    refuse(kept_message(kept, "Previous non-secret options were restored."))
-                refuse("Claude Code did not retain the requested options; previous non-secret options were restored.")
+                    refuse(kept_message(kept, restored))
+                refuse("Claude Code did not retain the requested options. " + restored)
         if clears:
             try:
                 configure(clears)
@@ -855,10 +879,11 @@ def claude_main(args, root, name, product):
                 )
             kept = [variable for variable in cleared if current.get(variable) == KEYCHAIN]
             if kept:
-                # Keep the new settings of a credential whose secret was cleared: they
-                # are its only saved value now. Roll back only the rest.
+                # Keep the new settings of a credential whose secret was cleared (they are
+                # its only saved value now) or replaced by a new raw secret. Roll back the rest.
                 switched = [variable for variable in cleared if variable not in kept]
-                undo = {o: v for o, v in restore.items() if not switched or credential_of(o) in kept}
+                committed = set(switched) | saved_secrets(claude_values(current, mapping, schema))
+                undo = undo_for(committed)
                 try:
                     if undo:
                         configure(undo)
@@ -870,11 +895,11 @@ def claude_main(args, root, name, product):
                             "to null to restore them.",
                         )
                     )
-                if switched:
+                if committed:
                     outcome = (
-                        "It cleared "
-                        + ", ".join(switched)
-                        + ", whose new settings are kept"
+                        "It saved the new settings for "
+                        + ", ".join(sorted(committed))
+                        + ", which are kept"
                         + ("; the previous options for " + ", ".join(kept) + " were restored." if undo else ".")
                     )
                 elif undo:

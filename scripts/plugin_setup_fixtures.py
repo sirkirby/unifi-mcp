@@ -699,7 +699,35 @@ class Fixtures:
                 label + " rolls back the kept credential's provider",
             )
             message = result.stderr.decode("utf-8", "replace")
-            self.check("whose new settings are kept" in message, label + " reports the partial outcome")
+            self.check("which are kept" in message, label + " reports the partial outcome")
+        # A password moving to a provider while the API key moves to a raw secret: where
+        # Claude Code keeps the password, only the password's provider is rolled back. The
+        # new API key cannot be unsaved, so its old provider must not come back beside it.
+        for clears in ("", "1"):
+            seed()
+            invoke({f"UNIFI_{upper}_USERNAME": "fixture-user", base: "1234", api_key + "_FILE": filename})
+            result = invoke(
+                {base + "_FILE": filename, api_key: "FAKE-new-api-key", api_key + "_FILE": None},
+                1 if not clears else 0,
+                dict(newer, FIXTURE_CLAUDE_CLEARS=clears),
+            )
+            saved = options()
+            label = "mixed-direction switch " + ("with a kept password" if not clears else "with cleared secrets")
+            self.check(
+                saved.get("api_key") == "FAKE-new-api-key" and saved.get("api_key_file", "") == "",
+                label + " leaves one API-key spelling",
+            )
+            if clears:
+                self.check(
+                    saved.get("password", "") == "" and saved.get("password_file") == filename,
+                    label + " switches the password",
+                )
+            else:
+                self.check(
+                    saved.get("password") == "1234" and saved.get("password_file", "") == "",
+                    label + " rolls back only the password's provider",
+                )
+                self.check("which are kept" in result.stderr.decode("utf-8", "replace"), label + " is reported")
         # A deletion whose clear is applied but not confirmed reports an unknown outcome.
         for fault in ("halt:1", "read:1"):
             seed()
