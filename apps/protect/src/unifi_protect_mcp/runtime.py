@@ -149,6 +149,7 @@ def get_connection_manager() -> ProtectConnectionManager:
         port=cfg.port,
         site=cfg.site,
         verify_ssl=str(cfg.verify_ssl).lower() in ("true", "1", "yes"),
+        ssl_fingerprint=str(getattr(cfg, "ssl_fingerprint", None) or "") or None,
         api_key=api_key if api_key else None,
     )
 

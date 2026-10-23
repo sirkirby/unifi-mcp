@@ -42,13 +42,18 @@ If the server starts, run `protect_get_support_bundle(probe="summary")` and revi
 
 **Symptoms:** `SSL: CERTIFICATE_VERIFY_FAILED` or similar errors.
 
-**Fix:** Set `UNIFI_VERIFY_SSL=false` (most UniFi controllers use self-signed certificates).
+**Cause:** verification is on by default, and most UniFi consoles serve a self-signed certificate.
+
+**Fix:** Pin the console's certificate by its SHA-256 fingerprint, which keeps a real identity check:
 
 ```bash
-export UNIFI_VERIFY_SSL=false
+openssl s_client -connect <console>:443 </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+export UNIFI_SSL_FINGERPRINT=AB:CD:...    # the value printed above
 ```
 
-This is the default, so this error typically only occurs if you explicitly set it to `true`.
+If the fingerprint is already set, the console's certificate has changed; confirm the change was expected
+before updating it. `UNIFI_VERIFY_SSL=false` turns the check off entirely and logs a warning at startup.
+See [TLS verification](../../../docs/tls-verification.md).
 
 ## Missing Tools
 

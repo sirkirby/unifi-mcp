@@ -16,7 +16,8 @@ The Access server supports server-specific environment variables with the `UNIFI
 | `UNIFI_ACCESS_USERNAME` | `UNIFI_USERNAME` | Yes* | -- | Local admin username (*required for proxy path) |
 | `UNIFI_ACCESS_PASSWORD` | `UNIFI_PASSWORD` | Yes* | -- | Admin password (*required for proxy path) |
 | `UNIFI_ACCESS_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port (UniFi OS Console) |
-| `UNIFI_ACCESS_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |
+| `UNIFI_ACCESS_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `true` | TLS certificate verification; see [TLS verification](../../../docs/tls-verification.md) |
+| `UNIFI_ACCESS_SSL_FINGERPRINT` | `UNIFI_SSL_FINGERPRINT` | No | `""` | SHA-256 fingerprint pinning a self-signed console certificate; overrides verify_ssl |
 | `UNIFI_ACCESS_API_KEY` | `UNIFI_API_KEY` | No | `""` | Official UniFi API key (for API-key auth path) |
 
 **Resolution order:** `UNIFI_ACCESS_*` > `UNIFI_*` > YAML config > hardcoded default.
@@ -185,7 +186,8 @@ unifi:
   password: ${oc.env:UNIFI_ACCESS_PASSWORD,""}
   port: ${oc.env:UNIFI_ACCESS_PORT,443}
   site: ${oc.env:UNIFI_ACCESS_SITE,default}
-  verify_ssl: ${oc.env:UNIFI_ACCESS_VERIFY_SSL,false}
+  verify_ssl: ${oc.env:UNIFI_ACCESS_VERIFY_SSL,true}
+  ssl_fingerprint: ${oc.env:UNIFI_ACCESS_SSL_FINGERPRINT,""}
   api_key: ${oc.env:UNIFI_ACCESS_API_KEY,""}
 
 server:

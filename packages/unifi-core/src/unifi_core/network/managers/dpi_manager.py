@@ -22,6 +22,7 @@ import aiohttp
 
 from unifi_core.auth import UniFiAuth
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.tls import CertificateVerificationError, certificate_failure, is_certificate_error
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -70,13 +71,14 @@ class DpiManager:
         base_url = f"https://{self._connection.host}:{self._connection.port}"
         url = f"{base_url}/proxy/network/integration{path}"
 
+        cert_failure: CertificateVerificationError | None = None
         try:
             session = await self._auth.get_api_key_session(base_url)
             try:
                 async with session.get(
                     url,
                     params=params,
-                    ssl=self._connection.verify_ssl,
+                    ssl=self._connection.ssl,
                     timeout=aiohttp.ClientTimeout(total=10),
                     allow_redirects=False,
                 ) as resp:
@@ -88,8 +90,15 @@ class DpiManager:
             finally:
                 await session.close()
         except Exception as e:
-            logger.error("Error calling integration API %s: %s", path, e)
-            raise
+            if not is_certificate_error(e):
+                logger.error("Error calling integration API %s: %s", path, e)
+                raise
+            # The certificate error's text names the controller and, for a pin
+            # mismatch, both fingerprints. Keep the class and fixed guidance only.
+            cert_failure = certificate_failure(e, env_prefix="NETWORK")
+        # Raised outside the handler so the original is not chained as context.
+        logger.error("Error calling integration API %s: %s", path, cert_failure)
+        raise cert_failure
 
     async def get_dpi_applications(
         self,

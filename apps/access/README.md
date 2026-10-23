@@ -95,7 +95,8 @@ UNIFI_ACCESS_PASSWORD=your-password # Admin password
 # Optional:
 # UNIFI_ACCESS_API_KEY=             # Official UniFi API key (dual auth)
 # UNIFI_ACCESS_PORT=443             # Controller HTTPS port
-# UNIFI_ACCESS_VERIFY_SSL=false     # SSL certificate verification
+# UNIFI_ACCESS_VERIFY_SSL=true      # TLS certificate verification (default on)
+# UNIFI_ACCESS_SSL_FINGERPRINT=     # Pin a self-signed console cert by SHA-256 (docs/tls-verification.md)
 ```
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_ACCESS_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.

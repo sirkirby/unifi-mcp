@@ -30,6 +30,7 @@ from unifi_core.network.models.firewall import (
     validate_policy_selectors,
     validate_zone_targeting,
 )
+from unifi_core.tls import CertificateVerificationError, certificate_failure, is_certificate_error
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -163,13 +164,14 @@ class FirewallManager:
         # integration endpoints reject the local controller cookie session.
         session = await self._auth.get_api_key_session(base_url)
 
+        cert_failure: CertificateVerificationError | None = None
         try:
             async with session.request(
                 method.upper(),
                 url,
                 params=params,
                 json=data,
-                ssl=self._connection.verify_ssl,
+                ssl=self._connection.ssl,
                 timeout=timeout,
                 allow_redirects=False,
             ) as resp:
@@ -191,8 +193,16 @@ class FirewallManager:
                 if resp.status < 200 or resp.status >= 300:
                     raise RuntimeError(f"Integration API returned {resp.status} for {path}: {body}")
                 return body if isinstance(body, dict) else {}
+        except Exception as e:
+            if not is_certificate_error(e):
+                raise
+            # The certificate error's text names the controller and, for a pin
+            # mismatch, both fingerprints. Keep the class and fixed guidance only.
+            cert_failure = certificate_failure(e, env_prefix="NETWORK")
         finally:
             await session.close()
+        # Raised outside the handler so the original is not chained as context.
+        raise cert_failure
 
     def _require_integration_api_key(self, operation: str) -> None:
         """Fail before controller I/O when an Integration API mutation lacks auth."""

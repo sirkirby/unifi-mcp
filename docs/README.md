@@ -57,6 +57,9 @@ Generate, review, and share privacy-bounded Network, Protect, or Access troubles
 #### [Credential Providers](credential-providers.md)
 Keep the controller password and API key out of the MCP client's environment with the `_FILE` and `_COMMAND` spellings, and the contract the command provider runs under: supported platforms, executable resolution, and process lifecycle.
 
+#### [TLS Verification](tls-verification.md)
+Certificate verification is on by default. Pin a self-signed console certificate by its SHA-256 fingerprint instead of turning verification off.
+
 #### [Context Optimization Comparison](context-optimization-comparison.md)
 Visual guide comparing eager vs lazy vs meta-only modes:
 - Side-by-side token usage diagrams
@@ -180,6 +183,7 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 ### Core Documentation (docs/)
 - [context-optimization-comparison.md](context-optimization-comparison.md) - Mode comparison
 - [credential-providers.md](credential-providers.md) - Credential indirection contract
+- [tls-verification.md](tls-verification.md) - TLS verification and certificate pinning
 - [agent-install.md](agent-install.md) - Installing UniFi MCP with an agent, per client
 - [plugin-support.md](plugin-support.md) - Plugin support matrix
 - [plugin-upgrade.md](plugin-upgrade.md) - Plugin upgrade guide

@@ -139,7 +139,7 @@ export UNIFI_USERNAME="admin"
 export UNIFI_PASSWORD="yourpassword"
 export UNIFI_PORT="443"              # Optional
 export UNIFI_SITE="default"          # Optional
-export UNIFI_VERIFY_SSL="false"      # Optional
+export UNIFI_VERIFY_SSL="true"       # Optional; or UNIFI_SSL_FINGERPRINT for a self-signed console
 ```
 
 Or use a `.env` file in the project root.

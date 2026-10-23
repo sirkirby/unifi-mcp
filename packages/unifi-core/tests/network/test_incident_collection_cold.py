@@ -98,7 +98,10 @@ async def _collect(tmp_path: Path, login_status: int = 200, *, connection_state=
     controller = Controller(login_status)
     server = TestServer(controller.app)
     await server.start_server(ssl=_tls_context(tmp_path))
-    connection = ConnectionManager("127.0.0.1", "fixture-user", "fixture-password", port=server.port, retry_delay=0)
+    # The loopback fixture serves a throwaway self-signed certificate.
+    connection = ConnectionManager(
+        "127.0.0.1", "fixture-user", "fixture-password", port=server.port, retry_delay=0, verify_ssl=False
+    )
 
     async def acquire() -> EventManager:
         if not await connection.initialize():

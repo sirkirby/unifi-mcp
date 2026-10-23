@@ -10,6 +10,8 @@ import logging
 
 import aiohttp
 
+from unifi_core.tls import certificate_safe_middleware, safe_error_text, ssl_setting
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +30,7 @@ class ControllerType(enum.Enum):
 
 
 async def detect_controller_type_pre_login(
-    host: str, port: int, verify_ssl: bool = False, timeout: float = 10.0
+    host: str, port: int, verify_ssl: bool = True, timeout: float = 10.0, ssl_fingerprint: str | None = None
 ) -> ControllerType | None:
     """Probe the controller before login to detect type.
 
@@ -37,15 +39,20 @@ async def detect_controller_type_pre_login(
     - UniFi OS returns 200 with x-csrf-token header or HTML
     - Standalone controllers redirect (301/302) to /manage
 
+    A failed certificate check is logged as its class and fixed guidance only:
+    aiohttp's text names the controller and, for a stale pin, both fingerprints.
+
     Returns:
         ControllerType.UNIFI_OS or ControllerType.STANDALONE if detected, None otherwise.
     """
     url = f"https://{host}:{port}"
-    ssl_context = None if verify_ssl else False
+    ssl_context = ssl_setting(verify_ssl, ssl_fingerprint)
     client_timeout = aiohttp.ClientTimeout(total=timeout)
 
     try:
-        async with aiohttp.ClientSession(timeout=client_timeout) as session:
+        async with aiohttp.ClientSession(
+            timeout=client_timeout, middlewares=(certificate_safe_middleware(env_prefix="NETWORK"),)
+        ) as session:
             async with session.get(url, ssl=ssl_context, allow_redirects=False) as resp:
                 headers = resp.headers
                 if "x-csrf-token" in headers or resp.status == 200:
@@ -53,13 +60,13 @@ async def detect_controller_type_pre_login(
                 if resp.status in (302, 301):
                     return ControllerType.STANDALONE
     except Exception as e:
-        logger.debug("[detection] Pre-login probe failed: %s", e)
+        logger.debug("[detection] Pre-login probe failed: %s", safe_error_text(e, env_prefix="NETWORK"))
 
     return None
 
 
 async def detect_controller_type_by_api_probe(
-    session: aiohttp.ClientSession, host: str, port: int, verify_ssl: bool = False
+    session: aiohttp.ClientSession, host: str, port: int, verify_ssl: bool = True, ssl_fingerprint: str | None = None
 ) -> ControllerType | None:
     """Probe API endpoints to detect controller type (requires authenticated session).
 
@@ -70,7 +77,7 @@ async def detect_controller_type_by_api_probe(
         ControllerType.UNIFI_OS or ControllerType.STANDALONE if detected, None otherwise.
     """
     url_base = f"https://{host}:{port}"
-    ssl_context = None if verify_ssl else False
+    ssl_context = ssl_setting(verify_ssl, ssl_fingerprint)
 
     for path, expected_type in [
         ("/proxy/network/api/self/sites", ControllerType.UNIFI_OS),

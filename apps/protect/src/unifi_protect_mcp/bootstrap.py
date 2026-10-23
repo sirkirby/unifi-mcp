@@ -59,7 +59,8 @@ class ProtectSettings:
     password: str
     port: int = 443
     site: str = "default"
-    verify_ssl: bool = False
+    verify_ssl: bool = True
+    ssl_fingerprint: str = ""
     api_key: str = ""  # Optional API key for official API access
 
     @classmethod
@@ -71,7 +72,8 @@ class ProtectSettings:
             password=str(cfg.password),
             port=int(cfg.get("port", 443)),
             site=str(cfg.get("site", "default")),
-            verify_ssl=bool(cfg.get("verify_ssl", False)),
+            verify_ssl=bool(cfg.get("verify_ssl", True)),
+            ssl_fingerprint=str(cfg.get("ssl_fingerprint", "") or ""),
             api_key=str(cfg.get("api_key", "")),
         )
 
@@ -88,7 +90,7 @@ def load_config(path_override: str | Path | None = None) -> OmegaConf:
     return load_server_config(
         package_name="unifi_protect_mcp.config",
         env_prefix="PROTECT",
-        keys=("host", "username", "password", "port", "site", "verify_ssl", "api_key"),
+        keys=("host", "username", "password", "port", "site", "verify_ssl", "ssl_fingerprint", "api_key"),
         logger=logger,
     )
 

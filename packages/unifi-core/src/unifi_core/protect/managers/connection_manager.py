@@ -36,6 +36,15 @@ from unifi_core.support_bundle import (
     connectivity_probe_result,
 )
 from unifi_core.support_transport import no_retry_support_request
+from unifi_core.tls import (
+    SslSetting,
+    certificate_error_hint,
+    certificate_safe_middleware,
+    is_certificate_error,
+    ssl_setting,
+    tls_mode,
+    warn_if_unverified,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +100,10 @@ class ProtectConnectionManager:
     site:
         UniFi site name (metadata only — Protect uses a single site).
     verify_ssl:
-        Whether to verify the server's TLS certificate.
+        Whether to verify the server's TLS certificate (default ``True``).
+    ssl_fingerprint:
+        SHA-256 fingerprint of the console certificate. When set, it is pinned
+        and takes precedence over ``verify_ssl``; see :mod:`unifi_core.tls`.
     api_key:
         Optional API key for official Protect API endpoints.
     bootstrap_refresh_seconds:
@@ -106,9 +118,10 @@ class ProtectConnectionManager:
         password: str,
         port: int = 443,
         site: str = "default",
-        verify_ssl: bool = False,
+        verify_ssl: bool = True,
         api_key: str | None = None,
         bootstrap_refresh_seconds: float = BOOTSTRAP_REFRESH_SECONDS,
+        ssl_fingerprint: str | None = None,
     ):
         self.host = host
         self.username = username
@@ -116,6 +129,8 @@ class ProtectConnectionManager:
         self.port = port
         self.site = site
         self.verify_ssl = verify_ssl
+        self.ssl_fingerprint = ssl_fingerprint
+        warn_if_unverified(logger, ssl_setting(verify_ssl, ssl_fingerprint), product="Protect", env_prefix="PROTECT")
         self._api_key = api_key
 
         self._client: ProtectApiClient | None = None
@@ -279,15 +294,58 @@ class ProtectConnectionManager:
         """
         self._connect_hooks.append(hook)
 
+    @property
+    def ssl(self) -> SslSetting:
+        """The aiohttp ``ssl=`` value for controller requests (see :mod:`unifi_core.tls`)."""
+        return ssl_setting(self.verify_ssl, self.ssl_fingerprint)
+
+    def _client_tls_options(self) -> dict[str, Any]:
+        """ProtectApiClient arguments for the configured TLS settings.
+
+        uiprotect only takes a ``verify_ssl`` flag, so a pin is applied through
+        the sessions it is handed: their connector carries the fingerprint, and
+        aiohttp checks a connector pin on every request and websocket that
+        session opens. ``verify_ssl=True`` keeps uiprotect from overriding it
+        with a per-request ``ssl=False``. A fresh client is built per connect
+        attempt and ``close_session`` closes both sessions with it.
+
+        The sessions are supplied whenever certificates are checked, pinned or
+        not, so their middleware can replace a failed check before uiprotect
+        wraps it as ``NvrError("Error requesting data from <host>: <error>")``.
+        """
+        setting = self.ssl
+        if setting is False:
+            return {"verify_ssl": False}
+        middlewares = (certificate_safe_middleware(env_prefix="PROTECT"),)
+        return {
+            "verify_ssl": True,
+            # Same cookie jar uiprotect builds for its own private session.
+            "session": aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=setting),
+                cookie_jar=aiohttp.CookieJar(unsafe=True),
+                middlewares=middlewares,
+            ),
+            "public_api_session": aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=setting), middlewares=middlewares
+            ),
+        }
+
     async def _connect_once(self) -> None:
-        client = ProtectApiClient(
-            host=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-            api_key=self._api_key,
-            verify_ssl=self.verify_ssl,
-        )
+        tls_options = self._client_tls_options()
+        try:
+            client = ProtectApiClient(
+                host=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                api_key=self._api_key,
+                **tls_options,
+            )
+        except BaseException:
+            for name in ("session", "public_api_session"):
+                if name in tls_options:
+                    await tls_options[name].close()
+            raise
         # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
         try:
             await client.update()
@@ -321,6 +379,8 @@ class ProtectConnectionManager:
             "Connecting to UniFi Protect failed.", cause, status=nvr_status(error)
         )
         self._support_attempt = connection_attempt_failed(self._initialization_failure)
+        if is_certificate_error(error):
+            logger.warning("%s", certificate_error_hint(env_prefix="PROTECT"))
         self._last_connect_attempt_at = self._clock()
         if _is_terminal_auth_error(error):
             self._block_automatic_reconnect(error)
@@ -471,7 +531,7 @@ class ProtectConnectionManager:
         return {
             "initialized": self._initialized,
             "connected": self.is_connected,
-            "tls_verification_enabled": self.verify_ssl,
+            "tls_verification_enabled": tls_mode(self.ssl) != "disabled",
             "last_attempt": dict(self._support_attempt),
             "session_available": client_available,
             "bootstrap_available": bootstrap_available,
@@ -502,7 +562,7 @@ class ProtectConnectionManager:
                 url,
                 headers=client.headers or {},
                 timeout=aiohttp.ClientTimeout(total=10),
-                ssl=False if not self.verify_ssl else None,
+                ssl=self.ssl,
                 allow_redirects=False,
                 middlewares=(no_retry_support_request,),
             ) as response:

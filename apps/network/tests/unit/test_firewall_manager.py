@@ -10,6 +10,7 @@ import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import aiohttp
 import pytest
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
@@ -571,9 +572,9 @@ class TestFirewallPolicyOrdering:
             await firewall_manager._request_integration_api("get", "/v1/sites")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("verify_ssl", [True, False])
+    @pytest.mark.parametrize("verify_ssl", [True, False, aiohttp.Fingerprint(b"\x00" * 32)])
     async def test_integration_api_binds_key_to_controller_without_redirects(self, mock_connection, verify_ssl):
-        mock_connection.verify_ssl = verify_ssl
+        mock_connection.ssl = verify_ssl
         response = self._Response(status=200, json_body={"data": []})
         manager, session = self._manager_with_integration_response(mock_connection, response)
 

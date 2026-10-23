@@ -302,7 +302,10 @@ Each server supports its own prefixed environment variables that take priority o
 | `UNIFI_PASSWORD` | `UNIFI_NETWORK_PASSWORD` | `UNIFI_PROTECT_PASSWORD` | `UNIFI_ACCESS_PASSWORD` |
 | `UNIFI_PORT` | `UNIFI_NETWORK_PORT` | `UNIFI_PROTECT_PORT` | `UNIFI_ACCESS_PORT` |
 | `UNIFI_VERIFY_SSL` | `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_PROTECT_VERIFY_SSL` | `UNIFI_ACCESS_VERIFY_SSL` |
+| `UNIFI_SSL_FINGERPRINT` | `UNIFI_NETWORK_SSL_FINGERPRINT` | `UNIFI_PROTECT_SSL_FINGERPRINT` | `UNIFI_ACCESS_SSL_FINGERPRINT` |
 | `UNIFI_API_KEY` | `UNIFI_NETWORK_API_KEY` | `UNIFI_PROTECT_API_KEY` | `UNIFI_ACCESS_API_KEY` |
+
+**TLS:** certificate verification is on by default. For a console with its self-signed certificate, pin it with `UNIFI_SSL_FINGERPRINT` rather than setting `UNIFI_VERIFY_SSL=false`; see [TLS verification](docs/tls-verification.md).
 
 **Single controller?** Just set the shared `UNIFI_*` variables -- all servers will use them. Server-specific variables are only needed when the servers talk to different controllers or use different credentials.
 
