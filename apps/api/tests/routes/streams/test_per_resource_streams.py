@@ -21,6 +21,37 @@ from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
 
 
+class _FastASGITransport(ASGITransport):
+    """ASGITransport that declares ASGI spec_version 2.4.
+
+    httpx's ASGITransport never sets ``scope["asgi"]["spec_version"]``, so
+    Starlette's ``StreamingResponse.__call__`` always takes its pre-2.4
+    fallback branch: a task group running ``stream_response`` racing
+    ``listen_for_disconnect`` (a polling ``receive()`` loop). That branch
+    pays a real one-time anyio task-group/cancel-scope setup cost on the
+    first streaming response per event loop — and pytest-asyncio hands each
+    test a fresh loop, so every streaming test pays it again (seconds, not
+    milliseconds, observed locally). Real ASGI servers (uvicorn/hypercorn)
+    report spec_version >= 2.4 and take the direct `await
+    self.stream_response(send)` path, so this only corrects a test-transport
+    gap — it does not change what's exercised in production.
+    """
+
+    async def handle_async_request(self, request):
+        app = self.app
+
+        async def with_spec_version(scope, receive, send):
+            if scope.get("type") == "http":
+                scope = {**scope, "asgi": {**scope.get("asgi", {}), "spec_version": "2.4"}}
+            return await app(scope, receive, send)
+
+        self.app = with_spec_version
+        try:
+            return await super().handle_async_request(request)
+        finally:
+            self.app = app
+
+
 def _cfg(tmp_path):
     return ApiConfig(
         http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
@@ -121,7 +152,7 @@ async def test_stream_protect_camera_events_filters_by_camera_id(tmp_path, monke
 
     monkeypatch.setattr(route_mod, "sse_event_stream", _make_finite_stream())
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(transport=_FastASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
             f"/v1/streams/protect/cameras/{cam_a}/events?controller={cid}",
             headers={"Authorization": f"Bearer {key}"},
@@ -155,7 +186,7 @@ async def test_stream_access_door_events_filters_by_door_id(tmp_path, monkeypatc
 
     monkeypatch.setattr(route_mod, "sse_event_stream", _make_finite_stream())
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(transport=_FastASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
             f"/v1/streams/access/doors/{door_a}/events?controller={cid}",
             headers={"Authorization": f"Bearer {key}"},
@@ -191,7 +222,7 @@ async def test_stream_network_device_events_filters_by_mac(tmp_path, monkeypatch
 
     monkeypatch.setattr(route_mod, "sse_event_stream", _make_finite_stream())
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(transport=_FastASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
             f"/v1/streams/network/devices/{mac_a.upper().replace(':', '-')}/events?controller={cid}",
             headers={"Authorization": f"Bearer {key}"},

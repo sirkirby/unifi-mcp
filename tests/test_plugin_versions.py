@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -51,27 +52,43 @@ def pins(root: Path, version: str) -> None:
         )
 
 
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+@pytest.fixture(scope="module")
+def _repo_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build the base fixture repo (git init + commit + tag) once per module.
+
+    `repo` below copies this per test instead of repeating the full git init/
+    config/add/commit/tag subprocess sequence (~7 git invocations) for every
+    one of the ~40 tests that use it — a copy of this tiny repo is far
+    cheaper than rebuilding it, and each test still gets its own isolated
+    working tree to mutate and commit into.
+    """
+    template = tmp_path_factory.mktemp("repo-template")
+    subprocess.run(["git", "init", "-q", str(template)], check=True)
     for manifest in versions.MANIFESTS:
-        write(tmp_path, f"plugins/unifi-network/{manifest}", {"name": "unifi-network", "version": "1.0.0"})
+        write(template, f"plugins/unifi-network/{manifest}", {"name": "unifi-network", "version": "1.0.0"})
     # As shipped: the Codex manifest names its server file by path.
-    edit(tmp_path, "plugins/unifi-network/.codex-plugin/plugin.json", mcpServers="./.mcp.codex.json")
-    pins(tmp_path, "0.37.0")
+    edit(template, "plugins/unifi-network/.codex-plugin/plugin.json", mcpServers="./.mcp.codex.json")
+    pins(template, "0.37.0")
     for marketplace in versions.MARKETPLACES:
-        write(tmp_path, marketplace, {"plugins": [{"name": "unifi-network"}]})
-    (tmp_path / versions.CHANGELOG).write_text(f"# Changelog\n\n{versions.CHANGELOG_MARKER}\n")
+        write(template, marketplace, {"plugins": [{"name": "unifi-network"}]})
+    (template / versions.CHANGELOG).write_text(f"# Changelog\n\n{versions.CHANGELOG_MARKER}\n")
     # Fixture identity and hooks are scoped to this disposable repository.
-    versions.git(tmp_path, "config", "--local", "user.name", "Fixture")
-    versions.git(tmp_path, "config", "--local", "user.email", "fixture@example.invalid")
-    versions.git(tmp_path, "config", "--local", "commit.gpgsign", "false")
-    versions.git(tmp_path, "config", "--local", "core.hooksPath", str(tmp_path / "no-hooks"))
-    versions.git(tmp_path, "add", ".")
-    versions.git(tmp_path, "commit", "-qm", "fixture")
-    versions.git(tmp_path, "tag", "network/v0.37.0")
-    versions.git(tmp_path, "branch", "base")
-    return tmp_path
+    versions.git(template, "config", "--local", "user.name", "Fixture")
+    versions.git(template, "config", "--local", "user.email", "fixture@example.invalid")
+    versions.git(template, "config", "--local", "commit.gpgsign", "false")
+    versions.git(template, "config", "--local", "core.hooksPath", str(template / "no-hooks"))
+    versions.git(template, "add", ".")
+    versions.git(template, "commit", "-qm", "fixture")
+    versions.git(template, "tag", "network/v0.37.0")
+    versions.git(template, "branch", "base")
+    return template
+
+
+@pytest.fixture
+def repo(tmp_path: Path, _repo_template: Path) -> Path:
+    target = tmp_path / "repo"
+    shutil.copytree(_repo_template, target)
+    return target
 
 
 def change_skill(root: Path) -> None:

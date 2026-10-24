@@ -124,8 +124,28 @@ def test_warm_up_fails_softly(tmp_path, monkeypatch, mode) -> None:
     root = plugin_copy(tmp_path, "network", mode)
     monkeypatch.setenv("PATH", str(fake_bin(tmp_path, "uvx")))
 
+    # In "silent" mode the fake server ignores stdin closing and keeps
+    # sleeping, so stop()'s graceful step (close stdin, then `process.wait(5)`)
+    # always runs out its real 5s before escalating to SIGTERM/SIGKILL. Scale
+    # every wait() timeout way down so the escalation path is still exercised
+    # (TimeoutExpired still fires, stop() still falls through every step) but
+    # without spending real wall-clock seconds on a process we already know
+    # won't exit gracefully.
+    import subprocess as _subprocess
+
+    _orig_wait = _subprocess.Popen.wait
+
+    def _fast_wait(self, timeout=None):
+        return _orig_wait(self, timeout / 50 if timeout else timeout)
+
+    monkeypatch.setattr(_subprocess.Popen, "wait", _fast_wait)
+
+    # In "silent" mode the reply-reader thread never sees an answer, so
+    # warm_up()'s own `reader.join(timeout)` always blocks for the full
+    # timeout. A small timeout still exercises the same "no reply in time"
+    # branch without spending a real second on it.
     started = time.monotonic()
-    note = module.warm_up(root, "unifi-network", timeout=1)
+    note = module.warm_up(root, "unifi-network", timeout=0.05)
 
     assert time.monotonic() - started < 15
     assert note.startswith("Notice: unifi-network-mcp==")

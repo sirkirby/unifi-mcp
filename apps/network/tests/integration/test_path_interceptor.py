@@ -177,7 +177,16 @@ class TestPathInterception:
         - _unifi_os_override should be True
         """
         with aioresponses() as mock:
-            # Mock successful login
+            # Controller.login() always calls connectivity.check_unifi_os() first
+            # (a GET to the bare host), before the actual login POST. Leaving it
+            # unmocked makes aioresponses raise a connection error on every
+            # attempt, so the manager burns its full retry budget: 3 attempts
+            # with a real 5s asyncio.sleep between each (~10s wall per test).
+            # Mocking it lets the first attempt succeed immediately.
+            mock.get(
+                "https://192.0.2.1:443",
+                status=200,
+            )
             mock.post(
                 "https://192.0.2.1:443/api/auth/login",
                 status=200,
@@ -244,6 +253,14 @@ class TestPathInterception:
         - _unifi_os_override should be False
         """
         with aioresponses() as mock:
+            # See the proxy variant above: check_unifi_os() always runs a GET
+            # to the bare host before login, so it must be mocked too (a
+            # standalone controller returns a non-200 there, which is what
+            # keeps is_unifi_os False going into the login POST below).
+            mock.get(
+                "https://192.0.2.1:443",
+                status=404,
+            )
             # Mock successful login
             mock.post(
                 "https://192.0.2.1:443/api/login",

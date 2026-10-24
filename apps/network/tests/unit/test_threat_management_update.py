@@ -28,22 +28,47 @@ def test_closed_runtime_schema():
     assert not list(validator.iter_errors({"update_data": {"device_fingerprinting_enabled": False}}))
 
 
+_REGISTRY_MODE_CODE = (
+    "import json; import unifi_network_mcp.main; import unifi_network_mcp.tools.system; "
+    "from unifi_network_mcp.runtime import get_tool_registry; "
+    f't=get_tool_registry()["{TOOL}"]; '
+    'print(json.dumps({"schema":t.input_schema,"auth":t.auth_method}))'
+)
+
+
+@pytest.fixture(scope="module")
+def _registry_mode_results():
+    """Launch the three fresh-process registry-mode checks concurrently.
+
+    Each mode needs its own interpreter (the registration mode is read at
+    import time), and that cold import of unifi_network_mcp + its dependency
+    graph is the real cost here (no sleep/timeout involved) — spawning the
+    three subprocesses together instead of one after another turns that
+    into wall-clock-parallel work instead of serial work.
+    """
+    modes = ("lazy", "eager", "meta_only")
+    procs = {
+        mode: subprocess.Popen(
+            [sys.executable, "-c", _REGISTRY_MODE_CODE],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "UNIFI_TOOL_REGISTRATION_MODE": mode},
+        )
+        for mode in modes
+    }
+    results = {}
+    for mode, proc in procs.items():
+        stdout, stderr = proc.communicate()
+        results[mode] = (proc.returncode, stdout, stderr)
+    return results
+
+
 @pytest.mark.parametrize("mode", ["lazy", "eager", "meta_only"])
-def test_registry_mode_keeps_auth_and_closed_schema(mode):
-    code = (
-        "import json; import unifi_network_mcp.main; import unifi_network_mcp.tools.system; "
-        "from unifi_network_mcp.runtime import get_tool_registry; "
-        f't=get_tool_registry()["{TOOL}"]; '
-        'print(json.dumps({"schema":t.input_schema,"auth":t.auth_method}))'
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        check=True,
-        env={**os.environ, "UNIFI_TOOL_REGISTRATION_MODE": mode},
-    )
-    metadata = json.loads(result.stdout)
+def test_registry_mode_keeps_auth_and_closed_schema(mode, _registry_mode_results):
+    returncode, stdout, stderr = _registry_mode_results[mode]
+    assert returncode == 0, stderr
+    metadata = json.loads(stdout)
     assert metadata["auth"] == "local_only"
     assert metadata["schema"]["properties"]["update_data"]["additionalProperties"] is False
 
