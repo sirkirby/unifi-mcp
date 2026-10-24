@@ -8,28 +8,31 @@ class TestParseConfigBool:
     """Tests for parse_config_bool."""
 
     @pytest.mark.parametrize(
-        ("value", "default", "expected"),
+        ("value", "expected"),
         [
-            ("true", False, True),
-            ("false", False, False),
-            ("1", False, True),
-            ("0", False, False),
-            ("yes", False, True),
-            ("no", False, False),
-            ("on", False, True),
-            ("off", False, False),
-            (True, False, True),
-            (False, False, False),
-            (None, False, False),
-            (None, True, True),
-            ("TRUE", False, True),
-            ("True", False, True),
-            ("YES", False, True),
-            ("  true  ", False, True),
-            ("  false  ", False, False),
-            (1, False, True),
-            (0, False, False),
+            ("true", True),
+            ("false", False),
+            ("1", True),
+            ("0", False),
+            ("yes", True),
+            ("no", False),
+            ("on", True),
+            ("off", False),
+            (True, True),
+            (False, False),
+            (None, False),
+            ("TRUE", True),
+            ("True", True),
+            ("YES", True),
+            ("  true  ", True),
+            ("  false  ", False),
+            (1, True),
+            (0, False),
         ],
     )
-    def test_parse_config_bool(self, value, default, expected):
-        assert parse_config_bool(value, default=default) is expected
+    def test_parse_config_bool(self, value, expected):
+        # The keyword is omitted on purpose: these rows pin the declared default.
+        assert parse_config_bool(value) is expected
+
+    def test_explicit_default_applies_to_none(self):
+        assert parse_config_bool(None, default=True) is True
