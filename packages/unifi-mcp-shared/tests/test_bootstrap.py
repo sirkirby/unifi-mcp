@@ -49,26 +49,26 @@ class TestAssertCredentialsConfigured:
         )
 
     @pytest.mark.parametrize(
-        "cfg_dict",
+        ("cfg_dict", "plugin_name", "env_prefix"),
         [
-            {"unifi": {"host": ""}},
-            {"unifi": {"host": "   "}},
-            {},
+            ({"unifi": {"host": ""}}, "unifi-network", "NETWORK"),
+            ({"unifi": {"host": "   "}}, "unifi-protect", "PROTECT"),
+            ({}, "unifi-access", "ACCESS"),
         ],
     )
-    def test_exits_when_host_missing_or_blank(self, caplog, cfg_dict):
+    def test_exits_when_host_missing_or_blank(self, caplog, cfg_dict, plugin_name, env_prefix):
         with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as exc:
             assert_credentials_configured(
                 OmegaConf.create(cfg_dict),
-                plugin_name="unifi-network",
-                env_prefix="NETWORK",
+                plugin_name=plugin_name,
+                env_prefix=env_prefix,
                 logger=logging.getLogger("test"),
             )
         assert exc.value.code == 5
         joined = "\n".join(r.getMessage() for r in caplog.records)
-        assert "unifi-network" in joined
-        assert "UNIFI_NETWORK_HOST" in joined
-        assert "unifi-network-setup skill" in joined
+        assert plugin_name in joined
+        assert f"UNIFI_{env_prefix}_HOST" in joined
+        assert f"{plugin_name}-setup skill" in joined
 
 
 class TestResolveEnv:
@@ -247,12 +247,12 @@ class TestResolveEnv:
     @pytest.mark.parametrize(
         ("file_var", "plain_var", "plain_val", "expected"),
         [
-            ("UNIFI_NETWORK_PASSWORD_FILE", "UNIFI_PASSWORD", "shared-plain", "from-file"),
-            ("UNIFI_PASSWORD_FILE", "UNIFI_NETWORK_PASSWORD", "", "from-file"),
+            ("UNIFI_NETWORK_PASSWORD_FILE", "UNIFI_PASSWORD", "shared-plain", "server-file"),
+            ("UNIFI_PASSWORD_FILE", "UNIFI_NETWORK_PASSWORD", "", "shared-file"),
         ],
     )
     def test_server_and_shared_env_precedence(self, monkeypatch, tmp_path, file_var, plain_var, plain_val, expected):
-        (tmp_path / "pw").write_text("from-file")
+        (tmp_path / "pw").write_text(expected)
         monkeypatch.setenv(file_var, str(tmp_path / "pw"))
         monkeypatch.setenv(plain_var, plain_val)
         assert self._resolve() == expected

@@ -329,8 +329,9 @@ async def test_batch_preserves_content_only_result(prefix, content):
     assert stored["result"] is content
 
 
+@pytest.mark.parametrize("execute_args", [{}, None])
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
-async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
+async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix, execute_args):
     payload = {"success": True, "data": {"id": "abc"}}
     server = FastMCP(f"{prefix}-test")
     store = JobStore()
@@ -356,14 +357,9 @@ async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
 
     execute = await server.call_tool(
         f"{prefix}_execute",
-        {"tool": f"{prefix}_inner", "arguments": {}},
+        {"tool": f"{prefix}_inner", "arguments": execute_args},
     )
     assert json.loads(execute.content[0].text) == payload
-    execute_null = await server.call_tool(
-        f"{prefix}_execute",
-        {"tool": f"{prefix}_inner", "arguments": None},
-    )
-    assert json.loads(execute_null.content[0].text) == payload
 
     batch = await server.call_tool(
         f"{prefix}_batch",
@@ -417,6 +413,10 @@ class TestRegisterLoadTools:
 
         assert result["loaded"] == expected_loaded
         assert result["errors"] == expected_errors
+        if tools == ["unifi_unknown"]:
+            lazy_loader.load_tool.assert_not_awaited()
+        else:
+            lazy_loader.load_tool.assert_awaited_once_with("unifi_list_clients")
         if notified:
             ctx.notify_tools_changed.assert_awaited_once()
         else:

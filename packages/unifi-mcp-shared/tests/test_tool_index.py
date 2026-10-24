@@ -305,9 +305,16 @@ class TestGetToolIndex:
         assert index["count"] == 1
         assert index["tools"][0]["name"] == "unifi_get_stats"
 
-    def test_search_case_insensitive(self):
-        register_tool(name="unifi_list_clients", description="List clients")
-        index = get_tool_index(registration_mode="eager", search="LIST")
+    @pytest.mark.parametrize(
+        ("name", "description", "search"),
+        [
+            ("unifi_list_clients", "List clients", "LIST"),
+            ("tool_a", "A", "tool"),
+        ],
+    )
+    def test_search_case_insensitive(self, name, description, search):
+        register_tool(name=name, description=description)
+        index = get_tool_index(registration_mode="eager", search=search)
         assert index["count"] == 1
         assert index["filtered"] is True
 

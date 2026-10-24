@@ -16,6 +16,15 @@ class TestNormalizedEvent:
         [
             (
                 {
+                    "product": "protect",
+                    "event_type": "motion",
+                    "summary": "Motion detected at Front Door Camera",
+                    "raw": {"camera_id": "abc123"},
+                },
+                False,
+            ),
+            (
+                {
                     "product": "network",
                     "event_type": "client_connect",
                     "summary": "New client connected",
@@ -58,9 +67,9 @@ class TestMergeTimelines:
         ("hours_lists", "expected_products"),
         [
             ([], []),
-            ([[(2, "network")]], ["network"]),
-            ([[(3, "protect")], [(1, "network")]], ["network", "protect"]),
-            ([[(1, "network")], [(2, "protect")]], ["network", "protect"]),
+            ([[(2, "network", "a")]], ["network"]),
+            ([[(3, "protect", "b")], [(1, "network", "a")]], ["network", "protect"]),
+            ([[(1, "network", "a")], [(2, "protect", "b")]], ["network", "protect"]),
         ],
     )
     def test_merge_timelines(self, hours_lists, expected_products):
@@ -69,15 +78,17 @@ class TestMergeTimelines:
                 NormalizedEvent(
                     timestamp=datetime(2026, 3, 24, hr, 0, tzinfo=timezone.utc),
                     product=prod,
-                    event_type="a",
-                    summary="a",
+                    event_type=tag,
+                    summary=tag,
                     raw={},
                 )
-                for hr, prod in sublist
+                for hr, prod, tag in sublist
             ]
             for sublist in hours_lists
         ]
         result = merge_timelines(lists)
+        if not expected_products:
+            assert result == []
         assert [e.product for e in result] == expected_products
         if len(result) > 1:
             assert result[0].timestamp < result[1].timestamp

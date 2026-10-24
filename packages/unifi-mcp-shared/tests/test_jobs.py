@@ -29,16 +29,19 @@ class TestJobStore:
         event.set()
         await asyncio.sleep(0.05)
 
-    async def test_status_done(self, store):
+    @pytest.mark.parametrize("result_val", [{"data": "result"}, "ok", "done"])
+    async def test_status_done(self, store, result_val):
         async def quick():
-            return {"data": "result"}
+            return result_val
 
         job_id = await store.start(quick())
+        assert isinstance(job_id, str)
+        assert len(job_id) == 16
         await asyncio.sleep(0.05)  # let task complete
         status = await store.status(job_id)
         status_copy = await store.status(job_id)
         assert status["status"] == "done"
-        assert status["result"] == {"data": "result"}
+        assert status["result"] == result_val
         assert "completed" in status
         assert status is not status_copy
         assert status == status_copy

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from copy import deepcopy
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -99,10 +100,11 @@ async def test_unknown_kwarg_rejected(acl_manifest: pathlib.Path) -> None:
 async def test_valid_or_delegated_calls_pass_through(acl_manifest: pathlib.Path, tool_name: str, args: dict) -> None:
     server = StrictKwargFastMCP("test", tools_manifest_path=acl_manifest)
     sentinel = [{"type": "text", "text": "ok"}]
+    expected_args = deepcopy(args)
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool(tool_name, args)
     assert result is sentinel
-    super_mock.assert_awaited_once_with(tool_name, args, context=None)
+    super_mock.assert_awaited_once_with(tool_name, expected_args, context=None)
 
 
 async def test_no_args_tool_rejects_unknown_kwargs(acl_manifest: pathlib.Path) -> None:
@@ -260,21 +262,30 @@ async def test_mac_spelling_error_names_the_canonical_parameter(
 
 
 @pytest.mark.parametrize(
-    ("tool", "args"),
+    ("tool", "args", "expected_error"),
     [
-        ("unifi_get_client_details", {"hostname": "x"}),
-        ("unifi_two_macs", {"mac_address": "aa:bb:cc:dd:ee:ff"}),
-        ("unifi_trigger_rf_scan", {"client_mac": "aa:bb:cc:dd:ee:ff"}),
-        ("unifi_get_client_sessions", {"ap_mac": "aa:bb:cc:dd:ee:ff"}),
-        ("unifi_get_client_details", {"mac_address": "aa:bb:cc:dd:ee:ff", "client_mac": "11:22:33:44:55:66"}),
-        ("unifi_list_networks", {"mac_address": "aa:bb:cc:dd:ee:ff"}),
+        ("unifi_get_client_details", {"hostname": "x"}, None),
+        ("unifi_two_macs", {"mac_address": "aa:bb:cc:dd:ee:ff"}, None),
+        ("unifi_trigger_rf_scan", {"client_mac": "aa:bb:cc:dd:ee:ff"}, None),
+        ("unifi_get_client_sessions", {"ap_mac": "aa:bb:cc:dd:ee:ff"}, None),
+        (
+            "unifi_get_client_details",
+            {"mac_address": "aa:bb:cc:dd:ee:ff", "client_mac": "11:22:33:44:55:66"},
+            "unknown arguments {client_mac}",
+        ),
+        ("unifi_list_networks", {"mac_address": "aa:bb:cc:dd:ee:ff"}, None),
     ],
 )
-async def test_mac_hint_is_absent_when_not_applicable(mac_manifest: pathlib.Path, tool: str, args: dict) -> None:
+async def test_mac_hint_is_absent_when_not_applicable(
+    mac_manifest: pathlib.Path, tool: str, args: dict, expected_error: str | None
+) -> None:
     server = StrictKwargFastMCP("test", tools_manifest_path=mac_manifest)
     with pytest.raises(ToolError) as excinfo:
         await server.call_tool(tool, args)
-    assert "takes the MAC address as" not in str(excinfo.value)
+    msg = str(excinfo.value)
+    if expected_error:
+        assert expected_error in msg
+    assert "takes the MAC address as" not in msg
 
 
 async def test_mac_hint_does_not_disturb_the_rest_of_the_message(mac_manifest: pathlib.Path) -> None:

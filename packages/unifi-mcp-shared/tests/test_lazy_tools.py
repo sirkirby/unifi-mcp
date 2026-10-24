@@ -106,6 +106,7 @@ class TestLazyToolLoader:
     @pytest.mark.asyncio
     async def test_load_tool_marks_as_loaded(self):
         server = MagicMock()
+        assert LazyToolLoader(server, MagicMock(), {"unifi_test": "my.tools.test"}).is_loaded("unifi_test") is False
         tool_map = {"unifi_test": "json"}  # json is always importable
         loader = LazyToolLoader(server, MagicMock(), tool_map)
         assert loader.is_loaded("unifi_test") is False

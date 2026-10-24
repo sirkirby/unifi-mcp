@@ -17,23 +17,26 @@ class StructuredResult(BaseModel):
     data: dict[str, Any]
 
 
-@pytest.mark.parametrize(("revision", "compacted"), [("2025-11-25", True), ("2025-03-26", False)])
-async def test_adaptive_server_compacts_by_protocol_revision(monkeypatch, revision, compacted):
+@pytest.mark.parametrize(
+    ("revision", "data", "compacted"),
+    [("2025-11-25", {"rows": [{"id": 1}]}, True), ("2025-03-26", {}, False)],
+)
+async def test_adaptive_server_compacts_by_protocol_revision(monkeypatch, revision, data, compacted):
     server = UniFiMCPServer("test", mcp_content_mode="adaptive")
     monkeypatch.setattr("unifi_mcp_shared.server.get_request_protocol_revision", lambda _: revision)
 
     @server.tool(name="unifi_test", structured_output=True)
     async def unifi_test() -> StructuredResult:
-        return StructuredResult(success=True, data={"rows": [{"id": 1}]})
+        return StructuredResult(success=True, data=data)
 
     result = await server.call_tool("unifi_test", {})
 
     assert isinstance(result, CallToolResult)
-    assert result.structured_content == {"success": True, "data": {"rows": [{"id": 1}]}}
+    assert result.structured_content == {"success": True, "data": data}
     if compacted:
         assert "rows" not in result.content[0].text
     else:
-        assert json.loads(result.content[0].text) == {"success": True, "data": {"rows": [{"id": 1}]}}
+        assert json.loads(result.content[0].text) == {"success": True, "data": data}
 
 
 def test_unifi_server_retains_strict_dispatch_contract():

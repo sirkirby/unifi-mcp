@@ -80,13 +80,12 @@ class TestCreateMcpToolAdapter:
 
     @pytest.mark.parametrize("protocol_revision", ["2025-11-25", "v1", "2026-07-28", None])
     def test_returns_original_decorator(self, monkeypatch, protocol_revision):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
         mock_decorator = MagicMock(name="fastmcp_tool_decorator")
-        adapter = (
-            create_mcp_tool_adapter(mock_decorator)
-            if protocol_revision is None
-            else create_mcp_tool_adapter(mock_decorator, protocol_revision=protocol_revision)
-        )
+        if protocol_revision is None:
+            monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
+            adapter = create_mcp_tool_adapter(mock_decorator)
+        else:
+            adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision=protocol_revision)
         assert adapter is mock_decorator
 
     def test_unknown_revision_is_ignored_for_per_client_negotiation(self, caplog):

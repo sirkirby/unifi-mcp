@@ -302,6 +302,10 @@ class TestLazyDirectTools:
     @pytest.mark.asyncio
     async def test_module_siblings_still_run_through_execute(self, tool_package, tmp_path):
         server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
+        index = await _call(server, "unifi_tool_index", {})
+        assert {"unifi_get_camera", "unifi_reboot_camera", "unifi_list_cameras"} <= {
+            tool["name"] for tool in index["tools"]
+        }
         listed_initial = {tool.name: tool for tool in await server.list_tools()}
         assert set(listed_initial) == _LAZY_META_TOOLS | set(self.DIRECT)
         assert all(listed_initial[name].annotations.read_only_hint is True for name in self.DIRECT)
@@ -322,10 +326,6 @@ class TestLazyDirectTools:
         # As before, a tool runs once it is registered; nothing else was registered with it.
         names = {tool.name for tool in await server.list_tools()}
         assert names == _LAZY_META_TOOLS | set(self.DIRECT) | {"unifi_reboot_camera", "unifi_list_cameras"}
-        index = await _call(server, "unifi_tool_index", {})
-        assert {"unifi_get_camera", "unifi_reboot_camera", "unifi_list_cameras"} <= {
-            tool["name"] for tool in index["tools"]
-        }
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", ["meta_only", "eager"])

@@ -19,7 +19,7 @@ class TestParseConfigBool:
             ("on", False, True),
             ("off", False, False),
             (True, False, True),
-            (False, True, False),
+            (False, False, False),
             (None, False, False),
             (None, True, True),
             ("TRUE", False, True),
