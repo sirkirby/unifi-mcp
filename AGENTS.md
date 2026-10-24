@@ -311,7 +311,7 @@ Branch coverage cannot see a weakened assertion; these rules guard what it misse
 - A test that loops over a returned collection MUST first assert its length (or compare the whole collection), so an empty result fails.
 - An expected value MUST NOT be the same mutable object passed into the code under test; use an independent literal or `copy.deepcopy` taken before the call.
 - A test MAY be deleted only when a kept test asserts the same thing on the same input. A broader end-to-end test, a different input, or empty data does not count.
-- Folding tests into `@pytest.mark.parametrize` MUST keep every case and every assertion of the originals.
+- Folding tests into `@pytest.mark.parametrize` MUST keep every original's inputs and every assertion; where one shared body cannot, leave the test unfolded.
 - A pass that deletes or folds tests at scale follows the `test-pruning` skill (`.agents/skills/test-pruning/`).
 
 ### Version and Manifest Rules

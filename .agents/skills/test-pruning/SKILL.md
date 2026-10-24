@@ -45,7 +45,9 @@ For each candidate, open it and the kept tests it overlaps, and decide from the 
 
 - **Delete** only under the `AGENTS.md` bar: a kept test asserts the same thing on the same input.
   Record that kept test and its exact assertion.
-- **Fold** tests with the same body into one parametrized test, keeping every case and assertion.
+- **Fold** tests with the same body into one parametrized test, keeping each original's inputs and
+  assertions. A fold that swaps in simpler data (one product for three, one value for two) has
+  weakened the test.
 - **Keep** everything else, with a one-line reason.
 
 Write a ledger: one row per deleted or folded test, naming the kept test and assertion that
@@ -70,7 +72,7 @@ Run all of these on the finished branch; each catches a different kind of weaken
    ledger and the scan output. Ask it to compare every deleted or folded test's assertions with
    what replaced them, and to name any dropped assertion or weaker replacement (empty data,
    different input, a broader end-to-end test). This is the only gate that catches an assertion
-   dropped inside a fold.
+   dropped inside a fold, or a fold that changed its inputs.
 4. **Mutation diff** (optional, for deletions in high-risk code): `python3 scripts/mutdiff.py
    <clean-worktree> <source-file> <function>[,...] <test-file> <base-ref> <branch>` reports bugs
    the original tests caught that the changed tests let through. It costs one pytest run per
