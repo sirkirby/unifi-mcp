@@ -244,37 +244,39 @@ def _make_radioless_gateway_device(mac="aa:bb:cc:dd:ee:02"):
     return device
 
 
+@pytest.fixture
+def mock_connection():
+    conn = MagicMock()
+    conn.site = "default"
+    conn.request = AsyncMock()
+    conn.get_cached = MagicMock(return_value=None)
+    conn._update_cache = MagicMock()
+    conn._invalidate_cache = MagicMock()
+    conn.controller = MagicMock()
+    conn.controller.devices = MagicMock()
+    conn.controller.devices.update = AsyncMock()
+    conn.controller.devices.values = MagicMock(return_value=[])
+    conn.ensure_connected = AsyncMock(return_value=True)
+
+    # ConnectionManager.refresh_handler() is how the managers refresh a
+    # handler collection now; delegate to the same ``update()`` these
+    # tests already stub so their setup keeps its meaning.
+    async def _refresh_handler(name, _c=conn):
+        return await getattr(_c.controller, name).update()
+
+    conn.refresh_handler = _refresh_handler
+    return conn
+
+
+@pytest.fixture
+def device_manager(mock_connection):
+    from unifi_core.network.managers.device_manager import DeviceManager
+
+    return DeviceManager(mock_connection)
+
+
 class TestDeviceManagerGetRadio:
     """Tests for DeviceManager.get_device_radio()."""
-
-    @pytest.fixture
-    def mock_connection(self):
-        conn = MagicMock()
-        conn.site = "default"
-        conn.request = AsyncMock()
-        conn.get_cached = MagicMock(return_value=None)
-        conn._update_cache = MagicMock()
-        conn._invalidate_cache = MagicMock()
-        conn.controller = MagicMock()
-        conn.controller.devices = MagicMock()
-        conn.controller.devices.update = AsyncMock()
-        conn.controller.devices.values = MagicMock(return_value=[])
-        conn.ensure_connected = AsyncMock(return_value=True)
-
-        # ConnectionManager.refresh_handler() is how the managers refresh a
-        # handler collection now; delegate to the same ``update()`` these
-        # tests already stub so their setup keeps its meaning.
-        async def _refresh_handler(name, _c=conn):
-            return await getattr(_c.controller, name).update()
-
-        conn.refresh_handler = _refresh_handler
-        return conn
-
-    @pytest.fixture
-    def device_manager(self, mock_connection):
-        from unifi_core.network.managers.device_manager import DeviceManager
-
-        return DeviceManager(mock_connection)
 
     @pytest.mark.asyncio
     async def test_returns_radio_data_for_ap(self, device_manager, mock_connection):
@@ -301,15 +303,6 @@ class TestDeviceManagerGetRadio:
         assert na_radio["radio"] == "na"
         assert na_radio["tx_power_mode"] == "auto"
         assert na_radio["current_tx_power"] == 23
-
-    @pytest.mark.asyncio
-    async def test_returns_none_for_switch(self, device_manager, mock_connection):
-        switch = _make_switch_device()
-        mock_connection.controller.devices.values.return_value = [switch]
-
-        result = await device_manager.get_device_radio(switch.mac)
-
-        assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_radio_data_for_udm(self, device_manager, mock_connection):
@@ -350,12 +343,13 @@ class TestDeviceManagerGetRadio:
         assert result["radios"] == []
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_radioless_gateway(self, device_manager, mock_connection):
-        """UDM Pro / UXG-style gateways without radio hardware must return None, not empty success."""
-        udm = _make_radioless_gateway_device()
-        mock_connection.controller.devices.values.return_value = [udm]
+    @pytest.mark.parametrize("make_device", [_make_switch_device, _make_radioless_gateway_device])
+    async def test_returns_none_for_radioless_device(self, device_manager, mock_connection, make_device):
+        """Switches and UDM Pro / UXG-style gateways without radio hardware return None, not empty success."""
+        device = make_device()
+        mock_connection.controller.devices.values.return_value = [device]
 
-        result = await device_manager.get_device_radio(udm.mac)
+        result = await device_manager.get_device_radio(device.mac)
 
         assert result is None
 
@@ -371,35 +365,6 @@ class TestDeviceManagerGetRadio:
 
 class TestDeviceManagerUpdateRadio:
     """Tests for DeviceManager.update_device_radio()."""
-
-    @pytest.fixture
-    def mock_connection(self):
-        conn = MagicMock()
-        conn.site = "default"
-        conn.request = AsyncMock()
-        conn.get_cached = MagicMock(return_value=None)
-        conn._update_cache = MagicMock()
-        conn._invalidate_cache = MagicMock()
-        conn.controller = MagicMock()
-        conn.controller.devices = MagicMock()
-        conn.controller.devices.update = AsyncMock()
-        conn.controller.devices.values = MagicMock(return_value=[])
-        conn.ensure_connected = AsyncMock(return_value=True)
-
-        # ConnectionManager.refresh_handler() is how the managers refresh a
-        # handler collection now; delegate to the same ``update()`` these
-        # tests already stub so their setup keeps its meaning.
-        async def _refresh_handler(name, _c=conn):
-            return await getattr(_c.controller, name).update()
-
-        conn.refresh_handler = _refresh_handler
-        return conn
-
-    @pytest.fixture
-    def device_manager(self, mock_connection):
-        from unifi_core.network.managers.device_manager import DeviceManager
-
-        return DeviceManager(mock_connection)
 
     @pytest.mark.asyncio
     async def test_updates_target_radio_only(self, device_manager, mock_connection):
@@ -417,6 +382,9 @@ class TestDeviceManagerUpdateRadio:
         assert na_entry["tx_power_mode"] == "high"
         ng_entry = next(r for r in sent_table if r["radio"] == "ng")
         assert ng_entry["tx_power_mode"] == "medium"
+        mock_connection._invalidate_cache.assert_called()
+        # the cached device data is not mutated by the update
+        assert ap.raw["radio_table"][1]["tx_power_mode"] == "auto"
 
     @pytest.mark.asyncio
     async def test_update_by_name(self, device_manager, mock_connection):
@@ -449,26 +417,6 @@ class TestDeviceManagerUpdateRadio:
 
         with pytest.raises(UniFiNotFoundError):
             await device_manager.update_device_radio("ff:ff:ff:ff:ff:ff", "na", {"tx_power_mode": "high"})
-
-    @pytest.mark.asyncio
-    async def test_does_not_mutate_original_radio_table(self, device_manager, mock_connection):
-        """Ensure deepcopy prevents mutation of the cached device data."""
-        ap = _make_ap_device()
-        original_mode = ap.raw["radio_table"][1]["tx_power_mode"]
-        mock_connection.controller.devices.values.return_value = [ap]
-
-        await device_manager.update_device_radio(ap.mac, "na", {"tx_power_mode": "high"})
-
-        assert ap.raw["radio_table"][1]["tx_power_mode"] == original_mode
-
-    @pytest.mark.asyncio
-    async def test_invalidates_cache_on_success(self, device_manager, mock_connection):
-        ap = _make_ap_device()
-        mock_connection.controller.devices.values.return_value = [ap]
-
-        await device_manager.update_device_radio(ap.mac, "na", {"tx_power_mode": "high"})
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_handles_api_error(self, device_manager, mock_connection):
@@ -531,20 +479,12 @@ class TestUpdateDeviceRadioTool:
         assert "Invalid ht" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_accepts_internal_radio_name(self):
-        """Internal names like wifi0/wifi1 pass validation (reaching 'no updates' check)."""
+    @pytest.mark.parametrize("radio", ["na", "wifi0"])
+    async def test_rejects_no_updates(self, radio):
+        """Band and internal radio names (wifi0/wifi1) both pass radio validation and reach the 'no updates' check."""
         from unifi_network_mcp.tools.devices import update_device_radio
 
-        result = await update_device_radio(mac_address="aa:bb:cc:dd:ee:ff", radio="wifi0")
-
-        assert result["success"] is False
-        assert "No radio settings" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_rejects_no_updates(self):
-        from unifi_network_mcp.tools.devices import update_device_radio
-
-        result = await update_device_radio(mac_address="aa:bb:cc:dd:ee:ff", radio="na")
+        result = await update_device_radio(mac_address="aa:bb:cc:dd:ee:ff", radio=radio)
 
         assert result["success"] is False
         assert "No radio settings" in result["error"]

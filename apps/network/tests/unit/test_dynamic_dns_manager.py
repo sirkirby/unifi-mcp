@@ -48,6 +48,7 @@ class TestDynamicDnsManager:
 
         assert len(result) == 2
         assert result[0]["host_name"] == "home.example.com"
+        assert mock_connection.request.call_args[0][0].path == "/rest/dynamicdns"
 
     @pytest.mark.asyncio
     async def test_list_uses_cache(self, ddns_manager, mock_connection):
@@ -59,14 +60,6 @@ class TestDynamicDnsManager:
 
         assert result == cached
         mock_connection.request.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_list_handles_error(self, ddns_manager, mock_connection):
-        """list_dynamic_dns propagates controller errors."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await ddns_manager.list_dynamic_dns()
 
     # ---- Get ----
 
@@ -83,38 +76,6 @@ class TestDynamicDnsManager:
 
         assert result is not None
         assert result["host_name"] == "home.example.com"
-
-    @pytest.mark.asyncio
-    async def test_get_not_found(self, ddns_manager, mock_connection):
-        """get_dynamic_dns raises UniFiNotFoundError when the id is absent."""
-        mock_connection.request.return_value = [{"_id": "d1"}]
-
-        with pytest.raises(UniFiNotFoundError):
-            await ddns_manager.get_dynamic_dns("nonexistent")
-
-    # ---- Create ----
-
-    @pytest.mark.asyncio
-    async def test_create_success(self, ddns_manager, mock_connection):
-        """create_dynamic_dns returns the created entry and invalidates cache."""
-        created = {"_id": "d_new", "host_name": "new.example.com", "service": "dyndns", "interface": "wan"}
-        mock_connection.request.return_value = created
-
-        result = await ddns_manager.create_dynamic_dns(
-            {"host_name": "new.example.com", "service": "dyndns", "interface": "wan"}
-        )
-
-        assert result is not None
-        assert result["_id"] == "d_new"
-        mock_connection._invalidate_cache.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_create_handles_error(self, ddns_manager, mock_connection):
-        """create_dynamic_dns propagates controller errors."""
-        mock_connection.request.side_effect = Exception("Failed")
-
-        with pytest.raises(Exception):
-            await ddns_manager.create_dynamic_dns({"host_name": "fail.example.com"})
 
     # ---- Update ----
 
@@ -138,22 +99,6 @@ class TestDynamicDnsManager:
         assert put_req.method == "put"
         assert "d1" in put_req.path
 
-    @pytest.mark.asyncio
-    async def test_update_not_found(self, ddns_manager, mock_connection):
-        """update_dynamic_dns raises UniFiNotFoundError when the entry is missing."""
-        mock_connection.request.return_value = []
-
-        with pytest.raises(UniFiNotFoundError):
-            await ddns_manager.update_dynamic_dns("nonexistent", {"service": "noip"})
-
-    @pytest.mark.asyncio
-    async def test_update_handles_error(self, ddns_manager, mock_connection):
-        """update_dynamic_dns propagates controller errors from the fetch."""
-        mock_connection.request.side_effect = Exception("Failed")
-
-        with pytest.raises(Exception):
-            await ddns_manager.update_dynamic_dns("d1", {"service": "noip"})
-
     # ---- Delete ----
 
     @pytest.mark.asyncio
@@ -169,33 +114,50 @@ class TestDynamicDnsManager:
         assert "d1" in api_req.path
         mock_connection._invalidate_cache.assert_called_once()
 
+    # ---- Errors ----
+
     @pytest.mark.asyncio
-    async def test_delete_handles_error(self, ddns_manager, mock_connection):
-        """delete_dynamic_dns propagates controller errors."""
+    @pytest.mark.parametrize(
+        "method, args",
+        [
+            ("list_dynamic_dns", ()),
+            ("create_dynamic_dns", ({"host_name": "fail.example.com"},)),
+            ("update_dynamic_dns", ("d1", {"service": "noip"})),
+            ("delete_dynamic_dns", ("d1",)),
+        ],
+    )
+    async def test_controller_errors_propagate(self, ddns_manager, mock_connection, method, args):
         mock_connection.request.side_effect = Exception("Failed")
 
         with pytest.raises(Exception):
-            await ddns_manager.delete_dynamic_dns("d1")
+            await getattr(ddns_manager, method)(*args)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method, args, listing",
+        [
+            ("get_dynamic_dns", ("nonexistent",), [{"_id": "d1"}]),
+            ("update_dynamic_dns", ("nonexistent", {"service": "noip"}), []),
+        ],
+    )
+    async def test_not_found_raises(self, ddns_manager, mock_connection, method, args, listing):
+        """Get and update raise UniFiNotFoundError when the id is absent."""
+        mock_connection.request.return_value = listing
+
+        with pytest.raises(UniFiNotFoundError):
+            await getattr(ddns_manager, method)(*args)
 
     # ---- API Path Verification ----
 
     @pytest.mark.asyncio
-    async def test_list_uses_correct_path(self, ddns_manager, mock_connection):
-        """list_dynamic_dns uses the V1 /rest/dynamicdns endpoint."""
-        mock_connection.request.return_value = []
-
-        await ddns_manager.list_dynamic_dns()
-
-        api_req = mock_connection.request.call_args[0][0]
-        assert api_req.path == "/rest/dynamicdns"
-
-    @pytest.mark.asyncio
     async def test_create_uses_post(self, ddns_manager, mock_connection):
-        """create_dynamic_dns uses POST to /rest/dynamicdns."""
+        """create_dynamic_dns POSTs to /rest/dynamicdns, returns the entry, invalidates cache."""
         mock_connection.request.return_value = {"_id": "new"}
 
-        await ddns_manager.create_dynamic_dns({"host_name": "test.example.com", "service": "dyndns"})
+        result = await ddns_manager.create_dynamic_dns({"host_name": "test.example.com", "service": "dyndns"})
 
         api_req = mock_connection.request.call_args[0][0]
         assert api_req.method == "post"
         assert api_req.path == "/rest/dynamicdns"
+        assert result["_id"] == "new"
+        mock_connection._invalidate_cache.assert_called_once()

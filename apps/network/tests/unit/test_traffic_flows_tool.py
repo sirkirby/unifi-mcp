@@ -60,6 +60,8 @@ async def test_tool_maps_params_and_returns_success():
     # Omitted filters stay None (not [] or [None]).
     assert query.action is None
     assert query.destination_ip is None
+    assert query.source_port is None
+    assert query.destination_port is None
     # within_hours=2 -> window is ~2h wide (allow small clock-skew).
     assert query.time_from is not None and query.time_to is not None
     assert abs((query.time_to - query.time_from) - 2 * 3600 * 1000) < 2000
@@ -80,23 +82,22 @@ async def test_tool_maps_port_filters_as_integer_lists():
 
 
 @pytest.mark.asyncio
-async def test_tool_omitted_port_filters_stay_none():
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({"destination_port": 70000}, id="out-of-range-port"),
+        # page=-1 violates the model's page_number ge=0; the tool must surface this
+        # as the uniform error envelope, not let a ValidationError escape.
+        pytest.param({"time_from": 1, "time_to": 2, "page": -1}, id="negative-page"),
+    ],
+)
+async def test_tool_invalid_input_returns_error_envelope(kwargs):
     with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = dict(_ENVELOPE)
-        await get_traffic_flows()
-
-    query = mock_get.call_args.args[0]
-    assert query.source_port is None
-    assert query.destination_port is None
-
-
-@pytest.mark.asyncio
-async def test_tool_out_of_range_port_returns_error_envelope():
-    with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
-        out = await get_traffic_flows(destination_port=70000)
+        out = await get_traffic_flows(**kwargs)
 
     assert out["success"] is False
-    mock_get.assert_not_awaited()
+    assert "error" in out
+    mock_get.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -126,17 +127,6 @@ async def test_tool_clamps_page_size():
         assert mock_get.call_args.args[0].page_size == 1000
         await get_traffic_flows(time_from=1, time_to=2, page_size=0)
         assert mock_get.call_args.args[0].page_size == 1
-
-
-@pytest.mark.asyncio
-async def test_tool_negative_page_returns_error_envelope():
-    # page=-1 violates the model's page_number ge=0; the tool must surface this
-    # as the uniform error envelope, not let a ValidationError escape.
-    with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
-        out = await get_traffic_flows(time_from=1, time_to=2, page=-1)
-    assert out["success"] is False
-    assert "error" in out
-    mock_get.assert_not_called()
 
 
 @pytest.mark.asyncio

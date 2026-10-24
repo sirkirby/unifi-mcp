@@ -51,7 +51,7 @@ class TestForgetClient:
         assert call_args.method == "post"
         assert call_args.path == "/cmd/stamgr"
         assert call_args.data == {"macs": ["aa:bb:cc:dd:ee:ff"], "cmd": "forget-sta"}
-        mock_connection._invalidate_cache.assert_called_once()
+        mock_connection._invalidate_cache.assert_called_once_with("clients")
 
     @pytest.mark.asyncio
     async def test_forget_client_api_error(self, client_manager, mock_connection):
@@ -60,10 +60,3 @@ class TestForgetClient:
 
         with pytest.raises(Exception):
             await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
-
-    @pytest.mark.asyncio
-    async def test_forget_client_invalidates_cache(self, client_manager, mock_connection):
-        """Test that cache is invalidated after forgetting a client."""
-        await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
-
-        mock_connection._invalidate_cache.assert_called_once_with("clients")

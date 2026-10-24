@@ -38,12 +38,13 @@ SAMPLE_ENTRY_SECRET = {**SAMPLE_ENTRY, "x_password": "super-secret-token"}
 
 class TestListDynamicDns:
     @pytest.mark.asyncio
-    async def test_list_success(self):
+    @pytest.mark.parametrize("entries", [[SAMPLE_ENTRY], []], ids=["one-entry", "empty"])
+    async def test_list_success(self, entries):
         mock_conn = MagicMock()
         mock_conn.site = "default"
 
         with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
-            mock_mgr.list_dynamic_dns = AsyncMock(return_value=[SAMPLE_ENTRY])
+            mock_mgr.list_dynamic_dns = AsyncMock(return_value=entries)
             mock_mgr._connection = mock_conn
 
             from unifi_network_mcp.tools.dynamic_dns import list_dynamic_dns
@@ -51,9 +52,10 @@ class TestListDynamicDns:
             result = await list_dynamic_dns()
 
         assert result["success"] is True
-        assert result["count"] == 1
-        assert result["entries"][0]["host_name"] == "home.example.com"
-        assert result["entries"][0]["id"] == "ddns001"
+        assert result["count"] == len(entries)
+        for listed in result["entries"]:
+            assert listed["host_name"] == "home.example.com"
+            assert listed["id"] == "ddns001"
 
     @pytest.mark.asyncio
     async def test_list_redacts_secret_when_policy_on(self):
@@ -90,22 +92,6 @@ class TestListDynamicDns:
             result = await list_dynamic_dns()
 
         assert result["entries"][0]["x_password"] == "super-secret-token"
-
-    @pytest.mark.asyncio
-    async def test_list_empty(self):
-        mock_conn = MagicMock()
-        mock_conn.site = "default"
-
-        with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
-            mock_mgr.list_dynamic_dns = AsyncMock(return_value=[])
-            mock_mgr._connection = mock_conn
-
-            from unifi_network_mcp.tools.dynamic_dns import list_dynamic_dns
-
-            result = await list_dynamic_dns()
-
-        assert result["success"] is True
-        assert result["count"] == 0
 
     @pytest.mark.asyncio
     async def test_list_exception(self):

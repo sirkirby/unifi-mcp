@@ -69,57 +69,31 @@ async def test_merges_active_and_user_records(mock_connection):
 
 
 @pytest.mark.asyncio
-async def test_returns_user_only_when_not_active(mock_connection):
-    """Offline client present only in /rest/user — returned as-is."""
+@pytest.mark.parametrize(
+    "live, user, stat_sta_raises, rest_user_raises, key, expected",
+    [
+        pytest.param(
+            None, {"_id": "user-123", "noted": True}, False, False, "_id", "user-123", id="user-only-when-not-active"
+        ),
+        pytest.param({"uptime": 99}, None, False, False, "uptime", 99, id="active-only-when-no-user-record"),
+        pytest.param(None, {"_id": "user-123"}, True, False, "_id", "user-123", id="user-when-stat-sta-raises"),
+        pytest.param({"uptime": 99}, None, False, True, "uptime", 99, id="active-when-rest-user-raises"),
+    ],
+)
+async def test_single_source_lookup(mock_connection, live, user, stat_sta_raises, rest_user_raises, key, expected):
+    """A client known to only one endpoint is returned as-is, and a transient
+    failure on one endpoint must not break the other."""
     mac = "aa:bb:cc:dd:ee:ff"
-    user = _client(mac, _id="user-123", noted=True, last_seen=1776076601)
-    mock_connection.controller.clients.values.return_value = []
-    mock_connection.controller.clients_all.values.return_value = [user]
+    mock_connection.controller.clients.values.return_value = [_client(mac, **live)] if live else []
+    mock_connection.controller.clients_all.values.return_value = [_client(mac, **user)] if user else []
+    if stat_sta_raises:
+        mock_connection.controller.clients.update.side_effect = RuntimeError("boom")
+    if rest_user_raises:
+        mock_connection.controller.clients_all.update.side_effect = RuntimeError("boom")
 
-    mgr = ClientManager(mock_connection)
-    result = await mgr.get_client_details(mac)
-    assert result.raw["_id"] == "user-123"
+    result = await ClientManager(mock_connection).get_client_details(mac)
 
-
-@pytest.mark.asyncio
-async def test_returns_active_only_when_no_user_record(mock_connection):
-    """Transient client present only in /stat/sta — returned as-is."""
-    mac = "aa:bb:cc:dd:ee:ff"
-    live = _client(mac, uptime=99, signal=-50)
-    mock_connection.controller.clients.values.return_value = [live]
-    mock_connection.controller.clients_all.values.return_value = []
-
-    mgr = ClientManager(mock_connection)
-    result = await mgr.get_client_details(mac)
-    assert result.raw["uptime"] == 99
-
-
-@pytest.mark.asyncio
-async def test_falls_back_to_user_when_stat_sta_raises(mock_connection):
-    """If /stat/sta fetch raises, /rest/user still resolves the lookup —
-    a transient failure on one endpoint must not break the other.
-    """
-    mac = "aa:bb:cc:dd:ee:ff"
-    user = _client(mac, _id="user-123", last_seen=1776076601)
-    mock_connection.controller.clients.update.side_effect = RuntimeError("boom")
-    mock_connection.controller.clients_all.values.return_value = [user]
-
-    mgr = ClientManager(mock_connection)
-    result = await mgr.get_client_details(mac)
-    assert result.raw["_id"] == "user-123"
-
-
-@pytest.mark.asyncio
-async def test_falls_back_to_active_when_rest_user_raises(mock_connection):
-    """And vice versa — /rest/user failure doesn't block lookup of active clients."""
-    mac = "aa:bb:cc:dd:ee:ff"
-    live = _client(mac, uptime=99, signal=-50)
-    mock_connection.controller.clients.values.return_value = [live]
-    mock_connection.controller.clients_all.update.side_effect = RuntimeError("boom")
-
-    mgr = ClientManager(mock_connection)
-    result = await mgr.get_client_details(mac)
-    assert result.raw["uptime"] == 99
+    assert result.raw[key] == expected
 
 
 @pytest.mark.asyncio

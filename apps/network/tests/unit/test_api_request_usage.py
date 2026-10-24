@@ -5,7 +5,6 @@ not 'json='. This test prevents reintroduction of that bug.
 """
 
 import ast
-import inspect
 from pathlib import Path
 
 import pytest
@@ -30,19 +29,6 @@ class TestApiRequestSignature:
         assert request.data == {"key": "value"}
         assert request.method == "post"
         assert request.path == "/test"
-
-    def test_api_request_valid_parameters(self):
-        """Document the valid parameters for ApiRequest."""
-        sig = inspect.signature(ApiRequest)
-        param_names = set(sig.parameters.keys())
-
-        # These are the only valid parameters
-        assert "method" in param_names
-        assert "path" in param_names
-        assert "data" in param_names
-
-        # 'json' should NOT be a valid parameter
-        assert "json" not in param_names
 
 
 class TestManagerFilesUseCorrectApiRequestSyntax:

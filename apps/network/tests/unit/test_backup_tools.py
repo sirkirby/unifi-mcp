@@ -64,29 +64,7 @@ class TestBackupTools:
 
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_create_backup_handles_error(self, system_manager, mock_connection):
-        """Test create_backup returns None on error."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await system_manager.create_backup()
-
     # ---- List Backups ----
-
-    @pytest.mark.asyncio
-    async def test_list_backups_returns_list(self, system_manager, mock_connection):
-        """Test list_backups returns list of backup dicts."""
-        backups = [
-            {"filename": "autobackup_1.unf", "datetime": "2026-03-28", "size": 28000000},
-            {"filename": "autobackup_2.unf", "datetime": "2026-03-27", "size": 27500000},
-        ]
-        mock_connection.request.return_value = backups
-
-        result = await system_manager.list_backups()
-
-        assert len(result) == 2
-        assert result[0]["filename"] == "autobackup_1.unf"
 
     @pytest.mark.asyncio
     async def test_list_backups_handles_dict_response(self, system_manager, mock_connection):
@@ -96,14 +74,6 @@ class TestBackupTools:
         result = await system_manager.list_backups()
 
         assert len(result) == 1
-
-    @pytest.mark.asyncio
-    async def test_list_backups_handles_error(self, system_manager, mock_connection):
-        """Test list_backups returns empty list on error."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await system_manager.list_backups()
 
     # ---- Delete Backup ----
 
@@ -120,14 +90,6 @@ class TestBackupTools:
         assert api_req.path == "/cmd/backup"
         assert api_req.data["cmd"] == "delete-backup"
         assert api_req.data["filename"] == "autobackup_1.unf"
-
-    @pytest.mark.asyncio
-    async def test_delete_backup_handles_error(self, system_manager, mock_connection):
-        """Test delete_backup returns False on error."""
-        mock_connection.request.side_effect = Exception("Failed")
-
-        with pytest.raises(Exception):
-            await system_manager.delete_backup("nonexistent.unf")
 
     # ---- Auto-Backup Settings ----
 
@@ -179,24 +141,36 @@ class TestBackupTools:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_update_autobackup_settings_error(self, system_manager, mock_connection):
-        """Test update_autobackup_settings returns False on error."""
-        mock_connection.request.side_effect = Exception("Failed")
+    @pytest.mark.parametrize(
+        "method, args",
+        [
+            ("create_backup", ()),
+            ("list_backups", ()),
+            ("delete_backup", ("nonexistent.unf",)),
+            ("update_autobackup_settings", ({"autobackup_enabled": True},)),
+        ],
+    )
+    async def test_controller_errors_propagate(self, system_manager, mock_connection, method, args):
+        mock_connection.request.side_effect = Exception("Connection failed")
 
         with pytest.raises(Exception):
-            await system_manager.update_autobackup_settings({"autobackup_enabled": True})
+            await getattr(system_manager, method)(*args)
 
     # ---- API Path Verification ----
 
     @pytest.mark.asyncio
     async def test_list_backups_uses_correct_path(self, system_manager, mock_connection):
-        """Test list_backups uses POST /cmd/backup with list-backups command."""
-        mock_connection.request.return_value = []
+        """Test list_backups uses POST /cmd/backup with list-backups command and returns the backups."""
+        mock_connection.request.return_value = [
+            {"filename": "autobackup_1.unf", "datetime": "2026-03-28", "size": 28000000},
+            {"filename": "autobackup_2.unf", "datetime": "2026-03-27", "size": 27500000},
+        ]
 
-        await system_manager.list_backups()
+        result = await system_manager.list_backups()
 
-        call_args = mock_connection.request.call_args
-        api_req = call_args[0][0]
+        assert len(result) == 2
+        assert result[0]["filename"] == "autobackup_1.unf"
+        api_req = mock_connection.request.call_args[0][0]
         assert api_req.path == "/cmd/backup"
         assert api_req.method == "post"
         assert api_req.data["cmd"] == "list-backups"
@@ -374,16 +348,6 @@ class TestSnmpV3Tools:
         assert result["snmp_settings"] == {"enabled_v3": True, "username": "ro", "x_password": REDACTED}
 
     @pytest.mark.asyncio
-    async def test_v3_only_update_does_not_require_enabled(self, monkeypatch):
-        """Turning v3 off must not force the caller to restate v1 state."""
-        system, mgr = self._manager(monkeypatch)
-
-        result = await system.update_snmp_settings(enabled_v3=False, confirm=True)
-
-        mgr.update_settings.assert_awaited_once_with("snmp", {"enabledV3": False})
-        assert result["success"] is True
-
-    @pytest.mark.asyncio
     async def test_no_fields_is_rejected(self, monkeypatch):
         system, mgr = self._manager(monkeypatch)
 
@@ -463,12 +427,20 @@ class TestSnmpV3Tools:
         assert all(r.exc_info is None for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_enabled_false_alone_is_sent(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "kwargs, payload",
+        [
+            pytest.param({"enabled_v3": False}, {"enabledV3": False}, id="v3-off-does-not-require-v1-state"),
+            pytest.param({"enabled": False}, {"enabled": False}, id="enabled-false-alone-is-sent"),
+        ],
+    )
+    async def test_single_flag_update_sends_only_that_key(self, monkeypatch, kwargs, payload):
         system, mgr = self._manager(monkeypatch)
 
-        await system.update_snmp_settings(enabled=False, confirm=True)
+        result = await system.update_snmp_settings(confirm=True, **kwargs)
 
-        mgr.update_settings.assert_awaited_once_with("snmp", {"enabled": False})
+        mgr.update_settings.assert_awaited_once_with("snmp", payload)
+        assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_mixed_v1_and_v3_update(self, monkeypatch):

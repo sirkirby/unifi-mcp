@@ -29,29 +29,18 @@ class TestDeviceCommands:
     # ---- locate_device ----
 
     @pytest.mark.asyncio
-    async def test_locate_device_enable(self, device_manager, mock_connection):
-        """Test locate_device sends set-locate command."""
+    @pytest.mark.parametrize("enable, cmd", [(True, "set-locate"), (False, "unset-locate")])
+    async def test_locate_device_command(self, device_manager, mock_connection, enable, cmd):
+        """locate_device sends set-locate / unset-locate for the device."""
         mock_connection.request.return_value = {}
 
-        result = await device_manager.locate_device("aa:bb:cc:dd:ee:ff", True)
+        result = await device_manager.locate_device("aa:bb:cc:dd:ee:ff", enable)
 
         assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        api_request = mock_connection.request.call_args[0][0]
         assert api_request.path == "/cmd/devmgr"
-        assert api_request.data["cmd"] == "set-locate"
+        assert api_request.data["cmd"] == cmd
         assert api_request.data["mac"] == "aa:bb:cc:dd:ee:ff"
-
-    @pytest.mark.asyncio
-    async def test_locate_device_disable(self, device_manager, mock_connection):
-        """Test locate_device sends unset-locate command."""
-        mock_connection.request.return_value = {}
-
-        result = await device_manager.locate_device("aa:bb:cc:dd:ee:ff", False)
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        assert call_args[0][0].data["cmd"] == "unset-locate"
 
     @pytest.mark.asyncio
     async def test_locate_device_handles_error(self, device_manager, mock_connection):

@@ -47,6 +47,7 @@ class TestDnsManager:
 
         assert len(result) == 2
         assert result[0]["key"] == "host.example.com"
+        assert mock_connection.request.call_args[0][0].path == "/static-dns"
 
     @pytest.mark.asyncio
     async def test_list_dns_records_uses_cache(self, dns_manager, mock_connection):
@@ -58,14 +59,6 @@ class TestDnsManager:
 
         assert result == cached
         mock_connection.request.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_list_dns_records_handles_error(self, dns_manager, mock_connection):
-        """Test list_dns_records returns empty list on error."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await dns_manager.list_dns_records()
 
     # ---- Get DNS Record ----
 
@@ -84,36 +77,19 @@ class TestDnsManager:
         assert result["key"] == "host.example.com"
 
     @pytest.mark.asyncio
-    async def test_get_dns_record_not_found(self, dns_manager, mock_connection):
-        """Test get_dns_record raises UniFiNotFoundError when not found."""
-        mock_connection.request.return_value = [{"_id": "r1"}]
+    @pytest.mark.parametrize(
+        "method, args, listing",
+        [
+            ("get_dns_record", ("nonexistent",), [{"_id": "r1"}]),
+            ("update_dns_record", ("nonexistent", {"value": "10.0.0.2"}), []),
+        ],
+    )
+    async def test_not_found_raises(self, dns_manager, mock_connection, method, args, listing):
+        """Get and update raise UniFiNotFoundError when the record id is absent."""
+        mock_connection.request.return_value = listing
 
         with pytest.raises(UniFiNotFoundError):
-            await dns_manager.get_dns_record("nonexistent")
-
-    # ---- Create DNS Record ----
-
-    @pytest.mark.asyncio
-    async def test_create_dns_record_success(self, dns_manager, mock_connection):
-        """Test create_dns_record returns created record."""
-        created = {"_id": "r_new", "key": "new.example.com", "value": "10.0.0.99", "record_type": "A"}
-        mock_connection.request.return_value = created
-
-        result = await dns_manager.create_dns_record(
-            {"key": "new.example.com", "value": "10.0.0.99", "record_type": "A"}
-        )
-
-        assert result is not None
-        assert result["_id"] == "r_new"
-        mock_connection._invalidate_cache.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_create_dns_record_handles_error(self, dns_manager, mock_connection):
-        """Test create_dns_record returns None on error."""
-        mock_connection.request.side_effect = Exception("Failed")
-
-        with pytest.raises(Exception):
-            await dns_manager.create_dns_record({"key": "fail.example.com"})
+            await getattr(dns_manager, method)(*args)
 
     # ---- Update DNS Record ----
 
@@ -135,22 +111,6 @@ class TestDnsManager:
         assert put_req.method == "put"
         assert "r1" in put_req.path
 
-    @pytest.mark.asyncio
-    async def test_update_dns_record_not_found(self, dns_manager, mock_connection):
-        """Test update_dns_record raises UniFiNotFoundError when record missing."""
-        mock_connection.request.return_value = []
-
-        with pytest.raises(UniFiNotFoundError):
-            await dns_manager.update_dns_record("nonexistent", {"value": "10.0.0.2"})
-
-    @pytest.mark.asyncio
-    async def test_update_dns_record_handles_error(self, dns_manager, mock_connection):
-        """Test update_dns_record returns False on error."""
-        mock_connection.request.side_effect = Exception("Failed")
-
-        with pytest.raises(Exception):
-            await dns_manager.update_dns_record("r1", {"value": "10.0.0.2"})
-
     # ---- Delete DNS Record ----
 
     @pytest.mark.asyncio
@@ -167,35 +127,35 @@ class TestDnsManager:
         assert "r1" in api_req.path
         mock_connection._invalidate_cache.assert_called_once()
 
+    # ---- Error propagation ----
+
     @pytest.mark.asyncio
-    async def test_delete_dns_record_handles_error(self, dns_manager, mock_connection):
-        """Test delete_dns_record returns False on error."""
+    @pytest.mark.parametrize(
+        "method, args",
+        [
+            ("list_dns_records", ()),
+            ("create_dns_record", ({"key": "fail.example.com"},)),
+            ("update_dns_record", ("r1", {"value": "10.0.0.2"})),
+            ("delete_dns_record", ("r1",)),
+        ],
+    )
+    async def test_controller_errors_propagate(self, dns_manager, mock_connection, method, args):
         mock_connection.request.side_effect = Exception("Failed")
 
         with pytest.raises(Exception):
-            await dns_manager.delete_dns_record("r1")
+            await getattr(dns_manager, method)(*args)
 
     # ---- API Path Verification ----
 
     @pytest.mark.asyncio
-    async def test_list_uses_correct_path(self, dns_manager, mock_connection):
-        """Test list_dns_records uses v2 /static-dns endpoint."""
-        mock_connection.request.return_value = []
-
-        await dns_manager.list_dns_records()
-
-        call_args = mock_connection.request.call_args
-        api_req = call_args[0][0]
-        assert api_req.path == "/static-dns"
-
-    @pytest.mark.asyncio
     async def test_create_uses_post(self, dns_manager, mock_connection):
-        """Test create_dns_record uses POST."""
+        """create_dns_record POSTs to /static-dns, returns the record, invalidates cache."""
         mock_connection.request.return_value = {"_id": "new"}
 
-        await dns_manager.create_dns_record({"key": "test", "value": "10.0.0.1", "record_type": "A"})
+        result = await dns_manager.create_dns_record({"key": "test", "value": "10.0.0.1", "record_type": "A"})
 
-        call_args = mock_connection.request.call_args
-        api_req = call_args[0][0]
+        api_req = mock_connection.request.call_args[0][0]
         assert api_req.method == "post"
         assert api_req.path == "/static-dns"
+        assert result["_id"] == "new"
+        mock_connection._invalidate_cache.assert_called_once()

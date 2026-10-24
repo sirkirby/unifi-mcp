@@ -271,12 +271,6 @@ class TestNetworkManagerWlan:
         return NetworkManager(mock_connection)
 
     @pytest.mark.asyncio
-    async def test_delete_wlan_exists(self, network_manager):
-        """Verify delete_wlan method exists and is callable."""
-        assert hasattr(network_manager, "delete_wlan")
-        assert callable(network_manager.delete_wlan)
-
-    @pytest.mark.asyncio
     async def test_toggle_wlan_exists(self, network_manager):
         """Verify toggle_wlan method exists and is callable."""
         assert hasattr(network_manager, "toggle_wlan")
@@ -333,14 +327,6 @@ class TestNetworkManagerApGroups:
         api_req = call_args[0][0]
         assert "apgroup" in api_req.path
 
-    @pytest.mark.asyncio
-    async def test_list_ap_groups_handles_error(self, network_manager, mock_connection):
-        """Test list_ap_groups returns empty list on exception."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await network_manager.list_ap_groups()
-
     # ---- Get AP Group Details ----
 
     @pytest.mark.asyncio
@@ -357,14 +343,6 @@ class TestNetworkManagerApGroups:
         assert result is not None
         assert result["_id"] == "grp1"
         assert result["name"] == "Default"
-
-    @pytest.mark.asyncio
-    async def test_get_ap_group_details_not_found(self, network_manager, mock_connection):
-        """Test get_ap_group_details returns None when group not found."""
-        mock_connection.request.side_effect = Exception("Not found")
-
-        with pytest.raises(Exception):
-            await network_manager.get_ap_group_details("nonexistent")
 
     # ---- Create AP Group ----
 
@@ -426,12 +404,19 @@ class TestNetworkManagerApGroups:
         assert "grp1" in put_req.path
 
     @pytest.mark.asyncio
-    async def test_update_ap_group_not_found(self, network_manager, mock_connection):
-        """Test update_ap_group returns False when group not found."""
+    @pytest.mark.parametrize(
+        "method, args",
+        [
+            ("list_ap_groups", ()),
+            ("get_ap_group_details", ("nonexistent",)),
+            ("update_ap_group", ("nonexistent", {"name": "New Name"})),
+        ],
+    )
+    async def test_ap_group_controller_errors_propagate(self, network_manager, mock_connection, method, args):
         mock_connection.request.side_effect = Exception("Not found")
 
         with pytest.raises(Exception):
-            await network_manager.update_ap_group("nonexistent", {"name": "New Name"})
+            await getattr(network_manager, method)(*args)
 
     # ---- Delete AP Group ----
 

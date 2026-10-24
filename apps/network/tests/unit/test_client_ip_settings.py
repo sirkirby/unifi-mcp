@@ -59,134 +59,63 @@ class TestClientIPSettings:
         return client
 
     @pytest.mark.asyncio
-    async def test_set_fixed_ip(self, client_manager, mock_connection, mock_client):
-        """Test setting a fixed IP address."""
-        # Mock get_client_details to return the client
+    @pytest.mark.parametrize(
+        "kwargs, expected",
+        [
+            pytest.param(
+                {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
+                {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
+                id="fixed-ip",
+            ),
+            pytest.param(
+                {"fixed_ip": "192.168.1.100"},
+                {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
+                id="fixed-ip-only-ip-auto-enables",
+            ),
+            pytest.param({"use_fixedip": False}, {"use_fixedip": False, "fixed_ip": ""}, id="disable-fixed-ip"),
+            pytest.param(
+                {"local_dns_record_enabled": True, "local_dns_record": "mydevice.local"},
+                {"local_dns_record_enabled": True, "local_dns_record": "mydevice.local"},
+                id="local-dns",
+            ),
+            pytest.param(
+                {"local_dns_record": "mydevice.local"},
+                {"local_dns_record_enabled": True, "local_dns_record": "mydevice.local"},
+                id="local-dns-only-hostname-auto-enables",
+            ),
+            pytest.param(
+                {"local_dns_record_enabled": False},
+                {"local_dns_record_enabled": False, "local_dns_record": ""},
+                id="disable-local-dns",
+            ),
+            pytest.param(
+                {
+                    "use_fixedip": True,
+                    "fixed_ip": "192.168.1.100",
+                    "local_dns_record_enabled": True,
+                    "local_dns_record": "mydevice.local",
+                },
+                {
+                    "use_fixedip": True,
+                    "fixed_ip": "192.168.1.100",
+                    "local_dns_record_enabled": True,
+                    "local_dns_record": "mydevice.local",
+                },
+                id="both-ip-and-dns",
+            ),
+        ],
+    )
+    async def test_sends_expected_settings(self, client_manager, mock_connection, mock_client, kwargs, expected):
         mock_connection.controller.clients_all.values.return_value = [mock_client]
         mock_connection.request.return_value = {}
 
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            use_fixedip=True,
-            fixed_ip="192.168.1.100",
-        )
+        result = await client_manager.set_client_ip_settings(client_mac="aa:bb:cc:dd:ee:ff", **kwargs)
 
         assert result is True
-        # Verify the API call
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["use_fixedip"] is True
-        assert api_request.data["fixed_ip"] == "192.168.1.100"
-
-    @pytest.mark.asyncio
-    async def test_set_fixed_ip_only_ip(self, client_manager, mock_connection, mock_client):
-        """Test setting fixed IP by only providing the IP address."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            fixed_ip="192.168.1.100",
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        # Should auto-enable use_fixedip
-        assert api_request.data["use_fixedip"] is True
-        assert api_request.data["fixed_ip"] == "192.168.1.100"
-
-    @pytest.mark.asyncio
-    async def test_disable_fixed_ip(self, client_manager, mock_connection, mock_client):
-        """Test disabling fixed IP."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            use_fixedip=False,
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["use_fixedip"] is False
-        assert api_request.data["fixed_ip"] == ""
-
-    @pytest.mark.asyncio
-    async def test_set_local_dns_record(self, client_manager, mock_connection, mock_client):
-        """Test setting a local DNS record."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            local_dns_record_enabled=True,
-            local_dns_record="mydevice.local",
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["local_dns_record_enabled"] is True
-        assert api_request.data["local_dns_record"] == "mydevice.local"
-
-    @pytest.mark.asyncio
-    async def test_set_local_dns_only_hostname(self, client_manager, mock_connection, mock_client):
-        """Test setting DNS by only providing the hostname."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            local_dns_record="mydevice.local",
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        # Should auto-enable local_dns_record_enabled
-        assert api_request.data["local_dns_record_enabled"] is True
-        assert api_request.data["local_dns_record"] == "mydevice.local"
-
-    @pytest.mark.asyncio
-    async def test_disable_local_dns(self, client_manager, mock_connection, mock_client):
-        """Test disabling local DNS record."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            local_dns_record_enabled=False,
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["local_dns_record_enabled"] is False
-        assert api_request.data["local_dns_record"] == ""
-
-    @pytest.mark.asyncio
-    async def test_set_both_ip_and_dns(self, client_manager, mock_connection, mock_client):
-        """Test setting both fixed IP and DNS record."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        result = await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            use_fixedip=True,
-            fixed_ip="192.168.1.100",
-            local_dns_record_enabled=True,
-            local_dns_record="mydevice.local",
-        )
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["use_fixedip"] is True
-        assert api_request.data["fixed_ip"] == "192.168.1.100"
-        assert api_request.data["local_dns_record_enabled"] is True
-        assert api_request.data["local_dns_record"] == "mydevice.local"
+        api_request = mock_connection.request.call_args[0][0]
+        for key, value in expected.items():
+            assert api_request.data[key] == value
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_client_not_found(self, client_manager, mock_connection):
@@ -240,19 +169,6 @@ class TestClientIPSettings:
         ]
         assert any(r.data.get("noted") is True for r in write_requests)
         assert any(r.data.get("use_fixedip") is True for r in write_requests)
-
-    @pytest.mark.asyncio
-    async def test_invalidates_cache(self, client_manager, mock_connection, mock_client):
-        """Test invalidates cache after update."""
-        mock_connection.controller.clients_all.values.return_value = [mock_client]
-        mock_connection.request.return_value = {}
-
-        await client_manager.set_client_ip_settings(
-            client_mac="aa:bb:cc:dd:ee:ff",
-            fixed_ip="192.168.1.100",
-        )
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_handles_api_error(self, client_manager, mock_connection, mock_client):

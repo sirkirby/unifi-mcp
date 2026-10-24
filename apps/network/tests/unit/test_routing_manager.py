@@ -123,43 +123,46 @@ class TestRoutingManager:
             await routing_manager.get_route_details("nonexistent")
 
     @pytest.mark.asyncio
-    async def test_create_route_basic(self, routing_manager, mock_connection):
-        """Test create_route with required parameters."""
-        mock_connection.request.return_value = [{"_id": "new1", "name": "New Route"}]
-
-        await routing_manager.create_route(
-            name="New Route",
-            static_route_network="10.0.0.0/24",
-            static_route_nexthop="192.168.1.1",
-        )
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["name"] == "New Route"
-        assert api_request.data["static-route_network"] == "10.0.0.0/24"
-        assert api_request.data["static-route_nexthop"] == "192.168.1.1"
-        assert api_request.data["static-route_distance"] == 1
-        assert api_request.data["enabled"] is True
-
-    @pytest.mark.asyncio
-    async def test_create_route_with_all_options(self, routing_manager, mock_connection):
-        """Test create_route with all optional parameters."""
+    @pytest.mark.parametrize(
+        "kwargs, expected",
+        [
+            pytest.param(
+                {
+                    "name": "New Route",
+                    "static_route_network": "10.0.0.0/24",
+                    "static_route_nexthop": "192.168.1.1",
+                },
+                {
+                    "name": "New Route",
+                    "static-route_network": "10.0.0.0/24",
+                    "static-route_nexthop": "192.168.1.1",
+                    "static-route_distance": 1,
+                    "enabled": True,
+                },
+                id="required-only-uses-defaults",
+            ),
+            pytest.param(
+                {
+                    "name": "Custom Route",
+                    "static_route_network": "172.16.0.0/16",
+                    "static_route_nexthop": "10.0.0.1",
+                    "static_route_distance": 10,
+                    "enabled": False,
+                    "route_type": "nexthop-route",
+                },
+                {"static-route_distance": 10, "enabled": False, "type": "nexthop-route"},
+                id="all-options",
+            ),
+        ],
+    )
+    async def test_create_route_payload(self, routing_manager, mock_connection, kwargs, expected):
         mock_connection.request.return_value = [{"_id": "new1"}]
 
-        await routing_manager.create_route(
-            name="Custom Route",
-            static_route_network="172.16.0.0/16",
-            static_route_nexthop="10.0.0.1",
-            static_route_distance=10,
-            enabled=False,
-            route_type="nexthop-route",
-        )
+        await routing_manager.create_route(**kwargs)
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["static-route_distance"] == 10
-        assert api_request.data["enabled"] is False
-        assert api_request.data["type"] == "nexthop-route"
+        api_request = mock_connection.request.call_args[0][0]
+        for key, value in expected.items():
+            assert api_request.data[key] == value
 
     @pytest.mark.asyncio
     async def test_create_route_invalidates_cache(self, routing_manager, mock_connection):
@@ -205,6 +208,7 @@ class TestRoutingManager:
         api_request = update_call[0][0]
         assert api_request.data["name"] == "New Name"
         assert api_request.data["enabled"] is False
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_update_route_network_and_nexthop(self, routing_manager, mock_connection):
@@ -252,18 +256,6 @@ class TestRoutingManager:
 
         # With full-object updates, calling with no changes is a valid noop
         assert result is True
-
-    @pytest.mark.asyncio
-    async def test_update_route_invalidates_cache(self, routing_manager, mock_connection):
-        """Test update_route invalidates the cache."""
-        mock_connection.request.side_effect = [
-            [{"_id": "r1", "name": "Test"}],
-            {},
-        ]
-
-        await routing_manager.update_route(route_id="r1", name="Updated")
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_update_route_handles_error(self, routing_manager, mock_connection):

@@ -153,8 +153,10 @@ class TestGetPduOutlets:
     """DeviceManager.get_pdu_outlets()."""
 
     @pytest.mark.asyncio
-    async def test_returns_outlets_for_usp_device(self, device_manager, mock_connection):
-        pdu = _make_pdu_device()
+    @pytest.mark.parametrize("device_type", ["usp", "uap"])
+    async def test_returns_outlets_for_pdu(self, device_manager, mock_connection, device_type):
+        """UAP-typed PDUs (older mesh-connected strips) classify as PDU when is_access_point=False."""
+        pdu = _make_pdu_device(device_type=device_type)
         mock_connection.controller.devices.values.return_value = [pdu]
 
         result = await device_manager.get_pdu_outlets(pdu.mac)
@@ -169,18 +171,6 @@ class TestGetPduOutlets:
         assert first["relay_state"] is True
         assert first["override_relay_state"] is True
         assert first["has_override"] is True
-
-    @pytest.mark.asyncio
-    async def test_returns_outlets_for_uap_pdu(self, device_manager, mock_connection):
-        """UAP-typed PDUs (older mesh-connected strips) classify as PDU when is_access_point=False."""
-        pdu = _make_pdu_device(device_type="uap")
-        pdu.raw["is_access_point"] = False
-        mock_connection.controller.devices.values.return_value = [pdu]
-
-        result = await device_manager.get_pdu_outlets(pdu.mac)
-
-        assert result is not None
-        assert len(result["outlets"]) == 7
 
     @pytest.mark.asyncio
     async def test_returns_none_for_ap(self, device_manager, mock_connection):
@@ -208,6 +198,7 @@ class TestSetOutletState:
     async def test_modifies_only_target_outlet(self, device_manager, mock_connection):
         """The crux: writing one outlet must preserve every sibling override verbatim."""
         pdu = _make_pdu_device()
+        original_outlet_3 = dict(pdu.raw["outlet_overrides"][2])
         mock_connection.controller.devices.values.return_value = [pdu]
 
         result = await device_manager.set_outlet_state(pdu.mac, outlet_index=3, relay_state=True)
@@ -231,30 +222,28 @@ class TestSetOutletState:
             if original["index"] == 3:
                 continue
             assert sent_by_index[original["index"]] == original, f"override for outlet {original['index']} was mutated"
+        mock_connection._invalidate_cache.assert_called()
+        # The cached device's outlet_overrides entry is unchanged
+        assert pdu.raw["outlet_overrides"][2] == original_outlet_3
 
     @pytest.mark.asyncio
-    async def test_cycle_enabled_unchanged_when_omitted(self, device_manager, mock_connection):
+    @pytest.mark.parametrize(
+        "kwargs, expected_cycle",
+        [
+            pytest.param({"relay_state": False}, True, id="omitted-keeps-original"),
+            pytest.param({"relay_state": True, "cycle_enabled": False}, False, id="provided-updates"),
+        ],
+    )
+    async def test_cycle_enabled(self, device_manager, mock_connection, kwargs, expected_cycle):
         pdu = _make_pdu_device()
         mock_connection.controller.devices.values.return_value = [pdu]
 
-        await device_manager.set_outlet_state(pdu.mac, outlet_index=4, relay_state=False)
+        await device_manager.set_outlet_state(pdu.mac, outlet_index=4, **kwargs)
 
         sent_overrides = mock_connection.request.call_args[0][0].data["outlet_overrides"]
         outlet_4 = next(o for o in sent_overrides if o["index"] == 4)
-        assert outlet_4["relay_state"] is False
-        # Original cycle_enabled=True must be preserved untouched
-        assert outlet_4["cycle_enabled"] is True
-
-    @pytest.mark.asyncio
-    async def test_cycle_enabled_updated_when_provided(self, device_manager, mock_connection):
-        pdu = _make_pdu_device()
-        mock_connection.controller.devices.values.return_value = [pdu]
-
-        await device_manager.set_outlet_state(pdu.mac, outlet_index=4, relay_state=True, cycle_enabled=False)
-
-        sent_overrides = mock_connection.request.call_args[0][0].data["outlet_overrides"]
-        outlet_4 = next(o for o in sent_overrides if o["index"] == 4)
-        assert outlet_4["cycle_enabled"] is False
+        assert outlet_4["relay_state"] is kwargs["relay_state"]
+        assert outlet_4["cycle_enabled"] is expected_cycle
 
     @pytest.mark.asyncio
     async def test_seeds_override_when_missing(self, device_manager, mock_connection):
@@ -301,26 +290,6 @@ class TestSetOutletState:
 
         assert result is None
         mock_connection.request.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_does_not_mutate_cached_overrides(self, device_manager, mock_connection):
-        pdu = _make_pdu_device()
-        original_outlet_3 = dict(pdu.raw["outlet_overrides"][2])
-        mock_connection.controller.devices.values.return_value = [pdu]
-
-        await device_manager.set_outlet_state(pdu.mac, outlet_index=3, relay_state=True)
-
-        # The cached device's outlet_overrides entry is unchanged
-        assert pdu.raw["outlet_overrides"][2] == original_outlet_3
-
-    @pytest.mark.asyncio
-    async def test_invalidates_cache_on_success(self, device_manager, mock_connection):
-        pdu = _make_pdu_device()
-        mock_connection.controller.devices.values.return_value = [pdu]
-
-        await device_manager.set_outlet_state(pdu.mac, outlet_index=1, relay_state=False)
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_propagates_api_error(self, device_manager, mock_connection):

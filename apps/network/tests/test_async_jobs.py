@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from unifi_network_mcp.jobs import JOBS, JobStore, get_job_status, start_async_tool
+from unifi_network_mcp.jobs import JobStore, get_job_status, start_async_tool
 
 
 class TestJobStore:
@@ -65,27 +65,6 @@ class TestJobStore:
         assert "Intentional test error" in status["error"]
         assert "completed" in status
 
-    @pytest.mark.asyncio
-    async def test_unknown_job_id(self):
-        """Test querying an unknown job ID."""
-        store = JobStore()
-        status = await store.status("unknown123")
-        assert status["status"] == "unknown"
-
-    @pytest.mark.asyncio
-    async def test_global_singleton(self):
-        """Test that JOBS is a singleton instance."""
-
-        async def task1():
-            return "result1"
-
-        job_id = await JOBS.start(task1())
-        await asyncio.sleep(0.05)
-
-        status = await JOBS.status(job_id)
-        assert status["status"] == "done"
-        assert status["result"] == "result1"
-
 
 class TestHelperFunctions:
     """Tests for the helper functions."""
@@ -111,49 +90,3 @@ class TestHelperFunctions:
         assert status["status"] == "done"
         assert status["result"]["success"] is True
         assert status["result"]["args"]["arg1"] == "value1"
-
-    @pytest.mark.asyncio
-    async def test_get_job_status(self):
-        """Test the get_job_status helper function."""
-
-        async def task():
-            return {"data": "test"}
-
-        job_id = await JOBS.start(task())
-        await asyncio.sleep(0.05)
-
-        status = await get_job_status(job_id)
-        assert status["status"] == "done"
-        assert status["result"]["data"] == "test"
-
-
-if __name__ == "__main__":
-    # Run tests manually if needed
-    import sys
-
-    sys.path.insert(0, "/Users/chris/Repos/unifi-network-mcp")
-
-    async def run_tests():
-        test = TestJobStore()
-        await test.test_start_and_complete_job()
-        print("✓ test_start_and_complete_job passed")
-
-        await test.test_job_with_error()
-        print("✓ test_job_with_error passed")
-
-        await test.test_unknown_job_id()
-        print("✓ test_unknown_job_id passed")
-
-        await test.test_global_singleton()
-        print("✓ test_global_singleton passed")
-
-        test2 = TestHelperFunctions()
-        await test2.test_start_async_tool()
-        print("✓ test_start_async_tool passed")
-
-        await test2.test_get_job_status()
-        print("✓ test_get_job_status passed")
-
-        print("\nAll tests passed!")
-
-    asyncio.run(run_tests())

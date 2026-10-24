@@ -35,13 +35,14 @@ class TestListDnsRecords:
     """Test the list_dns_records tool."""
 
     @pytest.mark.asyncio
-    async def test_list_success(self):
-        """List returns formatted records with success."""
+    @pytest.mark.parametrize("records", [[SAMPLE_RECORD], []], ids=["one-record", "empty"])
+    async def test_list_success(self, records):
+        """List returns formatted records (zero count when none exist)."""
         mock_conn = MagicMock()
         mock_conn.site = "default"
 
         with patch("unifi_network_mcp.tools.dns.dns_manager") as mock_mgr:
-            mock_mgr.list_dns_records = AsyncMock(return_value=[SAMPLE_RECORD])
+            mock_mgr.list_dns_records = AsyncMock(return_value=records)
             mock_mgr._connection = mock_conn
 
             from unifi_network_mcp.tools.dns import list_dns_records
@@ -49,26 +50,10 @@ class TestListDnsRecords:
             result = await list_dns_records()
 
         assert result["success"] is True
-        assert result["count"] == 1
-        assert result["records"][0]["key"] == "host.example.com"
-        assert result["records"][0]["id"] == "dns001"
-
-    @pytest.mark.asyncio
-    async def test_list_empty(self):
-        """List returns zero count when no records exist."""
-        mock_conn = MagicMock()
-        mock_conn.site = "default"
-
-        with patch("unifi_network_mcp.tools.dns.dns_manager") as mock_mgr:
-            mock_mgr.list_dns_records = AsyncMock(return_value=[])
-            mock_mgr._connection = mock_conn
-
-            from unifi_network_mcp.tools.dns import list_dns_records
-
-            result = await list_dns_records()
-
-        assert result["success"] is True
-        assert result["count"] == 0
+        assert result["count"] == len(records)
+        for listed in result["records"]:
+            assert listed["key"] == "host.example.com"
+            assert listed["id"] == "dns001"
 
     @pytest.mark.asyncio
     async def test_list_exception(self):
@@ -153,6 +138,8 @@ class TestCreateDnsRecord:
 
         assert result["success"] is True
         assert result.get("requires_confirmation") is True
+        # record_type passes through to the controller without enum checking
+        assert result["preview"]["will_create"]["record_type"] == "A"
 
     @pytest.mark.asyncio
     async def test_create_confirm_success(self):
@@ -172,22 +159,6 @@ class TestCreateDnsRecord:
         assert result["success"] is True
         assert "created successfully" in result["message"]
         assert result["details"]["_id"] == "dns_new"
-
-    @pytest.mark.asyncio
-    async def test_create_passes_record_type_to_controller(self):
-        """Model-based create passes record_type to controller without enum checking.
-
-        Enum validation happens at the controller level.
-        """
-        from unifi_network_mcp.tools.dns import create_dns_record
-
-        result = await create_dns_record(
-            record_data={"key": "test.example.com", "value": "10.0.0.1", "record_type": "A"},
-            confirm=False,
-        )
-
-        assert result["success"] is True
-        assert result["preview"]["will_create"]["record_type"] == "A"
 
     @pytest.mark.asyncio
     async def test_create_missing_required_field(self):
@@ -250,18 +221,24 @@ class TestUpdateDnsRecord:
     """Test the update_dns_record tool."""
 
     @pytest.mark.asyncio
-    async def test_update_preview(self):
-        """Preview mode returns proposed changes without fetching current state."""
+    @pytest.mark.parametrize("update_data", [{"value": "10.0.0.2"}, {"record_type": "CNAME"}])
+    async def test_update_preview(self, update_data):
+        """Preview returns proposed changes without fetching current state.
+
+        record_type values pass through without enum checking (the controller validates).
+        """
         from unifi_network_mcp.tools.dns import update_dns_record
 
         result = await update_dns_record(
             record_id="dns001",
-            update_data={"value": "10.0.0.2"},
+            update_data=update_data,
             confirm=False,
         )
 
         assert result["success"] is True
         assert result.get("requires_confirmation") is True
+        for key, value in update_data.items():
+            assert result["preview"]["proposed"][key] == value
 
     @pytest.mark.asyncio
     async def test_update_confirm_success(self):
@@ -311,23 +288,6 @@ class TestUpdateDnsRecord:
 
         assert result["success"] is False
         assert "No fields provided" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_update_passes_record_type_through(self):
-        """Model-based update passes record_type values through without enum checking.
-
-        Enum validation happens at the controller level.
-        """
-        from unifi_network_mcp.tools.dns import update_dns_record
-
-        result = await update_dns_record(
-            record_id="dns001",
-            update_data={"record_type": "CNAME"},
-            confirm=False,
-        )
-
-        assert result["success"] is True
-        assert result["preview"]["proposed"]["record_type"] == "CNAME"
 
     @pytest.mark.asyncio
     async def test_update_manager_exception(self):
