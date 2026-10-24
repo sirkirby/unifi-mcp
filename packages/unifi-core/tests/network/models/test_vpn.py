@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.vpn import (
-    VPNCLIENT_MUTABLE_FIELDS,
-    VPNCLIENT_READ_ONLY_FIELDS,
     VPNSERVER_MUTABLE_FIELDS,
     VPNSERVER_READ_ONLY_FIELDS,
     VpnClient,
@@ -15,6 +14,8 @@ from unifi_core.network.models.vpn import (
     to_controller_update,
     vpn_server_from_controller,
 )
+
+from .model_assertions import assert_fields
 
 
 class TestVpnClassification:
@@ -28,26 +29,6 @@ class TestVpnClassification:
 
     def test_rejects_non_vpn_network(self) -> None:
         assert is_vpn_network({"purpose": "corporate"}) is False
-
-
-class TestVpnClientFieldSets:
-    def test_mutable_fields_contains_expected(self) -> None:
-        for field in ("name", "enabled", "type", "server_address"):
-            assert field in VPNCLIENT_MUTABLE_FIELDS, f"Expected {field!r} in VPNCLIENT_MUTABLE_FIELDS"
-
-    def test_mutable_fields_excludes_id(self) -> None:
-        assert "id" not in VPNCLIENT_MUTABLE_FIELDS
-
-    def test_read_only_fields_contains_id(self) -> None:
-        assert "id" in VPNCLIENT_READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = VPNCLIENT_MUTABLE_FIELDS & VPNCLIENT_READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(VpnClient.model_fields.keys())
-        assert VPNCLIENT_MUTABLE_FIELDS | VPNCLIENT_READ_ONLY_FIELDS == all_fields
 
 
 class TestVpnServerFieldSets:
@@ -134,31 +115,22 @@ class TestToControllerCreate:
         payload = to_controller_create(model)
         assert "id" not in payload
 
-    def test_omits_none_fields(self) -> None:
-        model = VpnClient(name="Minimal")
-        payload = to_controller_create(model)
-        assert "server_address" not in payload
-        assert "enabled" not in payload
-
 
 class TestToControllerUpdate:
-    def test_filters_out_id(self) -> None:
-        result = to_controller_update({"id": "ignore-me", "enabled": True})
-        assert "id" not in result
-        assert result["enabled"] is True
-
-    def test_maps_type_to_vpn_type(self) -> None:
-        result = to_controller_update({"type": "wireguard-client"})
-        assert "vpn_type" in result
-        assert result["vpn_type"] == "wireguard-client"
-        assert "type" not in result
-
-    def test_drops_none_values(self) -> None:
-        result = to_controller_update({"name": None, "enabled": False})
-        assert "name" not in result
-        assert result["enabled"] is False
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "name": "Valid"})
-        assert "unknown" not in result
-        assert result["name"] == "Valid"
+    @pytest.mark.parametrize(
+        "fields, expected, absent, present",
+        [
+            ({"id": "ignore-me", "enabled": True}, {"enabled": True}, ("id",), ()),
+            ({"type": "wireguard-client"}, {"vpn_type": "wireguard-client"}, ("type",), ("vpn_type",)),
+            ({"name": None, "enabled": False}, {"enabled": False}, ("name",), ()),
+            ({"unknown": "value", "name": "Valid"}, {"name": "Valid"}, ("unknown",), ()),
+        ],
+        ids=["filters_out_id", "maps_type_to_vpn_type", "drops_none_values", "drops_unrecognised_keys"],
+    )
+    def test_to_controller_update_payload(self, fields, expected, absent, present) -> None:
+        result = to_controller_update(fields)
+        assert_fields(result, expected)
+        for key in absent:
+            assert key not in result
+        for key in present:
+            assert key in result

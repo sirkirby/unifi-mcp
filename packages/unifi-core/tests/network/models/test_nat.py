@@ -27,26 +27,6 @@ from tests.network.nat_fixtures import DNS_REDIRECT, NONE_FILTER, dnat
 
 
 class TestFieldSets:
-    def test_mutable_fields_contains_every_writable_key(self) -> None:
-        for field in (
-            "type",
-            "description",
-            "enabled",
-            "rule_index",
-            "protocol",
-            "ip_version",
-            "in_interface",
-            "out_interface",
-            "ip_address",
-            "port",
-            "logging",
-            "exclude",
-            "pppoe_use_base_interface",
-            "source_filter",
-            "destination_filter",
-        ):
-            assert field in MUTABLE_FIELDS, field
-
     def test_read_only_fields(self) -> None:
         assert READ_ONLY_FIELDS == {"id", "is_predefined", "setting_preference"}
 

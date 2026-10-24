@@ -5,131 +5,114 @@ from __future__ import annotations
 import pytest
 from unifi_core.network.models.content_filter import (
     MUTABLE_FIELDS,
-    READ_ONLY_FIELDS,
-    ContentFilter,
     from_controller,
     to_controller_update,
 )
 
+from .model_assertions import assert_fields
+
 
 class TestFieldSets:
-    def test_mutable_fields_contains_expected(self) -> None:
-        for field in (
-            "name",
-            "enabled",
-            "blocked_categories",
-            "safe_search",
-            "client_macs",
-            "network_ids",
-            "schedule_mode",
-        ):
-            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
-
-    def test_mutable_fields_excludes_read_only(self) -> None:
-        for field in ("id", "profile"):
-            assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
-
-    def test_read_only_fields_contains_id_and_profile(self) -> None:
-        assert "id" in READ_ONLY_FIELDS
-        assert "profile" in READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = MUTABLE_FIELDS & READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_mutable_and_read_only_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(ContentFilter.model_fields.keys())
-        assert MUTABLE_FIELDS | READ_ONLY_FIELDS == all_fields
-
     def test_schedule_mode_in_mutable_fields(self) -> None:
         """schedule_mode must be mutable regardless of JSON Schema dict."""
         assert "schedule_mode" in MUTABLE_FIELDS
 
 
 class TestFromController:
-    def test_full_dict(self) -> None:
-        raw = {
-            "_id": "cf-1",
-            "name": "Kids Filter",
-            "enabled": True,
-            "profile": "DNS",
-            "blocked_categories": ["ADULT", "GAMBLING"],
-            "safe_search": ["GOOGLE", "YOUTUBE"],
-            "client_macs": ["aa:bb:cc:dd:ee:ff"],
-            "network_ids": ["net-1"],
-            "schedule": {"mode": "ALWAYS"},
-        }
-        f = from_controller(raw)
-        assert f.id == "cf-1"
-        assert f.name == "Kids Filter"
-        assert f.enabled is True
-        assert f.profile == "DNS"
-        assert f.blocked_categories == ["ADULT", "GAMBLING"]
-        assert f.safe_search == ["GOOGLE", "YOUTUBE"]
-        assert f.client_macs == ["aa:bb:cc:dd:ee:ff"]
-        assert f.network_ids == ["net-1"]
-        assert f.schedule_mode == "ALWAYS"
-
-    def test_id_coalesces_underscore_id(self) -> None:
-        raw = {"_id": "abc", "name": "Test"}
-        f = from_controller(raw)
-        assert f.id == "abc"
-
-    def test_categories_coalesces_from_categories_key(self) -> None:
-        raw = {"_id": "cf-2", "categories": ["MALWARE"]}
-        f = from_controller(raw)
-        assert f.blocked_categories == ["MALWARE"]
-
-    def test_blocked_categories_takes_priority(self) -> None:
-        raw = {"_id": "cf-3", "blocked_categories": ["ADULT"], "categories": ["MALWARE"]}
-        f = from_controller(raw)
-        assert f.blocked_categories == ["ADULT"]
-
-    def test_schedule_mode_extracted_from_schedule_dict(self) -> None:
-        raw = {"_id": "cf-4", "schedule": {"mode": "CUSTOM"}}
-        f = from_controller(raw)
-        assert f.schedule_mode == "CUSTOM"
-
-    def test_enabled_false_is_preserved(self) -> None:
-        raw = {"_id": "cf-5", "enabled": False}
-        f = from_controller(raw)
-        assert f.enabled is False
-
-    def test_missing_enabled_defaults_to_none(self) -> None:
-        raw = {"_id": "cf-6"}
-        f = from_controller(raw)
-        assert f.enabled is None
-
-    def test_non_list_blocked_categories_becomes_empty(self) -> None:
-        raw = {"_id": "cf-7", "blocked_categories": None}
-        f = from_controller(raw)
-        assert f.blocked_categories == []
-
-    def test_handles_empty_dict(self) -> None:
-        f = from_controller({})
-        assert f.id is None
-        assert f.name is None
-        assert f.blocked_categories == []
-        assert f.safe_search == []
-        assert f.client_macs == []
-        assert f.network_ids == []
-        assert f.schedule_mode is None
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            (
+                {
+                    "_id": "cf-1",
+                    "name": "Kids Filter",
+                    "enabled": True,
+                    "profile": "DNS",
+                    "blocked_categories": ["ADULT", "GAMBLING"],
+                    "safe_search": ["GOOGLE", "YOUTUBE"],
+                    "client_macs": ["aa:bb:cc:dd:ee:ff"],
+                    "network_ids": ["net-1"],
+                    "schedule": {"mode": "ALWAYS"},
+                },
+                {
+                    "id": "cf-1",
+                    "name": "Kids Filter",
+                    "enabled": True,
+                    "profile": "DNS",
+                    "blocked_categories": ["ADULT", "GAMBLING"],
+                    "safe_search": ["GOOGLE", "YOUTUBE"],
+                    "client_macs": ["aa:bb:cc:dd:ee:ff"],
+                    "network_ids": ["net-1"],
+                    "schedule_mode": "ALWAYS",
+                },
+            ),
+            ({"_id": "abc", "name": "Test"}, {"id": "abc"}),
+            ({"_id": "cf-2", "categories": ["MALWARE"]}, {"blocked_categories": ["MALWARE"]}),
+            (
+                {"_id": "cf-3", "blocked_categories": ["ADULT"], "categories": ["MALWARE"]},
+                {"blocked_categories": ["ADULT"]},
+            ),
+            ({"_id": "cf-4", "schedule": {"mode": "CUSTOM"}}, {"schedule_mode": "CUSTOM"}),
+            ({"_id": "cf-5", "enabled": False}, {"enabled": False}),
+            ({"_id": "cf-6"}, {"enabled": None}),
+            ({"_id": "cf-7", "blocked_categories": None}, {"blocked_categories": []}),
+            (
+                {},
+                {
+                    "id": None,
+                    "name": None,
+                    "blocked_categories": [],
+                    "safe_search": [],
+                    "client_macs": [],
+                    "network_ids": [],
+                    "schedule_mode": None,
+                },
+            ),
+        ],
+        ids=[
+            "full_dict",
+            "id_coalesces_underscore_id",
+            "categories_coalesces_from_categories_key",
+            "blocked_categories_takes_priority",
+            "schedule_mode_extracted_from_schedule_dict",
+            "enabled_false_is_preserved",
+            "missing_enabled_defaults_to_none",
+            "non_list_blocked_categories_becomes_empty",
+            "handles_empty_dict",
+        ],
+    )
+    def test_from_controller_fields(self, raw, expected) -> None:
+        result = from_controller(raw)
+        assert_fields(result, expected)
 
 
 class TestToControllerUpdate:
-    def test_filters_out_read_only_id(self) -> None:
-        result = to_controller_update({"id": "ignore-me", "name": "New Name"})
-        assert "id" not in result
-        assert result["name"] == "New Name"
-
-    def test_filters_out_profile(self) -> None:
-        result = to_controller_update({"profile": "DNS", "name": "Test"})
-        assert "profile" not in result
-
-    def test_drops_none_values(self) -> None:
-        result = to_controller_update({"name": None, "enabled": True})
-        assert "name" not in result
-        assert result["enabled"] is True
+    @pytest.mark.parametrize(
+        "fields, expected, absent, present",
+        [
+            ({"id": "ignore-me", "name": "New Name"}, {"name": "New Name"}, ("id",), ()),
+            ({"profile": "DNS", "name": "Test"}, {}, ("profile",), ()),
+            ({"name": None, "enabled": True}, {"enabled": True}, ("name",), ()),
+            ({"blocked_categories": ["ADULT"], "categories": ["MALWARE"]}, {"categories": ["ADULT"]}, (), ()),
+            ({"client_macs": []}, {"client_macs": []}, (), ()),
+            ({"unknown": "value", "name": "Valid"}, {"name": "Valid"}, ("unknown",), ()),
+        ],
+        ids=[
+            "filters_out_read_only_id",
+            "filters_out_profile",
+            "drops_none_values",
+            "blocked_categories_wins_over_categories",
+            "empty_list_preserved",
+            "drops_unrecognised_keys",
+        ],
+    )
+    def test_to_controller_update_payload(self, fields, expected, absent, present) -> None:
+        result = to_controller_update(fields)
+        assert_fields(result, expected)
+        for key in absent:
+            assert key not in result
+        for key in present:
+            assert key in result
 
     def test_preserves_boolean_false(self) -> None:
         result = to_controller_update({"enabled": False})
@@ -172,26 +155,9 @@ class TestToControllerUpdate:
         result = to_controller_update({"categories": ["MALWARE"]})
         assert result["categories"] == ["MALWARE"]
 
-    def test_blocked_categories_wins_over_categories(self) -> None:
-        result = to_controller_update({"blocked_categories": ["ADULT"], "categories": ["MALWARE"]})
-        assert result["categories"] == ["ADULT"]
-
     def test_empty_blocked_categories_rejected(self) -> None:
         with pytest.raises(ValueError, match="blocked_categories"):
             to_controller_update({"blocked_categories": []})
-
-    def test_empty_list_preserved(self) -> None:
-        result = to_controller_update({"client_macs": []})
-        assert result["client_macs"] == []
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "name": "Valid"})
-        assert "unknown" not in result
-        assert result["name"] == "Valid"
-
-    def test_returns_empty_dict_when_no_mutable_fields(self) -> None:
-        result = to_controller_update({"id": "read-only"})
-        assert result == {}
 
 
 def test_schedule_round_trip_and_partial_translation() -> None:

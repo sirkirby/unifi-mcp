@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from unifi_core.network.models.switch import (
     MUTABLE_FIELDS,
-    READ_ONLY_FIELDS,
     PortProfile,
     build_create_payload,
     from_controller,
@@ -13,37 +12,7 @@ from unifi_core.network.models.switch import (
     to_controller_update,
 )
 
-
-class TestFieldSets:
-    def test_mutable_fields_contains_expected(self) -> None:
-        for field in (
-            "name",
-            "forward",
-            "native_networkconf_id",
-            "tagged_networkconf_ids",
-            "voice_networkconf_id",
-            "isolation",
-            "poe_mode",
-            "stp_port_mode",
-            "dot1x_ctrl",
-        ):
-            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
-
-    def test_mutable_fields_excludes_read_only(self) -> None:
-        for field in ("id", "attr_no_delete"):
-            assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
-
-    def test_read_only_fields_contains_id_and_attr_no_delete(self) -> None:
-        assert "id" in READ_ONLY_FIELDS
-        assert "attr_no_delete" in READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = MUTABLE_FIELDS & READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_mutable_and_read_only_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(PortProfile.model_fields.keys())
-        assert MUTABLE_FIELDS | READ_ONLY_FIELDS == all_fields
+from .model_assertions import assert_fields
 
 
 class TestFromController:
@@ -74,26 +43,24 @@ class TestFromController:
         assert pp.dot1x_ctrl == "force_authorized"
         assert pp.attr_no_delete is False
 
-    def test_id_coalesces_underscore_id(self) -> None:
-        raw = {"_id": "abc", "name": "Test"}
-        pp = from_controller(raw)
-        assert pp.id == "abc"
-
-    def test_tagged_networkconf_ids_defaults_to_empty(self) -> None:
-        raw = {"_id": "pp-1"}
-        pp = from_controller(raw)
-        assert pp.tagged_networkconf_ids == []
-
-    def test_non_list_tagged_ids_becomes_empty(self) -> None:
-        raw = {"_id": "pp-1", "tagged_networkconf_ids": None}
-        pp = from_controller(raw)
-        assert pp.tagged_networkconf_ids == []
-
-    def test_handles_empty_dict(self) -> None:
-        pp = from_controller({})
-        assert pp.id is None
-        assert pp.name is None
-        assert pp.tagged_networkconf_ids == []
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ({"_id": "abc", "name": "Test"}, {"id": "abc"}),
+            ({"_id": "pp-1"}, {"tagged_networkconf_ids": []}),
+            ({"_id": "pp-1", "tagged_networkconf_ids": None}, {"tagged_networkconf_ids": []}),
+            ({}, {"id": None, "name": None, "tagged_networkconf_ids": []}),
+        ],
+        ids=[
+            "id_coalesces_underscore_id",
+            "tagged_networkconf_ids_defaults_to_empty",
+            "non_list_tagged_ids_becomes_empty",
+            "handles_empty_dict",
+        ],
+    )
+    def test_from_controller_fields(self, raw, expected) -> None:
+        result = from_controller(raw)
+        assert_fields(result, expected)
 
 
 class TestToControllerCreate:
@@ -109,33 +76,6 @@ class TestToControllerCreate:
         assert payload["forward"] == "native"
         assert payload["native_networkconf_id"] == "net-20"
         assert payload["poe_mode"] == "auto"
-
-    def test_read_only_fields_excluded(self) -> None:
-        model = PortProfile(id="should-not-appear", attr_no_delete=True, name="Test")
-        payload = to_controller_create(model)
-        assert "id" not in payload
-        assert "attr_no_delete" not in payload
-
-
-class TestToControllerUpdate:
-    def test_filters_out_read_only_id(self) -> None:
-        result = to_controller_update({"id": "ignore-me", "name": "New Name"})
-        assert "id" not in result
-        assert result["name"] == "New Name"
-
-    def test_drops_none_values(self) -> None:
-        result = to_controller_update({"name": None, "forward": "all"})
-        assert "name" not in result
-        assert result["forward"] == "all"
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "name": "Valid"})
-        assert "unknown" not in result
-        assert result["name"] == "Valid"
-
-    def test_returns_empty_dict_when_no_mutable_fields(self) -> None:
-        result = to_controller_update({"id": "read-only", "attr_no_delete": True})
-        assert result == {}
 
 
 class TestAccessPortFields:

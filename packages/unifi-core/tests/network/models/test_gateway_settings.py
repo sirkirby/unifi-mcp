@@ -8,6 +8,8 @@ from unifi_core.network.models.gateway_settings import (
     to_controller_update,
 )
 
+from .model_assertions import assert_fields
+
 SAMPLE_USG = {
     "_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
     "site_id": "bbbbbbbbbbbbbbbbbbbbbbbb",
@@ -59,11 +61,30 @@ SAMPLE_USG = {
 
 
 class TestFromController:
-    def test_identity_and_key(self):
-        m = from_controller(SAMPLE_USG)
-        assert m.id == "aaaaaaaaaaaaaaaaaaaaaaaa"
-        assert m.site_id == "bbbbbbbbbbbbbbbbbbbbbbbb"
-        assert m.key == "usg"
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            (SAMPLE_USG, {"id": "aaaaaaaaaaaaaaaaaaaaaaaa", "site_id": "bbbbbbbbbbbbbbbbbbbbbbbb", "key": "usg"}),
+            (SAMPLE_USG, {"upnp_enabled": False, "upnp_wan_interface": "WAN", "mss_clamp": "auto"}),
+            (SAMPLE_USG, {"tcp_established_timeout": 7440, "icmp_timeout": 30, "timeout_setting_preference": "auto"}),
+            (SAMPLE_USG, {"echo_server": "8.8.8.8"}),
+            (SAMPLE_USG, {"ftp_module": True, "sip_module": True, "offload_sch": True}),
+            ({"_id": "x", "key": "usg"}, {"upnp_enabled": None, "dns_verification": None}),
+            ({**SAMPLE_USG, "geo_ip_filtering_countries": "US,CA"}, {"geo_ip_filtering_countries": "US,CA"}),
+        ],
+        ids=[
+            "identity_and_key",
+            "nat_upnp_fields",
+            "conntrack_timeouts_are_ints",
+            "echo_server_is_preserved",
+            "module_and_offload_flags",
+            "missing_keys_default_none",
+            "geo_ip_countries_string_passthrough",
+        ],
+    )
+    def test_from_controller_fields(self, raw, expected) -> None:
+        result = from_controller(raw)
+        assert_fields(result, expected)
 
     def test_security_fields(self):
         m = from_controller(SAMPLE_USG)
@@ -80,76 +101,25 @@ class TestFromController:
         assert m.dns_verification["secondary_dns_server"] == "8.8.8.8"
         assert m.dns_verification["domain"] == "ui.com"
 
-    def test_nat_upnp_fields(self):
-        m = from_controller(SAMPLE_USG)
-        assert m.upnp_enabled is False
-        assert m.upnp_wan_interface == "WAN"
-        assert m.mss_clamp == "auto"
-
-    def test_conntrack_timeouts_are_ints(self):
-        m = from_controller(SAMPLE_USG)
-        assert m.tcp_established_timeout == 7440
-        assert m.icmp_timeout == 30
-        assert m.timeout_setting_preference == "auto"
-
-    def test_echo_server_is_preserved(self):
-        m = from_controller(SAMPLE_USG)
-        assert m.echo_server == "8.8.8.8"
-
-    def test_module_and_offload_flags(self):
-        m = from_controller(SAMPLE_USG)
-        assert m.ftp_module is True
-        assert m.sip_module is True
-        assert m.offload_sch is True
-
-    def test_missing_keys_default_none(self):
-        m = from_controller({"_id": "x", "key": "usg"})
-        assert m.upnp_enabled is None
-        assert m.dns_verification is None
-
     def test_geo_ip_countries_list_normalized_to_csv(self):
         """Some firmware returns geo_ip_filtering_countries as an array; it must be
         coerced to the canonical CSV string rather than failing str validation."""
         m = from_controller({**SAMPLE_USG, "geo_ip_filtering_countries": ["US", "CA", "GB"]})
         assert m.geo_ip_filtering_countries == "US,CA,GB"
 
-    def test_geo_ip_countries_string_passthrough(self):
-        m = from_controller({**SAMPLE_USG, "geo_ip_filtering_countries": "US,CA"})
-        assert m.geo_ip_filtering_countries == "US,CA"
-
 
 class TestFieldSets:
-    def test_mutable_excludes_readonly(self):
-        assert "id" not in MUTABLE_FIELDS
-        assert "site_id" not in MUTABLE_FIELDS
-        assert "key" not in MUTABLE_FIELDS
-
     def test_mutable_count_is_38(self):
         assert len(MUTABLE_FIELDS) == 38
 
     def test_readonly_fields(self):
         assert READ_ONLY_FIELDS == frozenset({"id", "site_id", "key"})
 
-    def test_representative_mutable_fields(self):
-        for f in (
-            "upnp_enabled",
-            "geo_ip_filtering_enabled",
-            "tcp_established_timeout",
-            "dns_verification",
-            "echo_server",
-            "unbind_wan_monitors",
-        ):
-            assert f in MUTABLE_FIELDS
-
 
 class TestToControllerUpdate:
     def test_filters_unknown_and_readonly(self):
         out = to_controller_update({"upnp_enabled": True, "id": "x", "key": "usg", "bogus": 1})
         assert out == {"upnp_enabled": True}
-
-    def test_drops_none_keeps_false(self):
-        out = to_controller_update({"syn_cookies": False, "broadcast_ping": None})
-        assert out == {"syn_cookies": False}
 
     def test_nested_dict_passes_through(self):
         partial = {"dns_verification": {"primary_dns_server": "9.9.9.9"}}

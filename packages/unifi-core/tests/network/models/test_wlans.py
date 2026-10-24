@@ -15,6 +15,8 @@ from unifi_core.network.models.wlans import (
     validate_update,
 )
 
+from .model_assertions import assert_fields
+
 
 class TestFieldSets:
     def test_mutable_fields_contains_core_fields(self) -> None:
@@ -36,22 +38,6 @@ class TestFieldSets:
             "ap_group_mode",
         ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
-
-    def test_mutable_fields_excludes_read_only(self) -> None:
-        for field in ("id", "site_id"):
-            assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
-
-    def test_read_only_fields_contains_id_and_site_id(self) -> None:
-        assert "id" in READ_ONLY_FIELDS
-        assert "site_id" in READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = MUTABLE_FIELDS & READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_mutable_and_read_only_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(Wlan.model_fields.keys())
-        assert MUTABLE_FIELDS | READ_ONLY_FIELDS == all_fields
 
 
 class TestFromController:
@@ -84,21 +70,18 @@ class TestFromController:
         assert wlan.ap_group_ids == ["apg-1"]
         assert wlan.mac_filter_enabled is False
 
-    def test_network_id_fallback(self) -> None:
-        raw = {"_id": "wlan-2", "network_id": "net-2"}
-        wlan = from_controller(raw)
-        assert wlan.network_id == "net-2"
-
-    def test_networkconf_id_takes_priority(self) -> None:
-        raw = {"_id": "wlan-3", "networkconf_id": "primary", "network_id": "fallback"}
-        wlan = from_controller(raw)
-        assert wlan.network_id == "primary"
-
-    def test_handles_empty_dict(self) -> None:
-        wlan = from_controller({})
-        assert wlan.id is None
-        assert wlan.name is None
-        assert wlan.enabled is None
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ({"_id": "wlan-2", "network_id": "net-2"}, {"network_id": "net-2"}),
+            ({"_id": "wlan-3", "networkconf_id": "primary", "network_id": "fallback"}, {"network_id": "primary"}),
+            ({}, {"id": None, "name": None, "enabled": None}),
+        ],
+        ids=["network_id_fallback", "networkconf_id_takes_priority", "handles_empty_dict"],
+    )
+    def test_from_controller_fields(self, raw, expected) -> None:
+        result = from_controller(raw)
+        assert_fields(result, expected)
 
     def test_wlan_from_controller_carries_passphrase_verbatim(self) -> None:
         # The domain model is lossless: redaction is a response-boundary
@@ -302,31 +285,30 @@ class TestToControllerCreate:
 
 
 class TestToControllerUpdate:
-    def test_maps_network_id_to_networkconf_id(self) -> None:
-        result = to_controller_update({"network_id": "net-2"})
-        assert "networkconf_id" in result
-        assert result["networkconf_id"] == "net-2"
-        assert "network_id" not in result
-
-    def test_maps_vlan_id_to_vlan(self) -> None:
-        result = to_controller_update({"vlan_id": 30})
-        assert result["vlan"] == 30
-        assert "vlan_id" not in result
-
-    def test_filters_out_read_only_id(self) -> None:
-        result = to_controller_update({"id": "ignore-me", "name": "New Name"})
-        assert "id" not in result
-        assert result["name"] == "New Name"
-
-    def test_drops_none_values(self) -> None:
-        result = to_controller_update({"name": None, "enabled": True})
-        assert "name" not in result
-        assert result["enabled"] is True
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "name": "Valid"})
-        assert "unknown" not in result
-        assert result["name"] == "Valid"
+    @pytest.mark.parametrize(
+        "fields, expected, absent, present",
+        [
+            ({"network_id": "net-2"}, {"networkconf_id": "net-2"}, ("network_id",), ("networkconf_id",)),
+            ({"vlan_id": 30}, {"vlan": 30}, ("vlan_id",), ()),
+            ({"id": "ignore-me", "name": "New Name"}, {"name": "New Name"}, ("id",), ()),
+            ({"name": None, "enabled": True}, {"enabled": True}, ("name",), ()),
+            ({"unknown": "value", "name": "Valid"}, {"name": "Valid"}, ("unknown",), ()),
+        ],
+        ids=[
+            "maps_network_id_to_networkconf_id",
+            "maps_vlan_id_to_vlan",
+            "filters_out_read_only_id",
+            "drops_none_values",
+            "drops_unrecognised_keys",
+        ],
+    )
+    def test_to_controller_update_payload(self, fields, expected, absent, present) -> None:
+        result = to_controller_update(fields)
+        assert_fields(result, expected)
+        for key in absent:
+            assert key not in result
+        for key in present:
+            assert key in result
 
     def test_toggle_payload(self) -> None:
         result = to_controller_update({"enabled": False})

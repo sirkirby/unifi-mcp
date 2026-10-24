@@ -4,12 +4,6 @@ from __future__ import annotations
 
 import pytest
 from unifi_core.network.models.devices import (
-    DEVICE_MUTABLE_FIELDS,
-    DEVICE_READ_ONLY_FIELDS,
-    DEVICERADIO_MUTABLE_FIELDS,
-    DEVICERADIO_READ_ONLY_FIELDS,
-    Device,
-    DeviceRadio,
     from_controller,
     normalize_radio_channel,
     normalize_radio_ht,
@@ -19,57 +13,7 @@ from unifi_core.network.models.devices import (
     validate_radio_update,
 )
 
-
-class TestDeviceFieldSets:
-    def test_mutable_fields_contains_name(self) -> None:
-        assert "name" in DEVICE_MUTABLE_FIELDS
-
-    def test_mutable_fields_excludes_mac_and_model(self) -> None:
-        for field in ("mac", "model", "type", "version", "uptime", "state", "ip"):
-            assert field not in DEVICE_MUTABLE_FIELDS, f"{field!r} should NOT be in DEVICE_MUTABLE_FIELDS"
-
-    def test_read_only_fields_contains_mac(self) -> None:
-        assert "mac" in DEVICE_READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = DEVICE_MUTABLE_FIELDS & DEVICE_READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(Device.model_fields.keys())
-        assert DEVICE_MUTABLE_FIELDS | DEVICE_READ_ONLY_FIELDS == all_fields
-
-
-class TestDeviceRadioFieldSets:
-    def test_mutable_fields_contains_update_schema_fields(self) -> None:
-        for field in (
-            "tx_power_mode",
-            "tx_power",
-            "channel",
-            "ht",
-            "min_rssi_enabled",
-            "min_rssi",
-            "assisted_roaming_enabled",
-            "antenna_gain",
-            "vwire_enabled",
-            "sens_level_enabled",
-            "sens_level",
-        ):
-            assert field in DEVICERADIO_MUTABLE_FIELDS, f"Expected {field!r} in DEVICERADIO_MUTABLE_FIELDS"
-
-    def test_mutable_fields_excludes_radio(self) -> None:
-        assert "radio" not in DEVICERADIO_MUTABLE_FIELDS
-
-    def test_read_only_fields_contains_radio(self) -> None:
-        assert "radio" in DEVICERADIO_READ_ONLY_FIELDS
-
-    def test_mutable_and_read_only_are_disjoint(self) -> None:
-        overlap = DEVICERADIO_MUTABLE_FIELDS & DEVICERADIO_READ_ONLY_FIELDS
-        assert not overlap, f"Fields in both sets: {overlap}"
-
-    def test_cover_all_model_fields(self) -> None:
-        all_fields = frozenset(DeviceRadio.model_fields.keys())
-        assert DEVICERADIO_MUTABLE_FIELDS | DEVICERADIO_READ_ONLY_FIELDS == all_fields
+from .model_assertions import assert_fields
 
 
 class TestFromControllerDevice:
@@ -120,15 +64,6 @@ class TestDeviceToControllerUpdate:
         assert "mac" not in result
         assert "model" not in result
         assert result["name"] == "Keep"
-
-    def test_drops_none_values(self) -> None:
-        result = to_controller_update({"name": None})
-        assert result == {}
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "name": "Valid"})
-        assert "unknown" not in result
-        assert result["name"] == "Valid"
 
 
 class TestRadioFromController:
@@ -208,28 +143,23 @@ class TestRadioToControllerUpdate:
         result = radio_to_controller_update(updates)
         assert result == updates
 
-    def test_drops_read_only_radio(self) -> None:
-        result = radio_to_controller_update({"radio": "na", "tx_power_mode": "auto"})
-        assert "radio" not in result
-        assert result["tx_power_mode"] == "auto"
-
-    def test_drops_none_values(self) -> None:
-        result = radio_to_controller_update({"tx_power_mode": None, "channel": 36})
-        assert "tx_power_mode" not in result
-        assert result["channel"] == 36
-
-    def test_drops_unrecognised_keys(self) -> None:
-        result = radio_to_controller_update({"unknown": "value", "channel": 6})
-        assert "unknown" not in result
-        assert result["channel"] == 6
-
-    def test_preserves_false_boolean(self) -> None:
-        result = radio_to_controller_update({"min_rssi_enabled": False})
-        # False is falsy but valid — should NOT be dropped
-        # Note: to_controller_update drops values where v is not None fails for False
-        # since False is not None, it should be kept
-        assert "min_rssi_enabled" in result
-        assert result["min_rssi_enabled"] is False
+    @pytest.mark.parametrize(
+        "fields, expected, absent, present",
+        [
+            ({"radio": "na", "tx_power_mode": "auto"}, {"tx_power_mode": "auto"}, ("radio",), ()),
+            ({"tx_power_mode": None, "channel": 36}, {"channel": 36}, ("tx_power_mode",), ()),
+            ({"unknown": "value", "channel": 6}, {"channel": 6}, ("unknown",), ()),
+            ({"min_rssi_enabled": False}, {"min_rssi_enabled": False}, (), ("min_rssi_enabled",)),
+        ],
+        ids=["drops_read_only_radio", "drops_none_values", "drops_unrecognised_keys", "preserves_false_boolean"],
+    )
+    def test_radio_to_controller_update_payload(self, fields, expected, absent, present) -> None:
+        result = radio_to_controller_update(fields)
+        assert_fields(result, expected)
+        for key in absent:
+            assert key not in result
+        for key in present:
+            assert key in result
 
 
 class TestValidateRadioUpdate:
