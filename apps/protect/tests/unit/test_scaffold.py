@@ -1,5 +1,7 @@
 """Smoke tests for the UniFi Protect MCP server scaffold."""
 
+import pytest
+
 
 def test_package_importable():
     """Verify the unifi_protect_mcp package can be imported."""
@@ -34,21 +36,38 @@ def test_managers_importable():
     assert SystemManager(cm) is not None
 
 
-def test_categories_importable():
+@pytest.mark.parametrize("check", ["keys", "values"])
+def test_categories(check):
     """Verify categories module loads correctly."""
     from unifi_protect_mcp.categories import PROTECT_CATEGORY_MAP, TOOL_MODULE_MAP
 
     assert isinstance(PROTECT_CATEGORY_MAP, dict)
-    assert "camera" in PROTECT_CATEGORY_MAP
-    assert "event" in PROTECT_CATEGORY_MAP
-    assert "recording" in PROTECT_CATEGORY_MAP
-    assert "light" in PROTECT_CATEGORY_MAP
-    assert "sensor" in PROTECT_CATEGORY_MAP
-    assert "chime" in PROTECT_CATEGORY_MAP
-    assert "liveview" in PROTECT_CATEGORY_MAP
-    assert "recognition" in PROTECT_CATEGORY_MAP
-    assert "system" in PROTECT_CATEGORY_MAP
     assert isinstance(TOOL_MODULE_MAP, dict)
+    if check == "keys":
+        assert {
+            "camera",
+            "event",
+            "recording",
+            "light",
+            "sensor",
+            "chime",
+            "liveview",
+            "recognition",
+            "system",
+        }.issubset(PROTECT_CATEGORY_MAP)
+    else:
+        assert set(PROTECT_CATEGORY_MAP.values()) == {
+            "cameras",
+            "events",
+            "recordings",
+            "lights",
+            "sensors",
+            "chimes",
+            "liveviews",
+            "recognition",
+            "system",
+            "alarm",
+        }
 
 
 def test_tool_index_importable():
@@ -67,41 +86,3 @@ def test_config_helpers_importable():
     assert parse_config_bool("true") is True
     assert parse_config_bool("false") is False
     assert parse_config_bool(None, default=True) is True
-
-
-def test_connection_manager_properties():
-    """Verify ProtectConnectionManager stores connection params."""
-    from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
-
-    cm = ProtectConnectionManager(
-        host="192.0.2.1",
-        username="admin",
-        password="secret",
-        port=7443,
-        site="default",
-        verify_ssl=True,
-    )
-    assert cm.host == "192.0.2.1"
-    assert cm.username == "admin"
-    assert cm.port == 7443
-    assert cm.verify_ssl is True
-    assert cm.is_connected is False
-
-
-def test_protect_category_map_values():
-    """Verify category map values match config.yaml permissions keys."""
-    from unifi_protect_mcp.categories import PROTECT_CATEGORY_MAP
-
-    expected_values = {
-        "cameras",
-        "events",
-        "recordings",
-        "lights",
-        "sensors",
-        "chimes",
-        "liveviews",
-        "recognition",
-        "system",
-        "alarm",
-    }
-    assert set(PROTECT_CATEGORY_MAP.values()) == expected_values

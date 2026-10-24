@@ -349,35 +349,29 @@ class TestLightManagerUpdateLight:
 
 
 class TestLightManagerApply:
+    @pytest.mark.parametrize(
+        ("field", "value", "applied", "setter", "controller_value"),
+        [
+            ("light_on", True, "light_on=True", "set_light_public", True),
+            ("led_level", 3, "led_level=3", "set_led_level_public", 3),
+            (
+                "duration_seconds",
+                60,
+                "duration_seconds=60",
+                "set_duration_public",
+                timedelta(seconds=60),
+            ),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_apply_light_on(self, mock_cm_lights):
+    async def test_apply_settings(self, mock_cm_lights, field, value, applied, setter, controller_value):
         from unifi_core.protect.managers.light_manager import LightManager
 
         mgr = LightManager(mock_cm_lights)
         light = mock_cm_lights.client.bootstrap.lights["light-001"]
-        result = await mgr.apply_light_settings("light-001", {"light_on": True})
-        assert "light_on=True" in result["applied"]
-        light.set_light_public.assert_awaited_once_with(True)
-
-    @pytest.mark.asyncio
-    async def test_apply_led_level(self, mock_cm_lights):
-        from unifi_core.protect.managers.light_manager import LightManager
-
-        mgr = LightManager(mock_cm_lights)
-        light = mock_cm_lights.client.bootstrap.lights["light-001"]
-        result = await mgr.apply_light_settings("light-001", {"led_level": 3})
-        assert "led_level=3" in result["applied"]
-        light.set_led_level_public.assert_awaited_once_with(3)
-
-    @pytest.mark.asyncio
-    async def test_apply_duration(self, mock_cm_lights):
-        from unifi_core.protect.managers.light_manager import LightManager
-
-        mgr = LightManager(mock_cm_lights)
-        light = mock_cm_lights.client.bootstrap.lights["light-001"]
-        result = await mgr.apply_light_settings("light-001", {"duration_seconds": 60})
-        assert "duration_seconds=60" in result["applied"]
-        light.set_duration_public.assert_awaited_once_with(timedelta(seconds=60))
+        result = await mgr.apply_light_settings("light-001", {field: value})
+        assert applied in result["applied"]
+        getattr(light, setter).assert_awaited_once_with(controller_value)
 
     @pytest.mark.asyncio
     async def test_apply_error(self, mock_cm_lights):

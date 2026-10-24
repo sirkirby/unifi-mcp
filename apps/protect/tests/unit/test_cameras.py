@@ -1,5 +1,6 @@
 """Tests for CameraManager and camera tools."""
 
+import base64
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -475,36 +476,24 @@ class TestCameraManagerApplyCameraSettings:
         assert "errors" in result
         assert any("API error" in e for e in result["errors"])
 
+    @pytest.mark.parametrize(
+        ("value", "applied", "controller_value"),
+        [
+            ("superHdr", "hdr_mode=always", PublicHdrMode.ON),
+            (False, "hdr_mode=off", "off"),
+            (True, "hdr_mode=auto", "auto"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_apply_hdr_superhdr(self, mock_cm):
+    async def test_apply_hdr_modes(self, mock_cm, value, applied, controller_value):
+        """Boolean False stays a regression case: the SDK requires the literal ``off``."""
         from unifi_core.protect.managers.camera_manager import CameraManager
 
         mgr = CameraManager(mock_cm)
         cam = mock_cm.client.bootstrap.cameras["cam-001"]
-        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": "superHdr"})
-        assert "hdr_mode=always" in result["applied"]
-        cam.set_hdr_mode_public.assert_awaited_once_with(PublicHdrMode.ON)
-
-    @pytest.mark.asyncio
-    async def test_apply_hdr_bool_false_turns_off(self, mock_cm):
-        # Regression: set_hdr_mode_public(False) does NOT turn HDR off because
-        # ``False == "off"`` is false; we must normalize to the "off" literal.
-        from unifi_core.protect.managers.camera_manager import CameraManager
-
-        mgr = CameraManager(mock_cm)
-        cam = mock_cm.client.bootstrap.cameras["cam-001"]
-        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": False})
-        assert "hdr_mode=off" in result["applied"]
-        cam.set_hdr_mode_public.assert_awaited_once_with("off")
-
-    @pytest.mark.asyncio
-    async def test_apply_hdr_bool_true_is_auto(self, mock_cm):
-        from unifi_core.protect.managers.camera_manager import CameraManager
-
-        mgr = CameraManager(mock_cm)
-        cam = mock_cm.client.bootstrap.cameras["cam-001"]
-        await mgr.apply_camera_settings("cam-001", {"hdr_mode": True})
-        cam.set_hdr_mode_public.assert_awaited_once_with("auto")
+        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": value})
+        assert applied in result["applied"]
+        cam.set_hdr_mode_public.assert_awaited_once_with(controller_value)
 
     @pytest.mark.asyncio
     async def test_apply_hdr_invalid_value(self, mock_cm):
@@ -856,6 +845,7 @@ class TestProtectGetSnapshotTool:
         assert result["success"] is True
         assert "image_base64" in result["data"]
         assert result["data"]["content_type"] == "image/jpeg"
+        assert base64.b64decode(result["data"]["image_base64"]) == b"\xff\xd8JPEG"
 
     @pytest.mark.asyncio
     async def test_reference_url(self, mock_camera_manager):
@@ -863,8 +853,8 @@ class TestProtectGetSnapshotTool:
 
         result = await protect_get_snapshot("cam-001", include_image=False)
         assert result["success"] is True
-        assert "snapshot_url" in result["data"]
-        assert "cam-001" in result["data"]["snapshot_url"]
+        assert result["data"]["snapshot_url"] == "protect://cameras/cam-001/snapshot"
+        mock_camera_manager.get_snapshot.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_snapshot_error(self, mock_camera_manager):

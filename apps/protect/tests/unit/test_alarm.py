@@ -92,42 +92,27 @@ class TestListArmProfiles:
 
 
 class TestGetArmState:
+    @pytest.mark.parametrize(
+        ("status", "armed_at", "expected_armed", "expected_armed_at"),
+        [
+            ("disabled", None, False, None),
+            ("armed", 1775400000000, True, "2026-04-05T14:40:00+00:00"),
+            ("active", None, True, None),
+            ("disarmed", None, False, None),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_disarmed(self):
-        cm = _make_cm([_nvr_response(status="disabled"), _PROFILES_RESPONSE])
+    async def test_status_aliases(self, status, armed_at, expected_armed, expected_armed_at):
+        cm = _make_cm([_nvr_response(status=status, armed_at=armed_at), _PROFILES_RESPONSE])
         mgr = AlarmManager(cm)
         state = await mgr.get_arm_state()
 
-        assert state["armed"] is False
-        assert state["status"] == "disabled"
+        assert state["armed"] is expected_armed
+        assert state["status"] == status
         assert state["active_profile_id"] == "p-night"
         assert state["active_profile_name"] == "Arm Night"
-        assert state["armed_at"] is None
+        assert state["armed_at"] == expected_armed_at
         assert len(state["profiles"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_armed(self):
-        cm = _make_cm([_nvr_response(status="armed", armed_at=1775400000000), _PROFILES_RESPONSE])
-        mgr = AlarmManager(cm)
-        state = await mgr.get_arm_state()
-
-        assert state["armed"] is True
-        assert state["status"] == "armed"
-        assert state["armed_at"] == "2026-04-05T14:40:00+00:00"
-
-    @pytest.mark.asyncio
-    async def test_active_status_treated_as_armed(self):
-        cm = _make_cm([_nvr_response(status="active"), _PROFILES_RESPONSE])
-        mgr = AlarmManager(cm)
-        state = await mgr.get_arm_state()
-        assert state["armed"] is True
-
-    @pytest.mark.asyncio
-    async def test_disarmed_alias_status(self):
-        cm = _make_cm([_nvr_response(status="disarmed"), _PROFILES_RESPONSE])
-        mgr = AlarmManager(cm)
-        state = await mgr.get_arm_state()
-        assert state["armed"] is False
 
     @pytest.mark.asyncio
     async def test_unknown_profile_id(self):

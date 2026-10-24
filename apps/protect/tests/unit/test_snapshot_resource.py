@@ -185,88 +185,67 @@ class TestCameraSnapshotIndexResource:
 class TestSnapshotResourceRegistration:
     """Verify that resource decorators register correctly with the server."""
 
-    def test_snapshot_template_registered(self):
-        """The camera_snapshot function should be registered as a resource template."""
-        # Import the module so its @server.resource decorators run; with pytest-xdist
-        # workers are isolated so we can't rely on another test triggering the import.
+    @pytest.mark.parametrize(
+        ("resource_kind", "check"),
+        [
+            ("template", "registered"),
+            ("index", "registered"),
+            ("template", "mime_type"),
+            ("index", "mime_type"),
+            ("template", "metadata"),
+            ("index", "metadata"),
+        ],
+    )
+    def test_snapshot_registration(self, resource_kind, check):
         import unifi_protect_mcp.resources.snapshots  # noqa: F401
         from unifi_protect_mcp.runtime import server
 
-        templates = server._resource_manager.list_templates()
-        template_uris = [t.uri_template for t in templates]
-        assert "protect://cameras/{camera_id}/snapshot" in template_uris
+        if resource_kind == "template":
+            matches = [
+                item
+                for item in server._resource_manager.list_templates()
+                if item.uri_template == "protect://cameras/{camera_id}/snapshot"
+            ]
+            expected_mime = "image/jpeg"
+            expected_title = "Live Camera Snapshot"
+            expected_audience = ["user", "assistant"]
+            expected_priority = 0.7
+            expected_meta = {
+                "io.unifi.resourceKind": "camera-snapshot",
+                "io.unifi.updateMode": "on-demand",
+                "io.unifi.protocolSubscribe": False,
+                "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+            }
+        else:
+            matches = [
+                item
+                for item in server._resource_manager.list_resources()
+                if str(item.uri) == "protect://cameras/snapshots"
+            ]
+            expected_mime = "application/json"
+            expected_title = "Camera Snapshot Index"
+            expected_audience = ["assistant"]
+            expected_priority = 0.6
+            expected_meta = {
+                "io.unifi.resourceKind": "snapshot-index",
+                "io.unifi.updateMode": "poll",
+                "io.unifi.pollIntervalMs": 10000,
+                "io.unifi.protocolSubscribe": False,
+                "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+            }
 
-    def test_snapshot_index_registered(self):
-        """The camera_snapshot_index function should be registered as a concrete resource."""
-        import unifi_protect_mcp.resources.snapshots  # noqa: F401
-        from unifi_protect_mcp.runtime import server
-
-        resources = server._resource_manager.list_resources()
-        resource_uris = [str(r.uri) for r in resources]
-        assert "protect://cameras/snapshots" in resource_uris
-
-    def test_snapshot_template_mime_type(self):
-        """The snapshot template should have image/jpeg MIME type."""
-        import unifi_protect_mcp.resources.snapshots  # noqa: F401
-        from unifi_protect_mcp.runtime import server
-
-        templates = server._resource_manager.list_templates()
-        snapshot_templates = [t for t in templates if t.uri_template == "protect://cameras/{camera_id}/snapshot"]
-        assert len(snapshot_templates) == 1
-        assert snapshot_templates[0].mime_type == "image/jpeg"
-
-    def test_snapshot_index_mime_type(self):
-        """The snapshot index should have application/json MIME type."""
-        import unifi_protect_mcp.resources.snapshots  # noqa: F401
-        from unifi_protect_mcp.runtime import server
-
-        resources = server._resource_manager.list_resources()
-        index_resources = [r for r in resources if str(r.uri) == "protect://cameras/snapshots"]
-        assert len(index_resources) == 1
-        assert index_resources[0].mime_type == "application/json"
-
-    def test_snapshot_template_has_mcp_metadata(self):
-        """The snapshot template should expose MCP title, annotations, and namespaced metadata."""
-        import unifi_protect_mcp.resources.snapshots  # noqa: F401
-        from unifi_protect_mcp.runtime import server
-
-        templates = server._resource_manager.list_templates()
-        snapshot_templates = [t for t in templates if t.uri_template == "protect://cameras/{camera_id}/snapshot"]
-        assert len(snapshot_templates) == 1
-        template = snapshot_templates[0]
-
-        assert template.title == "Live Camera Snapshot"
-        assert template.annotations is not None
-        assert template.annotations.audience == ["user", "assistant"]
-        assert template.annotations.priority == 0.7
-        assert template.meta == {
-            "io.unifi.resourceKind": "camera-snapshot",
-            "io.unifi.updateMode": "on-demand",
-            "io.unifi.protocolSubscribe": False,
-            "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
-        }
-
-    def test_snapshot_index_has_mcp_metadata(self):
-        """The snapshot index should expose MCP title, annotations, and namespaced metadata."""
-        import unifi_protect_mcp.resources.snapshots  # noqa: F401
-        from unifi_protect_mcp.runtime import server
-
-        resources = server._resource_manager.list_resources()
-        index_resources = [r for r in resources if str(r.uri) == "protect://cameras/snapshots"]
-        assert len(index_resources) == 1
-        index = index_resources[0]
-
-        assert index.title == "Camera Snapshot Index"
-        assert index.annotations is not None
-        assert index.annotations.audience == ["assistant"]
-        assert index.annotations.priority == 0.6
-        assert index.meta == {
-            "io.unifi.resourceKind": "snapshot-index",
-            "io.unifi.updateMode": "poll",
-            "io.unifi.pollIntervalMs": 10000,
-            "io.unifi.protocolSubscribe": False,
-            "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
-        }
+        assert len(matches) == 1
+        resource = matches[0]
+        if check == "registered":
+            return
+        if check == "mime_type":
+            assert resource.mime_type == expected_mime
+            return
+        assert resource.title == expected_title
+        assert resource.annotations is not None
+        assert resource.annotations.audience == expected_audience
+        assert resource.annotations.priority == expected_priority
+        assert resource.meta == expected_meta
 
 
 # ---------------------------------------------------------------------------
@@ -285,23 +264,6 @@ class TestGetSnapshotToolIncludeImage:
             yield mgr
 
     @pytest.mark.asyncio
-    async def test_include_image_returns_base64(self, mock_cam_manager_for_tool):
-        import base64
-
-        from unifi_protect_mcp.tools.cameras import protect_get_snapshot
-
-        fake_jpeg = b"\xff\xd8\xff\xe0JFIF_FAKE_DATA"
-        mock_cam_manager_for_tool.get_snapshot = AsyncMock(return_value=fake_jpeg)
-
-        result = await protect_get_snapshot(camera_id="cam-001", include_image=True)
-
-        assert result["success"] is True
-        assert result["data"]["content_type"] == "image/jpeg"
-        # Verify the base64 round-trips back to original bytes
-        decoded = base64.b64decode(result["data"]["image_base64"])
-        assert decoded == fake_jpeg
-
-    @pytest.mark.asyncio
     async def test_include_image_with_dimensions(self, mock_cam_manager_for_tool):
         from unifi_protect_mcp.tools.cameras import protect_get_snapshot
 
@@ -312,25 +274,3 @@ class TestGetSnapshotToolIncludeImage:
 
         assert result["success"] is True
         mock_cam_manager_for_tool.get_snapshot.assert_awaited_once_with("cam-001", width=640, height=480)
-
-    @pytest.mark.asyncio
-    async def test_no_include_image_returns_uri(self, mock_cam_manager_for_tool):
-        from unifi_protect_mcp.tools.cameras import protect_get_snapshot
-
-        result = await protect_get_snapshot(camera_id="cam-001", include_image=False)
-
-        assert result["success"] is True
-        assert result["data"]["snapshot_url"] == "protect://cameras/cam-001/snapshot"
-        # Should NOT have called get_snapshot when include_image is False
-        mock_cam_manager_for_tool.get_snapshot.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_include_image_error(self, mock_cam_manager_for_tool):
-        from unifi_protect_mcp.tools.cameras import protect_get_snapshot
-
-        mock_cam_manager_for_tool.get_snapshot = AsyncMock(side_effect=ValueError("Camera not found: cam-bad"))
-
-        result = await protect_get_snapshot(camera_id="cam-bad", include_image=True)
-
-        assert result["success"] is False
-        assert "Camera not found" in result["error"]

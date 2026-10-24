@@ -22,14 +22,28 @@ def cm():
 
 
 class TestInit:
-    def test_stores_connection_params(self, cm):
+    @pytest.mark.parametrize(
+        ("port", "verify_ssl", "api_key"),
+        [(443, False, "test-api-key"), (7443, True, None)],
+    )
+    def test_stores_connection_params(self, port, verify_ssl, api_key):
+        cm = ProtectConnectionManager(
+            host="192.0.2.1",
+            username="admin",
+            password="secret",
+            port=port,
+            site="default",
+            verify_ssl=verify_ssl,
+            api_key=api_key,
+        )
         assert cm.host == "192.0.2.1"
         assert cm.username == "admin"
         assert cm.password == "secret"
-        assert cm.port == 443
+        assert cm.port == port
         assert cm.site == "default"
-        assert cm.verify_ssl is False
-        assert cm._api_key == "test-api-key"
+        assert cm.verify_ssl is verify_ssl
+        assert cm._api_key == api_key
+        assert cm.is_connected is False
 
     def test_initial_state(self, cm):
         assert cm._client is None
@@ -57,9 +71,6 @@ class TestClientProperty:
 
 
 class TestIsConnected:
-    def test_false_when_not_initialized(self, cm):
-        assert cm.is_connected is False
-
     def test_false_when_client_none(self, cm):
         cm._initialized = True
         cm._client = None

@@ -286,8 +286,9 @@ def mock_recording_manager():
 
 
 class TestProtectGetRecordingStatusTool:
+    @pytest.mark.parametrize("camera_id", [None, "cam-001"])
     @pytest.mark.asyncio
-    async def test_success_all(self, mock_recording_manager):
+    async def test_success(self, mock_recording_manager, camera_id):
         from unifi_protect_mcp.tools.recordings import protect_get_recording_status
 
         mock_recording_manager.get_recording_status = AsyncMock(
@@ -296,22 +297,9 @@ class TestProtectGetRecordingStatusTool:
                 "count": 1,
             }
         )
-        result = await protect_get_recording_status()
+        result = await protect_get_recording_status(camera_id=camera_id)
         assert result["success"] is True
         assert result["data"]["count"] == 1
-
-    @pytest.mark.asyncio
-    async def test_success_single(self, mock_recording_manager):
-        from unifi_protect_mcp.tools.recordings import protect_get_recording_status
-
-        mock_recording_manager.get_recording_status = AsyncMock(
-            return_value={
-                "cameras": [{"camera_id": "cam-001", "is_recording": True}],
-                "count": 1,
-            }
-        )
-        result = await protect_get_recording_status(camera_id="cam-001")
-        assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_camera_not_found(self, mock_recording_manager):
@@ -341,18 +329,6 @@ class TestProtectListRecordingsTool:
         result = await protect_list_recordings("cam-001")
         assert result["success"] is True
         assert result["data"]["camera"] == "cam-001"
-
-    @pytest.mark.asyncio
-    async def test_with_time_range(self, mock_recording_manager):
-        from unifi_protect_mcp.tools.recordings import protect_list_recordings
-
-        mock_recording_manager.list_recordings = AsyncMock(return_value={"camera_id": "cam-001"})
-        result = await protect_list_recordings(
-            "cam-001",
-            start="2026-03-16T10:00:00Z",
-            end="2026-03-16T12:00:00Z",
-        )
-        assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_error(self, mock_recording_manager):

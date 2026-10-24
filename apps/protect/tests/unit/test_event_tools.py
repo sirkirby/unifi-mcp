@@ -415,19 +415,14 @@ class TestProtectAcknowledgeEvent:
 
 
 class TestParseDatetime:
-    def test_valid_iso(self):
+    @pytest.mark.parametrize("value", ["2026-03-16T12:00:00Z", "2026-03-16T12:00:00+05:00"])
+    def test_valid_iso(self, value):
         from unifi_protect_mcp.tools.events import _parse_datetime
 
-        dt = _parse_datetime("2026-03-16T12:00:00Z")
+        dt = _parse_datetime(value)
         assert dt is not None
         assert dt.year == 2026
         assert dt.tzinfo is not None
-
-    def test_valid_iso_with_offset(self):
-        from unifi_protect_mcp.tools.events import _parse_datetime
-
-        dt = _parse_datetime("2026-03-16T12:00:00+05:00")
-        assert dt is not None
 
     def test_naive_datetime_gets_utc(self):
         from unifi_protect_mcp.tools.events import _parse_datetime
@@ -436,17 +431,8 @@ class TestParseDatetime:
         assert dt is not None
         assert dt.tzinfo is not None  # UTC added
 
-    def test_none_returns_none(self):
+    @pytest.mark.parametrize("value", [None, "", "not-a-date"])
+    def test_invalid_returns_none(self, value):
         from unifi_protect_mcp.tools.events import _parse_datetime
 
-        assert _parse_datetime(None) is None
-
-    def test_empty_string_returns_none(self):
-        from unifi_protect_mcp.tools.events import _parse_datetime
-
-        assert _parse_datetime("") is None
-
-    def test_invalid_returns_none(self):
-        from unifi_protect_mcp.tools.events import _parse_datetime
-
-        assert _parse_datetime("not-a-date") is None
+        assert _parse_datetime(value) is None

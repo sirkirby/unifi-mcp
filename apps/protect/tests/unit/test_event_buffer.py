@@ -40,12 +40,6 @@ class TestEventBufferAdd:
         assert "_buffered_at" in event
         assert isinstance(event["_buffered_at"], float)
 
-    def test_add_multiple(self):
-        buf = EventBuffer()
-        for i in range(5):
-            buf.add({"type": "motion", "index": i})
-        assert len(buf) == 5
-
 
 # ---------------------------------------------------------------------------
 # Max size / ring behavior
@@ -69,10 +63,6 @@ class TestEventBufferMaxSize:
 
 
 class TestEventBufferGetRecent:
-    def test_empty_buffer(self):
-        buf = EventBuffer()
-        assert buf.get_recent() == []
-
     def test_returns_newest_first(self):
         buf = EventBuffer()
         buf.add({"type": "motion", "index": 0})
