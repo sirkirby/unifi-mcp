@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,18 @@ def _dump(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
 
 
+@cache
+def _schema_validator():
+    """Check the unchanged artifact once; every payload is still validated."""
+    schema = json.loads(VIEW_SCHEMA_PATH.read_text())
+    validator = jsonschema.validators.validator_for(schema)(schema)
+    validator.check_schema(schema)
+    return validator
+
+
+@cache
 def _evidence(path: Path) -> IncidentEvidence:
+    """Share read-only golden inputs; client_view still validates each projection."""
     return validate_incident_evidence(load_case(path)["expected"])
 
 
@@ -104,9 +116,9 @@ def test_view_schema_artifact_is_versioned() -> None:
 
 @pytest.mark.parametrize("path", case_paths(), ids=lambda p: p.stem)
 def test_golden_views_validate_and_are_canonical(path: Path) -> None:
-    schema = json.loads(VIEW_SCHEMA_PATH.read_text())
+    validator = _schema_validator()
     for item in json.loads((VIEWS_DIR / path.name).read_text())["views"]:
-        jsonschema.validate(item["expected"], schema)
+        validator.validate(item["expected"])
         view = IncidentEvidenceView.model_validate(item["expected"])
         assert json.loads(canonical_view_json(view)) == item["expected"]
 
@@ -320,7 +332,7 @@ def test_view_names_the_conflict_group_of_every_cited_version(case: str) -> None
     members = [evidence_id for evidence_id, group in cited.items() if group is not None]
     assert len(members) >= 2
     assert all(evidence_id.startswith(cited[evidence_id] + "|version|") for evidence_id in members)
-    jsonschema.validate(view, json.loads(VIEW_SCHEMA_PATH.read_text()))
+    _schema_validator().validate(view)
     IncidentEvidenceView.model_validate(view)
 
 
@@ -347,7 +359,7 @@ def _plain_index(view: dict[str, Any]) -> int:
 def test_schema_and_python_agree_on_view_conflict_groups(change, schema_rejects: bool) -> None:
     _, view = _conflict_view("conflicting_versions")
     change(view)
-    schema_errors = list(jsonschema.Draft202012Validator(json.loads(VIEW_SCHEMA_PATH.read_text())).iter_errors(view))
+    schema_errors = list(_schema_validator().iter_errors(view))
     assert bool(schema_errors) is schema_rejects
     with pytest.raises(ValidationError, match="conflict group"):
         IncidentEvidenceView.model_validate(view)

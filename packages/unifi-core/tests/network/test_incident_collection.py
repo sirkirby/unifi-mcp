@@ -31,6 +31,8 @@ REQUEST = RESPONSES["request"]
 PRIVATE = "fixture-private-controller-text"
 DEVICE = "02:00:00:00:00:0a"
 SCHEMA = json.loads(SCHEMA_PATH.read_text())
+SCHEMA_VALIDATOR = jsonschema.validators.validator_for(SCHEMA)(SCHEMA)
+SCHEMA_VALIDATOR.check_schema(SCHEMA)
 
 # Network event reads are POST queries by API design; these are the only ones
 # the collector may send. Any other method or path is a mutation risk.
@@ -60,7 +62,7 @@ async def collect(manager, **arguments):
 
 def contract_json(evidence) -> dict:
     payload = evidence_to_json(evidence)
-    jsonschema.validate(payload, SCHEMA)
+    SCHEMA_VALIDATOR.validate(payload)
     assert validate_incident_evidence(payload) == evidence
     return payload
 

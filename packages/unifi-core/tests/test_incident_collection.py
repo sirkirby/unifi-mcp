@@ -46,6 +46,8 @@ WINDOW = {"start": "2026-08-08T12:00:00Z", "end": "2026-08-08T12:55:00+00:00"}
 DEVICE = "02:00:00:00:00:0a"
 CAMERA = "cam-fixture-000a"
 SCHEMA = json.loads(SCHEMA_PATH.read_text())
+SCHEMA_VALIDATOR = jsonschema.validators.validator_for(SCHEMA)(SCHEMA)
+SCHEMA_VALIDATOR.check_schema(SCHEMA)
 
 
 def _ms(value: datetime) -> int:
@@ -54,7 +56,7 @@ def _ms(value: datetime) -> int:
 
 def assert_contract_valid(evidence) -> dict:
     payload = evidence_to_json(evidence)
-    jsonschema.validate(payload, SCHEMA)
+    SCHEMA_VALIDATOR.validate(payload)
     assert validate_incident_evidence(payload) == evidence
     return payload
 
