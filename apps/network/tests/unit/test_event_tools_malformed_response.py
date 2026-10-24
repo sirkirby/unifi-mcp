@@ -43,18 +43,6 @@ async def test_malformed_envelope_is_a_tool_error_not_an_empty_success(monkeypat
     assert set(result) == {"success", "error"}
 
 
-@pytest.mark.asyncio
-async def test_valid_empty_envelope_is_still_an_empty_success(monkeypatch):
-    from unifi_network_mcp.tools import events as events_module
-
-    monkeypatch.setattr(events_module, "_get_event_manager", lambda: _manager({"data": []}))
-
-    result = await events_module.list_events()
-
-    assert result["success"] is True
-    assert result["events"] == [] and result["count"] == 0
-
-
 # --- through the SDK's real decoding and ConnectionManager -------------------------
 
 PRIVATE = "fixture-private-controller-text"

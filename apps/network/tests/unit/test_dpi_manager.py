@@ -72,9 +72,9 @@ class TestDpiManager:
         assert result == cached
 
     @pytest.mark.asyncio
-    async def test_get_dpi_applications_search_filters_client_side(self, dpi_manager, mock_connection):
-        """Test search filtering happens client-side."""
-        # Mock the integration API response
+    @pytest.mark.parametrize("search", ["slack", "SLACK"])
+    async def test_get_dpi_applications_search_filters_client_side(self, dpi_manager, search):
+        """Search is case-insensitive and applied client-side."""
         api_response = {
             "data": [
                 {"id": 1, "name": "Slack"},
@@ -89,28 +89,10 @@ class TestDpiManager:
         with patch.object(dpi_manager, "_request_integration_api", new_callable=AsyncMock) as mock_api:
             mock_api.return_value = api_response
 
-            result = await dpi_manager.get_dpi_applications(search="slack")
+            result = await dpi_manager.get_dpi_applications(search=search)
 
-        assert len(result["data"]) == 1
-        assert result["data"][0]["name"] == "Slack"
+        assert [app["name"] for app in result["data"]] == ["Slack"]
         assert result.get("filtered_from") == 3
-
-    @pytest.mark.asyncio
-    async def test_get_dpi_applications_search_case_insensitive(self, dpi_manager):
-        """Test search is case-insensitive."""
-        api_response = {
-            "data": [{"id": 1, "name": "Telegram"}],
-            "totalCount": 1,
-            "offset": 0,
-            "limit": 100,
-        }
-
-        with patch.object(dpi_manager, "_request_integration_api", new_callable=AsyncMock) as mock_api:
-            mock_api.return_value = api_response
-
-            result = await dpi_manager.get_dpi_applications(search="TELEGRAM")
-
-        assert len(result["data"]) == 1
 
     # ---- get_dpi_categories ----
 

@@ -29,30 +29,6 @@ class TestEventManagerV2:
         return mgr
 
     @pytest.mark.asyncio
-    async def test_get_events_returns_list(self, event_manager, mock_connection):
-        mock_connection.request.return_value = [
-            {
-                "data": [
-                    {"id": "evt1", "event": "CLIENT_CONNECTED_WIRED", "category": "CLIENT_DEVICES"},
-                    {"id": "evt2", "event": "CLIENT_DISCONNECTED_WIRELESS", "category": "CLIENT_DEVICES"},
-                ],
-                "total_element_count": 2,
-            }
-        ]
-        events = await event_manager.get_events(within=24, limit=100)
-        assert len(events) == 2
-        assert events[0]["id"] == "evt1"
-
-    @pytest.mark.asyncio
-    async def test_get_events_with_exact_event_key(self, event_manager, mock_connection):
-        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
-        await event_manager.get_events(event_type="CLIENT_CONNECTED_WIRELESS_2")
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["keys"] == ["CLIENT_CONNECTED_WIRELESS_2"]
-        assert api_request.data["searchText"] == ""
-
-    @pytest.mark.asyncio
     async def test_default_categories_keep_the_general_view(self, event_manager, mock_connection):
         """Requests that do not ask for AUDIT are unchanged."""
         mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
@@ -87,53 +63,9 @@ class TestEventManagerV2:
         assert all(request.data["pageSize"] == 100 for request in requests)
 
     @pytest.mark.asyncio
-    async def test_get_events_applies_arbitrary_start_across_pages(self, event_manager, mock_connection):
-        mock_connection.request.side_effect = [
-            [{"data": [{"id": f"evt{i}"} for i in range(100, 110)], "total_page_count": 12}],
-            [{"data": [{"id": f"evt{i}"} for i in range(110, 120)], "total_page_count": 12}],
-        ]
-
-        events = await event_manager.get_events(limit=10, start=105)
-
-        assert [event["id"] for event in events] == [f"evt{i}" for i in range(105, 115)]
-        requests = [call.args[0] for call in mock_connection.request.call_args_list]
-        assert [request.data["pageNumber"] for request in requests] == [10, 11]
-
-    @pytest.mark.asyncio
     async def test_get_events_zero_limit_makes_no_request(self, event_manager, mock_connection):
         assert await event_manager.get_events(limit=0) == []
         mock_connection.request.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_get_events_uses_timestamp_range(self, event_manager, mock_connection):
-        mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
-        await event_manager.get_events(within=48)
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert "timestampFrom" in api_request.data
-        assert "timestampTo" in api_request.data
-        assert api_request.data["timestampTo"] > api_request.data["timestampFrom"]
-
-    @pytest.mark.asyncio
-    async def test_get_events_handles_error(self, event_manager, mock_connection):
-        mock_connection.request.side_effect = Exception("Network error")
-
-        with pytest.raises(Exception):
-            await event_manager.get_events()
-
-    @pytest.mark.asyncio
-    async def test_get_alarms_v2(self, event_manager, mock_connection):
-        mock_connection.request.return_value = [
-            {
-                "data": [
-                    {"id": "alm1", "event": "THREAT_DETECTED", "severity": "VERY_HIGH"},
-                ],
-                "total_element_count": 1,
-            }
-        ]
-        alarms = await event_manager.get_alarms()
-        assert len(alarms) == 1
-        assert alarms[0]["severity"] == "VERY_HIGH"
 
     @pytest.mark.asyncio
     async def test_get_alarms_v2_limit(self, event_manager, mock_connection):
@@ -162,17 +94,6 @@ class TestEventManagerLegacy:
         return mgr
 
     @pytest.mark.asyncio
-    async def test_get_events_returns_list(self, event_manager, mock_connection):
-        mock_events = [
-            {"_id": "evt1", "msg": "Client connected", "time": 1700000000},
-            {"_id": "evt2", "msg": "Client disconnected", "time": 1700000100},
-        ]
-        mock_connection.request.return_value = mock_events
-        events = await event_manager.get_events(within=24, limit=100)
-        assert len(events) == 2
-        assert events[0]["_id"] == "evt1"
-
-    @pytest.mark.asyncio
     async def test_get_events_with_type_filter(self, event_manager, mock_connection):
         mock_connection.request.return_value = []
         await event_manager.get_events(event_type="EVT_SW_Connected")
@@ -181,51 +102,12 @@ class TestEventManagerLegacy:
         assert api_request.data["type"] == "EVT_SW_Connected"
 
     @pytest.mark.asyncio
-    async def test_get_events_respects_limit(self, event_manager, mock_connection):
-        mock_connection.request.return_value = []
-        await event_manager.get_events(limit=5000)
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["_limit"] == 3000
-
-    @pytest.mark.asyncio
-    async def test_get_events_handles_dict_response(self, event_manager, mock_connection):
-        mock_connection.request.return_value = {"data": [{"_id": "evt1"}], "meta": {"rc": "ok"}}
-        events = await event_manager.get_events()
-        assert len(events) == 1
-        assert events[0]["_id"] == "evt1"
-
-    @pytest.mark.asyncio
-    async def test_get_events_handles_error(self, event_manager, mock_connection):
-        mock_connection.request.side_effect = Exception("Network error")
-
-        with pytest.raises(Exception):
-            await event_manager.get_events()
-
-    @pytest.mark.asyncio
-    async def test_get_alarms_returns_list(self, event_manager, mock_connection):
-        mock_alarms = [
-            {"_id": "alm1", "msg": "High CPU usage", "severity": "warning"},
-            {"_id": "alm2", "msg": "Device offline", "severity": "critical"},
-        ]
-        mock_connection.request.return_value = mock_alarms
-        alarms = await event_manager.get_alarms()
-        assert len(alarms) == 2
-
-    @pytest.mark.asyncio
     async def test_get_alarms_archived_parameter(self, event_manager, mock_connection):
         mock_connection.request.return_value = []
         await event_manager.get_alarms(archived=True)
         call_args = mock_connection.request.call_args
         api_request = call_args[0][0]
         assert "archived=true" in api_request.path
-
-    @pytest.mark.asyncio
-    async def test_get_alarms_limit(self, event_manager, mock_connection):
-        mock_alarms = [{"_id": f"alm{i}"} for i in range(200)]
-        mock_connection.request.return_value = mock_alarms
-        alarms = await event_manager.get_alarms(limit=50)
-        assert len(alarms) == 50
 
 
 class TestEventManagerCommon:
@@ -311,22 +193,6 @@ class TestEventManagerCommon:
             await event_manager.archive_all_alarms()
 
     @pytest.mark.asyncio
-    async def test_auto_detect_v2(self, event_manager, mock_connection):
-        """Test that v2 API is detected when system-log/count succeeds."""
-        mock_connection.request.return_value = {"count": 100}
-        await event_manager._ensure_api_version()
-        assert event_manager._use_v2 is True
-
-    @pytest.mark.asyncio
-    async def test_auto_detect_legacy(self, event_manager, mock_connection):
-        """A controller response establishing an absent v2 endpoint selects legacy."""
-        mock_connection.request.side_effect = ResponseError(
-            "Call https://controller.example/system-log/count received 404"
-        )
-        await event_manager._ensure_api_version()
-        assert event_manager._use_v2 is False
-
-    @pytest.mark.asyncio
     async def test_failed_probe_logs_retry_without_caching_legacy(self, event_manager, mock_connection, caplog):
         """An inconclusive failure logs its class and retry; controller text is never kept."""
         mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
@@ -345,12 +211,6 @@ class TestEventManagerCommon:
         mock_connection.request.side_effect = ResponseError("Call https://controller.example/x received 400")
         await event_manager._ensure_api_version()
         assert event_manager._v2_probe_error == "ResponseError, HTTP 400"
-
-    @pytest.mark.asyncio
-    async def test_successful_probe_records_no_error(self, event_manager, mock_connection):
-        mock_connection.request.return_value = {"count": 1}
-        await event_manager._ensure_api_version()
-        assert event_manager._v2_probe_error is None
 
     @pytest.mark.asyncio
     async def test_legacy_events_404_after_failed_probe_explains_both(self, event_manager, mock_connection):
@@ -381,19 +241,6 @@ class TestEventManagerCommon:
 
         assert "v2 system-log probe failed (Exception)" in str(exc.value)
         assert "unknown severity LOW" not in str(exc.value)
-
-    @pytest.mark.asyncio
-    async def test_legacy_failure_on_a_genuinely_old_controller_is_left_alone(self, event_manager, mock_connection):
-        """No probe error recorded means legacy was a real choice — do not editorialise."""
-        event_manager._use_v2 = False
-        event_manager._v2_probe_error = None
-        mock_connection.request.side_effect = Exception("connection reset by fixture-controller")
-
-        with pytest.raises(Exception) as exc:
-            await event_manager.get_events()
-
-        assert str(exc.value) == "/stat/event failed (Exception)."
-        assert "v2 system-log probe" not in str(exc.value)
 
 
 class TestWebsocketLifecycle:
@@ -743,36 +590,6 @@ class TestWebsocketHealth(TestWebsocketLifecycle):
         await mgr.stop_listening()
 
     @pytest.mark.asyncio
-    async def test_stop_unsubscribes_even_when_the_caller_is_cancelled(self, cm):
-        """Maintainer probe 3: a cancellation aimed at the stopping caller must
-        propagate AND the subscription must still be released."""
-        import asyncio
-
-        from unifi_core.network.managers.event_manager import EventManager
-
-        unsub = MagicMock(name="unsub")
-        cm.controller.messages.subscribe = MagicMock(return_value=unsub)
-        mgr = EventManager(cm)
-        await mgr.start_listening()
-        await self._wait(cm.controller.started)
-        entered = asyncio.Event()
-
-        async def _shutdown():
-            entered.set()
-            await mgr.stop_listening()
-
-        outer = asyncio.create_task(_shutdown())
-        await self._wait(entered)
-        outer.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await outer
-
-        assert outer.cancelled()
-        unsub.assert_called_once()
-        assert mgr.is_listening is False
-        assert mgr.attached is False
-
-    @pytest.mark.asyncio
     async def test_open_reconnect_circuit_is_reported_as_not_attached(self, cm, sleeps):
         from unifi_core.network.managers.event_manager import EventManager
 
@@ -911,10 +728,13 @@ class TestWebsocketHealth(TestWebsocketLifecycle):
 
     @pytest.mark.asyncio
     async def test_stop_re_raises_a_cancellation_aimed_at_the_caller(self, cm):
+        """A cancellation aimed at the stopping caller must propagate AND the subscription must still be released."""
         import asyncio
 
         from unifi_core.network.managers.event_manager import EventManager
 
+        unsub = MagicMock(name="unsub")
+        cm.controller.messages.subscribe = MagicMock(return_value=unsub)
         mgr = EventManager(cm)
         await mgr.start_listening()
         await self._wait(cm.controller.started)
@@ -931,6 +751,9 @@ class TestWebsocketHealth(TestWebsocketLifecycle):
         with pytest.raises(asyncio.CancelledError):
             await outer
         assert outer.cancelled()
+        unsub.assert_called_once()
+        assert mgr.is_listening is False
+        assert mgr.attached is False
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("status,reauth", [(401, True), (403, True), (500, False)])

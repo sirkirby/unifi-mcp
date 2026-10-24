@@ -9,6 +9,8 @@ import asyncio
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, PropertyMock, patch
 
+import pytest
+
 from unifi_core.auth import AuthenticationStatus
 from unifi_network_mcp import main as network_main
 from unifi_network_mcp.runtime import config
@@ -62,17 +64,12 @@ def _startup(
         yield started, stopped, ran
 
 
-def test_the_listener_is_started_on_a_successful_websocket_enabled_startup() -> None:
-    with _startup(connected=True, websocket_enabled=True) as (started, _, ran):
+@pytest.mark.parametrize("connected", [True, False])
+def test_the_listener_is_started_on_a_websocket_enabled_startup(connected: bool) -> None:
+    with _startup(connected=connected, websocket_enabled=True) as (started, _, ran):
         asyncio.run(network_main.main_async())
         started.assert_awaited_once()
         assert ran.await_count == 1, "startup never reached its transports"
-
-
-def test_the_listener_is_started_when_the_boot_connection_fails() -> None:
-    with _startup(connected=False, websocket_enabled=True) as (started, _, _):
-        asyncio.run(network_main.main_async())
-        started.assert_awaited_once()
 
 
 def test_key_only_startup_does_not_start_a_session_websocket() -> None:
