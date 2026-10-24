@@ -1,5 +1,6 @@
 """Tests for Alarm Manager v2 read models (normalized /api/v2/alarms/ rules)."""
 
+import pytest
 from unifi_core.protect.models.alarm_rules import (
     MUTABLE_FIELDS,
     AlarmRule,
@@ -165,26 +166,25 @@ def test_legacy_create_body_scaffolds_full_envelope():
     assert body["cooldown"] == {"enable": False, "timeout": 600000}
 
 
-def test_legacy_create_body_defaults_when_fields_omitted():
+@pytest.mark.parametrize(
+    "extra, expected_enable",
+    [
+        ({}, True),
+        ({"enabled": False}, False),
+    ],
+    ids=["omitted_defaults_enabled", "explicit_disabled"],
+)
+def test_legacy_create_body_defaults_when_fields_omitted(extra: dict, expected_enable: bool):
     from unifi_core.protect.models.alarm_rules import alarm_rule_to_legacy_create_body
 
-    body = alarm_rule_to_legacy_create_body({"title": "X", "actions": [{"data": {"type": "webhook"}}]})
+    body = alarm_rule_to_legacy_create_body({"title": "X", "actions": [{"data": {"type": "webhook"}}], **extra})
 
-    assert body["enable"] is True  # a newly-created rule defaults to enabled
+    assert body["enable"] is expected_enable
     assert body["sources"] == []
     assert body["conditions"] == []
     assert body["historyConditions"] == []
     assert body["schedules"] == []
     assert body["cooldown"] == {"enable": False, "timeout": 600000}
-
-
-def test_legacy_create_body_preserves_explicit_disabled():
-    from unifi_core.protect.models.alarm_rules import alarm_rule_to_legacy_create_body
-
-    body = alarm_rule_to_legacy_create_body(
-        {"title": "X", "enabled": False, "actions": [{"data": {"type": "webhook"}}]}
-    )
-    assert body["enable"] is False
 
 
 def test_legacy_create_body_preserves_license_plate_known_value():

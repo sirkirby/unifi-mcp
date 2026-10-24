@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.protect.models.liveviews import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -25,11 +26,9 @@ SAMPLE = {
 
 
 class TestLiveviewMutableFields:
-    def test_mutable_fields_contains_name(self) -> None:
-        assert "name" in MUTABLE_FIELDS
-
-    def test_mutable_fields_contains_cameras(self) -> None:
-        assert "cameras" in MUTABLE_FIELDS
+    @pytest.mark.parametrize("field", ["name", "cameras"])
+    def test_mutable_fields_contains(self, field: str) -> None:
+        assert field in MUTABLE_FIELDS
 
     def test_mutable_fields_excludes_read_only(self) -> None:
         assert "id" not in MUTABLE_FIELDS
@@ -91,20 +90,20 @@ class TestFromController:
         lv = from_controller(raw)
         assert lv.cameras == ["cam001"]
 
-    def test_missing_cameras_defaults_to_empty_list(self) -> None:
+    @pytest.mark.parametrize(
+        ("field", "expected"),
+        [
+            ("cameras", []),
+            ("slots", None),
+        ],
+    )
+    def test_missing_optional_collection_defaults(self, field: str, expected: object) -> None:
         lv = from_controller({"id": "lv004"})
-        assert lv.cameras == []
+        assert getattr(lv, field) == expected
 
-    def test_missing_slots_stays_none(self) -> None:
-        lv = from_controller({"id": "lv004"})
-        assert lv.slots is None
-
-    def test_non_list_slots_becomes_none(self) -> None:
-        lv = from_controller({"id": "lv005", "slots": "garbage"})
-        assert lv.slots is None
-
-    def test_non_list_slots_dict_becomes_none(self) -> None:
-        lv = from_controller({"id": "lv006", "slots": {"key": "val"}})
+    @pytest.mark.parametrize("slots", ["garbage", {"key": "val"}])
+    def test_non_list_slots_becomes_none(self, slots: object) -> None:
+        lv = from_controller({"id": "lv005", "slots": slots})
         assert lv.slots is None
 
     def test_handles_missing_optional_fields(self) -> None:
@@ -120,27 +119,20 @@ class TestFromController:
 
 
 class TestToControllerCreate:
-    def test_emits_name_and_camera_ids(self) -> None:
-        model = Liveview(name="My View", cameras=["cam001", "cam002"])
-        payload = to_controller_create(model)
-        assert payload == {"name": "My View", "camera_ids": ["cam001", "cam002"]}
-
-    def test_maps_cameras_to_camera_ids(self) -> None:
-        model = Liveview(name="Test", cameras=["cam-x"])
-        payload = to_controller_create(model)
-        assert "camera_ids" in payload
-        assert "cameras" not in payload
-        assert payload["camera_ids"] == ["cam-x"]
-
-    def test_none_name_emits_empty_string(self) -> None:
-        model = Liveview(name=None, cameras=["cam001"])
-        payload = to_controller_create(model)
-        assert payload["name"] == ""
-
-    def test_empty_cameras_emits_empty_list(self) -> None:
-        model = Liveview(name="Empty", cameras=[])
-        payload = to_controller_create(model)
-        assert payload["camera_ids"] == []
+    @pytest.mark.parametrize(
+        ("model", "expected"),
+        [
+            (
+                Liveview(name="My View", cameras=["cam001", "cam002"]),
+                {"name": "My View", "camera_ids": ["cam001", "cam002"]},
+            ),
+            (Liveview(name="Test", cameras=["cam-x"]), {"name": "Test", "camera_ids": ["cam-x"]}),
+            (Liveview(name=None, cameras=["cam001"]), {"name": "", "camera_ids": ["cam001"]}),
+            (Liveview(name="Empty", cameras=[]), {"name": "Empty", "camera_ids": []}),
+        ],
+    )
+    def test_to_controller_create(self, model: Liveview, expected: dict) -> None:
+        assert to_controller_create(model) == expected
 
     def test_roundtrip_from_controller_to_create(self) -> None:
         lv = from_controller(SAMPLE)

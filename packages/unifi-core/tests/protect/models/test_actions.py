@@ -19,6 +19,36 @@ from unifi_core.protect.models._actions import (
     TriggerChimeInput,
 )
 
+_ACTION_INPUT_MODELS = (
+    AlarmCreateRuleInput,
+    AlarmUpdateRuleInput,
+    PtzMoveInput,
+    PtzZoomInput,
+    PtzPresetInput,
+    RebootCameraInput,
+    ToggleRecordingInput,
+    AlarmArmInput,
+    AlarmDisarmInput,
+    TriggerChimeInput,
+    ExportClipInput,
+    DeleteRecordingInput,
+    DeleteLiveviewInput,
+    AcknowledgeEventInput,
+)
+
+_REQUIRED_EMPTY_MODELS = (
+    PtzMoveInput,
+    PtzZoomInput,
+    PtzPresetInput,
+    RebootCameraInput,
+    ToggleRecordingInput,
+    TriggerChimeInput,
+    ExportClipInput,
+    DeleteRecordingInput,
+    DeleteLiveviewInput,
+    AcknowledgeEventInput,
+)
+
 
 def _valid_rule_body(actions: list | None = None) -> dict:
     """Minimum body shape that satisfies the create/update validators.
@@ -35,15 +65,23 @@ def _valid_rule_body(actions: list | None = None) -> dict:
     }
 
 
+@pytest.mark.parametrize("model", _ACTION_INPUT_MODELS, ids=lambda m: m.__name__)
+def test_action_input_flag(model) -> None:
+    assert model.__action_input__ is True
+
+
+@pytest.mark.parametrize("model", _REQUIRED_EMPTY_MODELS, ids=lambda m: m.__name__)
+def test_required_fields_empty_constructor(model) -> None:
+    with pytest.raises(Exception):
+        model()
+
+
 # ---------------------------------------------------------------------------
 # AlarmCreateRuleInput / AlarmUpdateRuleInput — shape validation only
 # ---------------------------------------------------------------------------
 
 
 class TestAlarmCreateRuleInput:
-    def test_action_input_flag(self) -> None:
-        assert AlarmCreateRuleInput.__action_input__ is True
-
     def test_valid_with_actions(self) -> None:
         m = AlarmCreateRuleInput(body=_valid_rule_body())
         assert m.body["actions"]
@@ -54,9 +92,6 @@ class TestAlarmCreateRuleInput:
 
 
 class TestAlarmUpdateRuleInput:
-    def test_action_input_flag(self) -> None:
-        assert AlarmUpdateRuleInput.__action_input__ is True
-
     def test_valid_with_actions(self) -> None:
         m = AlarmUpdateRuleInput(rule_id="r-1", body=_valid_rule_body())
         assert m.rule_id == "r-1"
@@ -72,13 +107,6 @@ class TestAlarmUpdateRuleInput:
 
 
 class TestPtzMoveInput:
-    def test_action_input_flag(self):
-        assert PtzMoveInput.__action_input__ is True
-
-    def test_required_camera_id(self):
-        with pytest.raises(Exception):
-            PtzMoveInput()
-
     def test_defaults_applied(self):
         m = PtzMoveInput(camera_id="abc")
         assert m.pan is None
@@ -91,25 +119,20 @@ class TestPtzMoveInput:
         assert m.tilt == -200.0
         assert m.duration_ms == 1000
 
-    def test_pan_out_of_range_high(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"pan": 1500},
+            {"pan": -1001},
+            {"tilt": 1001},
+            {"duration_ms": -1},
+            {"duration_ms": 5001},
+        ],
+        ids=["pan_high", "pan_low", "tilt_high", "duration_negative", "duration_too_large"],
+    )
+    def test_out_of_range(self, kwargs):
         with pytest.raises(ValidationError):
-            PtzMoveInput(camera_id="abc", pan=1500)
-
-    def test_pan_out_of_range_low(self):
-        with pytest.raises(ValidationError):
-            PtzMoveInput(camera_id="abc", pan=-1001)
-
-    def test_tilt_out_of_range(self):
-        with pytest.raises(ValidationError):
-            PtzMoveInput(camera_id="abc", tilt=1001)
-
-    def test_duration_ms_negative(self):
-        with pytest.raises(ValidationError):
-            PtzMoveInput(camera_id="abc", duration_ms=-1)
-
-    def test_duration_ms_too_large(self):
-        with pytest.raises(ValidationError):
-            PtzMoveInput(camera_id="abc", duration_ms=5001)
+            PtzMoveInput(camera_id="abc", **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -118,33 +141,24 @@ class TestPtzMoveInput:
 
 
 class TestPtzZoomInput:
-    def test_action_input_flag(self):
-        assert PtzZoomInput.__action_input__ is True
-
-    def test_required_camera_id(self):
-        with pytest.raises(Exception):
-            PtzZoomInput()
-
     def test_defaults_applied(self):
         m = PtzZoomInput(camera_id="abc")
         assert m.zoom_speed == 0
         assert m.duration_ms == 250
 
-    def test_zoom_speed_out_of_range_high(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"zoom_speed": 1001},
+            {"zoom_speed": -1001},
+            {"duration_ms": -1},
+            {"duration_ms": 5001},
+        ],
+        ids=["zoom_high", "zoom_low", "duration_negative", "duration_too_large"],
+    )
+    def test_out_of_range(self, kwargs):
         with pytest.raises(ValidationError):
-            PtzZoomInput(camera_id="abc", zoom_speed=1001)
-
-    def test_zoom_speed_out_of_range_low(self):
-        with pytest.raises(ValidationError):
-            PtzZoomInput(camera_id="abc", zoom_speed=-1001)
-
-    def test_duration_ms_negative(self):
-        with pytest.raises(ValidationError):
-            PtzZoomInput(camera_id="abc", duration_ms=-1)
-
-    def test_duration_ms_too_large(self):
-        with pytest.raises(ValidationError):
-            PtzZoomInput(camera_id="abc", duration_ms=5001)
+            PtzZoomInput(camera_id="abc", **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -153,32 +167,26 @@ class TestPtzZoomInput:
 
 
 class TestPtzPresetInput:
-    def test_action_input_flag(self):
-        assert PtzPresetInput.__action_input__ is True
-
-    def test_required_fields(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"preset_slot": 0},
+            {"camera_id": "abc"},
+        ],
+        ids=["missing_camera_id", "missing_preset_slot"],
+    )
+    def test_individual_required_fields(self, kwargs):
         with pytest.raises(Exception):
-            PtzPresetInput()  # missing camera_id and preset_slot
+            PtzPresetInput(**kwargs)
 
-    def test_camera_id_required(self):
-        with pytest.raises(Exception):
-            PtzPresetInput(preset_slot=0)
-
-    def test_preset_slot_required(self):
-        with pytest.raises(Exception):
-            PtzPresetInput(camera_id="abc")
-
-    def test_valid(self):
-        m = PtzPresetInput(camera_id="abc", preset_slot=3)
-        assert m.preset_slot == 3
+    @pytest.mark.parametrize("preset_slot", [3, 0], ids=["slot_3", "slot_zero"])
+    def test_valid(self, preset_slot):
+        m = PtzPresetInput(camera_id="abc", preset_slot=preset_slot)
+        assert m.preset_slot == preset_slot
 
     def test_preset_slot_negative(self):
         with pytest.raises(ValidationError):
             PtzPresetInput(camera_id="abc", preset_slot=-1)
-
-    def test_preset_slot_zero_valid(self):
-        m = PtzPresetInput(camera_id="abc", preset_slot=0)
-        assert m.preset_slot == 0
 
 
 # ---------------------------------------------------------------------------
@@ -187,13 +195,6 @@ class TestPtzPresetInput:
 
 
 class TestRebootCameraInput:
-    def test_action_input_flag(self):
-        assert RebootCameraInput.__action_input__ is True
-
-    def test_required_camera_id(self):
-        with pytest.raises(Exception):
-            RebootCameraInput()
-
     def test_valid(self):
         m = RebootCameraInput(camera_id="cam-uuid-123")
         assert m.camera_id == "cam-uuid-123"
@@ -205,28 +206,22 @@ class TestRebootCameraInput:
 
 
 class TestToggleRecordingInput:
-    def test_action_input_flag(self):
-        assert ToggleRecordingInput.__action_input__ is True
-
-    def test_required_fields(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"enabled": True},
+            {"camera_id": "abc"},
+        ],
+        ids=["missing_camera_id", "missing_enabled"],
+    )
+    def test_individual_required_fields(self, kwargs):
         with pytest.raises(Exception):
-            ToggleRecordingInput()
+            ToggleRecordingInput(**kwargs)
 
-    def test_camera_id_required(self):
-        with pytest.raises(Exception):
-            ToggleRecordingInput(enabled=True)
-
-    def test_enabled_required(self):
-        with pytest.raises(Exception):
-            ToggleRecordingInput(camera_id="abc")
-
-    def test_valid_enable(self):
-        m = ToggleRecordingInput(camera_id="abc", enabled=True)
-        assert m.enabled is True
-
-    def test_valid_disable(self):
-        m = ToggleRecordingInput(camera_id="abc", enabled=False)
-        assert m.enabled is False
+    @pytest.mark.parametrize("enabled", [True, False], ids=["enable", "disable"])
+    def test_valid(self, enabled):
+        m = ToggleRecordingInput(camera_id="abc", enabled=enabled)
+        assert m.enabled is enabled
 
 
 # ---------------------------------------------------------------------------
@@ -235,16 +230,17 @@ class TestToggleRecordingInput:
 
 
 class TestAlarmArmInput:
-    def test_action_input_flag(self):
-        assert AlarmArmInput.__action_input__ is True
-
-    def test_default_no_profile(self):
-        m = AlarmArmInput()
-        assert m.profile_id is None
-
-    def test_with_profile_id(self):
-        m = AlarmArmInput(profile_id="profile-uuid")
-        assert m.profile_id == "profile-uuid"
+    @pytest.mark.parametrize(
+        "kwargs, expected",
+        [
+            ({}, None),
+            ({"profile_id": "profile-uuid"}, "profile-uuid"),
+        ],
+        ids=["default_none", "with_profile"],
+    )
+    def test_profile_id(self, kwargs, expected):
+        m = AlarmArmInput(**kwargs)
+        assert m.profile_id == expected
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +249,6 @@ class TestAlarmArmInput:
 
 
 class TestAlarmDisarmInput:
-    def test_action_input_flag(self):
-        assert AlarmDisarmInput.__action_input__ is True
-
-    def test_no_params_needed(self):
-        m = AlarmDisarmInput()
-        assert m is not None
-
     def test_instantiates_cleanly(self):
         m = AlarmDisarmInput()
         assert isinstance(m, AlarmDisarmInput)
@@ -271,13 +260,6 @@ class TestAlarmDisarmInput:
 
 
 class TestTriggerChimeInput:
-    def test_action_input_flag(self):
-        assert TriggerChimeInput.__action_input__ is True
-
-    def test_required_chime_id(self):
-        with pytest.raises(Exception):
-            TriggerChimeInput()
-
     def test_defaults_applied(self):
         m = TriggerChimeInput(chime_id="chime-uuid")
         assert m.volume is None
@@ -288,37 +270,33 @@ class TestTriggerChimeInput:
         assert m.volume == 80
         assert m.repeat_times == 3
 
-    def test_volume_out_of_range_high(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"volume": 101},
+            {"volume": -1},
+            {"repeat_times": 7},
+            {"repeat_times": 0},
+        ],
+        ids=["volume_high", "volume_low", "repeat_high", "repeat_low"],
+    )
+    def test_out_of_range(self, kwargs):
         with pytest.raises(ValidationError):
-            TriggerChimeInput(chime_id="chime-uuid", volume=101)
+            TriggerChimeInput(chime_id="chime-uuid", **kwargs)
 
-    def test_volume_out_of_range_low(self):
-        with pytest.raises(ValidationError):
-            TriggerChimeInput(chime_id="chime-uuid", volume=-1)
-
-    def test_repeat_times_out_of_range_high(self):
-        with pytest.raises(ValidationError):
-            TriggerChimeInput(chime_id="chime-uuid", repeat_times=7)
-
-    def test_repeat_times_out_of_range_low(self):
-        with pytest.raises(ValidationError):
-            TriggerChimeInput(chime_id="chime-uuid", repeat_times=0)
-
-    def test_volume_boundary_zero(self):
-        m = TriggerChimeInput(chime_id="chime-uuid", volume=0)
-        assert m.volume == 0
-
-    def test_volume_boundary_100(self):
-        m = TriggerChimeInput(chime_id="chime-uuid", volume=100)
-        assert m.volume == 100
-
-    def test_repeat_times_boundary_1(self):
-        m = TriggerChimeInput(chime_id="chime-uuid", repeat_times=1)
-        assert m.repeat_times == 1
-
-    def test_repeat_times_boundary_6(self):
-        m = TriggerChimeInput(chime_id="chime-uuid", repeat_times=6)
-        assert m.repeat_times == 6
+    @pytest.mark.parametrize(
+        "kwargs, attr, expected",
+        [
+            ({"volume": 0}, "volume", 0),
+            ({"volume": 100}, "volume", 100),
+            ({"repeat_times": 1}, "repeat_times", 1),
+            ({"repeat_times": 6}, "repeat_times", 6),
+        ],
+        ids=["volume_0", "volume_100", "repeat_1", "repeat_6"],
+    )
+    def test_boundary_valid(self, kwargs, attr, expected):
+        m = TriggerChimeInput(chime_id="chime-uuid", **kwargs)
+        assert getattr(m, attr) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -327,13 +305,6 @@ class TestTriggerChimeInput:
 
 
 class TestExportClipInput:
-    def test_action_input_flag(self):
-        assert ExportClipInput.__action_input__ is True
-
-    def test_required_fields(self):
-        with pytest.raises(Exception):
-            ExportClipInput()
-
     def test_defaults_applied(self):
         m = ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z")
         assert m.channel_index == 0
@@ -350,21 +321,19 @@ class TestExportClipInput:
         assert m.channel_index == 1
         assert m.fps == 4
 
-    def test_channel_index_out_of_range_high(self):
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"channel_index": 3},
+            {"channel_index": -1},
+            {"fps": 0},
+            {"fps": -1},
+        ],
+        ids=["channel_high", "channel_low", "fps_zero", "fps_negative"],
+    )
+    def test_out_of_range(self, kwargs):
         with pytest.raises(ValidationError):
-            ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", channel_index=3)
-
-    def test_channel_index_out_of_range_low(self):
-        with pytest.raises(ValidationError):
-            ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", channel_index=-1)
-
-    def test_fps_zero_raises(self):
-        with pytest.raises(ValidationError):
-            ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", fps=0)
-
-    def test_fps_negative_raises(self):
-        with pytest.raises(ValidationError):
-            ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", fps=-1)
+            ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", **kwargs)
 
     def test_channel_index_boundary_values(self):
         for idx in (0, 1, 2):
@@ -380,13 +349,6 @@ class TestExportClipInput:
 
 
 class TestDeleteRecordingInput:
-    def test_action_input_flag(self):
-        assert DeleteRecordingInput.__action_input__ is True
-
-    def test_required_fields(self):
-        with pytest.raises(Exception):
-            DeleteRecordingInput()
-
     def test_valid(self):
         m = DeleteRecordingInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T12:00:00Z")
         assert m.camera_id == "cam"
@@ -400,13 +362,6 @@ class TestDeleteRecordingInput:
 
 
 class TestDeleteLiveviewInput:
-    def test_action_input_flag(self):
-        assert DeleteLiveviewInput.__action_input__ is True
-
-    def test_required_liveview_id(self):
-        with pytest.raises(Exception):
-            DeleteLiveviewInput()
-
     def test_valid(self):
         m = DeleteLiveviewInput(liveview_id="lv-uuid")
         assert m.liveview_id == "lv-uuid"
@@ -418,13 +373,6 @@ class TestDeleteLiveviewInput:
 
 
 class TestAcknowledgeEventInput:
-    def test_action_input_flag(self):
-        assert AcknowledgeEventInput.__action_input__ is True
-
-    def test_required_event_id(self):
-        with pytest.raises(Exception):
-            AcknowledgeEventInput()
-
     def test_valid(self):
         m = AcknowledgeEventInput(event_id="evt-uuid-123")
         assert m.event_id == "evt-uuid-123"

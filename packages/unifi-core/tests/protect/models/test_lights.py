@@ -71,29 +71,25 @@ class TestLightModel:
         assert light.sensitivity is None
         assert light.duration_seconds is None
 
-    def test_to_controller_update_filters_read_only(self) -> None:
-        out = to_controller_update({"id": "light001", "name": "New Name", "led_level": 3})
+    @pytest.mark.parametrize(
+        ("fields", "expected"),
+        [
+            ({"id": "light001", "name": "New Name", "led_level": 3}, {"name": "New Name", "led_level": 3}),
+            ({"name": "New", "led_level": None}, {"name": "New"}),
+            ({}, {}),
+            ({"mac": "AA:BB:CC", "state": "CONNECTED", "name": "Porch"}, {"name": "Porch"}),
+        ],
+    )
+    def test_to_controller_update(self, fields: dict, expected: dict) -> None:
+        out = to_controller_update(fields)
         assert "id" not in out
-        assert out == {"name": "New Name", "led_level": 3}
-
-    def test_to_controller_update_drops_none_values(self) -> None:
-        out = to_controller_update({"name": "New", "led_level": None})
-        assert out == {"name": "New"}
-
-    def test_to_controller_update_empty_input(self) -> None:
-        assert to_controller_update({}) == {}
+        assert out == expected
 
     def test_to_controller_update_renames_is_light_on_to_light_on(self) -> None:
         out = to_controller_update({"is_light_on": True, "led_level": 2})
         assert "is_light_on" not in out
         assert out["light_on"] is True
         assert out["led_level"] == 2
-
-    def test_to_controller_update_filters_read_only_fields(self) -> None:
-        out = to_controller_update({"mac": "AA:BB:CC", "state": "CONNECTED", "name": "Porch"})
-        assert "mac" not in out
-        assert "state" not in out
-        assert out == {"name": "Porch"}
 
     def test_led_level_constraint_rejects_out_of_range(self) -> None:
         with pytest.raises(Exception):

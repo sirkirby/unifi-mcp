@@ -4,27 +4,32 @@ Verifies that `from_controller` / `smart_detection_from_controller` pass
 through the metadata dict when present and leave it as None when absent.
 """
 
+import pytest
 from unifi_core.protect.models.events import (
     from_controller,
     smart_detection_from_controller,
 )
 
 
-def test_event_from_controller_passes_metadata_through() -> None:
-    e = from_controller({"id": "evt-1", "metadata": {"linesStatus": {"1": {}}}})
-    assert e.metadata == {"linesStatus": {"1": {}}}
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ({"id": "evt-1", "metadata": {"linesStatus": {"1": {}}}}, {"linesStatus": {"1": {}}}),
+        ({"id": "evt-2"}, None),
+    ],
+    ids=["present", "absent"],
+)
+def test_event_from_controller_metadata(raw: dict, expected: dict | None) -> None:
+    assert from_controller(raw).metadata == expected
 
 
-def test_event_from_controller_metadata_is_none_when_absent() -> None:
-    e = from_controller({"id": "evt-2"})
-    assert e.metadata is None
-
-
-def test_smart_detection_from_controller_passes_metadata_through() -> None:
-    sd = smart_detection_from_controller({"id": "sd-1", "metadata": {"weather": {"temperature": 16}}})
-    assert sd.metadata == {"weather": {"temperature": 16}}
-
-
-def test_smart_detection_from_controller_metadata_is_none_when_absent() -> None:
-    sd = smart_detection_from_controller({"id": "sd-2"})
-    assert sd.metadata is None
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ({"id": "sd-1", "metadata": {"weather": {"temperature": 16}}}, {"weather": {"temperature": 16}}),
+        ({"id": "sd-2"}, None),
+    ],
+    ids=["present", "absent"],
+)
+def test_smart_detection_from_controller_metadata(raw: dict, expected: dict | None) -> None:
+    assert smart_detection_from_controller(raw).metadata == expected

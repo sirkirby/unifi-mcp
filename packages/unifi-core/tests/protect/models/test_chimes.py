@@ -108,12 +108,17 @@ class TestChimeModel:
         assert "repeat_times" in message
         assert "volume" in message
 
-    def test_to_controller_update_drops_none_values(self) -> None:
-        out = to_controller_update({"name": "New", "volume": None})
-        assert out == {"name": "New"}
-
-    def test_to_controller_update_empty_input(self) -> None:
-        assert to_controller_update({}) == {}
+    @pytest.mark.parametrize(
+        ("fields", "expected"),
+        [
+            ({"name": "New", "volume": None}, {"name": "New"}),
+            ({}, {}),
+            ({"name": "Side", "volume": 50, "repeat_times": 3}, {"name": "Side", "volume": 50, "repeat_times": 3}),
+            ({"volume": "50"}, {"volume": 50}),
+        ],
+    )
+    def test_to_controller_update(self, fields: dict, expected: dict) -> None:
+        assert to_controller_update(fields) == expected
 
     def test_to_controller_update_rejects_read_only_fields_when_mixed(self) -> None:
         with pytest.raises(ValueError) as exc_info:
@@ -149,10 +154,6 @@ class TestChimeModel:
         with pytest.raises(ValueError, match="must be a dictionary"):
             to_controller_update(["volume"])  # type: ignore[arg-type]
 
-    def test_to_controller_update_all_mutable(self) -> None:
-        out = to_controller_update({"name": "Side", "volume": 50, "repeat_times": 3})
-        assert out == {"name": "Side", "volume": 50, "repeat_times": 3}
-
     def test_to_controller_update_validates_global_ranges(self) -> None:
         with pytest.raises(ValueError) as exc_info:
             to_controller_update({"volume": 101})
@@ -167,19 +168,6 @@ class TestChimeModel:
         message = str(exc_info.value)
         assert "Invalid chime setting repeat_times" in message
         assert "greater than or equal to 1" in message
-
-    def test_to_controller_update_normalizes_global_values_through_model(self) -> None:
-        out = to_controller_update({"volume": "50"})
-        assert out == {"volume": 50}
-
-    def test_to_controller_update_drops_none_values_after_validation(self) -> None:
-        out = to_controller_update(
-            {
-                "name": "Porch",
-                "volume": None,
-            }
-        )
-        assert out == {"name": "Porch"}
 
     def test_to_ring_setting_update_accepts_per_camera_fields(self) -> None:
         out = to_ring_setting_update({"camera_id": "cam001", "volume": 50, "repeat_times": 3})

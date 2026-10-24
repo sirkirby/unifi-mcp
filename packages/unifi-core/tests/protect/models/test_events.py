@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from unifi_core.protect.models.events import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -95,16 +96,9 @@ class TestFromController:
         assert evt.start == dt_start.isoformat()
         assert evt.end == dt_end.isoformat()
 
-    def test_non_list_smart_detect_types_coerced_to_empty(self) -> None:
-        evt = from_controller({"id": "evt-004", "smart_detect_types": "person"})
-        assert evt.smart_detect_types == []
-
-    def test_none_smart_detect_types_coerced_to_empty(self) -> None:
-        evt = from_controller({"id": "evt-005", "smart_detect_types": None})
-        assert evt.smart_detect_types == []
-
-    def test_int_smart_detect_types_coerced_to_empty(self) -> None:
-        evt = from_controller({"id": "evt-006", "smart_detect_types": 42})
+    @pytest.mark.parametrize("smart_detect_types", ["person", None, 42])
+    def test_smart_detect_types_coerced_to_empty(self, smart_detect_types: object) -> None:
+        evt = from_controller({"id": "evt-004", "smart_detect_types": smart_detect_types})
         assert evt.smart_detect_types == []
 
     def test_camera_id_fallback(self) -> None:

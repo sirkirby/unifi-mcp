@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from unifi_core.protect.models.alarms import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -105,25 +106,18 @@ class TestStatusFromController:
         assert status.armed is None
         assert status.status is None
 
-    def test_datetime_armed_at_stringified(self) -> None:
-        dt = datetime(2026, 5, 13, 8, 0, 0, tzinfo=timezone.utc)
-        status = status_from_controller({"armed": True, "armed_at": dt})
-        assert status.armed_at == dt.isoformat()
-
-    def test_datetime_will_be_armed_at_stringified(self) -> None:
-        dt = datetime(2026, 5, 13, 8, 0, 30, tzinfo=timezone.utc)
-        status = status_from_controller({"will_be_armed_at": dt})
-        assert status.will_be_armed_at == dt.isoformat()
-
-    def test_datetime_breach_detected_at_stringified(self) -> None:
-        dt = datetime(2026, 5, 13, 9, 15, 0, tzinfo=timezone.utc)
-        status = status_from_controller({"breach_detected_at": dt})
-        assert status.breach_detected_at == dt.isoformat()
-
-    def test_string_datetime_passthrough(self) -> None:
-        raw = {"armed_at": "2026-05-13T08:00:00+00:00"}
-        status = status_from_controller(raw)
-        assert status.armed_at == "2026-05-13T08:00:00+00:00"
+    @pytest.mark.parametrize(
+        "field, dt",
+        [
+            ("will_be_armed_at", datetime(2026, 5, 13, 8, 0, 30, tzinfo=timezone.utc)),
+            ("armed_at", datetime(2026, 5, 13, 8, 0, 0, tzinfo=timezone.utc)),
+            ("breach_detected_at", datetime(2026, 5, 13, 9, 15, 0, tzinfo=timezone.utc)),
+        ],
+        ids=["will_be_armed_at", "armed_at", "breach_detected_at"],
+    )
+    def test_datetime_field_stringified(self, field: str, dt: datetime) -> None:
+        status = status_from_controller({field: dt})
+        assert getattr(status, field) == dt.isoformat()
 
     def test_model_dump_excludes_none(self) -> None:
         raw = {"armed": True, "status": "armed", "profile_count": 2}
@@ -248,27 +242,22 @@ class TestProfileListFromController:
         assert profile_list.profiles == []
         assert profile_list.count == 0
 
-    def test_list_passthrough(self) -> None:
-        """A bare list (not wrapped dict) should be passed through as profiles."""
-        raw = {"profiles": [{"id": "p-001"}, {"id": "p-002"}, {"id": "p-003"}], "count": 3}
-        profile_list = profile_list_from_controller(raw)
-        assert isinstance(profile_list.profiles, list)
-        assert len(profile_list.profiles) == 3
-
-    def test_non_list_profiles_coalesces_to_none(self) -> None:
-        """Non-list value for profiles should coalesce to None."""
-        raw = {"profiles": "unexpected_string", "count": 0}
-        profile_list = profile_list_from_controller(raw)
-        assert profile_list.profiles is None
-
     def test_none_profiles_coalesces_to_none(self) -> None:
         raw = {"profiles": None, "count": 0}
         profile_list = profile_list_from_controller(raw)
         assert profile_list.profiles is None
 
-    def test_dict_profiles_coalesces_to_none(self) -> None:
-        """A dict value for profiles (not a list) should coalesce to None."""
-        raw = {"profiles": {"unexpected": "dict"}, "count": 1}
+    @pytest.mark.parametrize(
+        "profiles",
+        [
+            "unexpected_string",
+            {"unexpected": "dict"},
+        ],
+        ids=["string", "dict"],
+    )
+    def test_non_list_profiles_coalesces_to_none(self, profiles: object) -> None:
+        """Non-list value for profiles should coalesce to None."""
+        raw = {"profiles": profiles, "count": 0}
         profile_list = profile_list_from_controller(raw)
         assert profile_list.profiles is None
 
@@ -422,17 +411,18 @@ class TestRuleFromController:
         assert rule.sources is None
         assert rule.conditions is None
 
-    def test_non_list_sources_coalesces_to_none(self) -> None:
-        rule = rule_from_controller({"id": "r-1", "sources": "not a list"})
-        assert rule.sources is None
-
-    def test_non_list_conditions_coalesces_to_none(self) -> None:
-        rule = rule_from_controller({"id": "r-1", "conditions": {"oops": "dict"}})
-        assert rule.conditions is None
-
-    def test_non_dict_cooldown_coalesces_to_none(self) -> None:
-        rule = rule_from_controller({"id": "r-1", "cooldown": "off"})
-        assert rule.cooldown is None
+    @pytest.mark.parametrize(
+        "field, value",
+        [
+            ("sources", "not a list"),
+            ("conditions", {"oops": "dict"}),
+            ("cooldown", "off"),
+        ],
+        ids=["sources_string", "conditions_dict", "cooldown_string"],
+    )
+    def test_non_list_nested_coalesces_to_none(self, field: str, value: object) -> None:
+        rule = rule_from_controller({"id": "r-1", field: value})
+        assert getattr(rule, field) is None
 
     def test_condition_with_non_dict_inner_keeps_outer_but_drops_inner(self) -> None:
         raw = {"id": "r-1", "conditions": [{"condition": "not a dict"}]}
@@ -483,16 +473,20 @@ class TestRuleListFromController:
         assert rule_list.rules == []
         assert rule_list.count == 0
 
-    def test_non_list_rules_coalesces_to_none(self) -> None:
-        rule_list = rule_list_from_controller({"rules": "oops", "count": 0})
-        assert rule_list.rules is None
-
     def test_none_rules_coalesces_to_none(self) -> None:
         rule_list = rule_list_from_controller({"rules": None, "count": 0})
         assert rule_list.rules is None
 
-    def test_dict_rules_coalesces_to_none(self) -> None:
-        rule_list = rule_list_from_controller({"rules": {"x": 1}, "count": 1})
+    @pytest.mark.parametrize(
+        "rules",
+        [
+            "oops",
+            {"x": 1},
+        ],
+        ids=["string", "dict"],
+    )
+    def test_non_list_rules_coalesces_to_none(self, rules: object) -> None:
+        rule_list = rule_list_from_controller({"rules": rules, "count": 0})
         assert rule_list.rules is None
 
     def test_empty_dict(self) -> None:
@@ -541,30 +535,6 @@ class TestRuleToController:
         assert out["name"] == "R1"
         assert out["enable"] is True
         assert out["schedules"] == []
-
-    def test_translates_nested_action_metadata_use_thumbnail(self) -> None:
-        from unifi_core.protect.models.alarms import rule_to_controller
-
-        body = {
-            "actions": [
-                {
-                    "type": "HTTP_REQUEST",
-                    "order": -1,
-                    "metadata": {
-                        "url": "https://example.test/wh",
-                        "method": "POST",
-                        "use_thumbnail": True,
-                    },
-                }
-            ],
-        }
-        out = rule_to_controller(body)
-        meta = out["actions"][0]["metadata"]
-        assert "use_thumbnail" not in meta
-        assert meta["useThumbnail"] is True
-        # Other metadata fields preserved
-        assert meta["url"] == "https://example.test/wh"
-        assert meta["method"] == "POST"
 
     def test_camelcase_input_passthrough_unchanged(self) -> None:
         from unifi_core.protect.models.alarms import rule_to_controller
@@ -617,14 +587,32 @@ class TestRuleToController:
         assert meta["useThumbnail"] is False
         assert "use_thumbnail" not in meta
 
-    def test_nested_snake_only_translated(self) -> None:
-        """A lone snake_case metadata key is translated to camelCase."""
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"use_thumbnail": True},
+            {
+                "url": "https://example.test/wh",
+                "method": "POST",
+                "use_thumbnail": True,
+            },
+        ],
+        ids=["snake_only", "snake_with_siblings"],
+    )
+    def test_nested_snake_only_translated(self, metadata: dict) -> None:
+        """A lone snake_case metadata key is translated to camelCase.
+
+        Sibling keys (url/method) must survive the rewrite.
+        """
         from unifi_core.protect.models.alarms import rule_to_controller
 
-        body = {"actions": [{"metadata": {"use_thumbnail": True}}]}
+        body = {"actions": [{"metadata": metadata}]}
         meta = rule_to_controller(body)["actions"][0]["metadata"]
         assert meta["useThumbnail"] is True
         assert "use_thumbnail" not in meta
+        for key, value in metadata.items():
+            if key != "use_thumbnail":
+                assert meta[key] == value
 
     def test_unknown_fields_passthrough(self) -> None:
         """Future Protect fields we don't enumerate must round-trip untouched."""

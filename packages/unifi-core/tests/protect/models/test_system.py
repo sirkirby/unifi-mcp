@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from unifi_core.protect.models.system import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -123,12 +124,9 @@ class TestSystemInfoFromController:
         info = system_info_from_controller({"storage": storage})
         assert info.storage == storage
 
-    def test_storage_non_dict_coalesces_to_none(self) -> None:
-        info = system_info_from_controller({"storage": "unexpected_string"})
-        assert info.storage is None
-
-    def test_storage_none_coalesces_to_none(self) -> None:
-        info = system_info_from_controller({"storage": None})
+    @pytest.mark.parametrize("storage", ["unexpected_string", None])
+    def test_storage_coalesces_to_none(self, storage: object) -> None:
+        info = system_info_from_controller({"storage": storage})
         assert info.storage is None
 
     def test_model_dump_excludes_none(self) -> None:
@@ -177,18 +175,21 @@ class TestHealthFromController:
         health = health_from_controller({"cpu": cpu})
         assert health.cpu == cpu
 
-    def test_cpu_non_dict_coalesces_to_none(self) -> None:
-        health = health_from_controller({"cpu": "string_value"})
-        assert health.cpu is None
-
     def test_memory_list_passthrough(self) -> None:
         # list is also a valid JSON passthrough
         health = health_from_controller({"memory": [{"key": "val"}]})
         assert health.memory == [{"key": "val"}]
 
-    def test_memory_non_dict_non_list_coalesces_to_none(self) -> None:
-        health = health_from_controller({"memory": 12345})
-        assert health.memory is None
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("cpu", "string_value"),
+            ("memory", 12345),
+        ],
+    )
+    def test_non_passthrough_type_coalesces_to_none(self, field: str, value: object) -> None:
+        health = health_from_controller({field: value})
+        assert getattr(health, field) is None
 
     def test_model_dump_excludes_none(self) -> None:
         raw = {"cpu": {"average_load": 0.2}, "is_updating": False}
@@ -238,13 +239,16 @@ class TestFirmwareStatusFromController:
         status = firmware_status_from_controller({"devices": devices})
         assert status.devices == devices
 
-    def test_nvr_non_dict_coalesces_to_none(self) -> None:
-        status = firmware_status_from_controller({"nvr": "unexpected"})
-        assert status.nvr is None
-
-    def test_devices_non_list_non_dict_coalesces_to_none(self) -> None:
-        status = firmware_status_from_controller({"devices": 42})
-        assert status.devices is None
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("nvr", "unexpected"),
+            ("devices", 42),
+        ],
+    )
+    def test_non_passthrough_type_coalesces_to_none(self, field: str, value: object) -> None:
+        status = firmware_status_from_controller({field: value})
+        assert getattr(status, field) is None
 
     def test_model_dump_excludes_none(self) -> None:
         raw = {"total_devices": 2, "devices_with_updates": 1}
@@ -378,19 +382,16 @@ class TestViewerListFromController:
         assert vl.viewers == []
         assert vl.count == 0
 
-    def test_viewers_non_list_coalesces_to_none(self) -> None:
-        raw = {"viewers": "unexpected_string", "count": 0}
-        vl = viewer_list_from_controller(raw)
-        assert vl.viewers is None
-
-    def test_viewers_dict_coalesces_to_none(self) -> None:
-        raw = {"viewers": {"unexpected": "dict"}, "count": 1}
-        vl = viewer_list_from_controller(raw)
-        assert vl.viewers is None
-
-    def test_viewers_none_coalesces_to_none(self) -> None:
-        raw = {"viewers": None, "count": 0}
-        vl = viewer_list_from_controller(raw)
+    @pytest.mark.parametrize(
+        "viewers",
+        [
+            None,
+            "unexpected_string",
+            {"unexpected": "dict"},
+        ],
+    )
+    def test_viewers_coalesces_to_none(self, viewers: object) -> None:
+        vl = viewer_list_from_controller({"viewers": viewers, "count": 0})
         assert vl.viewers is None
 
     def test_empty_dict(self) -> None:
@@ -399,16 +400,16 @@ class TestViewerListFromController:
         assert vl.viewers is None
         assert vl.count is None
 
-    def test_model_dump_excludes_none(self) -> None:
-        raw = {"viewers": [{"id": "v1"}], "count": 1}
-        vl = viewer_list_from_controller(raw)
-        dumped = vl.model_dump(exclude_none=True)
-        assert "viewers" in dumped
-        assert "count" in dumped
-
-    def test_model_dump_with_none_viewers_excludes_viewers(self) -> None:
-        raw = {"count": 0}
-        vl = viewer_list_from_controller(raw)
-        dumped = vl.model_dump(exclude_none=True)
-        assert "viewers" not in dumped
-        assert "count" in dumped
+    @pytest.mark.parametrize(
+        ("raw", "present", "absent"),
+        [
+            ({"viewers": [{"id": "v1"}], "count": 1}, ("viewers", "count"), ()),
+            ({"count": 0}, ("count",), ("viewers",)),
+        ],
+    )
+    def test_model_dump_exclude_none(self, raw: dict, present: tuple[str, ...], absent: tuple[str, ...]) -> None:
+        dumped = viewer_list_from_controller(raw).model_dump(exclude_none=True)
+        for key in present:
+            assert key in dumped
+        for key in absent:
+            assert key not in dumped

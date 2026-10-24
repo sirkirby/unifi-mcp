@@ -86,17 +86,18 @@ class TestCameraModel:
         cam = from_controller({"id": "cam003", "channels": "garbage"})
         assert cam.channels is None
 
-    def test_to_controller_update_filters_read_only(self) -> None:
-        out = to_controller_update({"id": "cam001", "name": "New", "mic_volume": 75})
+    @pytest.mark.parametrize(
+        ("fields", "expected"),
+        [
+            ({"id": "cam001", "name": "New", "mic_volume": 75}, {"name": "New", "mic_volume": 75}),
+            ({"name": "New", "mic_volume": None}, {"name": "New"}),
+            ({}, {}),
+        ],
+    )
+    def test_to_controller_update(self, fields: dict, expected: dict) -> None:
+        out = to_controller_update(fields)
         assert "id" not in out
-        assert out == {"name": "New", "mic_volume": 75}
-
-    def test_to_controller_update_drops_none_values(self) -> None:
-        out = to_controller_update({"name": "New", "mic_volume": None})
-        assert out == {"name": "New"}
-
-    def test_to_controller_update_empty_input(self) -> None:
-        assert to_controller_update({}) == {}
+        assert out == expected
 
     def test_mic_volume_constraint_rejects_out_of_range(self) -> None:
         with pytest.raises(Exception):
