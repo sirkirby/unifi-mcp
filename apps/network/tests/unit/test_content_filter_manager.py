@@ -10,6 +10,13 @@ import pytest
 
 from unifi_core.exceptions import UniFiNotFoundError
 
+CALLS = [
+    lambda m: m.get_content_filters(),
+    lambda m: m.get_content_filter_by_id("f1"),
+    lambda m: m.update_content_filter("f1", {"name": "Test"}),
+    lambda m: m.delete_content_filter("f1"),
+]
+
 
 class TestContentFilterManager:
     """Tests for the ContentFilterManager class."""
@@ -49,6 +56,7 @@ class TestContentFilterManager:
         assert len(filters) == 2
         assert filters[0]["name"] == "Kids"
         mock_connection._update_cache.assert_called_once()
+        assert mock_connection.request.call_args[0][0].path == "/content-filtering"
 
     @pytest.mark.asyncio
     async def test_get_content_filters_uses_cache(self, content_filter_manager, mock_connection):
@@ -62,22 +70,24 @@ class TestContentFilterManager:
         mock_connection.request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_content_filters_handles_error(self, content_filter_manager, mock_connection):
-        """Test get_content_filters returns empty list on error."""
-        mock_connection.request.side_effect = Exception("Network error")
-
-        with pytest.raises(Exception):
-            await content_filter_manager.get_content_filters()
-
-    @pytest.mark.asyncio
-    async def test_get_content_filters_not_connected(self, content_filter_manager, mock_connection):
-        """Test get_content_filters returns empty list when not connected."""
+    @pytest.mark.parametrize("call", CALLS)
+    async def test_not_connected_raises(self, content_filter_manager, mock_connection, call):
+        """Every manager operation raises when not connected, without sending a request."""
         mock_connection.ensure_connected.return_value = False
 
         with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await content_filter_manager.get_content_filters()
+            await call(content_filter_manager)
 
         mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("call", CALLS)
+    async def test_api_error_propagates(self, content_filter_manager, mock_connection, call):
+        """API errors propagate from every manager operation."""
+        mock_connection.request.side_effect = Exception("API error")
+
+        with pytest.raises(Exception, match="API error"):
+            await call(content_filter_manager)
 
     @pytest.mark.asyncio
     async def test_get_content_filters_handles_dict_response(self, content_filter_manager, mock_connection):
@@ -102,6 +112,8 @@ class TestContentFilterManager:
 
         assert profile is not None
         assert profile["name"] == "Kids"
+        # list search, not GET /content-filtering/f1
+        assert mock_connection.request.call_args[0][0].path == "/content-filtering"
 
     @pytest.mark.asyncio
     async def test_get_content_filter_by_id_not_found(self, content_filter_manager, mock_connection):
@@ -112,14 +124,6 @@ class TestContentFilterManager:
 
         with pytest.raises(UniFiNotFoundError):
             await content_filter_manager.get_content_filter_by_id("nonexistent")
-
-    @pytest.mark.asyncio
-    async def test_get_content_filter_by_id_handles_error(self, content_filter_manager, mock_connection):
-        """Test get_content_filter_by_id returns None on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await content_filter_manager.get_content_filter_by_id("f1")
 
     # ---- update_content_filter ----
 
@@ -198,50 +202,10 @@ class TestContentFilterManager:
         assert result["name"] == "Updated"
         assert result["categories"] == ["FAMILY"]
         mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_update_content_filter_not_connected(self, content_filter_manager, mock_connection):
-        """Test update_content_filter returns False when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await content_filter_manager.update_content_filter("f1", {"name": "Test"})
-
-    @pytest.mark.asyncio
-    async def test_update_content_filter_handles_error(self, content_filter_manager, mock_connection):
-        """Test update_content_filter returns False on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await content_filter_manager.update_content_filter("f1", {"name": "Test"})
-
-    @pytest.mark.asyncio
-    async def test_update_content_filter_fetches_and_merges(self, content_filter_manager, mock_connection):
-        """Test update_content_filter fetches current profile, merges, PUTs full object."""
-        existing_filter = {
-            "_id": "cf1",
-            "name": "Kids Filter",
-            "enabled": True,
-            "categories": ["ADULT", "GAMBLING"],
-            "safe_search": ["GOOGLE", "YOUTUBE"],
-            "client_macs": ["aa:bb:cc:dd:ee:ff"],
-        }
-        mock_connection.request.side_effect = [
-            [existing_filter],  # GET list (used by get_content_filter_by_id)
-            {},  # PUT
-        ]
-
-        result = await content_filter_manager.update_content_filter(
-            "cf1", {"name": "Family Filter", "safe_search": ["GOOGLE", "YOUTUBE", "BING"]}
-        )
-
-        assert result["name"] == "Family Filter"
-        put_call = mock_connection.request.call_args_list[1]
-        put_request = put_call[0][0]
+        put_request = mock_connection.request.call_args_list[1][0][0]
         assert put_request.method == "put"
-        assert put_request.data["name"] == "Family Filter"
-        assert put_request.data["safe_search"] == ["GOOGLE", "YOUTUBE", "BING"]
-        assert put_request.data["categories"] == ["ADULT", "GAMBLING"]
+        assert put_request.path == "/content-filtering/f1"
+        assert put_request.data["name"] == "Updated"
 
     @pytest.mark.asyncio
     async def test_update_content_filter_puts_controller_dialect_verbatim(
@@ -328,72 +292,8 @@ class TestContentFilterManager:
 
         assert result is True
         mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_delete_content_filter_not_connected(self, content_filter_manager, mock_connection):
-        """Test delete_content_filter returns False when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await content_filter_manager.delete_content_filter("f1")
-
-    @pytest.mark.asyncio
-    async def test_delete_content_filter_handles_error(self, content_filter_manager, mock_connection):
-        """Test delete_content_filter returns False on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await content_filter_manager.delete_content_filter("f1")
-
-    # ---- API path verification ----
-
-    @pytest.mark.asyncio
-    async def test_list_uses_correct_path(self, content_filter_manager, mock_connection):
-        """Test get_content_filters calls the correct API endpoint."""
-        mock_connection.request.return_value = []
-
-        await content_filter_manager.get_content_filters()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/content-filtering"
-
-    @pytest.mark.asyncio
-    async def test_get_by_id_uses_list(self, content_filter_manager, mock_connection):
-        """Test get_content_filter_by_id searches via list (no direct GET /{id})."""
-        mock_connection.request.return_value = [{"_id": "f1", "name": "Test"}]
-
-        await content_filter_manager.get_content_filter_by_id("f1")
-
-        # Should call the list endpoint, not /content-filtering/f1
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/content-filtering"
-
-    @pytest.mark.asyncio
-    async def test_update_uses_correct_path_and_method(self, content_filter_manager, mock_connection):
-        """Test update_content_filter uses PUT to the correct endpoint."""
-        existing = {"_id": "f1", "name": "Original"}
-        mock_connection.request.side_effect = [
-            [existing],  # GET list
-            {},  # PUT
-        ]
-
-        await content_filter_manager.update_content_filter("f1", {"name": "Updated"})
-
-        put_call = mock_connection.request.call_args_list[1]
-        api_request = put_call[0][0]
-        assert api_request.path == "/content-filtering/f1"
-        assert api_request.method == "put"
-
-    @pytest.mark.asyncio
-    async def test_delete_uses_correct_path_and_method(self, content_filter_manager, mock_connection):
-        """Test delete_content_filter uses DELETE to the correct endpoint."""
-        mock_connection.request.return_value = {}
-
-        await content_filter_manager.delete_content_filter("f1")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        api_request = mock_connection.request.call_args[0][0]
         assert api_request.path == "/content-filtering/f1"
         assert api_request.method == "delete"
+
+    # ---- API path verification ----

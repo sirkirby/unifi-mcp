@@ -7,6 +7,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+CALLS = [
+    lambda m: m.get_oon_policies(),
+    lambda m: m.get_oon_policy_by_id("p1"),
+    lambda m: m.create_oon_policy({"name": "Test"}),
+    lambda m: m.update_oon_policy("p1", {"name": "Test"}),
+    lambda m: m.toggle_oon_policy("p1"),
+    lambda m: m.delete_oon_policy("p1"),
+]
+
 
 class TestOonManager:
     """Tests for the OonManager class."""
@@ -46,6 +55,7 @@ class TestOonManager:
         assert len(policies) == 2
         assert policies[0]["name"] == "Bedtime"
         mock_connection._update_cache.assert_called_once()
+        assert mock_connection.request.call_args[0][0].path == "/object-oriented-network-configs"
 
     @pytest.mark.asyncio
     async def test_get_oon_policies_uses_cache(self, oon_manager, mock_connection):
@@ -59,14 +69,6 @@ class TestOonManager:
         mock_connection.request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_oon_policies_handles_error(self, oon_manager, mock_connection):
-        """Test get_oon_policies returns empty list on error."""
-        mock_connection.request.side_effect = Exception("Network error")
-
-        with pytest.raises(Exception):
-            await oon_manager.get_oon_policies()
-
-    @pytest.mark.asyncio
     async def test_get_oon_policies_handles_404(self, oon_manager, mock_connection):
         """Test get_oon_policies returns empty list on 404 (unsupported controller)."""
         mock_connection.request.side_effect = Exception("404 Not Found")
@@ -77,14 +79,24 @@ class TestOonManager:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_get_oon_policies_not_connected(self, oon_manager, mock_connection):
-        """Test get_oon_policies returns empty list when not connected."""
+    @pytest.mark.parametrize("call", CALLS)
+    async def test_not_connected_raises(self, oon_manager, mock_connection, call):
+        """Every manager operation raises when not connected, without sending a request."""
         mock_connection.ensure_connected.return_value = False
 
         with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.get_oon_policies()
+            await call(oon_manager)
 
         mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("call", CALLS)
+    async def test_api_error_propagates(self, oon_manager, mock_connection, call):
+        """API errors propagate from every manager operation."""
+        mock_connection.request.side_effect = Exception("API error")
+
+        with pytest.raises(Exception, match="API error"):
+            await call(oon_manager)
 
     # ---- get_oon_policy_by_id ----
 
@@ -97,22 +109,7 @@ class TestOonManager:
 
         assert policy is not None
         assert policy["name"] == "Test Policy"
-
-    @pytest.mark.asyncio
-    async def test_get_oon_policy_by_id_not_connected(self, oon_manager, mock_connection):
-        """Test get_oon_policy_by_id returns None when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.get_oon_policy_by_id("p1")
-
-    @pytest.mark.asyncio
-    async def test_get_oon_policy_by_id_handles_error(self, oon_manager, mock_connection):
-        """Test get_oon_policy_by_id returns None on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await oon_manager.get_oon_policy_by_id("p1")
+        assert mock_connection.request.call_args[0][0].path == "/object-oriented-network-config/p1"
 
     # ---- create_oon_policy ----
 
@@ -120,40 +117,51 @@ class TestOonManager:
     async def test_create_oon_policy_success(self, oon_manager, mock_connection):
         """Test create_oon_policy with valid data."""
         policy_data = {
+            "_id": "old1",
+            "id": "old1",
             "name": "New Policy",
             "enabled": True,
             "target_type": "CLIENTS",
             "targets": ["aa:bb:cc:dd:ee:ff"],
         }
-        mock_connection.request.return_value = {"id": "new1", **policy_data}
+        mock_connection.request.return_value = {**policy_data, "id": "new1"}
 
         result = await oon_manager.create_oon_policy(policy_data)
 
         assert result is not None
         assert result["id"] == "new1"
         mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_create_oon_policy_strips_id(self, oon_manager, mock_connection):
-        """Test create_oon_policy strips _id and id from data."""
-        policy_data = {"_id": "old1", "id": "old1", "name": "Test", "enabled": True}
-        mock_connection.request.return_value = {"id": "new1", "name": "Test"}
-
-        await oon_manager.create_oon_policy(policy_data)
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.path == "/object-oriented-network-config"
+        assert api_request.method == "post"
+        # _id and id are stripped from the POST body
         assert "_id" not in api_request.data
         assert "id" not in api_request.data
 
     @pytest.mark.asyncio
-    async def test_create_oon_policy_normalizes_client_targets(self, oon_manager, mock_connection):
-        """Test create_oon_policy sends controller target objects."""
+    @pytest.mark.parametrize(
+        ("target_type", "targets", "expected"),
+        [
+            (
+                "CLIENTS",
+                ["aa:bb:cc:dd:ee:ff", {"type": "MAC", "id": "11:22:33:44:55:66"}],
+                [
+                    {"type": "MAC", "value": "aa:bb:cc:dd:ee:ff"},
+                    {"type": "MAC", "value": "11:22:33:44:55:66"},
+                ],
+            ),
+            ("GROUPS", ["group-1"], [{"type": "NETWORK_GROUP_ID", "value": "group-1"}]),
+        ],
+    )
+    async def test_create_oon_policy_normalizes_targets(
+        self, oon_manager, mock_connection, target_type, targets, expected
+    ):
+        """create_oon_policy sends controller target objects (MAC values, network group ids)."""
         policy_data = {
             "name": "Test",
             "enabled": False,
-            "target_type": "CLIENTS",
-            "targets": ["aa:bb:cc:dd:ee:ff", {"type": "MAC", "id": "11:22:33:44:55:66"}],
+            "target_type": target_type,
+            "targets": targets,
             "secure": {"enabled": False, "internet": {"mode": "TURN_OFF_INTERNET"}},
         }
         mock_connection.request.return_value = {"id": "new1", "name": "Test"}
@@ -161,37 +169,20 @@ class TestOonManager:
         await oon_manager.create_oon_policy(policy_data)
 
         api_request = mock_connection.request.call_args[0][0]
-        assert api_request.data["targets"] == [
-            {"type": "MAC", "value": "aa:bb:cc:dd:ee:ff"},
-            {"type": "MAC", "value": "11:22:33:44:55:66"},
-        ]
+        assert api_request.data["targets"] == expected
 
     @pytest.mark.asyncio
-    async def test_create_oon_policy_normalizes_group_targets(self, oon_manager, mock_connection):
-        """Test create_oon_policy maps group IDs to network group targets."""
-        policy_data = {
-            "name": "Test",
-            "enabled": False,
-            "target_type": "GROUPS",
-            "targets": ["group-1"],
-            "secure": {"enabled": False, "internet": {"mode": "TURN_OFF_INTERNET"}},
-        }
-        mock_connection.request.return_value = {"id": "new1", "name": "Test"}
-
-        await oon_manager.create_oon_policy(policy_data)
-
-        api_request = mock_connection.request.call_args[0][0]
-        assert api_request.data["targets"] == [{"type": "NETWORK_GROUP_ID", "value": "group-1"}]
-
-    @pytest.mark.asyncio
-    async def test_create_oon_policy_normalizes_secure_shorthand(self, oon_manager, mock_connection):
-        """Test create_oon_policy sends required nested secure fields."""
+    @pytest.mark.parametrize("internet_access_enabled", [False, True])
+    async def test_create_oon_policy_normalizes_secure_shorthand(
+        self, oon_manager, mock_connection, internet_access_enabled
+    ):
+        """Secure shorthand becomes required nested fields; empty shorthand becomes a disabled draft."""
         policy_data = {
             "name": "Test",
             "enabled": False,
             "target_type": "CLIENTS",
             "targets": ["aa:bb:cc:dd:ee:ff"],
-            "secure": {"internet_access_enabled": False, "apps": []},
+            "secure": {"internet_access_enabled": internet_access_enabled, "apps": []},
         }
         mock_connection.request.return_value = {"id": "new1", "name": "Test"}
 
@@ -199,27 +190,7 @@ class TestOonManager:
 
         api_request = mock_connection.request.call_args[0][0]
         assert api_request.data["secure"] == {
-            "enabled": True,
-            "internet": {"mode": "TURN_OFF_INTERNET"},
-        }
-
-    @pytest.mark.asyncio
-    async def test_create_oon_policy_disables_empty_secure_shorthand(self, oon_manager, mock_connection):
-        """Test empty secure shorthand becomes a disabled draft config."""
-        policy_data = {
-            "name": "Test",
-            "enabled": False,
-            "target_type": "CLIENTS",
-            "targets": ["aa:bb:cc:dd:ee:ff"],
-            "secure": {"internet_access_enabled": True, "apps": []},
-        }
-        mock_connection.request.return_value = {"id": "new1", "name": "Test"}
-
-        await oon_manager.create_oon_policy(policy_data)
-
-        api_request = mock_connection.request.call_args[0][0]
-        assert api_request.data["secure"] == {
-            "enabled": False,
+            "enabled": not internet_access_enabled,
             "internet": {"mode": "TURN_OFF_INTERNET"},
         }
 
@@ -232,14 +203,6 @@ class TestOonManager:
         mock_connection.request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_create_oon_policy_not_connected(self, oon_manager, mock_connection):
-        """Test create_oon_policy returns None when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.create_oon_policy({"name": "Test"})
-
-    @pytest.mark.asyncio
     async def test_create_oon_policy_handles_data_wrapper(self, oon_manager, mock_connection):
         """Test create_oon_policy handles response with data key."""
         mock_connection.request.return_value = {"data": {"id": "new1", "name": "Test"}}
@@ -248,45 +211,7 @@ class TestOonManager:
 
         assert result == {"id": "new1", "name": "Test"}
 
-    @pytest.mark.asyncio
-    async def test_create_oon_policy_handles_error(self, oon_manager, mock_connection):
-        """Test create_oon_policy returns None on API error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await oon_manager.create_oon_policy({"name": "Test"})
-
     # ---- update_oon_policy ----
-
-    @pytest.mark.asyncio
-    async def test_update_oon_policy_success(self, oon_manager, mock_connection):
-        """Test update_oon_policy with valid data."""
-        existing = {"id": "p1", "name": "Original", "enabled": True}
-        mock_connection.request.side_effect = [
-            existing,  # GET
-            {},  # PUT
-        ]
-
-        result = await oon_manager.update_oon_policy("p1", {"name": "Updated"})
-
-        assert result["name"] == "Updated"
-        mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_update_oon_policy_not_connected(self, oon_manager, mock_connection):
-        """Test update_oon_policy returns False when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.update_oon_policy("p1", {"name": "Test"})
-
-    @pytest.mark.asyncio
-    async def test_update_oon_policy_handles_error(self, oon_manager, mock_connection):
-        """Test update_oon_policy returns False on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await oon_manager.update_oon_policy("p1", {"name": "Test"})
 
     @pytest.mark.asyncio
     async def test_update_oon_policy_fetches_and_merges(self, oon_manager, mock_connection):
@@ -313,18 +238,12 @@ class TestOonManager:
         put_call = mock_connection.request.call_args_list[1]
         put_request = put_call[0][0]
         assert put_request.method == "put"
+        assert put_request.path == "/object-oriented-network-config/p1"
+        mock_connection._invalidate_cache.assert_called()
         assert put_request.data["name"] == "Kids Bedtime v2"
         assert put_request.data["enabled"] is False
         assert put_request.data["targets"] == ["aa:bb:cc:dd:ee:ff"]
         assert put_request.data["secure"] == {"internet_access_enabled": True}
-
-    @pytest.mark.asyncio
-    async def test_update_oon_policy_not_found(self, oon_manager, mock_connection):
-        """Test update_oon_policy returns False when policy not found."""
-        mock_connection.request.side_effect = Exception("Not found")
-
-        with pytest.raises(Exception):
-            await oon_manager.update_oon_policy("nonexistent", {"name": "Test"})
 
     @pytest.mark.asyncio
     async def test_update_oon_policy_empty_update(self, oon_manager, mock_connection):
@@ -341,38 +260,17 @@ class TestOonManager:
     # ---- toggle_oon_policy ----
 
     @pytest.mark.asyncio
-    async def test_toggle_oon_policy_enables(self, oon_manager, mock_connection):
-        """Test toggle_oon_policy enables a disabled policy."""
+    @pytest.mark.parametrize(("currently_enabled", "expected"), [(False, True), (True, False)])
+    async def test_toggle_oon_policy_flips_state(self, oon_manager, mock_connection, currently_enabled, expected):
+        """toggle_oon_policy enables a disabled policy and disables an enabled one."""
         mock_connection.request.side_effect = [
-            {"id": "p1", "name": "Test", "enabled": False},  # get
+            {"id": "p1", "name": "Test", "enabled": currently_enabled},  # get
             {},  # put
         ]
 
         result = await oon_manager.toggle_oon_policy("p1")
 
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_toggle_oon_policy_disables(self, oon_manager, mock_connection):
-        """Test toggle_oon_policy disables an enabled policy."""
-        mock_connection.request.side_effect = [
-            {"id": "p1", "name": "Test", "enabled": True},  # get
-            {},  # put
-        ]
-
-        result = await oon_manager.toggle_oon_policy("p1")
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_toggle_oon_policy_not_connected(self, oon_manager, mock_connection):
-        """Test toggle_oon_policy returns None when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.toggle_oon_policy("p1")
-
-        mock_connection.request.assert_not_called()
+        assert result is expected
 
     @pytest.mark.asyncio
     async def test_toggle_oon_policy_not_found(self, oon_manager, mock_connection):
@@ -407,83 +305,8 @@ class TestOonManager:
 
         assert result is True
         mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_delete_oon_policy_not_connected(self, oon_manager, mock_connection):
-        """Test delete_oon_policy returns False when not connected."""
-        mock_connection.ensure_connected.return_value = False
-
-        with pytest.raises(ConnectionError, match="Not connected to controller"):
-            await oon_manager.delete_oon_policy("p1")
-
-    @pytest.mark.asyncio
-    async def test_delete_oon_policy_handles_error(self, oon_manager, mock_connection):
-        """Test delete_oon_policy returns False on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await oon_manager.delete_oon_policy("p1")
-
-    # ---- API path verification ----
-
-    @pytest.mark.asyncio
-    async def test_list_uses_plural_path(self, oon_manager, mock_connection):
-        """Test get_oon_policies uses plural path."""
-        mock_connection.request.return_value = []
-
-        await oon_manager.get_oon_policies()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/object-oriented-network-configs"
-
-    @pytest.mark.asyncio
-    async def test_get_by_id_uses_singular_path(self, oon_manager, mock_connection):
-        """Test get_oon_policy_by_id uses singular path."""
-        mock_connection.request.return_value = {"id": "p1"}
-
-        await oon_manager.get_oon_policy_by_id("p1")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/object-oriented-network-config/p1"
-
-    @pytest.mark.asyncio
-    async def test_create_uses_singular_path(self, oon_manager, mock_connection):
-        """Test create_oon_policy uses singular POST path."""
-        mock_connection.request.return_value = {"id": "new1"}
-
-        await oon_manager.create_oon_policy({"name": "Test"})
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/object-oriented-network-config"
-        assert api_request.method == "post"
-
-    @pytest.mark.asyncio
-    async def test_update_uses_singular_path(self, oon_manager, mock_connection):
-        """Test update_oon_policy uses singular PUT path."""
-        existing = {"id": "p1", "name": "Original"}
-        mock_connection.request.side_effect = [
-            existing,  # GET
-            {},  # PUT
-        ]
-
-        await oon_manager.update_oon_policy("p1", {"name": "Updated"})
-
-        put_call = mock_connection.request.call_args_list[1]
-        api_request = put_call[0][0]
-        assert api_request.path == "/object-oriented-network-config/p1"
-        assert api_request.method == "put"
-
-    @pytest.mark.asyncio
-    async def test_delete_uses_singular_path(self, oon_manager, mock_connection):
-        """Test delete_oon_policy uses singular DELETE path."""
-        mock_connection.request.return_value = {}
-
-        await oon_manager.delete_oon_policy("p1")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        api_request = mock_connection.request.call_args[0][0]
         assert api_request.path == "/object-oriented-network-config/p1"
         assert api_request.method == "delete"
+
+    # ---- API path verification ----

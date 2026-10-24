@@ -30,21 +30,6 @@ class TestUsergroupManager:
         return UsergroupManager(mock_connection)
 
     @pytest.mark.asyncio
-    async def test_get_usergroups_returns_list(self, usergroup_manager, mock_connection):
-        """Test get_usergroups returns a list of user groups."""
-        mock_groups = [
-            {"_id": "g1", "name": "Default", "qos_rate_max_down": -1},
-            {"_id": "g2", "name": "Limited", "qos_rate_max_down": 10000},
-        ]
-        mock_connection.request.return_value = mock_groups
-
-        groups = await usergroup_manager.get_usergroups()
-
-        assert len(groups) == 2
-        assert groups[0]["name"] == "Default"
-        mock_connection._update_cache.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_get_usergroups_uses_cache(self, usergroup_manager, mock_connection):
         """Test get_usergroups returns cached data when available."""
         cached_groups = [{"_id": "cached", "name": "Cached Group"}]
@@ -66,6 +51,8 @@ class TestUsergroupManager:
         groups = await usergroup_manager.get_usergroups()
 
         assert len(groups) == 1
+        assert groups[0]["name"] == "Test"
+        mock_connection._update_cache.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_usergroups_handles_error(self, usergroup_manager, mock_connection):
@@ -110,6 +97,7 @@ class TestUsergroupManager:
         api_request = call_args[0][0]
         assert api_request.data["name"] == "New Group"
         assert "qos_rate_max_down" not in api_request.data
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_create_usergroup_with_limits(self, usergroup_manager, mock_connection):
@@ -126,15 +114,6 @@ class TestUsergroupManager:
         api_request = call_args[0][0]
         assert api_request.data["qos_rate_max_down"] == 10000
         assert api_request.data["qos_rate_max_up"] == 5000
-
-    @pytest.mark.asyncio
-    async def test_create_usergroup_invalidates_cache(self, usergroup_manager, mock_connection):
-        """Test create_usergroup invalidates the cache."""
-        mock_connection.request.return_value = [{"_id": "new1"}]
-
-        await usergroup_manager.create_usergroup(name="Test")
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_create_usergroup_handles_error(self, usergroup_manager, mock_connection):
@@ -166,6 +145,7 @@ class TestUsergroupManager:
         api_request = update_call[0][0]
         assert api_request.data["name"] == "New Name"
         assert api_request.data["qos_rate_max_down"] == 5000
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_update_usergroup_not_found(self, usergroup_manager, mock_connection):
@@ -188,18 +168,6 @@ class TestUsergroupManager:
         result = await usergroup_manager.update_usergroup(group_id="g1")
 
         assert result is False
-
-    @pytest.mark.asyncio
-    async def test_update_usergroup_invalidates_cache(self, usergroup_manager, mock_connection):
-        """Test update_usergroup invalidates the cache."""
-        mock_connection.request.side_effect = [
-            [{"_id": "g1", "name": "Test"}],
-            {},
-        ]
-
-        await usergroup_manager.update_usergroup(group_id="g1", name="Updated")
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_update_usergroup_handles_error(self, usergroup_manager, mock_connection):
