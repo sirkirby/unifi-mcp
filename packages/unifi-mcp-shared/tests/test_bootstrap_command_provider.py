@@ -367,6 +367,10 @@ def test_a_helper_that_leaves_a_detached_descendant_still_refuses(helper, tmp_pa
     try:
         result = subprocess.run([sys.executable, str(probe)], capture_output=True, timeout=30, check=False)
         assert result.returncode == 6, f"expected a refusal, got {result.returncode}: {result.stderr[-400:]!r}"
+        # The child is started by the helper and may be slow to write its pidfile on a busy machine.
+        deadline = time.monotonic() + 10
+        while not pidfile.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
         assert pidfile.exists(), "the detached descendant never started"
     finally:
         # It left the helper's session deliberately, so nothing in the provider
