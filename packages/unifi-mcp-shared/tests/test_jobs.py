@@ -1,6 +1,7 @@
 """Tests for the shared jobs module."""
 
 import asyncio
+import copy
 
 import pytest
 from unifi_core.jobs import JobStore, get_job_status, start_async_tool
@@ -31,6 +32,8 @@ class TestJobStore:
 
     @pytest.mark.parametrize("result_val", [{"data": "result"}, "ok", "done"])
     async def test_status_done(self, store, result_val):
+        expected = copy.deepcopy(result_val)
+
         async def quick():
             return result_val
 
@@ -41,7 +44,7 @@ class TestJobStore:
         status = await store.status(job_id)
         status_copy = await store.status(job_id)
         assert status["status"] == "done"
-        assert status["result"] == result_val
+        assert status["result"] == expected
         assert "completed" in status
         assert status is not status_copy
         assert status == status_copy

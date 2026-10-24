@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -22,6 +23,7 @@ class StructuredResult(BaseModel):
     [("2025-11-25", {"rows": [{"id": 1}]}, True), ("2025-03-26", {}, False)],
 )
 async def test_adaptive_server_compacts_by_protocol_revision(monkeypatch, revision, data, compacted):
+    expected = {"success": True, "data": copy.deepcopy(data)}
     server = UniFiMCPServer("test", mcp_content_mode="adaptive")
     monkeypatch.setattr("unifi_mcp_shared.server.get_request_protocol_revision", lambda _: revision)
 
@@ -32,11 +34,11 @@ async def test_adaptive_server_compacts_by_protocol_revision(monkeypatch, revisi
     result = await server.call_tool("unifi_test", {})
 
     assert isinstance(result, CallToolResult)
-    assert result.structured_content == {"success": True, "data": data}
+    assert result.structured_content == expected
     if compacted:
         assert "rows" not in result.content[0].text
     else:
-        assert json.loads(result.content[0].text) == {"success": True, "data": data}
+        assert json.loads(result.content[0].text) == expected
 
 
 def test_unifi_server_retains_strict_dispatch_contract():
