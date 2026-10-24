@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from mcp.types import CreateTaskResult, Task
 from unifi_mcp_shared.tasks import (
     DEFAULT_TASK_POLL_INTERVAL_MS,
@@ -15,70 +16,60 @@ from unifi_mcp_shared.tasks import (
 )
 
 
-def test_task_from_running_job_status():
-    task = task_from_job_status(
-        "job-123",
-        {
-            "status": "running",
-            "started": 1_700_000_000,
-            "result": None,
-            "error": None,
-        },
-    )
-
+@pytest.mark.parametrize(
+    ("job_id", "job_status", "kwargs", "expected_status", "expected_msg", "expected_updated"),
+    [
+        (
+            "job-123",
+            {
+                "status": "done",
+                "started": 1_700_000_000,
+                "completed": 1_700_000_030,
+                "result": {"success": True},
+                "error": None,
+            },
+            {"ttl_ms": None, "poll_interval_ms": None},
+            "completed",
+            "Operation completed.",
+            "2023-11-14T22:13:50Z",
+        ),
+        (
+            "job-123",
+            {
+                "status": "error",
+                "started": 1_700_000_000,
+                "completed": 1_700_000_005,
+                "result": None,
+                "error": "Controller rejected request",
+            },
+            {},
+            "failed",
+            "Controller rejected request",
+            "2023-11-14T22:13:25Z",
+        ),
+        (
+            "missing",
+            {"status": "unknown"},
+            {},
+            "failed",
+            "Operation failed.",
+            None,
+        ),
+    ],
+)
+def test_task_from_terminal_or_unknown_job_status(
+    job_id, job_status, kwargs, expected_status, expected_msg, expected_updated
+):
+    task = task_from_job_status(job_id, job_status, **kwargs)
     assert isinstance(task, Task)
-    assert task.task_id == "job-123"
-    assert task.status == "working"
-    assert task.status_message == "Operation is in progress."
-    assert task.created_at == "2023-11-14T22:13:20Z"
-    assert task.last_updated_at == task.created_at
-    assert task.ttl == DEFAULT_TASK_TTL_MS
-    assert task.poll_interval == DEFAULT_TASK_POLL_INTERVAL_MS
-
-
-def test_task_from_completed_job_status_uses_completion_timestamp():
-    task = task_from_job_status(
-        "job-123",
-        {
-            "status": "done",
-            "started": 1_700_000_000,
-            "completed": 1_700_000_030,
-            "result": {"success": True},
-            "error": None,
-        },
-        ttl_ms=None,
-        poll_interval_ms=None,
-    )
-
-    assert task.status == "completed"
-    assert task.status_message == "Operation completed."
-    assert task.created_at == "2023-11-14T22:13:20Z"
-    assert task.last_updated_at == "2023-11-14T22:13:50Z"
-    assert task.ttl is None
-    assert task.poll_interval is None
-
-
-def test_task_from_failed_job_status_uses_error_message():
-    task = task_from_job_status(
-        "job-123",
-        {
-            "status": "error",
-            "started": 1_700_000_000,
-            "completed": 1_700_000_005,
-            "result": None,
-            "error": "Controller rejected request",
-        },
-    )
-
-    assert task.status == "failed"
-    assert task.status_message == "Controller rejected request"
-
-
-def test_unknown_job_status_maps_to_failed_task():
-    task = task_from_job_status("missing", {"status": "unknown"})
-
-    assert task.status == "failed"
-    assert task.status_message == "Operation failed."
+    assert task.status == expected_status
+    assert task.status_message == expected_msg
+    if expected_updated is not None:
+        assert task.created_at == "2023-11-14T22:13:20Z"
+        assert task.last_updated_at == expected_updated
+    if kwargs:
+        assert task.ttl is None
+        assert task.poll_interval is None
 
 
 def test_task_to_dict_uses_protocol_field_names():

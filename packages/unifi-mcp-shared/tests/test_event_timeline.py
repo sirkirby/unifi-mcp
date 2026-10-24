@@ -4,112 +4,83 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from unifi_core.event_timeline import NormalizedEvent, filter_by_area, merge_timelines
 
 
 class TestNormalizedEvent:
     """Test the normalized event data model."""
 
-    def test_create_event(self):
-        event = NormalizedEvent(
-            timestamp=datetime(2026, 3, 24, 2, 47, 0, tzinfo=timezone.utc),
-            product="protect",
-            event_type="motion",
-            summary="Motion detected at Front Door Camera",
-            raw={"camera_id": "abc123"},
-        )
-        assert event.product == "protect"
-        assert event.event_type == "motion"
-        assert event.location_id is None
-        assert event.location_name is None
-
-    def test_to_dict_excludes_none_location(self):
-        event = NormalizedEvent(
-            timestamp=datetime(2026, 3, 24, 2, 47, 0, tzinfo=timezone.utc),
-            product="network",
-            event_type="client_connect",
-            summary="New client connected",
-        )
+    @pytest.mark.parametrize(
+        ("kwargs", "has_location"),
+        [
+            (
+                {
+                    "product": "network",
+                    "event_type": "client_connect",
+                    "summary": "New client connected",
+                },
+                False,
+            ),
+            (
+                {
+                    "product": "access",
+                    "event_type": "badge_scan",
+                    "summary": "Badge scan at Main Entrance",
+                    "raw": {},
+                    "location_id": "loc_123",
+                    "location_name": "Home Lab",
+                },
+                True,
+            ),
+        ],
+    )
+    def test_normalized_event_to_dict(self, kwargs, has_location):
+        event = NormalizedEvent(timestamp=datetime(2026, 3, 24, 2, 47, 0, tzinfo=timezone.utc), **kwargs)
+        assert event.product == kwargs["product"]
+        assert event.event_type == kwargs["event_type"]
         d = event.to_dict()
-        assert "location_id" not in d
-        assert "location_name" not in d
         assert "normalized_fields" in d
-
-    def test_to_dict_includes_location_when_present(self):
-        event = NormalizedEvent(
-            timestamp=datetime(2026, 3, 24, 2, 47, 0, tzinfo=timezone.utc),
-            product="access",
-            event_type="badge_scan",
-            summary="Badge scan at Main Entrance",
-            raw={},
-            location_id="loc_123",
-            location_name="Home Lab",
-        )
-        d = event.to_dict()
-        assert d["location_id"] == "loc_123"
-        assert d["location_name"] == "Home Lab"
+        if has_location:
+            assert d["location_id"] == "loc_123"
+            assert d["location_name"] == "Home Lab"
+        else:
+            assert event.location_id is None
+            assert event.location_name is None
+            assert "location_id" not in d
+            assert "location_name" not in d
 
 
 class TestMergeTimelines:
     """Test merging multiple event lists into a sorted timeline."""
 
-    def test_merge_empty(self):
-        assert merge_timelines([]) == []
-
-    def test_merge_single_list(self):
-        events = [
-            NormalizedEvent(
-                timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="network",
-                event_type="a",
-                summary="a",
-                raw={},
-            ),
+    @pytest.mark.parametrize(
+        ("hours_lists", "expected_products"),
+        [
+            ([], []),
+            ([[(2, "network")]], ["network"]),
+            ([[(3, "protect")], [(1, "network")]], ["network", "protect"]),
+            ([[(1, "network")], [(2, "protect")]], ["network", "protect"]),
+        ],
+    )
+    def test_merge_timelines(self, hours_lists, expected_products):
+        lists = [
+            [
+                NormalizedEvent(
+                    timestamp=datetime(2026, 3, 24, hr, 0, tzinfo=timezone.utc),
+                    product=prod,
+                    event_type="a",
+                    summary="a",
+                    raw={},
+                )
+                for hr, prod in sublist
+            ]
+            for sublist in hours_lists
         ]
-        result = merge_timelines([events])
-        assert len(result) == 1
-
-    def test_merge_sorts_by_timestamp(self):
-        early = NormalizedEvent(
-            timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-            product="network",
-            event_type="a",
-            summary="a",
-            raw={},
-        )
-        late = NormalizedEvent(
-            timestamp=datetime(2026, 3, 24, 3, 0, tzinfo=timezone.utc),
-            product="protect",
-            event_type="b",
-            summary="b",
-            raw={},
-        )
-        result = merge_timelines([[late], [early]])
-        assert result[0].timestamp < result[1].timestamp
-
-    def test_merge_multiple_products(self):
-        events_a = [
-            NormalizedEvent(
-                timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network",
-                event_type="a",
-                summary="a",
-                raw={},
-            ),
-        ]
-        events_b = [
-            NormalizedEvent(
-                timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="protect",
-                event_type="b",
-                summary="b",
-                raw={},
-            ),
-        ]
-        result = merge_timelines([events_a, events_b])
-        assert len(result) == 2
-        assert result[0].product == "network"
-        assert result[1].product == "protect"
+        result = merge_timelines(lists)
+        assert [e.product for e in result] == expected_products
+        if len(result) > 1:
+            assert result[0].timestamp < result[1].timestamp
 
 
 class TestFilterByArea:

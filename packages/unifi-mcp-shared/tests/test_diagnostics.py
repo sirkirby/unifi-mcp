@@ -82,15 +82,14 @@ class TestSafeJson:
 class TestDiagnosticsEnabled:
     """Tests for diagnostics_enabled."""
 
-    def test_disabled_by_default(self, monkeypatch):
+    @pytest.mark.parametrize(("env_val", "expected"), [(None, False), ("true", True)])
+    def test_diagnostics_enabled_env(self, monkeypatch, env_val, expected):
         init_diagnostics(config_provider=None)
-        monkeypatch.delenv("UNIFI_MCP_DIAGNOSTICS", raising=False)
-        assert diagnostics_enabled() is False
-
-    def test_enabled_via_env(self, monkeypatch):
-        init_diagnostics(config_provider=None)
-        monkeypatch.setenv("UNIFI_MCP_DIAGNOSTICS", "true")
-        assert diagnostics_enabled() is True
+        if env_val is None:
+            monkeypatch.delenv("UNIFI_MCP_DIAGNOSTICS", raising=False)
+        else:
+            monkeypatch.setenv("UNIFI_MCP_DIAGNOSTICS", env_val)
+        assert diagnostics_enabled() is expected
 
     def test_enabled_via_config_provider(self):
         mock_config = MagicMock()

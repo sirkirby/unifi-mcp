@@ -13,14 +13,6 @@ class TestJobStore:
     def store(self):
         return JobStore()
 
-    async def test_start_returns_job_id(self, store):
-        async def noop():
-            return "done"
-
-        job_id = await store.start(noop())
-        assert isinstance(job_id, str)
-        assert len(job_id) == 16  # secrets.token_hex(8) produces 16 chars
-
     async def test_status_running(self, store):
         event = asyncio.Event()
 
@@ -29,6 +21,8 @@ class TestJobStore:
             return "finished"
 
         job_id = await store.start(wait_for_event())
+        assert isinstance(job_id, str)
+        assert len(job_id) == 16
         status = await store.status(job_id)
         assert status["status"] == "running"
         assert status["result"] is None
@@ -42,9 +36,12 @@ class TestJobStore:
         job_id = await store.start(quick())
         await asyncio.sleep(0.05)  # let task complete
         status = await store.status(job_id)
+        status_copy = await store.status(job_id)
         assert status["status"] == "done"
         assert status["result"] == {"data": "result"}
         assert "completed" in status
+        assert status is not status_copy
+        assert status == status_copy
 
     async def test_status_error(self, store):
         async def fail():
@@ -59,17 +56,6 @@ class TestJobStore:
     async def test_status_unknown(self, store):
         status = await store.status("nonexistent")
         assert status["status"] == "unknown"
-
-    async def test_status_returns_copy(self, store):
-        async def quick():
-            return "ok"
-
-        job_id = await store.start(quick())
-        await asyncio.sleep(0.05)
-        s1 = await store.status(job_id)
-        s2 = await store.status(job_id)
-        assert s1 is not s2
-        assert s1 == s2
 
 
 class TestStartAsyncTool:
