@@ -17,23 +17,21 @@ def _service(response=_PROFILE, error=None):
 
 
 @pytest.mark.asyncio
-async def test_arm_profile_posts_v2_action():
-    service, api_request = _service()
-    result = await service.arm_profile(_PROFILE_ID)
+@pytest.mark.parametrize(
+    "method,action,response",
+    [
+        ("arm_profile", "arm", _PROFILE),
+        ("disarm_profile", "disarm", {**_PROFILE, "state": "disarmed"}),
+    ],
+    ids=["arm", "disarm"],
+)
+async def test_arm_profile_posts_v2_action(method, action, response):
+    service, api_request = _service(response=response)
+    result = await getattr(service, method)(_PROFILE_ID)
     api_request.assert_awaited_once_with(
-        f"profiles/{_PROFILE_ID}/actions/arm", method="post", api_path="/api/v2/alarms/"
+        f"profiles/{_PROFILE_ID}/actions/{action}", method="post", api_path="/api/v2/alarms/"
     )
-    assert result == _PROFILE
-
-
-@pytest.mark.asyncio
-async def test_disarm_profile_posts_v2_action():
-    service, api_request = _service(response={**_PROFILE, "state": "disarmed"})
-    result = await service.disarm_profile(_PROFILE_ID)
-    api_request.assert_awaited_once_with(
-        f"profiles/{_PROFILE_ID}/actions/disarm", method="post", api_path="/api/v2/alarms/"
-    )
-    assert result["state"] == "disarmed"
+    assert result == response
 
 
 @pytest.mark.asyncio

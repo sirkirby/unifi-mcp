@@ -122,8 +122,17 @@ async def test_list_rules_prefers_alarm_manager_and_reports_complete():
 
 
 @pytest.mark.asyncio
-async def test_list_rules_falls_back_to_legacy_normalized_and_incomplete():
-    rules, complete = await _facade(service_err=True, legacy_list=[_RAW_LEGACY]).list_rules()
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"service_err": True, "legacy_list": [_RAW_LEGACY]},
+        {"service_list": [], "legacy_list": [_RAW_LEGACY]},
+        {"list_exc": BadRequest("404"), "legacy_list": [_RAW_LEGACY]},
+    ],
+    ids=["v2_permission", "v2_empty", "v2_client_error"],
+)
+async def test_list_rules_falls_back_to_legacy_normalized_and_incomplete(kwargs):
+    rules, complete = await _facade(**kwargs).list_rules()
     assert complete is False
     assert rules[0]["id"] == "66a5c92a0022f903e4000400"
     assert rules[0]["title"] == "Motion"  # normalized to canonical (name -> title)
@@ -138,28 +147,21 @@ async def test_get_rule_prefers_alarm_manager():
 
 
 @pytest.mark.asyncio
-async def test_get_rule_falls_back_to_legacy_normalized():
-    rule, complete = await _facade(service_err=True, legacy_get=_RAW_LEGACY).get_rule("66a5c92a0022f903e4000400")
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"service_err": True, "legacy_get": _RAW_LEGACY},
+        {
+            "get_exc": UniFiNotFoundError("alarm rule", "66a5c92a0022f903e4000400"),
+            "legacy_get": _RAW_LEGACY,
+        },
+    ],
+    ids=["v2_permission", "v2_not_found"],
+)
+async def test_get_rule_falls_back_to_legacy_normalized(kwargs):
+    rule, complete = await _facade(**kwargs).get_rule("66a5c92a0022f903e4000400")
     assert complete is False
     assert rule["title"] == "Motion"
-
-
-@pytest.mark.asyncio
-async def test_list_rules_falls_back_to_legacy_when_v2_empty():
-    # v2 endpoint exists but is unpopulated on this console (e.g. Protect not yet
-    # migrated to /api/v2/alarms) -> [] must fall back to legacy, not report 0 rules.
-    rules, complete = await _facade(service_list=[], legacy_list=[_RAW_LEGACY]).list_rules()
-    assert complete is False
-    assert rules[0]["id"] == "66a5c92a0022f903e4000400"
-    assert rules[0]["title"] == "Motion"
-
-
-@pytest.mark.asyncio
-async def test_list_rules_falls_back_on_v2_client_error():
-    # v2 4xx (e.g. 404 not found, 400 global-alarm-manager) -> BadRequest -> use legacy.
-    rules, complete = await _facade(list_exc=BadRequest("404"), legacy_list=[_RAW_LEGACY]).list_rules()
-    assert complete is False
-    assert rules[0]["title"] == "Motion"
 
 
 @pytest.mark.asyncio
@@ -190,8 +192,16 @@ async def test_list_profiles_prefers_alarm_manager_profiles_and_reports_complete
 
 
 @pytest.mark.asyncio
-async def test_list_profiles_falls_back_to_legacy_when_v2_empty():
-    profiles, complete = await _facade(service_list=[], legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"service_list": [], "legacy_list": [_RAW_LEGACY_PROFILE]},
+        {"list_exc": BadRequest("404"), "legacy_list": [_RAW_LEGACY_PROFILE]},
+    ],
+    ids=["v2_empty", "v2_client_error"],
+)
+async def test_list_profiles_falls_back_to_legacy_when_v2_empty(kwargs):
+    profiles, complete = await _facade(**kwargs).list_profiles()
 
     assert complete is False
     assert profiles[0]["id"] == "66a5c92a0022f903e4000401"
@@ -201,14 +211,6 @@ async def test_list_profiles_falls_back_to_legacy_when_v2_empty():
     assert profiles[0]["arm_compatible"] is True
     assert "state" not in profiles[0]
     assert "state_set_at" not in profiles[0]
-
-
-@pytest.mark.asyncio
-async def test_list_profiles_falls_back_on_v2_client_error():
-    profiles, complete = await _facade(list_exc=BadRequest("404"), legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
-
-    assert complete is False
-    assert profiles[0]["name"] == "Home"
 
 
 @pytest.mark.asyncio
@@ -238,16 +240,6 @@ async def test_list_profiles_uses_legacy_profiles_after_permission_error_when_av
 async def test_list_profiles_propagates_v2_server_error():
     with pytest.raises(NvrError):
         await _facade(list_exc=NvrError("500"), legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
-
-
-@pytest.mark.asyncio
-async def test_get_rule_falls_back_when_v2_not_found():
-    # v2 unpopulated -> service.get_rule raises NotFound -> fall back to legacy.
-    rule, complete = await _facade(
-        get_exc=UniFiNotFoundError("alarm rule", "66a5c92a0022f903e4000400"), legacy_get=_RAW_LEGACY
-    ).get_rule("66a5c92a0022f903e4000400")
-    assert complete is False
-    assert rule["title"] == "Motion"
 
 
 @pytest.mark.asyncio
@@ -347,27 +339,6 @@ async def test_create_rule_prefers_v2_when_v2_serves_rules():
 
 
 @pytest.mark.asyncio
-async def test_create_rule_falls_back_to_legacy_when_v2_endpoint_empty():
-    # An empty v2 response (200 []) means the endpoint exists but is not the
-    # active rule store on this console (e.g. Protect not migrated to
-    # /api/v2/alarms). Mirror the read fallback: write to legacy, not v2 — so a
-    # rule read from legacy can be created back on the same backend.
-    facade = _facade(service_list=[])
-
-    result, complete = await facade.create_rule(
-        {
-            "title": "New",
-            "actions": [{"action_id": "webhook", "data": {"type": "webhook"}}],
-        }
-    )
-
-    assert complete is False
-    assert result["id"] == _RAW_LEGACY["id"]
-    facade._service.create_rule.assert_not_called()
-    facade._legacy.create_rule.assert_awaited_once()
-
-
-@pytest.mark.asyncio
 async def test_create_rule_legacy_roundtrip_succeeds_when_v2_empty():
     # The reporter's flow: read a legacy rule, feed its canonical shape straight
     # back into create. The legacy condition has no `type`, so the canonical
@@ -388,8 +359,18 @@ async def test_create_rule_legacy_roundtrip_succeeds_when_v2_empty():
 
 
 @pytest.mark.asyncio
-async def test_create_rule_falls_back_to_legacy_when_v2_write_unavailable():
-    facade = _facade(service_err=True)
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"service_err": True},
+        {"service_list": []},
+    ],
+    ids=["v2_write_unavailable", "v2_endpoint_empty"],
+)
+async def test_create_rule_falls_back_to_legacy_when_v2_write_unavailable(kwargs):
+    # Empty v2 (200 []) means the endpoint exists but is not the active store
+    # (Protect not migrated to /api/v2/alarms). A 403 is the same write fallback.
+    facade = _facade(**kwargs)
 
     result, complete = await facade.create_rule(
         {
@@ -460,17 +441,17 @@ async def test_create_rule_legacy_preserves_license_plate_known_value():
 # --- Bug 1: legacy ids with a `_new` suffix must route, not be rejected --------
 
 
-def test_id_family_routes_v2_uuid_to_v2():
-    assert AlarmRulesFacade._id_family("019e9f9d-59a1-7ee3-8921-27f84a0086ea") == "v2"
-
-
-def test_id_family_routes_plain_object_id_to_legacy():
-    assert AlarmRulesFacade._id_family("66a5c92a0022f903e4000400") == "legacy"
-
-
-def test_id_family_routes_suffixed_legacy_id_to_legacy():
-    # Controller-assigned legacy ids may carry a `_new` suffix; route, don't reject.
-    assert AlarmRulesFacade._id_family(_LEGACY_NEW_ID) == "legacy"
+@pytest.mark.parametrize(
+    "rule_id,family",
+    [
+        ("019e9f9d-59a1-7ee3-8921-27f84a0086ea", "v2"),
+        ("66a5c92a0022f903e4000400", "legacy"),
+        (_LEGACY_NEW_ID, "legacy"),  # controller-assigned `_new` suffix; route, don't reject
+    ],
+    ids=["v2_uuid", "plain_object_id", "suffixed_legacy_id"],
+)
+def test_id_family_routes_v2_uuid_to_v2(rule_id, family):
+    assert AlarmRulesFacade._id_family(rule_id) == family
 
 
 def test_id_family_rejects_blank_id():

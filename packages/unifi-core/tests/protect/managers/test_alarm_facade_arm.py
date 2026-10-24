@@ -122,12 +122,24 @@ async def test_arm_reports_silent_noop_as_error():
 
 
 @pytest.mark.asyncio
-async def test_arm_falls_back_to_legacy_when_v2_unavailable():
+@pytest.mark.parametrize(
+    "operation,call_args,legacy_method,legacy_args,expected_profile_id",
+    [
+        ("arm", ("66a5c92a0022f903e4000401",), "arm", ("66a5c92a0022f903e4000401",), "legacy"),
+        ("disarm", (None,), "disarm", (), None),
+    ],
+    ids=["arm", "disarm"],
+)
+async def test_arm_falls_back_to_legacy_when_v2_unavailable(
+    operation, call_args, legacy_method, legacy_args, expected_profile_id
+):
     facade = _legacy_facade()
-    result = await facade.arm("66a5c92a0022f903e4000401")
-    facade._legacy.arm.assert_awaited_once_with("66a5c92a0022f903e4000401")
+    result = await getattr(facade, operation)(*call_args)
+    getattr(facade._legacy, legacy_method).assert_awaited_once_with(*legacy_args)
     facade._service.arm_profile.assert_not_called()
-    assert result["profile_id"] == "legacy"
+    facade._service.disarm_profile.assert_not_called()
+    if expected_profile_id is not None:
+        assert result["profile_id"] == expected_profile_id
 
 
 @pytest.mark.asyncio
@@ -164,14 +176,6 @@ async def test_disarm_reports_silent_noop_as_error():
     facade = _facade(active, after=active)
     with pytest.raises(ValueError, match="still 'armed'"):
         await facade.disarm(None)
-
-
-@pytest.mark.asyncio
-async def test_disarm_falls_back_to_legacy_when_v2_unavailable():
-    facade = _legacy_facade()
-    await facade.disarm(None)
-    facade._legacy.disarm.assert_awaited_once_with()
-    facade._service.disarm_profile.assert_not_called()
 
 
 @pytest.mark.asyncio
