@@ -78,74 +78,31 @@ class TestParseConfigBool:
         result = parse_config_bool(value)
         assert result == expected, f"Expected parse_config_bool({value!r}) to be {expected}"
 
-    def test_parse_config_bool_default_true(self):
-        """Verify default=True is used when value is None."""
-        assert parse_config_bool(None, default=True) is True
-
-    def test_parse_config_bool_default_false(self):
-        """Verify default=False is used when value is None."""
-        assert parse_config_bool(None, default=False) is False
+    @pytest.mark.parametrize("default", [True, False])
+    def test_parse_config_bool_default_used_when_none(self, default: bool):
+        """Verify the default is used when value is None."""
+        assert parse_config_bool(None, default=default) is default
 
 
 class TestHttpForceFlag:
     """Tests for UNIFI_MCP_HTTP_FORCE configuration option."""
 
     @pytest.mark.parametrize(
-        "value,expected",
+        "force_http,is_main_container_process,expected",
         [
-            ("true", True),
-            ("TRUE", True),
-            ("True", True),
-            ("1", True),
-            ("yes", True),
-            ("YES", True),
-            ("false", False),
-            ("FALSE", False),
-            ("0", False),
-            ("no", False),
-            ("", False),
-            ("invalid", False),
+            (True, False, True),  # force flag bypasses the PID check
+            (False, False, False),  # PID != 1 without force flag disables HTTP
+            (False, True, True),  # PID == 1 keeps HTTP enabled
         ],
     )
-    def test_http_force_flag_parsing(self, value: str, expected: bool):
-        """Verify HTTP force flag is parsed correctly using parse_config_bool."""
-        result = parse_config_bool(value)
-        assert result == expected, f"Expected '{value}' to parse as {expected}"
-
-    def test_http_enabled_with_force_flag_bypasses_pid_check(self):
-        """Verify force flag allows HTTP even when PID != 1."""
-        # Simulate the logic from main.py
+    def test_http_enabled_depends_on_pid_and_force_flag(self, force_http, is_main_container_process, expected):
+        """Simulate the logic from main.py."""
         http_enabled = True
-        force_http = True
-        is_main_container_process = False  # PID != 1
-
-        # With force flag, HTTP should remain enabled
-        if http_enabled and not is_main_container_process and not force_http:
-            http_enabled = False
-
-        assert http_enabled is True, "Force flag should bypass PID check"
-
-    def test_http_disabled_without_force_flag_when_not_pid_1(self):
-        """Verify HTTP is disabled when PID != 1 and no force flag."""
-        http_enabled = True
-        force_http = False
-        is_main_container_process = False  # PID != 1
 
         if http_enabled and not is_main_container_process and not force_http:
             http_enabled = False
 
-        assert http_enabled is False, "HTTP should be disabled when PID != 1 without force flag"
-
-    def test_http_enabled_when_pid_1(self):
-        """Verify HTTP is enabled when running as PID 1 (container main process)."""
-        http_enabled = True
-        force_http = False
-        is_main_container_process = True  # PID == 1
-
-        if http_enabled and not is_main_container_process and not force_http:
-            http_enabled = False
-
-        assert http_enabled is True, "HTTP should be enabled when PID == 1"
+        assert http_enabled is expected
 
 
 class TestHttpTransportSelection:
@@ -162,37 +119,22 @@ class TestHttpTransportSelection:
             http_transport = "streamable-http"
         return http_transport
 
-    def test_default_transport_is_streamable_http(self):
-        """Default transport should be streamable-http when not specified."""
-        assert self._resolve_transport(None) == "streamable-http"
-
-    def test_explicit_streamable_http(self):
-        """Explicit streamable-http value should be accepted."""
-        assert self._resolve_transport("streamable-http") == "streamable-http"
-
-    def test_explicit_sse(self):
-        """Explicit sse value should be accepted."""
-        assert self._resolve_transport("sse") == "sse"
-
-    def test_case_insensitive_streamable_http(self):
-        """Transport value should be case-insensitive."""
-        assert self._resolve_transport("Streamable-HTTP") == "streamable-http"
-
-    def test_case_insensitive_sse(self):
-        """SSE transport should be case-insensitive."""
-        assert self._resolve_transport("SSE") == "sse"
-
-    def test_invalid_value_falls_back_to_default(self):
-        """Invalid transport values should fall back to streamable-http."""
-        assert self._resolve_transport("bogus") == "streamable-http"
-
-    def test_empty_string_falls_back_to_default(self):
-        """Empty string should fall back to streamable-http."""
-        assert self._resolve_transport("") == "streamable-http"
-
-    def test_websocket_not_valid(self):
-        """Websocket is not a valid transport option."""
-        assert self._resolve_transport("websocket") == "streamable-http"
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            (None, "streamable-http"),
+            ("streamable-http", "streamable-http"),
+            ("sse", "sse"),
+            ("Streamable-HTTP", "streamable-http"),
+            ("SSE", "sse"),
+            ("bogus", "streamable-http"),
+            ("", "streamable-http"),
+            ("websocket", "streamable-http"),
+        ],
+    )
+    def test_transport_resolution(self, raw, expected):
+        """Defaults to streamable-http; case-insensitive; invalid values (incl. websocket) fall back."""
+        assert self._resolve_transport(raw) == expected
 
 
 class TestTransportLogLabels:
@@ -202,21 +144,22 @@ class TestTransportLogLabels:
         """Replicate the label logic from main.py."""
         return "Streamable HTTP" if transport == "streamable-http" else "HTTP SSE"
 
-    def test_streamable_http_label(self):
-        """Streamable HTTP transport should produce correct label."""
-        assert self._get_label("streamable-http") == "Streamable HTTP"
-
-    def test_sse_label(self):
-        """SSE transport should produce correct label."""
-        assert self._get_label("sse") == "HTTP SSE"
+    @pytest.mark.parametrize("transport,label", [("streamable-http", "Streamable HTTP"), ("sse", "HTTP SSE")])
+    def test_transport_label(self, transport, label):
+        assert self._get_label(transport) == label
 
 
 class TestTransportConfigYaml:
     """Tests for transport config in config.yaml via OmegaConf."""
 
-    def test_config_yaml_has_transport_key(self, tmp_path):
-        """Verify config.yaml transport key resolves with OmegaConf."""
+    @pytest.mark.parametrize("env_value,expected", [(None, "streamable-http"), ("sse", "sse")])
+    def test_config_yaml_transport_resolves(self, tmp_path, monkeypatch, env_value, expected):
+        """Transport key resolves to its default and can be overridden via environment variable."""
         from omegaconf import OmegaConf
+
+        monkeypatch.delenv("UNIFI_MCP_HTTP_TRANSPORT", raising=False)
+        if env_value is not None:
+            monkeypatch.setenv("UNIFI_MCP_HTTP_TRANSPORT", env_value)
 
         yaml_content = """
 server:
@@ -230,24 +173,4 @@ server:
 
         cfg = OmegaConf.load(config_file)
         OmegaConf.resolve(cfg)
-        assert cfg.server.http.transport == "streamable-http"
-
-    def test_config_yaml_transport_env_override(self, tmp_path, monkeypatch):
-        """Verify transport can be overridden via environment variable."""
-        from omegaconf import OmegaConf
-
-        monkeypatch.setenv("UNIFI_MCP_HTTP_TRANSPORT", "sse")
-
-        yaml_content = """
-server:
-  http:
-    enabled: false
-    force: false
-    transport: ${oc.env:UNIFI_MCP_HTTP_TRANSPORT,streamable-http}
-"""
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text(yaml_content)
-
-        cfg = OmegaConf.load(config_file)
-        OmegaConf.resolve(cfg)
-        assert cfg.server.http.transport == "sse"
+        assert cfg.server.http.transport == expected

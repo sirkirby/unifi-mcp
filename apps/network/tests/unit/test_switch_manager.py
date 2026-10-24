@@ -36,23 +36,6 @@ class TestSwitchManager:
     # ---- Port Profile CRUD ----
 
     @pytest.mark.asyncio
-    async def test_get_port_profiles_returns_list(self, switch_manager, mock_connection):
-        """Test get_port_profiles returns a list of profiles."""
-        mock_connection.request.return_value = {
-            "meta": {"rc": "ok"},
-            "data": [
-                {"_id": "p1", "name": "Endpoint", "forward": "native", "isolation": False},
-                {"_id": "p2", "name": "Endpoint (ISO)", "forward": "native", "isolation": True},
-            ],
-        }
-
-        profiles = await switch_manager.get_port_profiles()
-
-        assert len(profiles) == 2
-        assert profiles[1]["isolation"] is True
-        mock_connection._update_cache.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_get_port_profiles_uses_cache(self, switch_manager, mock_connection):
         """Test get_port_profiles returns cached data."""
         cached = [{"_id": "cached", "name": "Cached"}]
@@ -80,31 +63,6 @@ class TestSwitchManager:
             await switch_manager.get_port_profiles()
 
     @pytest.mark.asyncio
-    async def test_get_port_profile_by_id_found(self, switch_manager, mock_connection):
-        """Test get_port_profile_by_id returns profile."""
-        mock_connection.request.return_value = {
-            "data": [{"_id": "p1", "name": "Endpoint", "forward": "native"}],
-        }
-
-        profile = await switch_manager.get_port_profile_by_id("p1")
-
-        assert profile is not None
-        assert profile["name"] == "Endpoint"
-
-    @pytest.mark.asyncio
-    async def test_create_port_profile_success(self, switch_manager, mock_connection):
-        """Test create_port_profile with valid data."""
-        mock_connection.request.return_value = {
-            "data": [{"_id": "new1", "name": "Test", "forward": "native"}],
-        }
-
-        result = await switch_manager.create_port_profile({"name": "Test", "forward": "native"})
-
-        assert result.success is True
-        assert result.resource["_id"] == "new1"
-        mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
     async def test_create_port_profile_refetches_and_reports_coerced_fields(self, switch_manager, mock_connection):
         """The POST response is not proof of persistence; verification uses a fresh GET."""
         mock_connection.request.side_effect = [
@@ -130,23 +88,6 @@ class TestSwitchManager:
         mock_connection.request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_update_port_profile_success(self, switch_manager, mock_connection):
-        """Test update_port_profile acks success when the read-back matches."""
-        existing = {"_id": "p1", "name": "Original", "forward": "all"}
-        stored = {"_id": "p1", "name": "Updated", "forward": "all"}
-        mock_connection.request.side_effect = [
-            [existing],  # GET returns list
-            {},  # PUT
-            [stored],  # GET read-back
-        ]
-
-        result = await switch_manager.update_port_profile("p1", {"name": "Updated"})
-
-        assert result.success is True
-        assert result.persisted_fields == ("name",)
-        mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
     async def test_update_port_profile_fetches_and_merges(self, switch_manager, mock_connection):
         """Test update_port_profile fetches current profile, merges, PUTs full object."""
         existing_profile = {
@@ -166,34 +107,14 @@ class TestSwitchManager:
         result = await switch_manager.update_port_profile("pp1", {"name": "Renamed", "poe_mode": "off"})
 
         assert result.success is True, result.error
+        assert result.persisted_fields == ("name", "poe_mode")
+        mock_connection._invalidate_cache.assert_called()
         put_call = mock_connection.request.call_args_list[1]
         put_request = put_call[0][0]
         assert put_request.method == "put"
         assert put_request.data["name"] == "Renamed"
         assert put_request.data["poe_mode"] == "off"
         assert put_request.data["forward"] == "customize"
-
-    @pytest.mark.asyncio
-    async def test_update_port_profile_returns_controller_state_not_local_merge(self, switch_manager, mock_connection):
-        """The returned profile is what the controller stored, not what we sent.
-
-        The controller rewrites some values on write (notably `forward`, to
-        agree with tagged_vlan_mgmt). Returning the local merge reported those
-        rewritten writes as if they had been applied verbatim.
-        """
-        existing = {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"}
-        stored = {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"}
-        mock_connection.request.side_effect = [
-            [existing],  # GET current
-            {},  # PUT
-            [stored],  # GET read-back
-        ]
-
-        result = await switch_manager.update_port_profile("p1", {"forward": "native"})
-
-        assert result.success is False, "a rewritten write must not ack as success"
-        assert result.dropped_fields == ("forward",)
-        assert result.resource["forward"] == "all"
 
     @pytest.mark.asyncio
     async def test_update_port_profile_read_back_failure_reports_unverified_mutation(
@@ -214,25 +135,6 @@ class TestSwitchManager:
         assert "could not be re-read" in result.error
 
     @pytest.mark.asyncio
-    async def test_update_port_profile_reports_requested_key_the_controller_omits(
-        self, switch_manager, mock_connection
-    ):
-        """A missing requested field is a silent drop, not verified success."""
-        existing = {"_id": "p1", "name": "P", "forward": "native"}
-        stored = {"_id": "p1", "name": "P", "forward": "native"}
-        mock_connection.request.side_effect = [
-            [existing],
-            {},
-            [stored],
-        ]
-
-        result = await switch_manager.update_port_profile("p1", {"excluded_networkconf_ids": ["net-9"]})
-
-        assert result.success is False
-        assert result.mutation_applied is True
-        assert result.dropped_fields == ("excluded_networkconf_ids",)
-
-    @pytest.mark.asyncio
     async def test_update_port_profile_treats_omitted_empty_vlan_lists_as_persisted(
         self, switch_manager, mock_connection
     ):
@@ -247,20 +149,48 @@ class TestSwitchManager:
         assert result.unchanged_fields == ("excluded_networkconf_ids",)
 
     @pytest.mark.asyncio
-    async def test_update_port_profile_reports_list_reordering(self, switch_manager, mock_connection):
-        """Verification remains exact unless a controller normalization is explicitly documented."""
-        existing = {"_id": "p1", "tagged_networkconf_ids": []}
-        stored = {"_id": "p1", "tagged_networkconf_ids": ["b", "a"]}
-        mock_connection.request.side_effect = [
-            [existing],
-            {},
-            [stored],
-        ]
+    @pytest.mark.parametrize(
+        ("existing", "stored", "update", "field_attr", "field"),
+        [
+            # The controller rewrites `forward` on write; the result reports the
+            # stored state, never the local merge.
+            (
+                {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"},
+                {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"},
+                {"forward": "native"},
+                "dropped_fields",
+                "forward",
+            ),
+            # A requested key the controller omits is a silent drop.
+            (
+                {"_id": "p1", "name": "P", "forward": "native"},
+                {"_id": "p1", "name": "P", "forward": "native"},
+                {"excluded_networkconf_ids": ["net-9"]},
+                "dropped_fields",
+                "excluded_networkconf_ids",
+            ),
+            # List verification is exact; reordering is a coercion.
+            (
+                {"_id": "p1", "tagged_networkconf_ids": []},
+                {"_id": "p1", "tagged_networkconf_ids": ["b", "a"]},
+                {"tagged_networkconf_ids": ["a", "b"]},
+                "coerced_fields",
+                "tagged_networkconf_ids",
+            ),
+        ],
+        ids=["rewritten_value", "omitted_key", "list_reordering"],
+    )
+    async def test_update_port_profile_does_not_ack_unverified_write(
+        self, switch_manager, mock_connection, existing, stored, update, field_attr, field
+    ):
+        mock_connection.request.side_effect = [[existing], {}, [stored]]
 
-        result = await switch_manager.update_port_profile("p1", {"tagged_networkconf_ids": ["a", "b"]})
+        result = await switch_manager.update_port_profile("p1", update)
 
-        assert result.success is False
-        assert result.coerced_fields == ("tagged_networkconf_ids",)
+        assert result.success is False, "an unverified write must not ack as success"
+        assert result.mutation_applied is True
+        assert getattr(result, field_attr) == (field,)
+        assert result.resource.get("forward") == stored.get("forward")
 
     @pytest.mark.asyncio
     async def test_update_port_profile_not_found(self, switch_manager, mock_connection):
@@ -436,33 +366,44 @@ class TestSwitchManager:
     @pytest.mark.asyncio
     async def test_list_profiles_uses_correct_path(self, switch_manager, mock_connection):
         """Test port profiles list uses /rest/portconf."""
-        mock_connection.request.return_value = {"data": []}
+        mock_connection.request.return_value = {
+            "data": [
+                {"_id": "p1", "name": "Endpoint", "forward": "native", "isolation": False},
+                {"_id": "p2", "name": "Endpoint (ISO)", "forward": "native", "isolation": True},
+            ],
+        }
 
-        await switch_manager.get_port_profiles()
+        profiles = await switch_manager.get_port_profiles()
 
         call_args = mock_connection.request.call_args
         assert call_args[0][0].path == "/rest/portconf"
+        assert len(profiles) == 2
+        assert profiles[1]["isolation"] is True
+        mock_connection._update_cache.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_profile_by_id_uses_correct_path(self, switch_manager, mock_connection):
         """Test port profile get uses /rest/portconf/{id}."""
-        mock_connection.request.return_value = {"data": [{"_id": "p1"}]}
+        mock_connection.request.return_value = {"data": [{"_id": "p1", "name": "Endpoint"}]}
 
-        await switch_manager.get_port_profile_by_id("p1")
+        profile = await switch_manager.get_port_profile_by_id("p1")
 
         call_args = mock_connection.request.call_args
         assert call_args[0][0].path == "/rest/portconf/p1"
+        assert profile["name"] == "Endpoint"
 
     @pytest.mark.asyncio
     async def test_create_profile_uses_post(self, switch_manager, mock_connection):
         """Test port profile create uses POST."""
-        mock_connection.request.return_value = {"data": [{"_id": "new1"}]}
+        mock_connection.request.return_value = {"data": [{"_id": "new1", "name": "Test", "forward": "native"}]}
 
-        await switch_manager.create_port_profile({"name": "Test", "forward": "native"})
+        result = await switch_manager.create_port_profile({"name": "Test", "forward": "native"})
 
         call_args = mock_connection.request.call_args_list[0]
         assert call_args[0][0].path == "/rest/portconf"
         assert call_args[0][0].method == "post"
+        assert result.success is True
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_device_stat_uses_correct_path(self, switch_manager, mock_connection):

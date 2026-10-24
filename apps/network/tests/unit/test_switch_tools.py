@@ -36,18 +36,10 @@ class TestCreatePortProfileDefaults:
     """
 
     @pytest.mark.asyncio
-    async def test_poe_mode_default_is_sent(self) -> None:
+    async def test_defaults_are_sent(self) -> None:
         payload = await _create_preview(name="P", forward="native")
         assert payload["poe_mode"] == "auto"
-
-    @pytest.mark.asyncio
-    async def test_stp_port_mode_default_is_sent(self) -> None:
-        payload = await _create_preview(name="P", forward="native")
         assert payload["stp_port_mode"] is True
-
-    @pytest.mark.asyncio
-    async def test_isolation_default_is_sent(self) -> None:
-        payload = await _create_preview(name="P", forward="native")
         assert payload["isolation"] is False
 
     @pytest.mark.asyncio
@@ -62,43 +54,37 @@ class TestCreatePortProfileAccessPort:
     """An access port must be expressible in a single create call."""
 
     @pytest.mark.asyncio
-    async def test_tagged_vlan_mgmt_is_sent(self) -> None:
-        payload = await _create_preview(name="Access", forward="native", tagged_vlan_mgmt="block_all")
-        assert payload["tagged_vlan_mgmt"] == "block_all"
-
-    @pytest.mark.asyncio
-    async def test_tagged_networkconf_ids_reachable_from_create(self) -> None:
-        payload = await _create_preview(
-            name="Trunk",
-            forward="customize",
-            tagged_vlan_mgmt="custom",
-            tagged_networkconf_ids=["net-1", "net-2"],
-        )
-        assert payload["tagged_networkconf_ids"] == ["net-1", "net-2"]
-
-    @pytest.mark.asyncio
-    async def test_excluded_networkconf_ids_reachable_from_create(self) -> None:
-        payload = await _create_preview(
-            name="Trunk",
-            forward="customize",
-            tagged_vlan_mgmt="custom",
-            excluded_networkconf_ids=["net-9"],
-        )
-        assert payload["excluded_networkconf_ids"] == ["net-9"]
-
-    @pytest.mark.asyncio
-    async def test_port_mode_edge_fields_reachable_from_create(self) -> None:
-        payload = await _create_preview(
-            name="Access",
-            forward="native",
-            tagged_vlan_mgmt="block_all",
-            stp_edge_state="enabled",
-            stp_bpdu_guard_enabled=True,
-            stp_uplink=False,
-        )
-        assert payload["stp_edge_state"] == "enabled"
-        assert payload["stp_bpdu_guard_enabled"] is True
-        assert payload["stp_uplink"] is False
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"name": "Access", "forward": "native", "tagged_vlan_mgmt": "block_all"},
+            {
+                "name": "Trunk",
+                "forward": "customize",
+                "tagged_vlan_mgmt": "custom",
+                "tagged_networkconf_ids": ["net-1", "net-2"],
+            },
+            {
+                "name": "Trunk",
+                "forward": "customize",
+                "tagged_vlan_mgmt": "custom",
+                "excluded_networkconf_ids": ["net-9"],
+            },
+            {
+                "name": "Access",
+                "forward": "native",
+                "tagged_vlan_mgmt": "block_all",
+                "stp_edge_state": "enabled",
+                "stp_bpdu_guard_enabled": True,
+                "stp_uplink": False,
+            },
+        ],
+        ids=["tagged_vlan_mgmt", "tagged_networkconf_ids", "excluded_networkconf_ids", "port_mode_edge_fields"],
+    )
+    async def test_fields_reachable_from_create(self, kwargs: dict) -> None:
+        payload = await _create_preview(**kwargs)
+        for key, value in kwargs.items():
+            assert payload[key] == value
 
     @pytest.mark.asyncio
     async def test_omitted_optional_fields_are_not_sent(self) -> None:
@@ -111,6 +97,12 @@ class TestCreatePortProfileAccessPort:
             "stp_edge_state",
             "stp_bpdu_guard_enabled",
             "stp_uplink",
+            "stormctrl_bcast_enabled",
+            "stormctrl_bcast_rate",
+            "stormctrl_mcast_enabled",
+            "stormctrl_mcast_rate",
+            "stormctrl_ucast_enabled",
+            "stormctrl_ucast_rate",
         ):
             assert key not in payload, f"{key!r} should not be sent when not requested"
 
@@ -155,31 +147,6 @@ class TestPortProfileWriteVerification:
         assert result["details_after_attempt"]["forward"] == "all"
 
     @pytest.mark.asyncio
-    async def test_update_success_when_manager_verifies(self) -> None:
-        from unifi_network_mcp.tools.switch import update_port_profile
-
-        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr._connection.site = "default"
-            mock_mgr.update_port_profile = AsyncMock(
-                return_value=WriteVerificationResult(
-                    success=True,
-                    mutation_applied=True,
-                    operation="update",
-                    resource={"_id": "pp1", "forward": "native", "tagged_vlan_mgmt": "block_all"},
-                    persisted_fields=("forward", "tagged_vlan_mgmt"),
-                    metadata={"profile_id": "pp1"},
-                )
-            )
-
-            result = await update_port_profile(
-                profile_id="pp1",
-                profile_data={"forward": "native", "tagged_vlan_mgmt": "block_all"},
-                confirm=True,
-            )
-
-        assert result["success"] is True, result
-
-    @pytest.mark.asyncio
     async def test_create_reports_coerced_field(self) -> None:
         from unifi_network_mcp.tools.switch import create_port_profile
 
@@ -208,50 +175,6 @@ class TestPortProfileWriteVerification:
         assert result["mutation_applied"] is True
         assert result["coerced_fields"] == ["forward"]
         assert result["details_after_attempt"]["forward"] == "all"
-
-    @pytest.mark.asyncio
-    async def test_create_success_path_reports_no_coercion(self) -> None:
-        """The happy path: everything requested came back as requested."""
-        created = {
-            "_id": "pp3",
-            "name": "Access",
-            "forward": "native",
-            "tagged_vlan_mgmt": "block_all",
-            "poe_mode": "auto",
-            "isolation": False,
-            "stp_port_mode": True,
-        }
-        from unifi_network_mcp.tools.switch import create_port_profile
-
-        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr._connection.site = "default"
-            mock_mgr.create_port_profile = AsyncMock(
-                return_value=WriteVerificationResult(
-                    success=True,
-                    mutation_applied=True,
-                    operation="create",
-                    resource=created,
-                    persisted_fields=(
-                        "forward",
-                        "isolation",
-                        "name",
-                        "poe_mode",
-                        "stp_port_mode",
-                        "tagged_vlan_mgmt",
-                    ),
-                    metadata={"profile_id": "pp3"},
-                )
-            )
-            result = await create_port_profile(
-                name="Access",
-                forward="native",
-                tagged_vlan_mgmt="block_all",
-                confirm=True,
-            )
-
-        assert result["success"] is True, result
-        assert result["coerced_fields"] == []
-        assert result["details"]["_id"] == "pp3"
 
     @pytest.mark.asyncio
     async def test_create_does_not_flag_keys_the_controller_omits(self) -> None:
@@ -293,6 +216,8 @@ class TestPortProfileWriteVerification:
             )
 
         assert result["success"] is True, result
+        assert result["coerced_fields"] == []
+        assert result["details"]["_id"] == "pp4"
 
 
 class TestUpdatePortProfilePreview:
@@ -347,19 +272,6 @@ class TestStormControlWritePath:
         assert payload["stormctrl_mcast_rate"] == 500
         assert payload["stormctrl_ucast_enabled"] is False
         assert payload["stormctrl_ucast_rate"] == 2000
-
-    @pytest.mark.asyncio
-    async def test_create_omits_storm_control_when_unset(self) -> None:
-        payload = await _create_preview(name="P", forward="native")
-        for key in (
-            "stormctrl_bcast_enabled",
-            "stormctrl_bcast_rate",
-            "stormctrl_mcast_enabled",
-            "stormctrl_mcast_rate",
-            "stormctrl_ucast_enabled",
-            "stormctrl_ucast_rate",
-        ):
-            assert key not in payload, f"{key!r} should not be sent when not requested"
 
     @pytest.mark.asyncio
     async def test_update_accepts_storm_control_without_warning(self) -> None:

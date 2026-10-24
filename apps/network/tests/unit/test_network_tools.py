@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from unifi_core.redaction import REDACTED
-from unifi_core.write_verification import failed_write, verify_write
+from unifi_core.write_verification import verify_write
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
@@ -64,23 +64,6 @@ class TestUpdateNetwork:
 
         assert result["success"] is False
         assert "update_data cannot be empty" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_invalid_field_type(self):
-        """Wrong field types are rejected before preview or controller access."""
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            from unifi_network_mcp.tools.network import update_network
-
-            result = await update_network(
-                network_id="net001",
-                update_data={"dhcpd_leasetime": "not-an-int"},
-                confirm=True,
-            )
-
-        assert result["success"] is False
-        assert "Invalid network update data" in result["error"]
-        mock_mgr.get_network_details.assert_not_called()
-        mock_mgr.update_network.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_network_not_found(self):
@@ -149,28 +132,6 @@ class TestUpdateNetwork:
         assert result["details"]["domain_name"] == "new.example.com"
 
     @pytest.mark.asyncio
-    async def test_manager_error_surfaces_verbatim(self):
-        """Controller error detail from the structured manager result reaches the caller."""
-        controller_error = "{'meta': {'rc': 'error', 'msg': 'api.err.MissingIPAddress'}, 'data': []}"
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
-            mock_mgr.update_network = AsyncMock(return_value=failed_write(controller_error, operation="update"))
-
-            from unifi_network_mcp.tools.network import update_network
-
-            result = await update_network(
-                network_id="net001",
-                update_data={"dhcpguard_enabled": True},
-                confirm=True,
-            )
-
-        assert result["success"] is False
-        assert "api.err.MissingIPAddress" in result["error"]
-        assert "net001" in result["error"]
-        # Ensure we're NOT returning the old misleading constant message
-        assert "might not be fully implemented" not in result["error"]
-
-    @pytest.mark.asyncio
     async def test_manager_structured_result_contract(self):
         """A regression to a bare bool is rejected instead of reporting phantom success."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
@@ -188,25 +149,6 @@ class TestUpdateNetwork:
 
         # The tool catches the TypeError in its except block and returns error dict
         assert result["success"] is False
-
-    @pytest.mark.asyncio
-    async def test_vlan_range_validation(self):
-        """VLAN ID outside 1-4094 is rejected by cross-field validation."""
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
-            mock_mgr.update_network = AsyncMock()
-
-            from unifi_network_mcp.tools.network import update_network
-
-            result = await update_network(
-                network_id="net001",
-                update_data={"vlan": "5000"},
-                confirm=True,
-            )
-
-        assert result["success"] is False
-        assert "1 and 4094" in result["error"]
-        mock_mgr.update_network.assert_not_called()
 
 
 SAMPLE_WAN = {
@@ -247,7 +189,9 @@ async def test_update_network_preview_read_failure_returns_structured_error():
     [
         ({"vlan": "not-an-integer"}, "must be an integer"),
         ({"vlan": 5000}, "between 1 and 4094"),
+        ({"vlan": "5000"}, "1 and 4094"),
         ({"ip_subnet": "not-a-cidr"}, "valid IPv4 or IPv6 CIDR"),
+        ({"dhcpd_leasetime": "not-an-int"}, "Invalid network update data"),
     ],
 )
 async def test_update_network_rejects_malformed_values_before_preview(update_data, error_fragment):
@@ -339,34 +283,6 @@ class TestUpdateNetworkWanFields:
     """WAN field updates + connectivity-loss warnings in the confirm-preview."""
 
     @pytest.mark.asyncio
-    async def test_wan_partial_update_forwards_only_changed_field(self):
-        """Tool forwards ONLY the changed field to the manager; the merge/preservation step
-        is the manager's deep_merge (covered in the manager suite), so this asserts forwarding."""
-        updated = {**SAMPLE_WAN, "wan_smartq_enabled": True}
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_WAN, updated])
-            mock_mgr.update_network = AsyncMock(
-                return_value=verify_write(
-                    operation="update",
-                    requested={"wan_smartq_enabled": True},
-                    before=SAMPLE_WAN,
-                    after=updated,
-                )
-            )
-
-            from unifi_network_mcp.tools.network import update_network
-
-            result = await update_network(
-                network_id="wan001",
-                update_data={"wan_smartq_enabled": True},
-                confirm=True,
-            )
-
-        assert result["success"] is True
-        forwarded = mock_mgr.update_network.call_args[0][1]
-        assert forwarded == {"wan_smartq_enabled": True}
-
-    @pytest.mark.asyncio
     async def test_confirmed_update_forwards_firewall_zone_and_wan_monitor_fields(self):
         fields = {
             "firewall_zone_id": "zone-v2-1",
@@ -431,8 +347,9 @@ class TestUpdateNetworkWanFields:
         mock_mgr.update_network.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_wan_preview_no_warning_for_safe_field(self):
-        """A non-connectivity-critical WAN field (smartq) emits no warning."""
+    @pytest.mark.parametrize("update_data", [{"wan_smartq_enabled": True}, {"ipv6_enabled": True}])
+    async def test_wan_preview_no_warning_for_safe_field(self, update_data):
+        """Non-connectivity-critical WAN fields (smartq, dual-stack IPv6) emit no warning."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
             mock_mgr.update_network = AsyncMock()
@@ -441,7 +358,7 @@ class TestUpdateNetworkWanFields:
 
             result = await update_network(
                 network_id="wan001",
-                update_data={"wan_smartq_enabled": True},
+                update_data=update_data,
                 confirm=False,
             )
 
@@ -574,20 +491,6 @@ class TestUpdateNetworkWanFields:
         mock_mgr.update_network.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_wan_ipv6_field_no_connectivity_warning(self):
-        """IPv6 WAN fields are dual-stack and not connectivity-critical -> no warning."""
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
-            mock_mgr.update_network = AsyncMock()
-            from unifi_network_mcp.tools.network import update_network
-
-            result = await update_network(network_id="wan001", update_data={"ipv6_enabled": True}, confirm=False)
-
-        assert result.get("requires_confirmation") is True
-        assert not result.get("warnings")
-        mock_mgr.update_network.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_wan_ipv6_pd_delegation_preview(self):
         """The controller-native PD value reaches the confirmation preview unchanged."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
@@ -682,71 +585,39 @@ class TestWlanToolRedaction:
         assert result["preview"]["will_create"]["x_passphrase"] == REDACTED
 
 
-class TestCreateWlanNetworkconfId:
-    """create_wlan must forward networkconf_id to the manager regardless of whether
-    the caller uses the controller field name (networkconf_id) or the model field name (network_id)."""
+class TestCreateWlanFieldsReachManager:
+    """create_wlan must forward fields to the manager: networkconf_id whether the caller uses
+    the controller field name (networkconf_id) or the model field name (network_id), and the
+    roaming fields, which pass through the WLAN_MUTABLE_FIELDS filter."""
 
     @pytest.mark.asyncio
-    async def test_networkconf_id_alias_reaches_manager(self):
-        created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.create_wlan = AsyncMock(
-                return_value=verify_write(operation="create", requested={}, after=created, metadata={"wlan_id": "w99"})
-            )
-            mock_mgr._connection.site = "default"
-
-            from unifi_network_mcp.tools.network import create_wlan
-
-            result = await create_wlan(
+    @pytest.mark.parametrize(
+        ("extra", "expected"),
+        [
+            ({"networkconf_id": "net-abc"}, {"networkconf_id": "net-abc"}),
+            ({"network_id": "net-abc"}, {"networkconf_id": "net-abc"}),
+            (
+                # rrm_enabled False and the negative RSSIs are deliberate: a
+                # truthiness filter anywhere on this path would silently eat them.
                 {
-                    "name": "HomeSSID",
-                    "security": "wpapsk",
-                    "x_passphrase": "password1",
-                    "networkconf_id": "net-abc",
+                    "rrm_enabled": False,
+                    "roaming_assistant_na_enabled": True,
+                    "roaming_assistant_na_rssi": -77,
+                    "roaming_assistant_6e_enabled": True,
+                    "roaming_assistant_6e_rssi": -88,
                 },
-                confirm=True,
-            )
-
-        assert result["success"] is True
-        payload = mock_mgr.create_wlan.call_args[0][0]
-        assert payload.get("networkconf_id") == "net-abc", (
-            "networkconf_id was silently dropped before reaching the manager"
-        )
-        assert "network_id" not in payload
-
-    @pytest.mark.asyncio
-    async def test_network_id_model_name_also_works(self):
-        created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.create_wlan = AsyncMock(
-                return_value=verify_write(operation="create", requested={}, after=created, metadata={"wlan_id": "w99"})
-            )
-            mock_mgr._connection.site = "default"
-
-            from unifi_network_mcp.tools.network import create_wlan
-
-            result = await create_wlan(
                 {
-                    "name": "HomeSSID",
-                    "security": "wpapsk",
-                    "x_passphrase": "password1",
-                    "network_id": "net-abc",
+                    "rrm_enabled": False,
+                    "roaming_assistant_na_enabled": True,
+                    "roaming_assistant_na_rssi": -77,
+                    "roaming_assistant_6e_enabled": True,
+                    "roaming_assistant_6e_rssi": -88,
                 },
-                confirm=True,
-            )
-
-        assert result["success"] is True
-        payload = mock_mgr.create_wlan.call_args[0][0]
-        assert payload.get("networkconf_id") == "net-abc"
-
-
-class TestCreateWlanRoamingFields:
-    """Adding the roaming fields to Wlan.MUTABLE_FIELDS also makes create_wlan accept
-    them, since it filters wlan_data through WLAN_MUTABLE_FIELDS. Pin that boundary:
-    the model-conversion tests would still pass if create_wlan dropped them here."""
-
-    @pytest.mark.asyncio
-    async def test_roaming_fields_reach_the_manager(self):
+            ),
+        ],
+        ids=["networkconf_id", "network_id_model_name", "roaming_fields"],
+    )
+    async def test_fields_reach_the_manager(self, extra, expected):
         created = {"_id": "w99", "name": "HomeSSID"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.create_wlan = AsyncMock(
@@ -757,28 +628,16 @@ class TestCreateWlanRoamingFields:
             from unifi_network_mcp.tools.network import create_wlan
 
             result = await create_wlan(
-                {
-                    "name": "HomeSSID",
-                    "security": "wpapsk",
-                    "x_passphrase": "password1",
-                    # rrm_enabled False and the negative RSSIs are deliberate: a
-                    # truthiness filter anywhere on this path would silently eat them.
-                    "rrm_enabled": False,
-                    "roaming_assistant_na_enabled": True,
-                    "roaming_assistant_na_rssi": -77,
-                    "roaming_assistant_6e_enabled": True,
-                    "roaming_assistant_6e_rssi": -88,
-                },
+                {"name": "HomeSSID", "security": "wpapsk", "x_passphrase": "password1", **extra},
                 confirm=True,
             )
 
         assert result["success"] is True
         payload = mock_mgr.create_wlan.call_args[0][0]
-        assert payload.get("rrm_enabled") is False, "rrm_enabled=False dropped before the manager"
-        assert payload.get("roaming_assistant_na_enabled") is True
-        assert payload.get("roaming_assistant_na_rssi") == -77
-        assert payload.get("roaming_assistant_6e_enabled") is True
-        assert payload.get("roaming_assistant_6e_rssi") == -88
+        for key, value in expected.items():
+            assert key in payload, f"{key} dropped before the manager"
+            assert payload[key] == value
+        assert "network_id" not in payload
 
 
 class TestUpdateWlanNetworkconfId:

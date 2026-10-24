@@ -81,161 +81,42 @@ class TestPathDetection:
     """Test suite for UniFi OS automatic detection (FR-001, FR-002, FR-003)."""
 
     @pytest.mark.asyncio
-    async def test_detects_unifi_os_correctly(self):
-        """Test detection of UniFi OS when proxy endpoint succeeds.
-
-        FR-001: System MUST probe /proxy/network/api/self/sites endpoint
-        FR-010: Detection MUST use /api/self/sites endpoint (lightweight)
-
-        Scenario:
-        - UniFi OS endpoint (/proxy/network/api/self/sites) returns 200 with valid JSON
-        - Standard endpoint should NOT be called (proxy succeeds first)
-
-        Expected: detect_unifi_os_proactively() returns True
-        """
+    @pytest.mark.parametrize(
+        ("proxy", "standard", "expected"),
+        [
+            # FR-001: the proxy endpoint answers -> UniFi OS.
+            ({"status": 200, "payload": {"meta": {"rc": "ok"}, "data": []}}, None, True),
+            # FR-001: only the direct endpoint answers -> standard controller.
+            ({"status": 404}, {"status": 200, "payload": {"meta": {"rc": "ok"}, "data": []}}, False),
+            # Both endpoints fail -> None (fall back to aiounifi).
+            ({"status": 404}, {"status": 404}, None),
+            # FR-012: both succeed (ambiguous) -> prefer direct paths.
+            (
+                {"status": 200, "payload": {"meta": {"rc": "ok"}, "data": []}},
+                {"status": 200, "payload": {"meta": {"rc": "ok"}, "data": []}},
+                False,
+            ),
+            # SC-002/SC-005: timeouts are handled gracefully -> None.
+            (
+                {"exception": asyncio.TimeoutError("Request timeout")},
+                {"exception": asyncio.TimeoutError("Request timeout")},
+                None,
+            ),
+        ],
+        ids=["unifi_os", "standard", "both_fail", "both_succeed_prefers_direct", "timeouts"],
+    )
+    async def test_detection_outcome(self, proxy, standard, expected):
         base_url = "https://192.0.2.1:443"
 
         with aioresponses() as mock:
-            # Mock UniFi OS endpoint to succeed
-            _mock_get(
-                mock,
-                base_url,
-                "/proxy/network/api/self/sites",
-                status=200,
-                payload={"meta": {"rc": "ok"}, "data": []},
-            )
+            _mock_get(mock, base_url, "/proxy/network/api/self/sites", **proxy)
+            if standard is not None:
+                _mock_get(mock, base_url, "/api/self/sites", **standard)
 
             async with aiohttp.ClientSession() as session:
                 result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
 
-            assert result is True, "Should detect UniFi OS when proxy endpoint succeeds"
-
-    @pytest.mark.asyncio
-    async def test_detects_standard_controller(self):
-        """Test detection of standard controller when only direct path works.
-
-        FR-001: System MUST probe both endpoints
-
-        Scenario:
-        - UniFi OS endpoint (/proxy/network/api/self/sites) fails with 404
-        - Standard endpoint (/api/self/sites) returns 200 with valid JSON
-
-        Expected: detect_unifi_os_proactively() returns False
-        """
-        base_url = "https://192.0.2.1:443"
-
-        with aioresponses() as mock:
-            # Mock UniFi OS endpoint to fail
-            _mock_get(mock, base_url, "/proxy/network/api/self/sites", status=404)
-
-            # Mock standard endpoint to succeed
-            _mock_get(
-                mock,
-                base_url,
-                "/api/self/sites",
-                status=200,
-                payload={"meta": {"rc": "ok"}, "data": []},
-            )
-
-            async with aiohttp.ClientSession() as session:
-                result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
-
-            assert result is False, "Should detect standard controller when only direct path works"
-
-    @pytest.mark.asyncio
-    async def test_detection_failure_returns_none(self):
-        """Test detection returns None when both endpoints fail.
-
-        Scenario:
-        - UniFi OS endpoint fails (404)
-        - Standard endpoint fails (404)
-
-        Expected: detect_unifi_os_proactively() returns None (fallback to aiounifi)
-        """
-        base_url = "https://192.0.2.1:443"
-
-        with aioresponses() as mock:
-            # Mock both endpoints to fail
-            _mock_get(mock, base_url, "/proxy/network/api/self/sites", status=404)
-
-            _mock_get(mock, base_url, "/api/self/sites", status=404)
-
-            async with aiohttp.ClientSession() as session:
-                result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
-
-            assert result is None, "Should return None when both endpoints fail"
-
-    @pytest.mark.asyncio
-    async def test_both_paths_succeed_prefers_direct(self):
-        """Test that when both paths succeed, detection prefers direct (FR-012).
-
-        FR-012: If both paths succeed (ambiguous), system MUST prefer direct paths
-
-        Scenario:
-        - Both UniFi OS and standard endpoints return 200 with valid JSON
-
-        Expected: detect_unifi_os_proactively() returns False (prefers direct)
-        """
-        base_url = "https://192.0.2.1:443"
-
-        with aioresponses() as mock:
-            # Mock both endpoints to succeed
-            _mock_get(
-                mock,
-                base_url,
-                "/proxy/network/api/self/sites",
-                status=200,
-                payload={"meta": {"rc": "ok"}, "data": []},
-            )
-
-            _mock_get(
-                mock,
-                base_url,
-                "/api/self/sites",
-                status=200,
-                payload={"meta": {"rc": "ok"}, "data": []},
-            )
-
-            async with aiohttp.ClientSession() as session:
-                result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
-
-            assert result is False, "Should prefer direct path when both succeed (FR-012)"
-
-    @pytest.mark.asyncio
-    async def test_detection_timeout_handling(self):
-        """Test that detection handles timeouts gracefully (SC-002, SC-005).
-
-        SC-002: Detection must complete within 5 seconds
-        SC-005: Detection adds ≤2 seconds to connection time
-
-        Scenario:
-        - GET requests raise asyncio.TimeoutError
-
-        Expected: detect_unifi_os_proactively() returns None
-        """
-        base_url = "https://192.0.2.1:443"
-
-        with aioresponses() as mock:
-            # Mock timeout on UniFi OS endpoint
-            _mock_get(
-                mock,
-                base_url,
-                "/proxy/network/api/self/sites",
-                exception=asyncio.TimeoutError("Request timeout"),
-            )
-
-            # Mock timeout on standard endpoint
-            _mock_get(
-                mock,
-                base_url,
-                "/api/self/sites",
-                exception=asyncio.TimeoutError("Request timeout"),
-            )
-
-            async with aiohttp.ClientSession() as session:
-                result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
-
-            assert result is None, "Should return None when requests timeout"
+            assert result is expected
 
     @pytest.mark.asyncio
     async def test_detection_retries_until_success(self):

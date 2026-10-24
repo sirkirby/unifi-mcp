@@ -15,14 +15,6 @@ import pytest
 class TestVersion:
     """Tests for package versioning."""
 
-    def test_version_is_available(self):
-        """Verify that the package version can be retrieved."""
-        from importlib.metadata import version
-
-        pkg_version = version("unifi-network-mcp")
-        assert pkg_version is not None
-        assert len(pkg_version) > 0
-
     def test_version_format_is_valid(self):
         """Verify the version follows PEP 440 format."""
         from importlib.metadata import version
