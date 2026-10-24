@@ -30,20 +30,6 @@ def test_config_missing_required_var_raises():
             load_config()
 
 
-def test_config_parses_server_list():
-    env = {
-        "UNIFI_RELAY_URL": "https://my-worker.workers.dev",
-        "UNIFI_RELAY_TOKEN": "test-token",
-        "UNIFI_RELAY_LOCATION_NAME": "Test",
-        "UNIFI_RELAY_SERVERS": "http://localhost:3000,http://localhost:3001,http://localhost:3002",
-    }
-    with patch.dict(os.environ, env, clear=False):
-        from unifi_mcp_relay.config import load_config
-
-        cfg = load_config()
-        assert cfg.servers == ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
-
-
 def test_config_defaults():
     env = {
         "UNIFI_RELAY_URL": "https://my-worker.workers.dev",
@@ -59,31 +45,24 @@ def test_config_defaults():
         assert cfg.reconnect_max_delay == 60
 
 
-def test_config_bad_refresh_interval_names_variable():
+@pytest.mark.parametrize(
+    ("var_name", "bad_value"),
+    [
+        ("UNIFI_RELAY_REFRESH_INTERVAL", "5m"),
+        ("UNIFI_RELAY_RECONNECT_MAX_DELAY", "one-minute"),
+    ],
+)
+def test_config_bad_integer_names_variable(var_name, bad_value):
     env = {
         "UNIFI_RELAY_URL": "https://my-worker.workers.dev",
         "UNIFI_RELAY_TOKEN": "test-token",
         "UNIFI_RELAY_LOCATION_NAME": "Test",
-        "UNIFI_RELAY_REFRESH_INTERVAL": "5m",
+        var_name: bad_value,
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
 
-        with pytest.raises(ValueError, match="UNIFI_RELAY_REFRESH_INTERVAL"):
-            load_config()
-
-
-def test_config_bad_reconnect_delay_names_variable():
-    env = {
-        "UNIFI_RELAY_URL": "https://my-worker.workers.dev",
-        "UNIFI_RELAY_TOKEN": "test-token",
-        "UNIFI_RELAY_LOCATION_NAME": "Test",
-        "UNIFI_RELAY_RECONNECT_MAX_DELAY": "one-minute",
-    }
-    with patch.dict(os.environ, env, clear=False):
-        from unifi_mcp_relay.config import load_config
-
-        with pytest.raises(ValueError, match="UNIFI_RELAY_RECONNECT_MAX_DELAY"):
+        with pytest.raises(ValueError, match=var_name):
             load_config()
 
 

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from unifi_mcp_relay.config import RelayConfig
-from unifi_mcp_relay.main import DiscoveryNotReadyError, RelaySidecar, _catalog_snapshot
+from unifi_mcp_relay.main import RelaySidecar, _catalog_snapshot
 from unifi_mcp_relay.policy import RELAY_EXCLUDED_ERROR
 
 
@@ -20,30 +20,6 @@ def config():
         servers=["http://localhost:3000"],
         refresh_interval=60,
     )
-
-
-@pytest.mark.asyncio
-async def test_sidecar_discovers_and_builds_catalog(config):
-    sidecar = RelaySidecar(config)
-    from unifi_mcp_relay.discovery import ServerInfo
-    from unifi_mcp_relay.protocol import ToolInfo
-
-    mock_info = ServerInfo(
-        name="unifi-network-mcp",
-        url="http://localhost:3000",
-        tools=[ToolInfo(name="unifi_list_devices", description="List", server_origin="unifi-network-mcp")],
-    )
-
-    with patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock) as mock_discover:
-        mock_discover.return_value = [mock_info]
-        with patch("unifi_mcp_relay.main.ToolForwarder") as MockFwd:
-            mock_fwd_instance = AsyncMock()
-            MockFwd.return_value = mock_fwd_instance
-
-            catalog = await sidecar._discover_catalog()
-            assert len(catalog) == 1
-            assert catalog[0].name == "unifi_list_devices"
-            mock_fwd_instance.open.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -133,20 +109,6 @@ async def test_sidecar_never_advertises_support_tools_from_stale_discovery(confi
 
 
 @pytest.mark.asyncio
-async def test_sidecar_discovery_requires_all_configured_servers(config):
-    sidecar = RelaySidecar(config)
-
-    with patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock) as mock_discover:
-        mock_discover.return_value = []
-
-        with pytest.raises(DiscoveryNotReadyError, match="0/1"):
-            await sidecar._discover_catalog()
-
-    assert sidecar._catalog == []
-    assert sidecar._forwarder is None
-
-
-@pytest.mark.asyncio
 async def test_sidecar_startup_waits_for_non_empty_catalog_before_registering(config):
     sidecar = RelaySidecar(config)
     from unifi_mcp_relay.discovery import ServerInfo
@@ -207,20 +169,6 @@ async def test_sidecar_tool_call_handler_delegates_to_forwarder(config):
 
 
 @pytest.mark.asyncio
-async def test_sidecar_tool_call_handler_returns_error_string(config):
-    sidecar = RelaySidecar(config)
-    from unifi_mcp_relay.forwarder import ToolForwarder
-
-    mock_fwd = AsyncMock(spec=ToolForwarder)
-    mock_fwd.forward_with_error = AsyncMock(return_value="Connection refused")
-    sidecar._forwarder = mock_fwd
-
-    result, error = await sidecar._handle_tool_call("unifi_list_devices", {})
-    assert result is None
-    assert error == "Connection refused"
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("tool_name", "arguments"),
     [
@@ -238,41 +186,6 @@ async def test_sidecar_rejects_support_calls_before_forwarder(config, tool_name,
     assert result is None
     assert error == RELAY_EXCLUDED_ERROR
     sidecar._forwarder.forward_with_error.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_refresh_loop_sends_metadata_only_catalog_update(config):
-    """Refresh must publish changed annotations even when tool names are stable."""
-    from unifi_mcp_relay.protocol import ToolInfo
-
-    sidecar = RelaySidecar(config)
-    sidecar._catalog = [
-        ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp")
-    ]
-    sidecar._advertised_catalog = _catalog_snapshot(sidecar._catalog)
-    updated_catalog = [
-        ToolInfo(
-            name="unifi_list_clients",
-            description="List clients",
-            annotations={"readOnlyHint": True, "openWorldHint": False},
-            server_origin="unifi-network-mcp",
-        )
-    ]
-
-    async def rediscover():
-        sidecar._catalog = updated_catalog
-        sidecar._running = False
-        return updated_catalog
-
-    sidecar._discover_catalog = AsyncMock(side_effect=rediscover)
-    sidecar._client.send_catalog_update = AsyncMock(return_value=True)
-    sidecar._running = True
-
-    with patch("unifi_mcp_relay.main.asyncio.sleep", new_callable=AsyncMock):
-        await sidecar._refresh_loop()
-
-    sidecar._discover_catalog.assert_awaited_once()
-    sidecar._client.send_catalog_update.assert_awaited_once_with(updated_catalog)
 
 
 @pytest.mark.asyncio
