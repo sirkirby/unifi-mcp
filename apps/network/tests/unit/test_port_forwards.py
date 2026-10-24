@@ -58,8 +58,12 @@ class TestCreatePortForward:
         manager.create_port_forward.assert_not_called()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocol", [None, "tcp", "udp", "tcp_udp"])
-    async def test_full_create_maps_to_controller_fields(self, protocol):
+    @pytest.mark.parametrize(
+        ("protocol", "extra"),
+        [(None, {}), ("tcp", {}), ("udp", {}), ("tcp_udp", {}), (None, {"src_ip": ""})],
+        ids=["default", "tcp", "udp", "tcp_udp", "empty_source"],
+    )
+    async def test_full_create_maps_to_controller_fields(self, protocol, extra):
         created = {"_id": "pf_001", "name": "Web Server", "fwd": "192.168.1.10"}
         with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as mock_fm:
             mock_fm.create_port_forward = AsyncMock(return_value=created)
@@ -73,12 +77,14 @@ class TestCreatePortForward:
                     "fwd_port": "8443",
                     "fwd_ip": "192.168.1.10",
                     **({"protocol": protocol} if protocol is not None else {}),
+                    **extra,
                 },
                 confirm=True,
             )
 
         assert result["success"] is True
         payload = mock_fm.create_port_forward.await_args.args[0]
+        assert "src" not in payload
         assert payload["fwd"] == "192.168.1.10"
         assert payload["proto"] == (protocol or "tcp_udp")
         assert "fwd_ip" not in payload
@@ -102,28 +108,6 @@ class TestCreatePortForward:
         assert result["requires_confirmation"] is True
         assert result["preview"]["will_create"]["fwd_ip"] == "192.168.1.10"
         mock_fm.create_port_forward.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_full_create_omits_empty_source(self):
-        created = {"_id": "pf_001", "name": "Web Server", "fwd": "192.168.1.10"}
-        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as mock_fm:
-            mock_fm.create_port_forward = AsyncMock(return_value=created)
-
-            from unifi_network_mcp.tools.port_forwards import create_port_forward
-
-            await create_port_forward(
-                {
-                    "name": "Web Server",
-                    "dst_port": "443",
-                    "fwd_port": "8443",
-                    "fwd_ip": "192.168.1.10",
-                    "src_ip": "",
-                },
-                confirm=True,
-            )
-
-        payload = mock_fm.create_port_forward.await_args.args[0]
-        assert "src" not in payload
 
     @pytest.mark.asyncio
     async def test_simple_create_preview_stays_user_facing(self):
