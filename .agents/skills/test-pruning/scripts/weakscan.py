@@ -4,14 +4,24 @@ usage: python3 weakscan.py <repo> <base-ref> [<head-ref>]   (head defaults to th
 
 loop-without-length: a `for` over a value whose body asserts, with no `len(...)`
   assertion on that value earlier in the test. An empty result skips every check.
-aliased-expected: a value passed into a call is later compared with `==` as the
+aliased-expected: a mutable value (a parametrized container, or a container the
+  test builds itself) passed into a call is later compared with `==` as the
   expected result, without a deepcopy. An in-place change to the input changes
   both sides and still passes.
+
+Exits non-zero when the diff cannot run, so a bad ref never reads as a clean scan.
 """
 
 import ast
 import subprocess
 import sys
+
+
+def fail(message):
+    """Exit 2: the comparison could not run, which must never read as a clean result."""
+    print(message, file=sys.stderr)
+    sys.exit(2)
+
 
 repo, base = sys.argv[1], sys.argv[2]
 head = sys.argv[3] if len(sys.argv) > 3 else None
@@ -22,11 +32,11 @@ def git(*args):
 
 
 diff_args = [f"{base}...{head}"] if head else [base]
-files = [
-    f
-    for f in git("diff", "--name-only", *diff_args).split()
-    if f.split("/")[-1].startswith("test_") and f.endswith(".py")
-]
+diff = subprocess.run(["git", "diff", "--name-only", *diff_args], cwd=repo, capture_output=True, text=True)
+if diff.returncode != 0:
+    # A comparison that did not run must not read as a clean scan.
+    fail(f"weakscan: git diff {' '.join(diff_args)} failed: {diff.stderr.strip()}")
+files = [f for f in diff.stdout.split() if f.split("/")[-1].startswith("test_") and f.endswith(".py")]
 
 
 def source(path, ref):
@@ -87,6 +97,25 @@ def mutable_param(fn, name):
                 return True
         return False
     return False
+
+
+CONTAINERS = (ast.Dict, ast.List, ast.Set, ast.DictComp, ast.ListComp, ast.SetComp)
+
+
+def local_containers(stmts):
+    """Names the test binds to a container it builds, plus plain aliases of them."""
+    names = set()
+    assigns = [n for n in stmts if isinstance(n, ast.Assign) and len(n.targets) == 1]
+    for n in sorted(assigns, key=lambda n: n.lineno):
+        target, value = n.targets[0], n.value
+        if not isinstance(target, ast.Name):
+            continue
+        built = isinstance(value, CONTAINERS) or (
+            isinstance(value, ast.Call) and ast.unparse(value.func) in ("dict", "list", "set")
+        )
+        if built or (isinstance(value, ast.Name) and value.id in names):
+            names.add(target.id)
+    return names
 
 
 def findings(fn):
@@ -153,7 +182,7 @@ def findings(fn):
         for t in n.targets
         if isinstance(t, ast.Name)
     }
-    params = {a.arg for a in fn.args.args if mutable_param(fn, a.arg)}
+    params = {a.arg for a in fn.args.args if mutable_param(fn, a.arg)} | local_containers(stmts)
     for a in [n for n in stmts if isinstance(n, ast.Assert)]:
         t = a.test
         if isinstance(t, ast.Compare) and any(isinstance(o, ast.Eq) for o in t.ops):

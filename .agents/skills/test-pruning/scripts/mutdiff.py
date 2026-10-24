@@ -8,7 +8,12 @@ lets through is a lost check. It catches deletions backed by a weaker
 replacement; weakscan.py catches loop and aliasing patterns that mutants do not.
 
 usage: python3 mutdiff.py <repo-worktree> <source-file> <function>[,<function>...] <test-file> \
-           <original-ref> <changed-ref> [uv run args, default: --package <inferred>]
+           <original-ref> <changed-ref> [runner ..., default: uv run --package <inferred>]
+
+Both test versions must pass on the unmutated source first. Under a mutant, exit 1
+(failed) or 2 (the mutant broke collection) counts as caught; any other pytest
+status stops the run, since an incomplete run must not read as a check.
+Exit status: 0 nothing lost, 1 a check lost, 2 the comparison could not run.
 
 Run it in a clean worktree: the source and test files are rewritten in place for
 each mutant and always restored. It costs a pytest run per mutant (seconds each).
@@ -18,6 +23,13 @@ import ast
 import subprocess
 import sys
 from pathlib import Path
+
+
+def fail(message):
+    """Exit 2: the comparison could not run, which must never read as a clean result."""
+    print(message, file=sys.stderr)
+    sys.exit(2)
+
 
 repo = Path(sys.argv[1])
 source, funcs, test_file, old_ref, new_ref = sys.argv[2], sys.argv[3].split(","), sys.argv[4], sys.argv[5], sys.argv[6]
@@ -30,7 +42,7 @@ PACKAGES = {
     "apps/access/": ["--package", "unifi-access-mcp"],
     "apps/api/": ["--package", "unifi-api-server"],
 }
-pkg = sys.argv[7:] or next(v for k, v in PACKAGES.items() if test_file.startswith(k))
+runner = sys.argv[7:] or ["uv", "run", *next(v for k, v in PACKAGES.items() if test_file.startswith(k))]
 
 
 def targets(tree, names):
@@ -104,13 +116,13 @@ def mutants(src, names):
 
 def run_tests():
     r = subprocess.run(
-        ["uv", "run", *pkg, "pytest", "-x", "-q", "-p", "no:cacheprovider", test_file],
+        [*runner, "pytest", "-x", "-q", "-p", "no:cacheprovider", test_file],
         cwd=repo,
         capture_output=True,
         text=True,
         timeout=300,
     )
-    return r.returncode == 0
+    return r.returncode, (r.stdout + r.stderr)[-2000:]
 
 
 def show(ref):
@@ -119,22 +131,42 @@ def show(ref):
     ).stdout
 
 
+class Incomplete(Exception):
+    """A pytest run that neither passed nor failed a test."""
+
+
+def caught(test_source):
+    """Whether this test file fails against the current (mutated) source."""
+    test_path.write_text(test_source)
+    status, output = run_tests()
+    if status == 0:
+        return False
+    if status in (1, 2):
+        return True
+    raise Incomplete(f"pytest exited {status}:\n{output}")
+
+
 src_path, test_path = repo / source, repo / test_file
 original_src, original_test = src_path.read_text(), test_path.read_text()
 old_test, new_test = show(old_ref), show(new_ref)
 total = killed = 0
 lost = []
 try:
+    for ref, text in ((old_ref, old_test), (new_ref, new_test)):
+        test_path.write_text(text)
+        status, output = run_tests()
+        if status != 0:
+            fail(f"mutdiff: the {ref} tests must pass on the unmutated source; pytest exited {status}:\n{output}")
     for label, mutated in mutants(original_src, funcs):
         total += 1
         src_path.write_text(mutated)
-        test_path.write_text(old_test)
-        if run_tests():
+        if not caught(old_test):
             continue  # the original tests miss this mutant too
         killed += 1
-        test_path.write_text(new_test)
-        if run_tests():
+        if not caught(new_test):
             lost.append(label)
+except Incomplete as exc:
+    fail(f"mutdiff: incomplete run, no result: {exc}")
 finally:
     src_path.write_text(original_src)
     test_path.write_text(original_test)
