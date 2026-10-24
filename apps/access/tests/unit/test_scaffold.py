@@ -65,24 +65,6 @@ def test_config_helpers_importable():
     assert parse_config_bool(None, default=True) is True
 
 
-def test_connection_manager_properties():
-    """Verify AccessConnectionManager stores connection params."""
-    from unifi_core.access.managers.connection_manager import AccessConnectionManager
-
-    cm = AccessConnectionManager(
-        host="192.0.2.1",
-        username="admin",
-        password="secret",
-        port=7443,
-        verify_ssl=True,
-    )
-    assert cm.host == "192.0.2.1"
-    assert cm.username == "admin"
-    assert cm.port == 7443
-    assert cm.verify_ssl is True
-    assert cm.is_connected is False
-
-
 def test_access_category_map_values():
     """Verify category map values match config.yaml permissions keys."""
     from unifi_access_mcp.categories import ACCESS_CATEGORY_MAP

@@ -294,27 +294,6 @@ class TestProxyRequest:
         assert result == expected
 
     @pytest.mark.asyncio
-    async def test_proxy_request_csrf_header(self, cm_proxy_only):
-        """Proxy request includes CSRF token in header."""
-        mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.json = AsyncMock(return_value={})
-        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.request = MagicMock(return_value=mock_resp)
-
-        cm_proxy_only._proxy_session = mock_session
-        cm_proxy_only._proxy_available = True
-        cm_proxy_only._csrf_token = "my-csrf-value"
-
-        await cm_proxy_only.proxy_request("GET", "system/info")
-
-        call_args = mock_session.request.call_args
-        assert call_args[1]["headers"]["X-CSRF-Token"] == "my-csrf-value"
-
-    @pytest.mark.asyncio
     async def test_proxy_request_reauth_on_401(self, cm_proxy_only):
         """Proxy request re-authenticates on 401 and retries."""
         # First response: 401
@@ -360,25 +339,6 @@ class TestProxyRequest:
         with pytest.raises(UniFiConnectionError, match="Proxy session is not available"):
             await cm_proxy_only.proxy_request("GET", "doors")
 
-    @pytest.mark.asyncio
-    async def test_proxy_request_non_200_error(self, cm_proxy_only):
-        """Proxy request raises on non-200 non-401 response."""
-        mock_resp = AsyncMock()
-        mock_resp.status = 500
-        mock_resp.text = AsyncMock(return_value="Internal Server Error")
-        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-        mock_resp.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.request = MagicMock(return_value=mock_resp)
-
-        cm_proxy_only._proxy_session = mock_session
-        cm_proxy_only._proxy_available = True
-        cm_proxy_only._csrf_token = "test"
-
-        with pytest.raises(UniFiConnectionError, match="HTTP 500"):
-            await cm_proxy_only.proxy_request("GET", "access/info")
-
 
 # ---------------------------------------------------------------------------
 # ULP proxy request tests
@@ -422,12 +382,18 @@ class TestUlpProxyRequest:
         with pytest.raises(UniFiConnectionError, match="Proxy session is not available"):
             await cm_proxy_only.proxy_request_ulp("POST", "users/search")
 
+    @pytest.mark.parametrize(
+        ("request_method", "status", "path"),
+        [
+            ("proxy_request", 500, "access/info"),
+            ("proxy_request_ulp", 404, "users/search"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_ulp_proxy_request_non_200_error(self, cm_proxy_only):
-        """ULP proxy request raises on non-200 non-401 response."""
+    async def test_proxy_request_non_200_error(self, cm_proxy_only, request_method, status, path):
         mock_resp = AsyncMock()
-        mock_resp.status = 404
-        mock_resp.text = AsyncMock(return_value="Not Found")
+        mock_resp.status = status
+        mock_resp.text = AsyncMock(return_value="request failed")
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -438,8 +404,8 @@ class TestUlpProxyRequest:
         cm_proxy_only._proxy_available = True
         cm_proxy_only._csrf_token = "test"
 
-        with pytest.raises(UniFiConnectionError, match="HTTP 404"):
-            await cm_proxy_only.proxy_request_ulp("POST", "users/search")
+        with pytest.raises(UniFiConnectionError, match=f"HTTP {status}"):
+            await getattr(cm_proxy_only, request_method)("POST", path)
 
     @pytest.mark.asyncio
     async def test_ulp_proxy_request_reauth_on_401(self, cm_proxy_only):

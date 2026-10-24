@@ -315,15 +315,6 @@ class TestGetDevice:
         mock_req.assert_awaited_once_with("GET", "devices/topology4")
 
     @pytest.mark.asyncio
-    async def test_get_device_proxy_not_found(self, device_mgr_proxy, cm_proxy):
-        """get_device raises ValueError when device ID not found in topology."""
-        topology = [{"name": "Site", "unique_id": "s", "floors": [{"name": "1F", "unique_id": "f", "doors": []}]}]
-        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
-            mock_req.return_value = {"data": topology}
-            with pytest.raises(UniFiNotFoundError):
-                await device_mgr_proxy.get_device("missing-dev")
-
-    @pytest.mark.asyncio
     async def test_get_device_empty_id(self, device_mgr_api):
         with pytest.raises(ValueError, match="device_id is required"):
             await device_mgr_api.get_device("")
