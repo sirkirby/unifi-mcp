@@ -22,11 +22,15 @@ def _as_list(value: Optional[str]) -> Optional[List[str]]:
     return [value] if value else None
 
 
+def _as_port_list(value: Optional[int]) -> Optional[List[int]]:
+    return [value] if value is not None else None
+
+
 @server.tool(
     name="unifi_get_traffic_flows",
     description=(
         "Query historical UniFi Traffic Flows (Insights > Flows). Returns completed flow "
-        "records — source/destination (incl. resolved destination domains), service, risk, "
+        "records — source/destination (incl. ports and resolved destination domains), service, risk, "
         "action, bytes, and timestamps — for a time window, with server-side filtering and "
         "pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or "
         "use within_hours. Read-only; one page per call (use page/total_page_count to paginate)."
@@ -43,8 +47,10 @@ async def get_traffic_flows(
     source_ip: Annotated[Optional[str], Field(description="Filter by source IP")] = None,
     source_name: Annotated[Optional[str], Field(description="Filter by source host/client name")] = None,
     source_network_id: Annotated[Optional[str], Field(description="Filter by source network ID")] = None,
+    source_port: Annotated[Optional[int], Field(ge=0, le=65535, description="Filter by source port")] = None,
     destination_domain: Annotated[Optional[str], Field(description="Filter by destination domain")] = None,
     destination_ip: Annotated[Optional[str], Field(description="Filter by destination IP")] = None,
+    destination_port: Annotated[Optional[int], Field(ge=0, le=65535, description="Filter by destination port")] = None,
     destination_region: Annotated[Optional[str], Field(description="Filter by destination region/country")] = None,
     risk: Annotated[Optional[str], Field(description="Filter by risk (low/medium/high)")] = None,
     action: Annotated[Optional[str], Field(description="Filter by action (allowed/blocked)")] = None,
@@ -81,8 +87,10 @@ async def get_traffic_flows(
             source_ip=_as_list(source_ip),
             source_host=_as_list(source_name),
             source_network_id=_as_list(source_network_id),
+            source_port=_as_port_list(source_port),
             destination_domain=_as_list(destination_domain),
             destination_ip=_as_list(destination_ip),
+            destination_port=_as_port_list(destination_port),
             destination_region=_as_list(destination_region),
         )
         result = await traffic_flow_manager.get_traffic_flows(query)

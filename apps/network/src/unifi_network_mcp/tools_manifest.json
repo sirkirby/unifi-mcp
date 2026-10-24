@@ -12518,7 +12518,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Query historical UniFi Traffic Flows (Insights > Flows). Returns completed flow records \u2014 source/destination (incl. resolved destination domains), service, risk, action, bytes, and timestamps \u2014 for a time window, with server-side filtering and pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or use within_hours. Read-only; one page per call (use page/total_page_count to paginate).",
+      "description": "Query historical UniFi Traffic Flows (Insights > Flows). Returns completed flow records \u2014 source/destination (incl. ports and resolved destination domains), service, risk, action, bytes, and timestamps \u2014 for a time window, with server-side filtering and pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or use within_hours. Read-only; one page per call (use page/total_page_count to paginate).",
       "name": "unifi_get_traffic_flows",
       "schema": {
         "input": {
@@ -12534,6 +12534,12 @@
             "destination_ip": {
               "description": "Filter by destination IP",
               "type": "string"
+            },
+            "destination_port": {
+              "description": "Filter by destination port",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
             },
             "destination_region": {
               "description": "Filter by destination region/country",
@@ -12583,6 +12589,12 @@
             "source_network_id": {
               "description": "Filter by source network ID",
               "type": "string"
+            },
+            "source_port": {
+              "description": "Filter by source port",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
             },
             "time_from": {
               "description": "Explicit window start, epoch ms",

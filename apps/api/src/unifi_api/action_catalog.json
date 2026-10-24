@@ -5185,6 +5185,12 @@
             "description": "Filter by destination IP",
             "type": "string"
           },
+          "destination_port": {
+            "description": "Filter by destination port",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
           "destination_region": {
             "description": "Filter by destination region/country",
             "type": "string"
@@ -5233,6 +5239,12 @@
           "source_network_id": {
             "description": "Filter by source network ID",
             "type": "string"
+          },
+          "source_port": {
+            "description": "Filter by source port",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
           },
           "time_from": {
             "description": "Explicit window start, epoch ms",

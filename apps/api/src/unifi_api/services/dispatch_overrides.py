@@ -957,6 +957,11 @@ def _translate_traffic_flows(args: dict[str, Any]) -> tuple[tuple[Any, ...], dic
             return [str(item) for item in value]
         return [str(value)]
 
+    def as_port_list(value: Any) -> list[Any] | None:
+        if value is None:
+            return None
+        return list(value) if isinstance(value, list) else [value]
+
     time_from = args.get("time_from")
     time_to = args.get("time_to")
     if (time_from is None) != (time_to is None):
@@ -983,8 +988,10 @@ def _translate_traffic_flows(args: dict[str, Any]) -> tuple[tuple[Any, ...], dic
         source_ip=as_list(args.get("source_ip")),
         source_host=as_list(args.get("source_name")),
         source_network_id=as_list(args.get("source_network_id")),
+        source_port=as_port_list(args.get("source_port")),
         destination_domain=as_list(args.get("destination_domain")),
         destination_ip=as_list(args.get("destination_ip")),
+        destination_port=as_port_list(args.get("destination_port")),
         destination_region=as_list(args.get("destination_region")),
     )
     return (), {"query": query}

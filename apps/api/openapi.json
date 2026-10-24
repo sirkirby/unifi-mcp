@@ -8528,6 +8528,17 @@
             ],
             "title": "Network Name"
           },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
           "zone_name": {
             "anyOf": [
               {

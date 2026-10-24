@@ -2277,6 +2277,7 @@ type TrafficFlowEndpoint {
   name: String
   mac: String
   ip: String
+  port: Int
   networkName: String
   zoneName: String
   domains: [String!]!

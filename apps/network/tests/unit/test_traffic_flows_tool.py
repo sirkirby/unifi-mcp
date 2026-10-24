@@ -66,6 +66,40 @@ async def test_tool_maps_params_and_returns_success():
 
 
 @pytest.mark.asyncio
+async def test_tool_maps_port_filters_as_integer_lists():
+    with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = dict(_ENVELOPE)
+        out = await get_traffic_flows(destination_port=7680, source_port=0, action="blocked")
+
+    assert out["success"] is True
+    query = mock_get.call_args.args[0]
+    assert query.destination_port == [7680]
+    # Port 0 is a real value, not an omitted filter.
+    assert query.source_port == [0]
+    assert query.action == ["blocked"]
+
+
+@pytest.mark.asyncio
+async def test_tool_omitted_port_filters_stay_none():
+    with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = dict(_ENVELOPE)
+        await get_traffic_flows()
+
+    query = mock_get.call_args.args[0]
+    assert query.source_port is None
+    assert query.destination_port is None
+
+
+@pytest.mark.asyncio
+async def test_tool_out_of_range_port_returns_error_envelope():
+    with patch(_MANAGER_METHOD, new_callable=AsyncMock) as mock_get:
+        out = await get_traffic_flows(destination_port=70000)
+
+    assert out["success"] is False
+    mock_get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_tool_rejects_half_specified_window():
     # XOR guard must reject either half alone, symmetrically.
     out_from = await get_traffic_flows(time_from=1000)  # time_to missing

@@ -29,8 +29,8 @@ async def test_traffic_flows_list(tmp_path, monkeypatch):
                         "id": "flow-1",
                         "action": "Allow",
                         "service": "HTTPS",
-                        "source": {"name": "alpha", "ip": "10.0.0.5"},
-                        "destination": {"ip": "203.0.113.1", "domains": ["example.com"]},
+                        "source": {"name": "alpha", "ip": "10.0.0.5", "port": 51514},
+                        "destination": {"ip": "203.0.113.1", "port": 443, "domains": ["example.com"]},
                     },
                     {
                         "id": "flow-2",
@@ -53,7 +53,7 @@ async def test_traffic_flows_list(tmp_path, monkeypatch):
         key,
         f'''{{
         network {{ trafficFlows(controller: "{cid}", withinHours: 24, pageSize: 100) {{
-            items {{ id action service source {{ name ip }} destination {{ ip domains }} }}
+            items {{ id action service source {{ name ip port }} destination {{ ip port domains }} }}
             nextCursor
         }} }}
     }}''',
@@ -65,6 +65,10 @@ async def test_traffic_flows_list(tmp_path, monkeypatch):
     assert {it["id"] for it in items} == {"flow-1", "flow-2"}
     assert items[0]["source"]["name"] == "alpha"
     assert items[0]["destination"]["domains"] == ["example.com"]
+    assert items[0]["source"]["port"] == 51514
+    assert items[0]["destination"]["port"] == 443
+    # A flow without a port projects null rather than failing the page.
+    assert items[1]["destination"]["port"] is None
     assert page["nextCursor"] is None
 
 

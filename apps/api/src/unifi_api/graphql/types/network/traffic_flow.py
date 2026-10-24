@@ -45,6 +45,7 @@ class TrafficFlowEndpoint:
     name: str | None
     mac: str | None
     ip: str | None
+    port: int | None
     network_name: str | None
     zone_name: str | None
     domains: list[str]
@@ -55,6 +56,7 @@ class TrafficFlowEndpoint:
             name=_get(obj, "name"),
             mac=_get(obj, "mac"),
             ip=_get(obj, "ip"),
+            port=_get(obj, "port"),
             network_name=_get(obj, "network_name"),
             zone_name=_get(obj, "zone_name"),
             domains=_get(obj, "domains", default=[]),
