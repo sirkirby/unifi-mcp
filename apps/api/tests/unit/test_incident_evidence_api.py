@@ -45,6 +45,11 @@ from unifi_core.incident_evidence_view import (
 NETWORK_PATH = "/v1/sites/default/incident-evidence/network"
 PROTECT_PATH = "/v1/sites/default/incident-evidence/protect"
 SENTINEL = "operator-supplied-sentinel-value"
+# The committed schemas are unchanged across cases; still validate every payload.
+SCHEMA_VALIDATOR = jsonschema.validators.validator_for(SCHEMA)(SCHEMA)
+VIEW_VALIDATOR = jsonschema.validators.validator_for(VIEW_SCHEMA)(VIEW_SCHEMA)
+for validator in (SCHEMA_VALIDATOR, VIEW_VALIDATOR):
+    validator.check_schema(validator.schema)
 
 
 class Harness:
@@ -100,10 +105,10 @@ async def make_harness(tmp_path, monkeypatch, products="network,protect", scopes
 def check_document(document: dict) -> None:
     """The default bounded view, or the full contract document when detail=full was asked for."""
     if document["schema"] == "unifi-incident-evidence-view":
-        jsonschema.validate(document, VIEW_SCHEMA)
+        VIEW_VALIDATOR.validate(document)
         IncidentEvidenceView.model_validate(document)
     else:
-        jsonschema.validate(document, SCHEMA)
+        SCHEMA_VALIDATOR.validate(document)
         validate_incident_evidence(document)
 
 

@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import jsonschema
 import pytest
+from argon2 import PasswordHasher
 from httpx import ASGITransport, AsyncClient
 from uiprotect.api import ProtectApiClient
 from uiprotect.exceptions import NotAuthorized, NvrError
@@ -43,6 +44,11 @@ VIEW_SCHEMA = json.loads((CORPUS / "incident-evidence-view.v1.schema.json").read
 NOW = parse_utc(RESPONSES["now"])
 PRIVATE = "fixture-private-controller-text"
 NVR_URL = "https://controller.invalid/proxy/protect/api/events"
+# The committed schemas are unchanged across cases; still validate every payload.
+SCHEMA_VALIDATOR = jsonschema.validators.validator_for(SCHEMA)(SCHEMA)
+VIEW_VALIDATOR = jsonschema.validators.validator_for(VIEW_SCHEMA)(VIEW_SCHEMA)
+for validator in (SCHEMA_VALIDATOR, VIEW_VALIDATOR):
+    validator.check_schema(validator.schema)
 
 INPUTS = {
     "network": {
@@ -122,6 +128,13 @@ def protect_manager(scenario: str) -> ProtectEventManager:
 
     client.api_request_raw = api_request_raw
     return ProtectEventManager(SimpleNamespace(client=client), {})
+
+
+@pytest.fixture(scope="module", autouse=True)
+def fast_argon2_hasher():
+    """Use the API suite's cheap hasher while keeping real key hashing and verification."""
+    with patch("unifi_api.auth.api_key._HASHER", PasswordHasher(time_cost=1, memory_cost=1024, parallelism=1)):
+        yield
 
 
 @pytest.fixture
@@ -296,12 +309,12 @@ async def test_mcp_rest_and_graphql_return_the_same_evidence(
     assert from_mcp == from_rest == from_graphql
     assert PRIVATE not in json.dumps(from_rest)
     if presentation == "full":
-        jsonschema.validate(from_rest, SCHEMA)
+        SCHEMA_VALIDATOR.validate(from_rest)
         evidence = validate_incident_evidence(from_rest)
         (source,) = evidence.sources
         assert evidence.mappings is not None or product == "protect"
     else:
-        jsonschema.validate(from_rest, VIEW_SCHEMA)
+        VIEW_VALIDATOR.validate(from_rest)
         view = IncidentEvidenceView.model_validate(from_rest)
         (source,) = view.sources
         assert view.record_selection.max_records_returned == arguments.get("max_records_returned", 25)

@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import re
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,15 @@ def _dump(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
 
 
+@cache
+def _schema_validator():
+    """Check the unchanged artifact once; every payload is still validated."""
+    schema = json.loads(SCHEMA_PATH.read_text())
+    validator = jsonschema.validators.validator_for(schema)(schema)
+    validator.check_schema(schema)
+    return validator
+
+
 def test_corpus_has_every_required_case() -> None:
     assert {path.stem for path in case_paths()} == REQUIRED_CASES
 
@@ -90,9 +100,9 @@ def test_schema_artifact_is_versioned() -> None:
 
 
 def test_expected_outputs_validate_against_schema_artifact() -> None:
-    schema = json.loads(SCHEMA_PATH.read_text())
+    validator = _schema_validator()
     for path in case_paths():
-        jsonschema.validate(load_case(path)["expected"], schema)
+        validator.validate(load_case(path)["expected"])
 
 
 def test_contract_rejects_tampered_golden_output() -> None:
@@ -120,7 +130,7 @@ def test_invalid_corpus_covers_both_layers() -> None:
 @pytest.mark.parametrize("path", _invalid_paths(), ids=lambda p: p.stem)
 def test_invalid_case_is_rejected_by_its_declared_layer(path: Path) -> None:
     case = json.loads(path.read_text())
-    validator = jsonschema.Draft202012Validator(json.loads(SCHEMA_PATH.read_text()))
+    validator = _schema_validator()
     schema_errors = list(validator.iter_errors(case["evidence"]))
     if case["rejected_by"] == "schema":
         assert schema_errors, "the schema must reject this evidence on its own"
@@ -135,7 +145,7 @@ def test_schema_rejects_failed_evidence_presented_as_an_all_clear() -> None:
     payload = load_case(CASES_DIR / "auth_failure_total.json")["expected"]
     payload.update(overall="empty", coverage_complete=True)
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(payload, json.loads(SCHEMA_PATH.read_text()))
+        _schema_validator().validate(payload)
 
 
 def _partial_response_shape(failure: bool, partial_response: bool) -> dict[str, Any]:
@@ -155,7 +165,7 @@ def _partial_response_shape(failure: bool, partial_response: bool) -> dict[str, 
 )
 def test_schema_and_semantic_validation_agree_on_partial_response_shapes(failure, partial_response, valid) -> None:
     payload = _partial_response_shape(failure, partial_response)
-    validator = jsonschema.Draft202012Validator(json.loads(SCHEMA_PATH.read_text()))
+    validator = _schema_validator()
     assert (not list(validator.iter_errors(payload))) is valid
     if valid:
         validate_incident_evidence(payload)
