@@ -30,19 +30,45 @@ class TestHotspotManager:
         return HotspotManager(mock_connection)
 
     @pytest.mark.asyncio
-    async def test_get_vouchers_returns_list(self, hotspot_manager, mock_connection):
-        """Test get_vouchers returns a list of vouchers."""
-        mock_vouchers = [
-            {"_id": "v1", "code": "ABC123", "quota": 1, "duration": 1440},
-            {"_id": "v2", "code": "DEF456", "quota": 0, "duration": 2880},
-        ]
-        mock_connection.request.return_value = mock_vouchers
+    @pytest.mark.parametrize(
+        "response",
+        [
+            [
+                {"_id": "v1", "code": "ABC123", "quota": 1, "duration": 1440},
+                {"_id": "v2", "code": "DEF456", "quota": 0, "duration": 2880},
+            ],
+            # dict response with 'data' key
+            {
+                "data": [
+                    {"_id": "v1", "code": "ABC123", "quota": 1, "duration": 1440},
+                    {"_id": "v2", "code": "DEF456", "quota": 0, "duration": 2880},
+                ],
+                "meta": {"rc": "ok"},
+            },
+        ],
+    )
+    async def test_get_vouchers_returns_list(self, hotspot_manager, mock_connection, response):
+        """get_vouchers returns the voucher list (unwrapping a 'data' envelope) and caches it."""
+        mock_connection.request.return_value = response
 
         vouchers = await hotspot_manager.get_vouchers()
 
         assert len(vouchers) == 2
         assert vouchers[0]["code"] == "ABC123"
         mock_connection._update_cache.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_revoke_voucher(self, hotspot_manager, mock_connection):
+        """revoke_voucher sends delete-voucher, returns True and invalidates the cache."""
+        mock_connection.request.return_value = {}
+
+        result = await hotspot_manager.revoke_voucher("voucher123")
+
+        assert result is True
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.data["cmd"] == "delete-voucher"
+        assert api_request.data["_id"] == "voucher123"
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_get_vouchers_uses_cache(self, hotspot_manager, mock_connection):
@@ -70,18 +96,6 @@ class TestHotspotManager:
         assert vouchers[0]["_id"] == "v1"
         # Should NOT cache filtered results
         mock_connection._update_cache.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_get_vouchers_handles_dict_response(self, hotspot_manager, mock_connection):
-        """Test get_vouchers handles dict response with 'data' key."""
-        mock_connection.request.return_value = {
-            "data": [{"_id": "v1", "code": "ABC123"}],
-            "meta": {"rc": "ok"},
-        }
-
-        vouchers = await hotspot_manager.get_vouchers()
-
-        assert len(vouchers) == 1
 
     @pytest.mark.asyncio
     async def test_get_vouchers_handles_error(self, hotspot_manager, mock_connection):
@@ -136,6 +150,7 @@ class TestHotspotManager:
         assert api_request.data["expire"] == 1440
         assert api_request.data["n"] == 1
         assert api_request.data["quota"] == 1
+        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_create_voucher_with_all_options(self, hotspot_manager, mock_connection):
@@ -161,44 +176,12 @@ class TestHotspotManager:
         assert api_request.data["bytes"] == 500
 
     @pytest.mark.asyncio
-    async def test_create_voucher_invalidates_cache(self, hotspot_manager, mock_connection):
-        """Test create_voucher invalidates the cache."""
-        mock_connection.request.return_value = []
-        hotspot_manager.get_vouchers = AsyncMock(return_value=[])
-
-        await hotspot_manager.create_voucher(expire_minutes=60)
-
-        mock_connection._invalidate_cache.assert_called()
-
-    @pytest.mark.asyncio
     async def test_create_voucher_handles_error(self, hotspot_manager, mock_connection):
         """Test create_voucher returns None on error."""
         mock_connection.request.side_effect = Exception("API error")
 
         with pytest.raises(Exception):
             await hotspot_manager.create_voucher(expire_minutes=60)
-
-    @pytest.mark.asyncio
-    async def test_revoke_voucher_success(self, hotspot_manager, mock_connection):
-        """Test revoke_voucher returns True on success."""
-        mock_connection.request.return_value = {}
-
-        result = await hotspot_manager.revoke_voucher("voucher123")
-
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["cmd"] == "delete-voucher"
-        assert api_request.data["_id"] == "voucher123"
-
-    @pytest.mark.asyncio
-    async def test_revoke_voucher_invalidates_cache(self, hotspot_manager, mock_connection):
-        """Test revoke_voucher invalidates the cache."""
-        mock_connection.request.return_value = {}
-
-        await hotspot_manager.revoke_voucher("voucher123")
-
-        mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
     async def test_revoke_voucher_failure(self, hotspot_manager, mock_connection):

@@ -83,45 +83,89 @@ def _mock_conn():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_list_vouchers_no_args_preserves_exact_legacy_envelope():
-    """No-argument call must preserve exact legacy response envelope: success, site, count, vouchers."""
+TIED_VOUCHERS = [
+    {"_id": "v_alpha", "code": "ALPHA", "create_time": 1700000000},
+    {"_id": "v_beta", "code": "BETA", "create_time": 1700000000},
+    {"_id": "v_newest", "code": "NEWEST", "create_time": 1700000500},
+]
+
+DIGIT_VOUCHERS = [
+    {"_id": "v1", "code": "1234567890", "note": "Guest Wifi", "create_time": 1700000000},
+    {"_id": "v2", "code": "9876543210", "note": "Staff-Only", "create_time": 1700000100},
+]
+
+
+async def _list(vouchers, **kwargs):
     with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
+        mock_hm.get_vouchers = AsyncMock(return_value=list(vouchers))
         mock_hm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.hotspot import list_vouchers
 
-        result = await list_vouchers()
+        return await list_vouchers(**kwargs)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"limit": None, "offset": 0, "search": None, "fields": None},
+        {"search": "   "},
+    ],
+)
+async def test_list_vouchers_unshaped_calls_preserve_legacy_envelope(kwargs):
+    """No-arg, explicit-default and whitespace-search calls keep the exact legacy envelope in controller order."""
+    result = await _list(SAMPLE_VOUCHERS, **kwargs)
 
     assert result["success"] is True
     assert result["site"] == "default"
     assert result["count"] == 4
-    assert len(result["vouchers"]) == 4
-
-    # Crucial: NO shaping metadata present in unshaped/no-arg response
-    assert "total_count" not in result
-    assert "total" not in result
-    assert "returned_count" not in result
-    assert "limit" not in result
-    assert "offset" not in result
+    # Crucial: NO shaping metadata present in unshaped responses
     assert set(result.keys()) == {"success", "site", "count", "vouchers"}
+    assert [v["id"] for v in result["vouchers"]] == [v["_id"] for v in SAMPLE_VOUCHERS]
 
 
+# Shaped calls sort created_at desc (ties by id desc); total_count reflects the filtered set.
 @pytest.mark.asyncio
-async def test_list_vouchers_explicit_defaults_preserves_exact_legacy_envelope():
-    """Explicitly passing default values preserves exact legacy envelope."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(limit=None, offset=0, search=None, fields=None)
+@pytest.mark.parametrize(
+    "vouchers,kwargs,total,codes",
+    [
+        (SAMPLE_VOUCHERS, {"search": "abc"}, 1, ["ABC12345"]),
+        (SAMPLE_VOUCHERS, {"search": "conference"}, 2, ["JKL22222", "ABC12345"]),
+        # "VALID_ONE" is a status, but no code or note contains "VALID"
+        (SAMPLE_VOUCHERS, {"search": "VALID"}, 0, []),
+        (SAMPLE_VOUCHERS, {"search": "nonexistent-substring"}, 0, []),
+        (SAMPLE_VOUCHERS, {"limit": 1, "offset": 0}, 4, ["JKL22222"]),
+        (SAMPLE_VOUCHERS, {"limit": 1000, "offset": 0}, 4, ["JKL22222", "GHI11111", "DEF67890", "ABC12345"]),
+        (SAMPLE_VOUCHERS, {"limit": 2, "offset": 0}, 4, ["JKL22222", "GHI11111"]),
+        (SAMPLE_VOUCHERS, {"limit": 2, "offset": 2}, 4, ["DEF67890", "ABC12345"]),
+        (SAMPLE_VOUCHERS, {"offset": 10, "limit": 5}, 4, []),
+        ([], {"limit": 10}, 0, []),
+        (TIED_VOUCHERS, {"limit": 10}, 3, ["NEWEST", "BETA", "ALPHA"]),
+        (DIGIT_VOUCHERS, {"search": "12345-67890"}, 1, ["1234567890"]),
+        (DIGIT_VOUCHERS, {"search": "12345-6"}, 1, ["1234567890"]),
+        (DIGIT_VOUCHERS, {"search": "Staff-Only"}, 1, ["9876543210"]),
+        # Arbitrary punctuation is not generalized
+        (DIGIT_VOUCHERS, {"search": "123.456"}, 0, []),
+        (SAMPLE_VOUCHERS, {"search": "conference", "limit": 1, "offset": 1, "fields": "code,note"}, 2, ["ABC12345"]),
+    ],
+)
+async def test_list_vouchers_shaping(vouchers, kwargs, total, codes):
+    result = await _list(vouchers, **kwargs)
 
     assert result["success"] is True
-    assert set(result.keys()) == {"success", "site", "count", "vouchers"}
-    assert result["count"] == 4
+    assert result["total_count"] == total
+    assert result["count"] == len(codes)
+    assert "total" not in result
+    assert "returned_count" not in result
+    assert [v["code"] for v in result["vouchers"]] == codes
+    for key in ("limit", "offset"):
+        if key in kwargs:
+            assert result[key] == kwargs[key]
+    if "fields" in kwargs:
+        for voucher in result["vouchers"]:
+            assert set(voucher) == set(kwargs["fields"].split(","))
 
 
 # ---------------------------------------------------------------------------
@@ -176,280 +220,14 @@ async def test_list_vouchers_rejects_invalid_offset(invalid_offset):
     assert "Invalid offset" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_list_vouchers_accepts_valid_boundary_values():
-    """Accept valid boundary values limit=1, limit=1000, offset=0."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        res1 = await list_vouchers(limit=1, offset=0)
-        assert res1["success"] is True
-        assert res1["count"] == 1
-        assert res1["total_count"] == 4
-        assert res1["limit"] == 1
-        assert "total" not in res1
-        assert "returned_count" not in res1
-
-        res1000 = await list_vouchers(limit=1000, offset=0)
-        assert res1000["success"] is True
-        assert res1000["count"] == 4
-        assert res1000["total_count"] == 4
-        assert res1000["limit"] == 1000
-
-
 # ---------------------------------------------------------------------------
 # 3. Search Filter Tests (Narrow Substring on Code and Note)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_list_vouchers_search_by_code_case_insensitive():
-    """Search matches code substring case-insensitively."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(search="abc")
-
-    assert result["success"] is True
-    assert result["total_count"] == 1
-    assert result["count"] == 1
-    assert "total" not in result
-    assert "returned_count" not in result
-    assert result["vouchers"][0]["code"] == "ABC12345"
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_search_by_note_case_insensitive():
-    """Search matches note substring case-insensitively."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(search="conference")
-
-    assert result["success"] is True
-    assert result["total_count"] == 2
-    assert result["count"] == 2
-    matched_codes = {v["code"] for v in result["vouchers"]}
-    assert matched_codes == {"ABC12345", "JKL22222"}
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_search_narrow_does_not_match_other_fields():
-    """Search does not match fields outside code and note (e.g. status or duration)."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        # "VALID_ONE" is a status, but no code or note contains "VALID"
-        result = await list_vouchers(search="VALID")
-
-    assert result["success"] is True
-    assert result["total_count"] == 0
-    assert result["vouchers"] == []
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_search_no_match_returns_empty_well_defined():
-    """Sparse / no-match search returns well-defined empty page with total_count=0."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(search="nonexistent-substring")
-
-    assert result["success"] is True
-    assert result["total_count"] == 0
-    assert result["count"] == 0
-    assert "total" not in result
-    assert "returned_count" not in result
-    assert result["vouchers"] == []
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_whitespace_search_ignored():
-    """Whitespace-only search string is ignored and preserves all vouchers."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(search="   ")
-
-    # Treated as no shaping requested
-    assert result["success"] is True
-    assert result["count"] == 4
-    assert len(result["vouchers"]) == 4
-
-
 # ---------------------------------------------------------------------------
 # 4. Paging and Ordering Tests
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_paging_limit_and_offset():
-    """Limit and offset paginate correctly with total_count and count metadata."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        page1 = await list_vouchers(limit=2, offset=0)
-        assert page1["success"] is True
-        assert page1["total_count"] == 4
-        assert page1["count"] == 2
-        assert page1["limit"] == 2
-        assert page1["offset"] == 0
-        assert "total" not in page1
-        assert "returned_count" not in page1
-        assert [v["code"] for v in page1["vouchers"]] == ["JKL22222", "GHI11111"]
-
-        page2 = await list_vouchers(limit=2, offset=2)
-        assert page2["success"] is True
-        assert page2["total_count"] == 4
-        assert page2["count"] == 2
-        assert page2["offset"] == 2
-        assert [v["code"] for v in page2["vouchers"]] == ["DEF67890", "ABC12345"]
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_offset_beyond_total_is_well_defined():
-    """Offset beyond total returns empty vouchers list with well-defined metadata."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(offset=10, limit=5)
-
-    assert result["success"] is True
-    assert result["total_count"] == 4
-    assert result["count"] == 0
-    assert result["vouchers"] == []
-    assert result["offset"] == 10
-    assert result["limit"] == 5
-    assert "total" not in result
-    assert "returned_count" not in result
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_empty_controller_collection():
-    """Empty controller response returns well-defined empty page."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=[])
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        result = await list_vouchers(limit=10)
-
-    assert result["success"] is True
-    assert result["total_count"] == 0
-    assert result["count"] == 0
-    assert result["vouchers"] == []
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_paging_preserves_deterministic_order():
-    """Shaped calls sort created_at desc; unpaged preserves controller order."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        paged_items = []
-        for i in range(4):
-            page = await list_vouchers(limit=1, offset=i)
-            paged_items.extend(page["vouchers"])
-
-        unpaged = await list_vouchers()
-        # Unpaged preserves controller order
-        assert [v["id"] for v in unpaged["vouchers"]] == [
-            "60a8b3c4d5e6f7a8b9c0d101",
-            "60a8b3c4d5e6f7a8b9c0d102",
-            "60a8b3c4d5e6f7a8b9c0d103",
-            "60a8b3c4d5e6f7a8b9c0d104",
-        ]
-        # Paged items follow deterministic created_at desc order
-        assert [v["id"] for v in paged_items] == [
-            "60a8b3c4d5e6f7a8b9c0d104",  # create_time: 1700000300
-            "60a8b3c4d5e6f7a8b9c0d103",  # create_time: 1700000200
-            "60a8b3c4d5e6f7a8b9c0d102",  # create_time: 1700000100
-            "60a8b3c4d5e6f7a8b9c0d101",  # create_time: 1700000000
-        ]
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_paging_deterministic_tie_break():
-    """Ties in created_at are deterministically broken by id descending."""
-    tied_vouchers = [
-        {"_id": "v_alpha", "code": "ALPHA", "create_time": 1700000000},
-        {"_id": "v_beta", "code": "BETA", "create_time": 1700000000},
-        {"_id": "v_newest", "code": "NEWEST", "create_time": 1700000500},
-    ]
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=tied_vouchers)
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        # Unpaged preserves controller order
-        unpaged = await list_vouchers()
-        assert [v["id"] for v in unpaged["vouchers"]] == ["v_alpha", "v_beta", "v_newest"]
-
-        # Paged sorts created_at desc with id desc tie break
-        paged = await list_vouchers(limit=10)
-        assert [v["id"] for v in paged["vouchers"]] == ["v_newest", "v_beta", "v_alpha"]
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_ui_hyphenated_digit_search():
-    """Search matches UI hyphenated digit codes against stored digit codes."""
-    digit_vouchers = [
-        {"_id": "v1", "code": "1234567890", "note": "Guest Wifi", "create_time": 1700000000},
-        {"_id": "v2", "code": "9876543210", "note": "Staff-Only", "create_time": 1700000100},
-    ]
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=digit_vouchers)
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        # Full UI hyphenated search
-        res1 = await list_vouchers(search="12345-67890")
-        assert res1["count"] == 1
-        assert res1["vouchers"][0]["code"] == "1234567890"
-
-        # Partial UI hyphenated search
-        res2 = await list_vouchers(search="12345-6")
-        assert res2["count"] == 1
-        assert res2["vouchers"][0]["code"] == "1234567890"
-
-        # Exact hyphenated note match
-        res3 = await list_vouchers(search="Staff-Only")
-        assert res3["count"] == 1
-        assert res3["vouchers"][0]["code"] == "9876543210"
-
-        # Arbitrary punctuation is not generalized
-        res4 = await list_vouchers(search="123.456")
-        assert res4["count"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -523,33 +301,6 @@ async def test_list_vouchers_rejects_non_string_fields():
 # ---------------------------------------------------------------------------
 # 6. Combined Search, Paging, and Projection
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_list_vouchers_combined_search_paging_and_projection():
-    """Search filters first, total_count reflects filtered count, paging and projection apply."""
-    with patch("unifi_network_mcp.tools.hotspot.hotspot_manager") as mock_hm:
-        mock_hm.get_vouchers = AsyncMock(return_value=list(SAMPLE_VOUCHERS))
-        mock_hm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.hotspot import list_vouchers
-
-        # "conference" matches 2 vouchers: JKL22222 (1700000300) and ABC12345 (1700000000).
-        # Sorted created_at desc: JKL22222 is index 0, ABC12345 is index 1.
-        # offset=1, limit=1 returns ABC12345.
-        result = await list_vouchers(search="conference", limit=1, offset=1, fields="code,note")
-
-    assert result["success"] is True
-    assert result["total_count"] == 2
-    assert result["count"] == 1
-    assert result["limit"] == 1
-    assert result["offset"] == 1
-    assert "total" not in result
-    assert "returned_count" not in result
-    assert len(result["vouchers"]) == 1
-    assert result["vouchers"][0]["code"] == "ABC12345"
-    assert result["vouchers"][0]["note"] == "Conference Guest 1"
-    assert set(result["vouchers"][0].keys()) == {"code", "note"}
 
 
 # ---------------------------------------------------------------------------

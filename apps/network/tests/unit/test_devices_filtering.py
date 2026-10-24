@@ -151,25 +151,6 @@ async def test_get_device_details_default_preserves_pre_pr_full_raw_object():
 
 
 @pytest.mark.asyncio
-async def test_get_device_details_ports_resolves_lldp_neighbor():
-    # Opt-in summary path: summary=True, include="ports" -> port_summary with LLDP resolved.
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(SWITCH_RAW))
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import get_device_details
-
-        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include="ports")
-
-    assert result["success"] is True and result["summary_mode"] is True
-    port1 = next(pp for pp in result["device"]["port_summary"] if pp["port_idx"] == 1)
-    assert port1["lldp_neighbor"]["name"] == "AP-1"
-    assert port1["last_seen_mac"] == "aa:bb:cc:00:00:99"
-    port2 = next(pp for pp in result["device"]["port_summary"] if pp["port_idx"] == 2)
-    assert port2["lldp_neighbor"] is None
-
-
-@pytest.mark.asyncio
 async def test_list_devices_search_reports_total():
     with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
         mock_dm.get_devices = AsyncMock(return_value=[SWITCH_RAW, GATEWAY_RAW])
@@ -183,53 +164,6 @@ async def test_list_devices_search_reports_total():
     assert result["devices"][0]["name"] == "UDM"
     # back-compat: legacy `count` key preserved alongside returned_count
     assert result["count"] == result["returned_count"]
-
-
-@pytest.mark.asyncio
-async def test_list_devices_switch_summary_replaces_raw_table():
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_devices = AsyncMock(return_value=[SWITCH_RAW])
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import list_devices
-
-        result = await list_devices(device_type="switch", include_details=True)
-
-    dev = result["devices"][0]
-    assert dev["total_ports"] == 2 and dev["ports_up"] == 1
-    assert "port_table" not in dev  # compressed, not raw
-
-
-@pytest.mark.asyncio
-async def test_list_devices_gateway_summary_flattened():
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_devices = AsyncMock(return_value=[GATEWAY_RAW])
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import list_devices
-
-        result = await list_devices(device_type="gateway", include_details=True)
-
-    dev = result["devices"][0]
-    assert dev["wan1_ip"] == "203.0.113.5" and dev["wan1_up"] is True
-    assert dev["network_count"] == 2 and dev["cpu_usage"] == "12.5"
-
-
-@pytest.mark.asyncio
-async def test_get_device_details_surfaces_unknown_include_sections():
-    # Typos in include must surface as `unknown_sections` so LLM callers can self-correct.
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(SWITCH_RAW))
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import get_device_details
-
-        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include="basic,prts")
-
-    # known section still applied (basic fields present)
-    assert result["device"]["mac"] == SWITCH_RAW["mac"]
-    # typo surfaced
-    assert result.get("unknown_sections") == ["prts"]
 
 
 @pytest.mark.asyncio
@@ -278,87 +212,6 @@ async def test_list_devices_include_details_summary_false_returns_raw_tables():
 
 
 @pytest.mark.asyncio
-async def test_get_device_details_summary_include_all_returns_every_section():
-    # include="all" populates every section: basic + ports + radios (if any) + stats +
-    # uplink (if any) + lldp.
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(SWITCH_RAW))
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import get_device_details
-
-        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include="all")
-
-    d = result["device"]
-    assert d["mac"] == SWITCH_RAW["mac"]  # basic
-    assert d["port_count"] == len(SWITCH_RAW["port_table"])  # ports
-    assert d["lldp_table"] == SWITCH_RAW["lldp_table"]  # lldp
-
-
-@pytest.mark.asyncio
-async def test_get_device_details_port_last_seen_mac_without_lldp_neighbor():
-    # When a port has last_seen_mac but no LLDP entry, lldp_neighbor must be None
-    # (wireless client traffic case — last_seen_mac is the wireless client's MAC,
-    # not infrastructure).
-    raw = {
-        **SWITCH_RAW,
-        "port_table": [
-            {
-                "port_idx": 7,
-                "name": "Port 7",
-                "up": True,
-                "speed": 100,
-                "poe_enable": False,
-                # last_seen_mac is a wireless client's MAC -> no LLDP entry expected
-                "last_connection": {"mac": "aa:bb:cc:00:00:cc"},
-            },
-        ],
-        "lldp_table": [],  # no LLDP infrastructure on this port
-    }
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(raw))
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import get_device_details
-
-        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include="ports")
-
-    port = result["device"]["port_summary"][0]
-    assert port["last_seen_mac"] == "aa:bb:cc:00:00:cc"
-    assert port["lldp_neighbor"] is None  # not infrastructure — wireless client traffic
-
-
-@pytest.mark.asyncio
-async def test_list_devices_zero_items_case():
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_devices = AsyncMock(return_value=[])
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import list_devices
-
-        result = await list_devices()
-
-    assert result["total_count"] == 0 and result["returned_count"] == 0
-    assert result["count"] == 0
-    assert result["devices"] == []
-
-
-@pytest.mark.asyncio
-async def test_list_devices_returns_all_by_default():
-    # No limit by default — preserves upstream behavior (no silent truncation).
-    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
-        mock_dm.get_devices = AsyncMock(return_value=[SWITCH_RAW, GATEWAY_RAW])
-        mock_dm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.devices import list_devices
-
-        result = await list_devices()
-
-    assert result["total_count"] == 2 and result["returned_count"] == 2
-    assert result["limit"] is None
-
-
-@pytest.mark.asyncio
 async def test_rogue_aps_defaults_to_paginated_summary():
     with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
         manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
@@ -376,49 +229,6 @@ async def test_rogue_aps_defaults_to_paginated_summary():
     assert result["summary_mode"] is True
     assert result["rogue_aps"][0]["ssid"] == "ssid-0"
     assert "site_id" not in result["rogue_aps"][0]
-
-
-@pytest.mark.asyncio
-async def test_rogue_aps_offset_and_full_mode():
-    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
-        manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
-        manager._connection.site = "default"
-        from unifi_network_mcp.tools.devices import list_rogue_aps
-
-        result = await list_rogue_aps(limit=2, offset=2, summary=False)
-
-    assert result["rogue_aps"] == ROGUE_APS[2:4]
-    assert result["next_offset"] == 4
-    assert result["has_more"] is True
-
-
-@pytest.mark.asyncio
-async def test_rogue_aps_final_page_has_no_continuation():
-    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
-        manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
-        manager._connection.site = "default"
-        from unifi_network_mcp.tools.devices import list_rogue_aps
-
-        result = await list_rogue_aps(limit=2, offset=4, summary=False)
-
-    assert result["returned_count"] == 1
-    assert result["next_offset"] is None
-    assert result["has_more"] is False
-
-
-@pytest.mark.asyncio
-async def test_rogue_ap_filters_apply_before_pagination():
-    mixed_channels = [{**ap, "channel": 1 if index < 3 else 36} for index, ap in enumerate(ROGUE_APS)]
-    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
-        manager.list_rogue_aps = AsyncMock(return_value=mixed_channels)
-        manager._connection.site = "default"
-        from unifi_network_mcp.tools.devices import list_rogue_aps
-
-        result = await list_rogue_aps(channel=36, limit=1, offset=1, summary=False)
-
-    assert result["total_count"] == 2
-    assert result["rogue_aps"] == [mixed_channels[4]]
-    assert result["has_more"] is False
 
 
 def test_rogue_ap_pagination_bounds_are_in_schema_and_validate_inputs():
@@ -455,3 +265,153 @@ async def test_device_projection_preserves_nested_response_policy(monkeypatch, r
     assert result["success"] is True
     assert set(result["devices"][0]) == {"mac", "ports"}
     assert result["devices"][0]["ports"][0]["x_password"] == (REDACTED if redact else "synthetic-port-secret")
+
+
+PORT7_RAW = {
+    **SWITCH_RAW,
+    "port_table": [
+        {
+            "port_idx": 7,
+            "name": "Port 7",
+            "up": True,
+            "speed": 100,
+            "poe_enable": False,
+            # last_seen_mac is a wireless client's MAC -> no LLDP entry expected
+            "last_connection": {"mac": "aa:bb:cc:00:00:cc"},
+        },
+    ],
+    "lldp_table": [],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "raw,expected_ports",
+    [
+        # LLDP neighbor resolved for port 1; port 2 has none.
+        (SWITCH_RAW, {1: ("AP-1", "aa:bb:cc:00:00:99"), 2: (None, None)}),
+        # A port with last_seen_mac but no LLDP entry (wireless client traffic) has lldp_neighbor None.
+        (PORT7_RAW, {7: (None, "aa:bb:cc:00:00:cc")}),
+    ],
+)
+async def test_get_device_details_ports_summary(raw, expected_ports):
+    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
+        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(raw))
+        mock_dm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.devices import get_device_details
+
+        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include="ports")
+
+    assert result["success"] is True and result["summary_mode"] is True
+    ports = {pp["port_idx"]: pp for pp in result["device"]["port_summary"]}
+    assert set(ports) == set(expected_ports)
+    for idx, (neighbor_name, last_seen_mac) in expected_ports.items():
+        neighbor = ports[idx]["lldp_neighbor"]
+        assert (neighbor["name"] if neighbor else None) == neighbor_name
+        assert ports[idx]["last_seen_mac"] == last_seen_mac
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "include,expected,unknown_sections",
+    [
+        # include="all" populates every section: basic + ports + lldp (+ radios/uplink when present).
+        (
+            "all",
+            {
+                "mac": SWITCH_RAW["mac"],
+                "port_count": len(SWITCH_RAW["port_table"]),
+                "lldp_table": SWITCH_RAW["lldp_table"],
+            },
+            None,
+        ),
+        # Typos in include surface as `unknown_sections` so LLM callers can self-correct;
+        # the known section is still applied.
+        ("basic,prts", {"mac": SWITCH_RAW["mac"]}, ["prts"]),
+    ],
+)
+async def test_get_device_details_summary_sections(include, expected, unknown_sections):
+    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
+        mock_dm.get_device_details = AsyncMock(return_value=_detail_mock(SWITCH_RAW))
+        mock_dm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.devices import get_device_details
+
+        result = await get_device_details("aa:bb:cc:00:00:10", summary=True, include=include)
+
+    assert {key: result["device"][key] for key in expected} == expected
+    assert result.get("unknown_sections") == unknown_sections
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "device_type,raw,expected",
+    [
+        ("switch", SWITCH_RAW, {"total_ports": 2, "ports_up": 1}),
+        (
+            "gateway",
+            GATEWAY_RAW,
+            {"wan1_ip": "203.0.113.5", "wan1_up": True, "network_count": 2, "cpu_usage": "12.5"},
+        ),
+    ],
+)
+async def test_list_devices_summary_compresses_raw_tables(device_type, raw, expected):
+    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
+        mock_dm.get_devices = AsyncMock(return_value=[raw])
+        mock_dm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.devices import list_devices
+
+        result = await list_devices(device_type=device_type, include_details=True)
+
+    dev = result["devices"][0]
+    assert {key: dev[key] for key in expected} == expected
+    assert "port_table" not in dev  # compressed, not raw
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("devices", [[SWITCH_RAW, GATEWAY_RAW], []])
+async def test_list_devices_returns_all_by_default(devices):
+    # No limit by default — preserves upstream behavior (no silent truncation); empty stays well-defined.
+    with patch("unifi_network_mcp.tools.devices.device_manager") as mock_dm:
+        mock_dm.get_devices = AsyncMock(return_value=list(devices))
+        mock_dm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.devices import list_devices
+
+        result = await list_devices()
+
+    assert result["total_count"] == result["returned_count"] == result["count"] == len(devices)
+    assert result["limit"] is None
+    assert len(result["devices"]) == len(devices)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs,channel_filter,total,indexes,next_offset,has_more",
+    [
+        ({"limit": 2, "offset": 2}, None, 5, [2, 3], 4, True),
+        ({"limit": 2, "offset": 4}, None, 5, [4], None, False),
+        # Filters apply before pagination: channel 36 leaves two of five.
+        ({"channel": 36, "limit": 1, "offset": 1}, 36, 2, [4], None, False),
+    ],
+)
+async def test_rogue_aps_full_mode_pagination(kwargs, channel_filter, total, indexes, next_offset, has_more):
+    aps = (
+        [{**ap, "channel": 1 if index < 3 else 36} for index, ap in enumerate(ROGUE_APS)]
+        if channel_filter
+        else ROGUE_APS
+    )
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.list_rogue_aps = AsyncMock(return_value=aps)
+        manager._connection.site = "default"
+        from unifi_network_mcp.tools.devices import list_rogue_aps
+
+        result = await list_rogue_aps(summary=False, **kwargs)
+
+    assert result["total_count"] == total
+    assert result["returned_count"] == len(indexes)
+    assert result["rogue_aps"] == [aps[i] for i in indexes]
+    assert result["next_offset"] == next_offset
+    assert result["has_more"] is has_more

@@ -4,7 +4,7 @@ Tests granularity support, new report endpoints, live stat endpoints,
 and device command methods (speedtest).
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
@@ -36,51 +36,57 @@ class TestStatsManagerEnhanced:
 
         return StatsManager(mock_connection, mock_client_manager)
 
-    # ---- Granularity on existing methods ----
+    # ---- Report/stat endpoint request shapes ----
 
     @pytest.mark.asyncio
-    async def test_get_network_stats_default_granularity(self, stats_manager, mock_connection):
-        """Test get_network_stats uses hourly.site by default."""
+    @pytest.mark.parametrize(
+        "method,args,kwargs,path,data",
+        [
+            ("get_network_stats", (), {}, "/stat/report/hourly.site", {}),
+            ("get_network_stats", (), {"granularity": "5minutes"}, "/stat/report/5minutes.site", {}),
+            ("get_network_stats", (), {"granularity": "daily"}, "/stat/report/daily.site", {}),
+            ("get_network_stats", (), {"granularity": "monthly"}, "/stat/report/monthly.site", {}),
+            ("get_client_stats", ("aa:bb:cc:dd:ee:ff",), {}, "/stat/report/hourly.user", {}),
+            (
+                "get_client_stats",
+                ("aa:bb:cc:dd:ee:ff",),
+                {"granularity": "5minutes"},
+                "/stat/report/5minutes.user",
+                {},
+            ),
+            ("get_device_stats", ("aa:bb:cc:dd:ee:ff",), {"device_type": "ap"}, "/stat/report/hourly.ap", {}),
+            ("get_device_stats", ("aa:bb:cc:dd:ee:ff",), {"device_type": "gw"}, "/stat/report/hourly.gw", {}),
+            ("get_device_stats", ("aa:bb:cc:dd:ee:ff",), {}, "/stat/report/hourly.dev", {}),
+            ("get_gateway_stats", (), {}, "/stat/report/hourly.gw", {}),
+            ("get_gateway_stats", (), {"granularity": "5minutes"}, "/stat/report/5minutes.gw", {}),
+            ("get_speedtest_results", (), {}, "/stat/report/archive.speedtest", {}),
+            ("get_site_dpi_traffic", (), {}, "/stat/sitedpi", {"type": "by_app"}),
+            ("get_site_dpi_traffic", (), {"by": "by_cat"}, "/stat/sitedpi", {"type": "by_cat"}),
+            ("get_client_dpi_traffic", ("aa:bb:cc:dd:ee:ff",), {}, "/stat/stadpi", {"macs": ["aa:bb:cc:dd:ee:ff"]}),
+            ("get_ips_events", (), {}, "/stat/ips/event", {"_limit": 50}),
+            ("get_ips_events", (), {"limit": 10}, "/stat/ips/event", {"_limit": 10}),
+            ("get_client_sessions", (), {}, "/stat/session", {"type": "all"}),
+            (
+                "get_client_sessions",
+                (),
+                {"client_mac": "aa:bb:cc:dd:ee:ff"},
+                "/stat/session",
+                {"mac": "aa:bb:cc:dd:ee:ff"},
+            ),
+            ("get_anomalies", (), {}, "/stat/anomalies", {"start": ANY, "end": ANY}),
+        ],
+    )
+    async def test_request_shape(self, stats_manager, mock_connection, method, args, kwargs, path, data):
+        """Each stats method hits its endpoint with the expected query payload."""
         mock_connection.request.return_value = []
 
-        await stats_manager.get_network_stats()
+        await getattr(stats_manager, method)(*args, **kwargs)
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.site"
-
-    @pytest.mark.asyncio
-    async def test_get_network_stats_5min_granularity(self, stats_manager, mock_connection):
-        """Test get_network_stats uses 5minutes.site endpoint."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_network_stats(granularity="5minutes")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/5minutes.site"
-
-    @pytest.mark.asyncio
-    async def test_get_network_stats_daily_granularity(self, stats_manager, mock_connection):
-        """Test get_network_stats uses daily.site endpoint."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_network_stats(granularity="daily")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/daily.site"
-
-    @pytest.mark.asyncio
-    async def test_get_network_stats_monthly_granularity(self, stats_manager, mock_connection):
-        """Test get_network_stats uses monthly.site endpoint."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_network_stats(granularity="monthly")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/monthly.site"
+        # Empty answers can trigger a fallback request, so pick the request for this endpoint.
+        api_request = next((c[0][0] for c in mock_connection.request.call_args_list if c[0][0].path == path), None)
+        assert api_request is not None, [c[0][0].path for c in mock_connection.request.call_args_list]
+        for key, value in data.items():
+            assert api_request.data[key] == value
 
     @pytest.mark.asyncio
     async def test_get_network_stats_invalid_granularity(self, stats_manager):
@@ -89,198 +95,61 @@ class TestStatsManagerEnhanced:
             await stats_manager.get_network_stats(granularity="invalid")
 
     @pytest.mark.asyncio
-    async def test_get_network_stats_includes_wan_attrs(self, stats_manager, mock_connection):
-        """Test get_network_stats requests WAN breakdown attrs."""
+    @pytest.mark.parametrize(
+        "method,args,kwargs,attrs",
+        [
+            ("get_network_stats", (), {}, {"wan-rx_bytes", "wan-tx_bytes"}),
+            ("get_client_stats", ("aa:bb:cc:dd:ee:ff",), {}, {"signal", "satisfaction", "tx_retries"}),
+            ("get_device_stats", ("aa:bb:cc:dd:ee:ff",), {"device_type": "ap"}, {"satisfaction"}),
+            ("get_device_stats", ("aa:bb:cc:dd:ee:ff",), {"device_type": "gw"}, {"cpu"}),
+        ],
+    )
+    async def test_report_requests_include_breakdown_attrs(
+        self, stats_manager, mock_connection, method, args, kwargs, attrs
+    ):
         mock_connection.request.return_value = []
 
-        await stats_manager.get_network_stats()
+        await getattr(stats_manager, method)(*args, **kwargs)
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        attrs = api_request.data["attrs"]
-        assert "wan-rx_bytes" in attrs
-        assert "wan-tx_bytes" in attrs
+        assert attrs <= set(mock_connection.request.call_args[0][0].data["attrs"])
 
     @pytest.mark.asyncio
-    async def test_get_client_stats_uses_user_endpoint(self, stats_manager, mock_connection):
-        """Test get_client_stats uses .user endpoint (not .sta)."""
+    @pytest.mark.parametrize(
+        "method,payload",
+        [("get_gateway_stats", [{"wan-rx_bytes": 1000}]), ("get_speedtest_results", [{"xput_download": 100}])],
+    )
+    async def test_report_results_are_returned(self, stats_manager, mock_connection, method, payload):
+        mock_connection.request.return_value = payload
+
+        assert await getattr(stats_manager, method)() == payload
+
+    @pytest.mark.asyncio
+    async def test_get_client_sessions_without_mac(self, stats_manager, mock_connection):
+        """Test get_client_sessions omits mac field when not provided."""
         mock_connection.request.return_value = []
 
-        await stats_manager.get_client_stats("aa:bb:cc:dd:ee:ff")
+        await stats_manager.get_client_sessions()
 
         call_args = mock_connection.request.call_args
         api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.user"
+        assert "mac" not in api_request.data
+
+    # ---- IPS events ----
 
     @pytest.mark.asyncio
-    async def test_get_client_stats_includes_wifi_attrs(self, stats_manager, mock_connection):
-        """Test get_client_stats requests WiFi quality attrs."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_client_stats("aa:bb:cc:dd:ee:ff")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        attrs = api_request.data["attrs"]
-        assert "signal" in attrs
-        assert "satisfaction" in attrs
-        assert "tx_retries" in attrs
-
-    @pytest.mark.asyncio
-    async def test_get_client_stats_5min_granularity(self, stats_manager, mock_connection):
-        """Test get_client_stats with 5-minute granularity."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_client_stats("aa:bb:cc:dd:ee:ff", granularity="5minutes")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/5minutes.user"
-
-    @pytest.mark.asyncio
-    async def test_get_device_stats_routes_ap(self, stats_manager, mock_connection):
-        """Test get_device_stats uses .ap endpoint for APs."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_device_stats("aa:bb:cc:dd:ee:ff", device_type="ap")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.ap"
-        assert "satisfaction" in api_request.data["attrs"]
-
-    @pytest.mark.asyncio
-    async def test_get_device_stats_routes_gw(self, stats_manager, mock_connection):
-        """Test get_device_stats uses .gw endpoint for gateways."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_device_stats("aa:bb:cc:dd:ee:ff", device_type="gw")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.gw"
-        assert "cpu" in api_request.data["attrs"]
-
-    @pytest.mark.asyncio
-    async def test_get_device_stats_defaults_to_dev(self, stats_manager, mock_connection):
-        """Test get_device_stats defaults to .dev endpoint."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_device_stats("aa:bb:cc:dd:ee:ff")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.dev"
-
-    # ---- New report endpoints ----
-
-    @pytest.mark.asyncio
-    async def test_get_gateway_stats(self, stats_manager, mock_connection):
-        """Test get_gateway_stats uses .gw endpoint."""
-        mock_connection.request.return_value = [{"wan-rx_bytes": 1000}]
-
-        result = await stats_manager.get_gateway_stats()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/hourly.gw"
-        assert result == [{"wan-rx_bytes": 1000}]
-
-    @pytest.mark.asyncio
-    async def test_get_gateway_stats_5min(self, stats_manager, mock_connection):
-        """Test get_gateway_stats with 5-minute granularity."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_gateway_stats(granularity="5minutes")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/5minutes.gw"
-
-    @pytest.mark.asyncio
-    async def test_get_speedtest_results(self, stats_manager, mock_connection):
-        """Test get_speedtest_results uses archive.speedtest endpoint."""
-        mock_connection.request.return_value = [{"xput_download": 100}]
-
-        result = await stats_manager.get_speedtest_results()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/report/archive.speedtest"
-        assert result == [{"xput_download": 100}]
-
-    # ---- Live stat endpoints ----
-
-    @pytest.mark.asyncio
-    async def test_get_site_dpi_traffic(self, stats_manager, mock_connection):
-        """Test get_site_dpi_traffic uses /stat/sitedpi."""
-        mock_connection.request.return_value = [{"app": 1, "rx_bytes": 500}]
-
-        await stats_manager.get_site_dpi_traffic()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/sitedpi"
-        assert api_request.data["type"] == "by_app"
-
-    @pytest.mark.asyncio
-    async def test_get_site_dpi_traffic_by_cat(self, stats_manager, mock_connection):
-        """Test get_site_dpi_traffic with by_cat grouping."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_site_dpi_traffic(by="by_cat")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["type"] == "by_cat"
-
-    @pytest.mark.asyncio
-    async def test_get_client_dpi_traffic(self, stats_manager, mock_connection):
-        """Test get_client_dpi_traffic uses /stat/stadpi with mac filter."""
-        mock_connection.request.return_value = [{"app": 2, "tx_bytes": 300}]
-
-        await stats_manager.get_client_dpi_traffic("aa:bb:cc:dd:ee:ff")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/stadpi"
-        assert api_request.data["macs"] == ["aa:bb:cc:dd:ee:ff"]
-
-    @pytest.mark.asyncio
-    async def test_get_ips_events(self, stats_manager, mock_connection):
-        """Test get_ips_events uses /stat/ips/event."""
-        mock_connection.request.return_value = [{"event_type": "alert"}]
-
-        await stats_manager.get_ips_events()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/ips/event"
-        assert api_request.data["_limit"] == 50
-
-    @pytest.mark.asyncio
-    async def test_get_ips_events_custom_limit(self, stats_manager, mock_connection):
-        """Test get_ips_events with custom limit."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_ips_events(limit=10)
-
-        # An empty legacy answer now triggers the v2 fallback, so the legacy
-        # request is the first call rather than the last one.
-        api_request = mock_connection.request.call_args_list[0][0][0]
-        assert api_request.path == "/stat/ips/event"
-        assert api_request.data["_limit"] == 10
-
-    @pytest.mark.asyncio
-    async def test_get_ips_events_empty_legacy_falls_back_to_v2(self, stats_manager, mock_connection):
-        """An empty legacy response must still reach the v2 security log.
-
-        Controllers that moved IPS events to the v2 system log answer
-        /stat/ips/event with 200 and an empty list rather than failing, so a
-        fallback guarded only by an exception never runs for them.
-        """
+    @pytest.mark.parametrize(
+        "legacy_answer",
+        [
+            # Controllers that moved IPS events to the v2 system log answer /stat/ips/event
+            # with 200 and an empty list rather than failing, so an exception-only fallback never runs.
+            [],
+            # A malformed legacy answer must reach v2 rather than be coerced to [].
+            {"unexpected": "envelope"},
+        ],
+    )
+    async def test_get_ips_events_unusable_legacy_falls_back_to_v2(self, stats_manager, mock_connection, legacy_answer):
         v2_events = [{"key": "THREAT_DETECTED", "subcategory": "SECURITY_INTRUSION_PREVENTION"}]
-        mock_connection.request.side_effect = [[], v2_events]
+        mock_connection.request.side_effect = [legacy_answer, v2_events]
 
         result = await stats_manager.get_ips_events()
 
@@ -324,114 +193,23 @@ class TestStatsManagerEnhanced:
 
         mock_connection._update_cache.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_get_ips_events_non_list_legacy_falls_back_to_v2(self, stats_manager, mock_connection):
-        """A malformed legacy answer must reach v2 rather than be coerced to []."""
-        v2_events = [{"key": "THREAT_DETECTED", "subcategory": "SECURITY_INTRUSION_PREVENTION"}]
-        mock_connection.request.side_effect = [{"unexpected": "envelope"}, v2_events]
-
-        result = await stats_manager.get_ips_events()
-
-        assert result == v2_events
-        assert mock_connection.request.call_count == 2
+    # ---- Dashboard ----
 
     @pytest.mark.asyncio
-    async def test_get_client_sessions(self, stats_manager, mock_connection):
-        """Test get_client_sessions uses /stat/session."""
-        mock_connection.request.return_value = [{"mac": "aa:bb:cc:dd:ee:ff"}]
-
-        await stats_manager.get_client_sessions()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/session"
-        assert api_request.data["type"] == "all"
-
-    @pytest.mark.asyncio
-    async def test_get_client_sessions_with_mac(self, stats_manager, mock_connection):
-        """Test get_client_sessions filters by MAC when provided."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_client_sessions(client_mac="aa:bb:cc:dd:ee:ff")
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["mac"] == "aa:bb:cc:dd:ee:ff"
-
-    @pytest.mark.asyncio
-    async def test_get_client_sessions_without_mac(self, stats_manager, mock_connection):
-        """Test get_client_sessions omits mac field when not provided."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_client_sessions()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert "mac" not in api_request.data
-
-    @pytest.mark.asyncio
-    async def test_get_dashboard(self, stats_manager, mock_connection):
-        """Dashboard hits the V2 aggregated endpoint with the historySeconds knob."""
+    @pytest.mark.parametrize("kwargs,seconds", [({}, 86400), ({"history_seconds": 3600}, 3600)])
+    async def test_get_dashboard(self, stats_manager, mock_connection, kwargs, seconds):
+        """Dashboard hits the V2 aggregated endpoint with the caller's historySeconds window."""
         sample = [{"gateway": {}, "wifi_activity": {}, "isp_metrics": {}}]
         mock_connection.request.return_value = sample
 
-        result = await stats_manager.get_dashboard()
+        result = await stats_manager.get_dashboard(**kwargs)
 
         api_request = mock_connection.request.call_args[0][0]
-        assert api_request.path == "/aggregated-dashboard?historySeconds=86400"
+        assert api_request.path == f"/aggregated-dashboard?historySeconds={seconds}"
         assert api_request.method == "get"
         assert result == sample
 
-    @pytest.mark.asyncio
-    async def test_get_dashboard_custom_history_window(self, stats_manager, mock_connection):
-        """historySeconds query param reflects the caller's window."""
-        mock_connection.request.return_value = []
-
-        await stats_manager.get_dashboard(history_seconds=3600)
-
-        api_request = mock_connection.request.call_args[0][0]
-        assert api_request.path == "/aggregated-dashboard?historySeconds=3600"
-
-    @pytest.mark.asyncio
-    async def test_get_anomalies(self, stats_manager, mock_connection):
-        """Test get_anomalies uses /stat/anomalies."""
-        mock_connection.request.return_value = [{"type": "dns_anomaly"}]
-
-        await stats_manager.get_anomalies()
-
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/anomalies"
-        assert "start" in api_request.data
-        assert "end" in api_request.data
-
     # ---- Client WiFi details ----
-
-    @pytest.mark.asyncio
-    async def test_get_client_wifi_details_found(self, stats_manager, mock_connection):
-        """Test get_client_wifi_details returns WiFi fields."""
-        mock_connection.request.return_value = [
-            {
-                "mac": "aa:bb:cc:dd:ee:ff",
-                "signal": -65,
-                "noise": -95,
-                "satisfaction": 100,
-                "tx_rate": 867000,
-                "rx_rate": 780000,
-                "tx_retries": 42,
-                "channel": 100,
-                "radio": "na",
-                "essid": "endpoint",
-            }
-        ]
-
-        result = await stats_manager.get_client_wifi_details("aa:bb:cc:dd:ee:ff")
-
-        assert result is not None
-        assert result["mac"] == "aa:bb:cc:dd:ee:ff"
-        assert result["signal"] == -65
-        assert result["satisfaction"] == 100
-        assert result["channel"] == 100
 
     @pytest.mark.asyncio
     async def test_get_client_wifi_details_uses_get_stat_sta(self, stats_manager, mock_connection):
@@ -445,107 +223,92 @@ class TestStatsManagerEnhanced:
         assert api_request.path == "/stat/sta"
 
     @pytest.mark.asyncio
-    async def test_get_client_wifi_details_filters_by_mac(self, stats_manager, mock_connection):
-        """Must filter list by MAC, not return clients[0]."""
-        mock_connection.request.return_value = [
-            {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132, "radio": "na"},
-            {"mac": "aa:bb:cc:dd:ee:ff", "signal": -34, "channel": 1, "radio": "ng"},
-            {"mac": "22:22:22:22:22:22", "signal": -79, "channel": 11, "radio": "ng"},
-        ]
+    @pytest.mark.parametrize(
+        "rows,query,expected",
+        [
+            (
+                [
+                    {
+                        "mac": "aa:bb:cc:dd:ee:ff",
+                        "signal": -65,
+                        "noise": -95,
+                        "satisfaction": 100,
+                        "tx_rate": 867000,
+                        "rx_rate": 780000,
+                        "tx_retries": 42,
+                        "channel": 100,
+                        "radio": "na",
+                        "essid": "endpoint",
+                    }
+                ],
+                "aa:bb:cc:dd:ee:ff",
+                {"mac": "aa:bb:cc:dd:ee:ff", "signal": -65, "satisfaction": 100, "channel": 100},
+            ),
+            # Must filter the list by MAC, not return clients[0].
+            (
+                [
+                    {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132, "radio": "na"},
+                    {"mac": "aa:bb:cc:dd:ee:ff", "signal": -34, "channel": 1, "radio": "ng"},
+                    {"mac": "22:22:22:22:22:22", "signal": -79, "channel": 11, "radio": "ng"},
+                ],
+                "aa:bb:cc:dd:ee:ff",
+                {"mac": "aa:bb:cc:dd:ee:ff", "signal": -34, "channel": 1},
+            ),
+            # Unknown MAC returns None, not clients[0].
+            (
+                [
+                    {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132},
+                    {"mac": "22:22:22:22:22:22", "signal": -60, "channel": 36},
+                ],
+                "00:00:00:00:00:00",
+                None,
+            ),
+            # MAC matching ignores case so callers aren't forced to normalize.
+            (
+                [{"mac": "AA:BB:CC:DD:EE:FF", "signal": -50, "channel": 36}],
+                "aa:bb:cc:dd:ee:ff",
+                {"mac": "AA:BB:CC:DD:EE:FF", "signal": -50},
+            ),
+            ([], "ff:ff:ff:ff:ff:ff", None),
+        ],
+    )
+    async def test_get_client_wifi_details_lookup(self, stats_manager, mock_connection, rows, query, expected):
+        mock_connection.request.return_value = rows
 
-        result = await stats_manager.get_client_wifi_details("aa:bb:cc:dd:ee:ff")
+        result = await stats_manager.get_client_wifi_details(query)
 
-        assert result is not None
-        assert result["mac"] == "aa:bb:cc:dd:ee:ff"
-        assert result["signal"] == -34
-        assert result["channel"] == 1
-
-    @pytest.mark.asyncio
-    async def test_get_client_wifi_details_no_match_returns_none(self, stats_manager, mock_connection):
-        """Unknown MAC must return None, not clients[0]."""
-        mock_connection.request.return_value = [
-            {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132},
-            {"mac": "22:22:22:22:22:22", "signal": -60, "channel": 36},
-        ]
-
-        result = await stats_manager.get_client_wifi_details("00:00:00:00:00:00")
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_get_client_wifi_details_mac_case_insensitive(self, stats_manager, mock_connection):
-        """MAC matching must ignore case so callers aren't forced to normalize."""
-        mock_connection.request.return_value = [
-            {"mac": "AA:BB:CC:DD:EE:FF", "signal": -50, "channel": 36},
-        ]
-
-        result = await stats_manager.get_client_wifi_details("aa:bb:cc:dd:ee:ff")
-
-        assert result is not None
-        assert result["mac"] == "AA:BB:CC:DD:EE:FF"
-        assert result["signal"] == -50
-
-    @pytest.mark.asyncio
-    async def test_get_client_wifi_details_not_found(self, stats_manager, mock_connection):
-        """Test get_client_wifi_details returns None for unknown client."""
-        mock_connection.request.return_value = []
-
-        result = await stats_manager.get_client_wifi_details("ff:ff:ff:ff:ff:ff")
-
-        assert result is None
+        if expected is None:
+            assert result is None
+        else:
+            assert {key: result[key] for key in expected} == expected
 
     # ---- Error handling ----
 
     @pytest.mark.asyncio
-    async def test_get_gateway_stats_handles_error(self, stats_manager, mock_connection):
-        """Test get_gateway_stats returns empty list on error."""
+    @pytest.mark.parametrize(
+        "method,args",
+        [
+            ("get_gateway_stats", ()),
+            ("get_ips_events", ()),
+            ("get_dashboard", ()),
+            ("get_client_wifi_details", ("aa:bb:cc:dd:ee:ff",)),
+        ],
+    )
+    async def test_request_errors_propagate(self, stats_manager, mock_connection, method, args):
         mock_connection.request.side_effect = Exception("API error")
 
         with pytest.raises(Exception):
-            await stats_manager.get_gateway_stats()
-
-    @pytest.mark.asyncio
-    async def test_get_ips_events_handles_error(self, stats_manager, mock_connection):
-        """Test get_ips_events returns empty list on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await stats_manager.get_ips_events()
-
-    @pytest.mark.asyncio
-    async def test_get_dashboard_handles_error(self, stats_manager, mock_connection):
-        """Test get_dashboard returns empty list on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await stats_manager.get_dashboard()
-
-    @pytest.mark.asyncio
-    async def test_get_client_wifi_details_handles_error(self, stats_manager, mock_connection):
-        """Test get_client_wifi_details returns None on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await stats_manager.get_client_wifi_details("aa:bb:cc:dd:ee:ff")
+            await getattr(stats_manager, method)(*args)
 
     # ---- Cache tests ----
 
     @pytest.mark.asyncio
-    async def test_get_network_stats_uses_cache(self, stats_manager, mock_connection):
-        """Test get_network_stats returns cached data."""
+    @pytest.mark.parametrize("method", ["get_network_stats", "get_site_dpi_traffic"])
+    async def test_uses_cache(self, stats_manager, mock_connection, method):
+        """Cached data is returned without a controller request."""
         mock_connection.get_cached.return_value = [{"cached": True}]
 
-        result = await stats_manager.get_network_stats()
-
-        assert result == [{"cached": True}]
-        mock_connection.request.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_get_site_dpi_traffic_uses_cache(self, stats_manager, mock_connection):
-        """Test get_site_dpi_traffic returns cached data."""
-        mock_connection.get_cached.return_value = [{"cached": True}]
-
-        result = await stats_manager.get_site_dpi_traffic()
+        result = await getattr(stats_manager, method)()
 
         assert result == [{"cached": True}]
         mock_connection.request.assert_not_called()
@@ -571,46 +334,32 @@ class TestDeviceManagerSpeedtest:
         return DeviceManager(mock_connection)
 
     @pytest.mark.asyncio
-    async def test_trigger_speedtest(self, device_manager, mock_connection):
-        """Test trigger_speedtest sends correct command."""
-        mock_connection.request.return_value = {}
+    @pytest.mark.parametrize(
+        "method,response,expected,cmd",
+        [
+            ("trigger_speedtest", {}, True, "speedtest"),
+            ("get_speedtest_status", {"status": "running"}, {"status": "running"}, "speedtest-status"),
+        ],
+    )
+    async def test_speedtest_commands(self, device_manager, mock_connection, method, response, expected, cmd):
+        """Speedtest methods send the right devmgr command for the device."""
+        mock_connection.request.return_value = response
 
-        result = await device_manager.trigger_speedtest("aa:bb:cc:dd:ee:ff")
+        result = await getattr(device_manager, method)("aa:bb:cc:dd:ee:ff")
 
-        assert result is True
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        assert result == expected
+        api_request = mock_connection.request.call_args[0][0]
         assert api_request.path == "/cmd/devmgr"
-        assert api_request.data["cmd"] == "speedtest"
+        assert api_request.data["cmd"] == cmd
         assert api_request.data["mac"] == "aa:bb:cc:dd:ee:ff"
 
     @pytest.mark.asyncio
-    async def test_trigger_speedtest_handles_error(self, device_manager, mock_connection):
-        """Test trigger_speedtest returns False on error."""
+    @pytest.mark.parametrize("method", ["trigger_speedtest", "get_speedtest_status"])
+    async def test_speedtest_errors_propagate(self, device_manager, mock_connection, method):
         mock_connection.request.side_effect = Exception("API error")
 
         with pytest.raises(Exception):
-            await device_manager.trigger_speedtest("aa:bb:cc:dd:ee:ff")
-
-    @pytest.mark.asyncio
-    async def test_get_speedtest_status(self, device_manager, mock_connection):
-        """Test get_speedtest_status sends correct command."""
-        mock_connection.request.return_value = {"status": "running"}
-
-        result = await device_manager.get_speedtest_status("aa:bb:cc:dd:ee:ff")
-
-        assert result == {"status": "running"}
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.data["cmd"] == "speedtest-status"
-
-    @pytest.mark.asyncio
-    async def test_get_speedtest_status_handles_error(self, device_manager, mock_connection):
-        """Test get_speedtest_status returns empty dict on error."""
-        mock_connection.request.side_effect = Exception("API error")
-
-        with pytest.raises(Exception):
-            await device_manager.get_speedtest_status("aa:bb:cc:dd:ee:ff")
+            await getattr(device_manager, method)("aa:bb:cc:dd:ee:ff")
 
 
 class TestGetAlertsFallbackDiagnostics:

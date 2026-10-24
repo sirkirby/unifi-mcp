@@ -12,26 +12,6 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_top_clients_enrichment_asks_for_existence_only():
-    with (
-        patch("unifi_network_mcp.tools.stats.stats_manager") as mock_sm,
-        patch("unifi_network_mcp.tools.stats.client_manager") as mock_cm,
-    ):
-        mock_sm._connection = MagicMock(site="default")
-        mock_sm.get_top_clients = AsyncMock(return_value=[{"mac": "aa:bb:cc:dd:ee:ff", "rx_bytes": 1, "tx_bytes": 2}])
-        mock_cm.get_client_details = AsyncMock(
-            return_value=SimpleNamespace(mac="aa:bb:cc:dd:ee:ff", raw={"mac": "aa:bb:cc:dd:ee:ff", "name": "printer"})
-        )
-
-        from unifi_network_mcp.tools.stats import get_top_clients
-
-        result = await get_top_clients(duration="daily", limit=1)
-
-    assert result["success"] is True
-    mock_cm.get_client_details.assert_awaited_once_with("aa:bb:cc:dd:ee:ff", existence_only=True)
-
-
-@pytest.mark.asyncio
 async def test_top_clients_name_lookup_is_best_effort_per_row(caplog):
     """A client that left inventory since the window keeps its row, MAC and bytes."""
     import logging
@@ -66,5 +46,7 @@ async def test_top_clients_name_lookup_is_best_effort_per_row(caplog):
     first, second = result["top_clients"]
     assert first["mac"] == gone_mac and first["upload_bytes"] == 50 * 1024**3
     assert second["hostname"] == "laptop"
+    # name enrichment only needs to know the client exists
+    mock_cm.get_client_details.assert_any_await("aa:bb:cc:00:00:02", existence_only=True)
     assert gone_mac not in caplog.text
     assert "name" not in rows[1], "enrichment must not mutate the manager's (cached) rows"

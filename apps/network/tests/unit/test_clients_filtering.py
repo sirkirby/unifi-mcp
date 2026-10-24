@@ -52,7 +52,11 @@ def _mock_conn():
 
 
 @pytest.mark.asyncio
-async def test_search_filters_by_substring():
+@pytest.mark.parametrize(
+    "kwargs,total,returned",
+    [({"search": "phone"}, 1, 1), ({"limit": 1}, 3, 1)],
+)
+async def test_list_clients_search_and_limit_report_total(kwargs, total, returned):
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
         mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
@@ -60,35 +64,25 @@ async def test_search_filters_by_substring():
 
         from unifi_network_mcp.tools.clients import list_clients
 
-        result = await list_clients(search="phone")
+        result = await list_clients(**kwargs)
 
     assert result["success"] is True
-    assert result["total_count"] == 1
-    assert result["returned_count"] == 1
-    assert result["clients"][0]["name"] == "Phone"
-
-
-@pytest.mark.asyncio
-async def test_limit_truncates_but_reports_total():
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import list_clients
-
-        result = await list_clients(limit=1)
-
-    assert result["total_count"] == 3
-    assert result["returned_count"] == 1
-    assert result["limit"] == 1
-    # back-compat: legacy `count` key preserved alongside the new returned_count
+    assert result["total_count"] == total
+    assert result["returned_count"] == returned
+    # back-compat: legacy `count` key preserved alongside returned_count
     assert result["count"] == result["returned_count"]
+    if "limit" in kwargs:
+        assert result["limit"] == kwargs["limit"]
+    if "search" in kwargs:
+        assert result["clients"][0]["name"] == "Phone"
 
 
 @pytest.mark.asyncio
-async def test_fields_selects_subset():
-    # upstream/main emits a distinct `name` key.
+@pytest.mark.parametrize(
+    "fields,expected_keys,unknown_fields",
+    [("mac,name", {"mac", "name"}, None), ("mac,naame", {"mac"}, ["naame"])],
+)
+async def test_list_clients_fields_selects_subset_and_surfaces_unknown(fields, expected_keys, unknown_fields):
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
         mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
@@ -96,10 +90,11 @@ async def test_fields_selects_subset():
 
         from unifi_network_mcp.tools.clients import list_clients
 
-        result = await list_clients(fields="mac,name")
+        result = await list_clients(fields=fields)
 
-    client = result["clients"][0]
-    assert set(client.keys()) == {"mac", "name"}
+    assert set(result["clients"][0].keys()) == expected_keys
+    # typos surface so callers can self-correct
+    assert result.get("unknown_fields") == unknown_fields
 
 
 @pytest.mark.asyncio
@@ -137,64 +132,6 @@ CLIENT_DETAIL_RAW = {
     "oui": "Acme",
     "network_id": "net1",
 }
-
-
-@pytest.mark.asyncio
-async def test_get_client_details_default_preserves_full_object():
-    # Regression guard: default (no args) must return the full raw object in the
-    # {success, site, client} envelope — byte-for-byte the prior behavior, no trimming.
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import get_client_details
-
-        result = await get_client_details("aa:bb:cc:00:00:01")
-
-    assert result["success"] is True
-    assert "summary_mode" not in result and "include" not in result
-    client = result["client"]
-    # Full raw fields present (not trimmed away)
-    assert client["tx_bytes"] == 1000
-    assert client["oui"] == "Acme"
-    assert client["essid"] == "Home"
-
-
-@pytest.mark.asyncio
-async def test_get_client_details_summary_trims_to_sections():
-    # New behavior: summary=true trims to the named sections.
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import get_client_details
-
-        result = await get_client_details("aa:bb:cc:00:00:01", summary=True, include="basic")
-
-    assert result["summary_mode"] is True
-    client = result["client"]
-    assert client["mac"] == "aa:bb:cc:00:00:01"
-    # basic section excludes traffic + fingerprint
-    assert "tx_bytes" not in client
-    assert "oui" not in client
-
-
-@pytest.mark.asyncio
-async def test_get_client_details_explicit_summary_false_raw_passthrough():
-    # Explicit summary=False symmetric to devices/network: passes the full raw object
-    # through under `client`, with summary_mode absent (default-path envelope).
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import get_client_details
-
-        result = await get_client_details("aa:bb:cc:00:00:01", summary=False)
-
-    assert result["success"] is True
-    assert "summary_mode" not in result  # raw envelope
-    assert result["client"]["tx_bytes"] == 1000
-    assert result["client"]["oui"] == "Acme"
 
 
 @pytest.mark.asyncio
@@ -269,72 +206,30 @@ async def test_get_client_details_reports_an_undetermined_lookup_as_an_error():
 
 
 @pytest.mark.asyncio
-async def test_get_client_details_summary_status_offline_without_signal():
-    # Offline/historical clients lack `is_online` and active-connection counters;
-    # status must be derived as Offline, not defaulted to Online.
-    offline_raw = {"mac": "aa:bb:cc:00:00:05", "hostname": "ghost", "is_wired": True}
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_client_details = AsyncMock(return_value=offline_raw)
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import get_client_details
-
-        result = await get_client_details("aa:bb:cc:00:00:05", summary=True, include="basic")
-
-    assert result["client"]["status"] == "Offline"
-
-
-@pytest.mark.asyncio
-async def test_get_client_details_summary_status_online_with_signal():
-    online_raw = {"mac": "aa:bb:cc:00:00:06", "hostname": "live", "is_wired": True, "is_online": True}
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_client_details = AsyncMock(return_value=online_raw)
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import get_client_details
-
-        result = await get_client_details("aa:bb:cc:00:00:06", summary=True, include="basic")
-
-    assert result["client"]["status"] == "Online"
-
-
-@pytest.mark.asyncio
-async def test_get_client_details_surfaces_unknown_include_sections():
-    # Typos in include must surface as `unknown_sections` so LLM callers can self-correct.
+@pytest.mark.parametrize("kwargs", [{}, {"summary": False}])
+async def test_get_client_details_default_and_summary_false_preserve_full_object(kwargs):
+    # Regression guard: default (and explicit summary=False) returns the full raw object in the
+    # {success, site, client} envelope, no trimming and no summary_mode.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
         mock_cm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.clients import get_client_details
 
-        result = await get_client_details("aa:bb:cc:00:00:01", summary=True, include="basix,traffic")
+        result = await get_client_details("aa:bb:cc:00:00:01", **kwargs)
 
-    # known section still applied (traffic counters present)
-    assert result["client"]["tx_bytes"] == 1000
-    # typo surfaced
-    assert result.get("unknown_sections") == ["basix"]
-
-
-@pytest.mark.asyncio
-async def test_list_clients_surfaces_unknown_fields():
-    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.clients import list_clients
-
-        result = await list_clients(fields="mac,naame")
-
-    # known field returned
-    assert "mac" in result["clients"][0]
-    # typo surfaced
-    assert result.get("unknown_fields") == ["naame"]
+    assert result["success"] is True
+    assert "summary_mode" not in result and "include" not in result
+    client = result["client"]
+    assert client["tx_bytes"] == 1000
+    assert client["oui"] == "Acme"
+    assert client["essid"] == "Home"
 
 
 @pytest.mark.asyncio
 async def test_get_client_details_summary_sections_are_independent():
-    # wireless requested but absent-when-wired stays out; traffic populates when requested.
+    # Each section is independent: basic excludes wireless/traffic/fingerprint, traffic populates
+    # byte counters, and typos in include surface as `unknown_sections` while known ones still apply.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
         mock_cm._connection = _mock_conn()
@@ -343,9 +238,33 @@ async def test_get_client_details_summary_sections_are_independent():
 
         basic_only = await get_client_details("aa:bb:cc:00:00:01", summary=True, include="basic")
         with_traffic = await get_client_details("aa:bb:cc:00:00:01", summary=True, include="traffic")
+        with_typo = await get_client_details("aa:bb:cc:00:00:01", summary=True, include="basix,traffic")
 
-    # basic excludes wireless + traffic sections
-    assert "essid" not in basic_only["client"]
-    assert "tx_bytes" not in basic_only["client"]
-    # traffic section populates byte counters
+    assert basic_only["summary_mode"] is True
+    assert basic_only["client"]["mac"] == "aa:bb:cc:00:00:01"
+    for key in ("essid", "tx_bytes", "oui"):
+        assert key not in basic_only["client"]
     assert with_traffic["client"]["tx_bytes"] == 1000
+    assert with_typo["client"]["tx_bytes"] == 1000
+    assert with_typo.get("unknown_sections") == ["basix"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "raw,expected_status",
+    [
+        # Offline/historical clients lack `is_online`; status must be Offline, not defaulted to Online.
+        ({"mac": "aa:bb:cc:00:00:05", "hostname": "ghost", "is_wired": True}, "Offline"),
+        ({"mac": "aa:bb:cc:00:00:06", "hostname": "live", "is_wired": True, "is_online": True}, "Online"),
+    ],
+)
+async def test_get_client_details_summary_status(raw, expected_status):
+    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
+        mock_cm.get_client_details = AsyncMock(return_value=raw)
+        mock_cm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.clients import get_client_details
+
+        result = await get_client_details(raw["mac"], summary=True, include="basic")
+
+    assert result["client"]["status"] == expected_status

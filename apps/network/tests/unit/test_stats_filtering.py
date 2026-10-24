@@ -22,33 +22,29 @@ DASHBOARD_RAW = [
 
 
 @pytest.mark.asyncio
-async def test_dashboard_defaults_to_summary():
+@pytest.mark.parametrize(
+    "kwargs,summary_mode,dashboard,omitted",
+    [
+        (
+            {},
+            True,
+            [{"system_status": {"status": "ok"}, "gateway": {"count": 1}}],
+            ["radio_activity", "wan_activity", "wan_history", "wifi_activity"],
+        ),
+        ({"summary": False, "history_seconds": 3600}, False, DASHBOARD_RAW, None),
+    ],
+)
+async def test_dashboard_summary_and_full_modes(kwargs, summary_mode, dashboard, omitted):
     with patch("unifi_network_mcp.tools.stats.stats_manager") as manager:
         manager.get_dashboard = AsyncMock(return_value=DASHBOARD_RAW)
         manager._connection.site = "default"
         from unifi_network_mcp.tools.stats import get_dashboard
 
-        result = await get_dashboard()
+        result = await get_dashboard(**kwargs)
 
-    assert result["summary_mode"] is True
-    assert result["dashboard"] == [{"system_status": {"status": "ok"}, "gateway": {"count": 1}}]
-    assert result["omitted_sections"] == [
-        "radio_activity",
-        "wan_activity",
-        "wan_history",
-        "wifi_activity",
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dashboard_full_mode_preserves_raw_shape():
-    with patch("unifi_network_mcp.tools.stats.stats_manager") as manager:
-        manager.get_dashboard = AsyncMock(return_value=DASHBOARD_RAW)
-        manager._connection.site = "default"
-        from unifi_network_mcp.tools.stats import get_dashboard
-
-        result = await get_dashboard(summary=False, history_seconds=3600)
-
-    assert result["summary_mode"] is False
-    assert result["dashboard"] == DASHBOARD_RAW
-    manager.get_dashboard.assert_awaited_once_with(history_seconds=3600)
+    assert result["summary_mode"] is summary_mode
+    assert result["dashboard"] == dashboard
+    if omitted:
+        assert result["omitted_sections"] == omitted
+    if "history_seconds" in kwargs:
+        manager.get_dashboard.assert_awaited_once_with(history_seconds=kwargs["history_seconds"])

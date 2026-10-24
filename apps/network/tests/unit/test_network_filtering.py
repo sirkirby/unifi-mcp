@@ -49,53 +49,6 @@ async def test_network_details_redacts_openvpn_private_keys(monkeypatch, redact,
 
 
 @pytest.mark.asyncio
-async def test_list_networks_purpose_and_fields():
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_networks = AsyncMock(return_value=list(NETWORKS))
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import list_networks
-
-        result = await list_networks(purpose="guest", fields="_id,name")
-
-    assert result["total_count"] == 1
-    assert set(result["networks"][0].keys()) == {"_id", "name"}
-    # back-compat: legacy `count` key preserved alongside returned_count
-    assert result["count"] == result["returned_count"]
-
-
-@pytest.mark.asyncio
-async def test_list_networks_purpose_is_case_insensitive():
-    # Mixed-case input must match the lowercase controller value, consistent with
-    # the search/action filters elsewhere (which normalize case).
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_networks = AsyncMock(return_value=list(NETWORKS))
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import list_networks
-
-        result = await list_networks(purpose="Guest")
-
-    assert result["total_count"] == 1
-    assert result["networks"][0]["name"] == "Guest"
-
-
-@pytest.mark.asyncio
-async def test_list_networks_search_matches_vlan_id():
-    # Prod semantics: VLAN match is equality on str(vlan), name match is substring.
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_networks = AsyncMock(return_value=list(NETWORKS))
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import list_networks
-
-        result = await list_networks(search="20")
-
-    assert result["total_count"] == 1
-    assert result["networks"][0]["name"] == "IoT"
-
-
-@pytest.mark.asyncio
 async def test_get_network_details_summary_false_redacts_by_default_and_uses_policy_opt_out(monkeypatch):
     raw = {"_id": "n2", "name": "IoT", "dhcpd_enabled": True, "secret": "x"}
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
@@ -131,61 +84,6 @@ async def test_get_network_details_default_preserves_full_object_with_redaction(
     # extra/unknown keys preserved, sensitive values redacted by default
     assert result["details"]["secret"] == "***REDACTED***"
     assert result["details"]["dhcpd_enabled"] is True
-
-
-@pytest.mark.asyncio
-async def test_get_network_details_dhcp_section_is_independent():
-    # Opt-in summary path: each section is independent. include="dhcp" must NOT
-    # auto-add basic keys; must request summary=True to enter the section path.
-    raw = {
-        "_id": "n2",
-        "name": "IoT",
-        "purpose": "corporate",
-        "dhcpd_enabled": True,
-        "dhcpd_start": "198.51.100.10",
-    }
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_network_details = AsyncMock(return_value=raw)
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import get_network_details
-
-        result = await get_network_details("n2", summary=True, include="dhcp")
-
-    details = result["details"]
-    assert details["dhcpd_enabled"] is True
-    assert "name" not in details  # basic not requested
-
-
-@pytest.mark.asyncio
-async def test_get_network_details_surfaces_unknown_include_sections():
-    raw = {"_id": "n2", "name": "IoT", "purpose": "corporate", "dhcpd_enabled": True}
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_network_details = AsyncMock(return_value=raw)
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import get_network_details
-
-        result = await get_network_details("n2", summary=True, include="dhcp,vpnn")
-
-    # known section applied
-    assert result["details"]["dhcpd_enabled"] is True
-    # typo surfaced
-    assert result.get("unknown_sections") == ["vpnn"]
-
-
-@pytest.mark.asyncio
-async def test_list_networks_surfaces_unknown_fields():
-    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
-        mock_nm.get_networks = AsyncMock(return_value=list(NETWORKS))
-        mock_nm._connection = _mock_conn()
-
-        from unifi_network_mcp.tools.network import list_networks
-
-        result = await list_networks(fields="name,vlann")
-
-    assert "name" in result["networks"][0]
-    assert result.get("unknown_fields") == ["vlann"]
 
 
 @pytest.mark.asyncio
@@ -226,3 +124,60 @@ async def test_list_networks_routes_through_typed_model():
     net = result["networks"][0]
     assert net["_id"] == "n9"
     assert net["vlan"] == "20"  # str (model coercion), not int 20 from raw
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs,total,first_name,keys,unknown_fields",
+    [
+        # Mixed-case purpose must match the lowercase controller value.
+        ({"purpose": "Guest"}, 1, "Guest", None, None),
+        ({"purpose": "guest", "fields": "_id,name"}, 1, "Guest", {"_id", "name"}, None),
+        # Prod semantics: VLAN match is equality on str(vlan), name match is substring.
+        ({"search": "20"}, 1, "IoT", None, None),
+        # Typos in fields surface as unknown_fields while known fields are still returned.
+        ({"fields": "name,vlann"}, 3, "Default", {"name"}, ["vlann"]),
+    ],
+)
+async def test_list_networks_filters_and_fields(kwargs, total, first_name, keys, unknown_fields):
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
+        mock_nm.get_networks = AsyncMock(return_value=list(NETWORKS))
+        mock_nm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.network import list_networks
+
+        result = await list_networks(**kwargs)
+
+    assert result["total_count"] == total
+    assert result["networks"][0]["name"] == first_name
+    if keys:
+        assert set(result["networks"][0].keys()) == keys
+    assert result.get("unknown_fields") == unknown_fields
+    # back-compat: legacy `count` key preserved alongside returned_count
+    assert result["count"] == result["returned_count"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "include,absent,unknown_sections",
+    [
+        # Each section is independent: include="dhcp" must not auto-add basic keys.
+        ("dhcp", ["name"], None),
+        # Typos surface as unknown_sections; the known section is still applied.
+        ("dhcp,vpnn", [], ["vpnn"]),
+    ],
+)
+async def test_get_network_details_summary_sections(include, absent, unknown_sections):
+    raw = {"_id": "n2", "name": "IoT", "purpose": "corporate", "dhcpd_enabled": True, "dhcpd_start": "198.51.100.10"}
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
+        mock_nm.get_network_details = AsyncMock(return_value=raw)
+        mock_nm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.network import get_network_details
+
+        result = await get_network_details("n2", summary=True, include=include)
+
+    assert result["details"]["dhcpd_enabled"] is True
+    for key in absent:
+        assert key not in result["details"]
+    assert result.get("unknown_sections") == unknown_sections
