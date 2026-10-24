@@ -403,6 +403,7 @@ class TestSwitchManager:
         assert call_args[0][0].path == "/rest/portconf"
         assert call_args[0][0].method == "post"
         assert result.success is True
+        assert result.resource["_id"] == "new1"
         mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio

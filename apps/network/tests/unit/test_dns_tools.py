@@ -51,6 +51,7 @@ class TestListDnsRecords:
 
         assert result["success"] is True
         assert result["count"] == len(records)
+        assert len(result["records"]) == len(records)
         for listed in result["records"]:
             assert listed["key"] == "host.example.com"
             assert listed["id"] == "dns001"

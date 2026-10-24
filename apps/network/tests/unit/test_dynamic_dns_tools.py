@@ -53,6 +53,7 @@ class TestListDynamicDns:
 
         assert result["success"] is True
         assert result["count"] == len(entries)
+        assert len(result["entries"]) == len(entries)
         for listed in result["entries"]:
             assert listed["host_name"] == "home.example.com"
             assert listed["id"] == "ddns001"
