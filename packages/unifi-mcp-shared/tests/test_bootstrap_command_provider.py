@@ -169,14 +169,15 @@ def test_helper_stdout_is_never_logged(monkeypatch, caplog, helper, exit_code):
 def test_timeout_terminates_helper_descendants(monkeypatch, tmp_path, caplog, helper):
     """A descendant that outlives the direct child must not survive the timeout."""
     marker = tmp_path / "DESCENDANT-RAN"
-    path = helper(f"(sleep 1; touch {marker}) &\nsleep 10", name="spawner.sh")
+    path = helper(f"(sleep 0.8; touch {marker}) &\nsleep 10", name="spawner.sh")
     monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_TIMEOUT_S", 0.3)
     monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_COMMAND", str(path))
 
     with _refused(caplog):
         _resolve()
 
-    deadline = time.monotonic() + 3
+    # Watch past the moment the descendant would have written its marker.
+    deadline = time.monotonic() + 1.8
     while time.monotonic() < deadline:
         assert not marker.exists(), "a descendant of the helper outlived the timeout"
         time.sleep(0.1)
@@ -321,7 +322,8 @@ def test_the_windows_read_path_is_capped_too(monkeypatch, helper):
 
 def test_a_signal_that_cannot_be_delivered_still_refuses(monkeypatch, caplog, helper):
     """EPERM from killpg -- a helper that changed uid -- must not escape as a traceback."""
-    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_TIMEOUT_S", 1)
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_GRACE_S", 0.3)
     monkeypatch.setattr(os, "killpg", lambda *a: (_ for _ in ()).throw(PermissionError(1, "Operation not permitted")))
     monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_COMMAND", f"{helper('sleep 20')}")
 
@@ -351,7 +353,7 @@ def test_a_helper_that_leaves_a_detached_descendant_still_refuses(helper, tmp_pa
         textwrap.dedent(f"""
         import logging, os, sys
         from unifi_mcp_shared import bootstrap
-        bootstrap._SECRET_COMMAND_TIMEOUT_S = 2
+        bootstrap._SECRET_COMMAND_TIMEOUT_S = 0.5
         bootstrap._TRUSTED_VARS = None
         os.environ["UNIFI_NETWORK_PASSWORD_COMMAND"] = {str(script)!r}
         try:
@@ -365,6 +367,10 @@ def test_a_helper_that_leaves_a_detached_descendant_still_refuses(helper, tmp_pa
     try:
         result = subprocess.run([sys.executable, str(probe)], capture_output=True, timeout=30, check=False)
         assert result.returncode == 6, f"expected a refusal, got {result.returncode}: {result.stderr[-400:]!r}"
+        # The child is started by the helper and may be slow to write its pidfile on a busy machine.
+        deadline = time.monotonic() + 10
+        while not pidfile.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
         assert pidfile.exists(), "the detached descendant never started"
     finally:
         # It left the helper's session deliberately, so nothing in the provider
@@ -375,7 +381,8 @@ def test_a_helper_that_leaves_a_detached_descendant_still_refuses(helper, tmp_pa
 
 def test_the_helper_is_reaped_rather_than_left_a_zombie(monkeypatch, caplog, helper):
     """SIGKILL delivery is asynchronous, so a zero-length wait never reaps."""
-    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_TIMEOUT_S", 1)
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_GRACE_S", 0.5)
     started: list = []
     real_popen = subprocess.Popen
 
@@ -442,36 +449,34 @@ def test_a_bare_name_resolving_to_a_relative_path_is_refused(monkeypatch, caplog
 
 
 @pytest.mark.parametrize("stream", ["stderr", "stdout"])
-def test_nothing_the_helper_writes_reaches_the_servers_own_streams(helper, tmp_path, stream):
-    """caplog cannot see fd 1 or fd 2, so this one runs out of process.
+def test_nothing_the_helper_writes_reaches_the_servers_own_streams(helper, capfd, monkeypatch, stream):
+    """caplog cannot see fd 1 or fd 2, so this one watches the real descriptors.
 
     A failing helper commonly prints the credential it could not unlock. The
-    in-process tests assert on the log records; only a real child can show that
-    the bytes never reach the descriptors an operator actually captures.
+    in-process tests assert on the log records; ``capfd`` captures the file
+    descriptors themselves (which a spawned helper would inherit), so it shows
+    that the bytes never reach the descriptors an operator actually captures.
     """
     noisy = helper(f"echo {SENTINEL} 1>&{'2' if stream == 'stderr' else '1'}\nexit 3", name="noisy.sh")
-    probe = tmp_path / "probe.py"
-    probe.write_text(
-        textwrap.dedent(f"""
-        import logging, os, sys
-        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
-        from unifi_mcp_shared import bootstrap
-        bootstrap._TRUSTED_VARS = None
-        os.environ["UNIFI_NETWORK_PASSWORD_COMMAND"] = {str(noisy)!r}
-        try:
+    monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_COMMAND", str(noisy))
+    root = logging.getLogger()
+    handler = logging.StreamHandler(sys.stderr)
+    previous_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    try:
+        with pytest.raises(SystemExit) as exc:
             bootstrap.resolve_env("password", env_prefix="NETWORK", logger=logging.getLogger("p"))
-        except SystemExit as exc:
-            sys.exit(int(exc.code))
-        """),
-        encoding="utf-8",
-    )
-    result = subprocess.run([sys.executable, str(probe)], capture_output=True, timeout=60, check=False)
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(previous_level)
+    captured = capfd.readouterr()
 
-    assert result.returncode == 6
-    blob = result.stdout + result.stderr
-    assert SENTINEL.encode() not in blob, f"helper {stream} reached the server's own streams"
+    assert exc.value.code == 6
+    blob = captured.out + captured.err
+    assert SENTINEL not in blob, f"helper {stream} reached the server's own streams"
     # The refusal itself must still be there, naming the variable.
-    assert b"UNIFI_NETWORK_PASSWORD_COMMAND" in blob
+    assert "UNIFI_NETWORK_PASSWORD_COMMAND" in blob
 
 
 def test_the_threaded_reader_accumulates_a_helper_that_writes_in_bursts(helper):
@@ -503,13 +508,14 @@ def test_the_threaded_reader_accumulates_a_helper_that_writes_in_bursts(helper):
     assert data == b"firstsecond"
 
 
-def test_a_term_resistant_descendant_is_killed_before_reporting_success(tmp_path):
+def test_a_term_resistant_descendant_is_killed_before_reporting_success(tmp_path, monkeypatch):
     """Reaping the direct helper is not the same as terminating its group.
 
     The helper's child ignores SIGTERM and stays in the same process group. If
     the direct child's exit is taken as whole-tree termination, that descendant
     survives a reported success.
     """
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_GRACE_S", 0.5)
     marker = tmp_path / "descendant-alive"
     # A shell's `trap "" TERM` does not protect the `sleep` it forks: killpg
     # reaps that and the shell then exits on its own. The descendant has to
@@ -612,6 +618,7 @@ def test_an_unsignalable_survivor_is_not_reported_as_a_terminated_tree(tmp_path,
     child being reaped says nothing about it, and reporting a terminated tree
     there is the same mistake as reporting one from the child's exit.
     """
+    monkeypatch.setattr(bootstrap, "_SECRET_COMMAND_GRACE_S", 0.3)
     marker = tmp_path / "survivor-ready"
     ignore_term = (
         "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "

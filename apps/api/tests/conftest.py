@@ -81,3 +81,40 @@ def reuse_route_analysis():
     finally:
         for name, build in originals.items():
             setattr(routing, name, build)
+
+
+@pytest.fixture(scope="session")
+def migrated_state_dir(tmp_path_factory):
+    """A state directory produced by one real first ``migrate`` run, copied per test.
+
+    The migration shells out to alembic and bootstraps the first admin key, which
+    is the same for every consumer, so it runs once. Tests copy the result and
+    never mutate the template.
+    """
+    from typer.testing import CliRunner
+    from unifi_api.cli import app
+
+    state_dir = tmp_path_factory.mktemp("migrated-state")
+    db_path = state_dir / "state.db"
+    cfg_path = state_dir / "config.yaml"
+    cfg_path.write_text(f"db:\n  path: {db_path}\n")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("UNIFI_API_DB_KEY", "test-passphrase")
+        mp.setenv("UNIFI_API_DB_PATH", str(db_path))
+        result = CliRunner().invoke(app, ["migrate", "--config-path", str(cfg_path)])
+    assert result.exit_code == 0, f"migrate failed: {result.output!r}"
+    return state_dir, result.output
+
+
+@pytest.fixture(scope="session")
+def api_server_command() -> list[str]:
+    """Argv prefix for the real ``unifi-api-server`` console script.
+
+    Uses the script installed beside the running interpreter so a smoke test
+    does not also pay for ``uv run``'s environment resolution; falls back to
+    ``uv run`` when the script is not alongside it.
+    """
+    script = Path(sys.executable).with_name("unifi-api-server")
+    if script.exists():
+        return [str(script)]
+    return ["uv", "run", "--package", "unifi-api-server", "unifi-api-server"]

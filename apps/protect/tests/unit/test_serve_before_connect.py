@@ -34,6 +34,8 @@ from unifi_protect_mcp.tools import cameras
 pytestmark = pytest.mark.real_reconnect
 
 WAIT_SECONDS = 0.5
+# Connect wait handed to the real stdio server; its calls must fail within this plus slack.
+STDIO_WAIT_SECONDS = 0.5
 RECONNECT_INTERVAL_SECONDS = 0.2
 
 
@@ -211,7 +213,7 @@ def test_stdio_initialize_and_tools_list_answer_while_the_controller_hangs(tmp_p
             env_prefix="PROTECT",
             port=silent.port,
             tool="protect_list_cameras",
-            wait_seconds=2.0,
+            wait_seconds=STDIO_WAIT_SECONDS,
         )
         assert silent.connections >= 1, "the server never tried the controller"
 
@@ -219,7 +221,7 @@ def test_stdio_initialize_and_tools_list_answer_while_the_controller_hangs(tmp_p
     assert run["list_seconds"] < 2.0
     assert run["initialize"]["serverInfo"]["name"] == "unifi-protect-mcp"
     assert "protect_tool_index" in run["tools"]
-    assert run["call_seconds"] < 2.0 + 2.0
+    assert run["call_seconds"] < STDIO_WAIT_SECONDS + 2.0
     payload = tool_payload(run["call"])
     assert payload["success"] is False
     assert "still connecting to the controller" in payload["error"]
@@ -232,12 +234,12 @@ def test_stdio_call_against_a_closed_port_reports_the_controller_unreachable(tmp
         env_prefix="PROTECT",
         port=closed_port(),
         tool="protect_list_cameras",
-        wait_seconds=2.0,
+        wait_seconds=STDIO_WAIT_SECONDS,
     )
 
     assert run["initialize_seconds"] < 2.0
     assert "protect_tool_index" in run["tools"]
-    assert run["call_seconds"] < 2.0 + 2.0
+    assert run["call_seconds"] < STDIO_WAIT_SECONDS + 2.0
     payload = tool_payload(run["call"])
     assert payload["success"] is False
     assert "Check that the controller is reachable" in payload["error"]

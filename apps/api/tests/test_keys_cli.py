@@ -1,17 +1,49 @@
-"""CLI keys subcommand tests (subprocess)."""
+"""CLI keys subcommand tests.
+
+One case runs the real ``unifi-api-server`` console script in a subprocess;
+the rest call the Typer app in-process against a copy of a migrated database.
+"""
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+from typer.testing import CliRunner
+from unifi_api.cli import app
 
-def _run_cli(*args: str, db_path: Path) -> subprocess.CompletedProcess:
+_KEY = re.compile(r"unifi_(live|test)_[A-Z2-7]{22}")
+
+
+class _Result:
+    def __init__(self, returncode: int, stdout: str, stderr: str) -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+@pytest.fixture
+def state(tmp_path: Path, migrated_state_dir, monkeypatch) -> tuple[Path, Path]:
+    """A fresh migrated database and config file for one test."""
+    template, _ = migrated_state_dir
+    db_path = tmp_path / "state.db"
+    for item in template.glob("state.db*"):
+        shutil.copy2(item, tmp_path / item.name)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(f"db:\n  path: {db_path}\n")
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "test-passphrase")
+    monkeypatch.setenv("UNIFI_API_DB_PATH", str(db_path))
+    return db_path, cfg_path
+
+
+def _run_subprocess(command: list[str], *args: str, db_path: Path) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["UNIFI_API_DB_KEY"] = "test-passphrase"
     env["UNIFI_API_DB_PATH"] = str(db_path)
     return subprocess.run(
-        ["uv", "run", "--package", "unifi-api-server", "unifi-api-server", *args],
+        [*command, *args],
         capture_output=True,
         text=True,
         check=False,
@@ -19,25 +51,32 @@ def _run_cli(*args: str, db_path: Path) -> subprocess.CompletedProcess:
     )
 
 
-def _bootstrap(tmp_path: Path) -> tuple[Path, Path]:
-    db_path = tmp_path / "state.db"
-    cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(f"db:\n  path: {db_path}\n")
-    r = _run_cli("migrate", "--config-path", str(cfg_path), db_path=db_path)
-    assert r.returncode == 0, f"migrate failed: {r.stderr}"
-    return db_path, cfg_path
+def _run_cli(*args: str, db_path: Path) -> _Result:
+    result = CliRunner().invoke(app, list(args))
+    return _Result(result.exit_code, result.output, result.output)
 
 
-def test_keys_create_emits_plaintext_once(tmp_path: Path) -> None:
-    db_path, cfg_path = _bootstrap(tmp_path)
-    r = _run_cli("keys", "create", "ci-test", "--scopes", "read,write", "--config-path", str(cfg_path), db_path=db_path)
+def test_keys_create_emits_plaintext_once(state, api_server_command) -> None:
+    # Real console script, real interpreter: the entry point the operator runs.
+    db_path, cfg_path = state
+    r = _run_subprocess(
+        api_server_command,
+        "keys",
+        "create",
+        "ci-test",
+        "--scopes",
+        "read,write",
+        "--config-path",
+        str(cfg_path),
+        db_path=db_path,
+    )
     assert r.returncode == 0, f"create failed: {r.stderr}"
     combined = r.stdout + r.stderr
-    assert re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined)
+    assert _KEY.search(combined)
 
 
-def test_keys_list_shows_active_and_no_plaintext(tmp_path: Path) -> None:
-    db_path, cfg_path = _bootstrap(tmp_path)
+def test_keys_list_shows_active_and_no_plaintext(state) -> None:
+    db_path, cfg_path = state
     _run_cli("keys", "create", "k1", "--scopes", "read", "--config-path", str(cfg_path), db_path=db_path)
     r = _run_cli("keys", "list", "--config-path", str(cfg_path), db_path=db_path)
     assert r.returncode == 0
@@ -46,13 +85,13 @@ def test_keys_list_shows_active_and_no_plaintext(tmp_path: Path) -> None:
     assert "read" in out
     assert "(active)" in out or "active" in out
     # Plaintext key body must NOT appear
-    assert not re.search(r"unifi_(live|test)_[A-Z2-7]{22}", out)
+    assert not _KEY.search(out)
 
 
-def test_keys_revoke_marks_revoked(tmp_path: Path) -> None:
-    db_path, cfg_path = _bootstrap(tmp_path)
+def test_keys_revoke_marks_revoked(state) -> None:
+    db_path, cfg_path = state
     create = _run_cli("keys", "create", "k1", "--scopes", "read", "--config-path", str(cfg_path), db_path=db_path)
-    m = re.search(r"unifi_(live|test)_[A-Z2-7]{22}", create.stdout + create.stderr)
+    m = _KEY.search(create.stdout + create.stderr)
     assert m, "no key emitted"
     plaintext = m.group(0)
     prefix = plaintext[:15]
@@ -64,7 +103,7 @@ def test_keys_revoke_marks_revoked(tmp_path: Path) -> None:
     assert "(revoked)" in listed.stdout
 
 
-def test_keys_revoke_unknown_prefix_errors(tmp_path: Path) -> None:
-    db_path, cfg_path = _bootstrap(tmp_path)
+def test_keys_revoke_unknown_prefix_errors(state) -> None:
+    db_path, cfg_path = state
     r = _run_cli("keys", "revoke", "unifi_live_NOPENOPENOPENOPE", "--config-path", str(cfg_path), db_path=db_path)
     assert r.returncode != 0
