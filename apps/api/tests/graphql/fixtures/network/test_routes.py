@@ -47,105 +47,68 @@ async def test_routes_list(tmp_path, monkeypatch):
     assert names == {"ToOffice", "ToCloud"}
 
 
+@pytest.mark.parametrize(
+    ("manager_results", "query", "query_field", "expected"),
+    [
+        pytest.param(
+            {("network", "routing_manager", "get_routes"): [{"_id": "rt-1", "name": "ToOffice"}]},
+            '{ network { route(controller: "CONTROLLER_ID", id: "rt-1") { id name } } }',
+            "route",
+            "rt-1",
+            id="route_detail",
+        ),
+        pytest.param(
+            {("network", "traffic_route_manager", "get_traffic_routes"): [{"_id": "tr-1", "name": "WorkTraffic"}]},
+            '{ network { trafficRoute(controller: "CONTROLLER_ID", id: "tr-1") { id name } } }',
+            "trafficRoute",
+            "tr-1",
+            id="traffic_route_detail",
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_route_detail(tmp_path, monkeypatch):
+async def test_route_details(tmp_path, monkeypatch, manager_results, query, query_field, expected):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "routing_manager", "get_routes"): [
-                {"_id": "rt-1", "name": "ToOffice"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ route(controller: "{cid}", id: "rt-1") {{
-            id name
-        }} }}
-    }}''',
-    )
+    stub_managers(monkeypatch, manager_results)
+    body = await graphql_query(app, key, query.replace("CONTROLLER_ID", cid))
     assert body.get("errors") is None, body
-    assert body["data"]["network"]["route"]["id"] == "rt-1"
+    assert body["data"]["network"][query_field]["id"] == expected
 
 
+@pytest.mark.parametrize(
+    ("manager_results", "query", "query_field"),
+    [
+        pytest.param(
+            {
+                ("network", "routing_manager", "get_active_routes"): [
+                    {"pfx": "0.0.0.0/0", "nh": "192.168.1.1"},
+                    {"pfx": "10.0.0.0/8", "nh": "10.1.1.1"},
+                ]
+            },
+            '{ network { activeRoutes(controller: "CONTROLLER_ID", limit: 10) { items { targetSubnet gateway } } } }',
+            "activeRoutes",
+            id="active_routes_list",
+        ),
+        pytest.param(
+            {
+                ("network", "traffic_route_manager", "get_traffic_routes"): [
+                    {"_id": "tr-1", "name": "WorkTraffic"},
+                    {"_id": "tr-2", "name": "GameTraffic"},
+                ]
+            },
+            '{ network { trafficRoutes(controller: "CONTROLLER_ID", limit: 10) { items { id name } } } }',
+            "trafficRoutes",
+            id="traffic_routes_list",
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_active_routes_list(tmp_path, monkeypatch):
+async def test_route_pages(tmp_path, monkeypatch, manager_results, query, query_field):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "routing_manager", "get_active_routes"): [
-                {"pfx": "0.0.0.0/0", "nh": "192.168.1.1"},
-                {"pfx": "10.0.0.0/8", "nh": "10.1.1.1"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ activeRoutes(controller: "{cid}", limit: 10) {{
-            items {{ targetSubnet gateway }}
-        }} }}
-    }}''',
-    )
+    stub_managers(monkeypatch, manager_results)
+    body = await graphql_query(app, key, query.replace("CONTROLLER_ID", cid))
     assert body.get("errors") is None, body
-    items = body["data"]["network"]["activeRoutes"]["items"]
+    items = body["data"]["network"][query_field]["items"]
     assert len(items) == 2
-
-
-@pytest.mark.asyncio
-async def test_traffic_routes_list(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "traffic_route_manager", "get_traffic_routes"): [
-                {"_id": "tr-1", "name": "WorkTraffic"},
-                {"_id": "tr-2", "name": "GameTraffic"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ trafficRoutes(controller: "{cid}", limit: 10) {{
-            items {{ id name }}
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    items = body["data"]["network"]["trafficRoutes"]["items"]
-    assert len(items) == 2
-
-
-@pytest.mark.asyncio
-async def test_traffic_route_detail(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "traffic_route_manager", "get_traffic_routes"): [
-                {"_id": "tr-1", "name": "WorkTraffic"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ trafficRoute(controller: "{cid}", id: "tr-1") {{
-            id name
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    assert body["data"]["network"]["trafficRoute"]["id"] == "tr-1"

@@ -22,87 +22,135 @@ from tests.graphql.fixtures._helpers import (
 )
 
 
+@pytest.mark.parametrize(
+    ("manager_results", "query", "query_field", "expected"),
+    [
+        pytest.param(
+            {
+                ("network", "switch_manager", "get_port_profiles"): [
+                    {"_id": "pp-1", "name": "All", "poe_mode": "auto"},
+                    {"_id": "pp-2", "name": "Disabled", "poe_mode": "off"},
+                ]
+            },
+            '{ network { portProfiles(controller: "CONTROLLER_ID", limit: 10) { items { id name poeMode } } } }',
+            "portProfiles",
+            {"All", "Disabled"},
+            id="port_profiles_list",
+        ),
+        pytest.param(
+            {
+                ("network", "usergroup_manager", "get_usergroups"): [
+                    {"_id": "ug-1", "name": "Premium", "qos_rate_max_down": 20000},
+                    {"_id": "ug-2", "name": "Standard", "qos_rate_max_down": 5000},
+                ]
+            },
+            '{ network { userGroups(controller: "CONTROLLER_ID", limit: 10) { items { id name qosRateMaxDown } } } }',
+            "userGroups",
+            {"Premium", "Standard"},
+            id="user_groups_list",
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_port_profiles_list(tmp_path, monkeypatch):
+async def test_switch_config_pages(tmp_path, monkeypatch, manager_results, query, query_field, expected):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "switch_manager", "get_port_profiles"): [
-                {"_id": "pp-1", "name": "All", "poe_mode": "auto"},
-                {"_id": "pp-2", "name": "Disabled", "poe_mode": "off"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ portProfiles(controller: "{cid}", limit: 10) {{
-            items {{ id name poeMode }}
-        }} }}
-    }}''',
-    )
+    stub_managers(monkeypatch, manager_results)
+    body = await graphql_query(app, key, query.replace("CONTROLLER_ID", cid))
     assert body.get("errors") is None, body
-    items = body["data"]["network"]["portProfiles"]["items"]
+    items = body["data"]["network"][query_field]["items"]
     assert len(items) == 2
     names = {it["name"] for it in items}
-    assert names == {"All", "Disabled"}
+    assert names == expected
 
 
-@pytest.mark.asyncio
-async def test_port_profile_detail(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "switch_manager", "get_port_profiles"): [
-                {"_id": "pp-1", "name": "All"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ portProfile(controller: "{cid}", id: "pp-1") {{
-            id name
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    assert body["data"]["network"]["portProfile"]["id"] == "pp-1"
-
-
-@pytest.mark.asyncio
-async def test_switch_ports(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "switch_manager", "get_switch_ports"): {
-                "name": "Core-Switch",
-                "model": "USW48",
-                "port_overrides": [],
+@pytest.mark.parametrize(
+    ("manager_results", "query", "query_field", "expected"),
+    [
+        pytest.param(
+            {("network", "switch_manager", "get_port_profiles"): [{"_id": "pp-1", "name": "All"}]},
+            '{ network { portProfile(controller: "CONTROLLER_ID", id: "pp-1") { id name } } }',
+            "portProfile",
+            "pp-1",
+            id="port_profile_detail",
+        ),
+        pytest.param(
+            {
+                ("network", "network_manager", "list_ap_groups"): [
+                    {"_id": "ag-1", "name": "Indoor", "device_macs": ["ap:01"]}
+                ]
             },
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ switchPorts(controller: "{cid}", deviceMac: "sw:01") {{
-            name model
-        }} }}
-    }}''',
-    )
+            '{ network { apGroup(controller: "CONTROLLER_ID", id: "ag-1") { id name } } }',
+            "apGroup",
+            "ag-1",
+            id="ap_group_detail",
+        ),
+        pytest.param(
+            {("network", "usergroup_manager", "get_usergroups"): [{"_id": "ug-1", "name": "Premium"}]},
+            '{ network { userGroup(controller: "CONTROLLER_ID", id: "ug-1") { id name } } }',
+            "userGroup",
+            "ug-1",
+            id="user_group_detail",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_switch_config_details(tmp_path, monkeypatch, manager_results, query, query_field, expected):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(monkeypatch, manager_results)
+    body = await graphql_query(app, key, query.replace("CONTROLLER_ID", cid))
     assert body.get("errors") is None, body
-    sw = body["data"]["network"]["switchPorts"]
+    assert body["data"]["network"][query_field]["id"] == expected
+
+
+@pytest.mark.parametrize(
+    ("manager_results", "query", "query_field", "value_field", "expected"),
+    [
+        pytest.param(
+            {
+                ("network", "switch_manager", "get_switch_ports"): {
+                    "name": "Core-Switch",
+                    "model": "USW48",
+                    "port_overrides": [],
+                }
+            },
+            '{ network { switchPorts(controller: "CONTROLLER_ID", deviceMac: "sw:01") { name model } } }',
+            "switchPorts",
+            "model",
+            "USW48",
+            id="switch_ports",
+        ),
+        pytest.param(
+            {
+                ("network", "switch_manager", "get_switch_capabilities"): {
+                    "name": "Core-Switch",
+                    "model": "USW48",
+                    "stp_version": "rstp",
+                    "dot1x_portctrl_enabled": False,
+                }
+            },
+            (
+                '{ network { switchCapabilities(controller: "CONTROLLER_ID", deviceMac: "sw:01") '
+                "{ name model stpVersion } } }"
+            ),
+            "switchCapabilities",
+            "stpVersion",
+            "rstp",
+            id="switch_capabilities",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_switch_details(tmp_path, monkeypatch, manager_results, query, query_field, value_field, expected):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(monkeypatch, manager_results)
+    body = await graphql_query(app, key, query.replace("CONTROLLER_ID", cid))
+    assert body.get("errors") is None, body
+    sw = body["data"]["network"][query_field]
     assert sw["name"] == "Core-Switch"
-    assert sw["model"] == "USW48"
+    assert sw[value_field] == expected
 
 
 @pytest.mark.asyncio
@@ -134,36 +182,6 @@ async def test_port_stats(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_switch_capabilities(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "switch_manager", "get_switch_capabilities"): {
-                "name": "Core-Switch",
-                "model": "USW48",
-                "stp_version": "rstp",
-                "dot1x_portctrl_enabled": False,
-            },
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ switchCapabilities(controller: "{cid}", deviceMac: "sw:01") {{
-            name model stpVersion
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    caps = body["data"]["network"]["switchCapabilities"]
-    assert caps["name"] == "Core-Switch"
-    assert caps["stpVersion"] == "rstp"
-
-
-@pytest.mark.asyncio
 async def test_ap_groups_list(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
@@ -191,82 +209,3 @@ async def test_ap_groups_list(tmp_path, monkeypatch):
     by_name = {it["name"]: it for it in items}
     assert by_name["Indoor"]["apCount"] == 2
     assert by_name["Outdoor"]["apCount"] == 1
-
-
-@pytest.mark.asyncio
-async def test_ap_group_detail(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "network_manager", "list_ap_groups"): [
-                {"_id": "ag-1", "name": "Indoor", "device_macs": ["ap:01"]},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ apGroup(controller: "{cid}", id: "ag-1") {{
-            id name
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    assert body["data"]["network"]["apGroup"]["id"] == "ag-1"
-
-
-@pytest.mark.asyncio
-async def test_user_groups_list(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "usergroup_manager", "get_usergroups"): [
-                {"_id": "ug-1", "name": "Premium", "qos_rate_max_down": 20000},
-                {"_id": "ug-2", "name": "Standard", "qos_rate_max_down": 5000},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ userGroups(controller: "{cid}", limit: 10) {{
-            items {{ id name qosRateMaxDown }}
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    items = body["data"]["network"]["userGroups"]["items"]
-    assert len(items) == 2
-    names = {it["name"] for it in items}
-    assert names == {"Premium", "Standard"}
-
-
-@pytest.mark.asyncio
-async def test_user_group_detail(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(
-        monkeypatch,
-        {
-            ("network", "usergroup_manager", "get_usergroups"): [
-                {"_id": "ug-1", "name": "Premium"},
-            ],
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        network {{ userGroup(controller: "{cid}", id: "ug-1") {{
-            id name
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    assert body["data"]["network"]["userGroup"]["id"] == "ug-1"
