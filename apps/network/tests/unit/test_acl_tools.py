@@ -5,6 +5,7 @@ translation (from_controller, to_controller_create, to_controller_update),
 and field symmetry guarantees.
 """
 
+import copy
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -397,6 +398,7 @@ class TestUpdateAclRule:
     @pytest.mark.parametrize("macs", [["11:22:33:44:55:66"], []], ids=["set", "empty_clears"])
     async def test_source_macs_translated(self, macs):
         """source_macs in rule_data is translated to controller shape; [] clears the list (not a no-op)."""
+        expected = copy.deepcopy(macs)
         with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
             mock_mgr.get_acl_rule_by_id = AsyncMock(return_value=SAMPLE_CONTROLLER_RULE)
             mock_mgr.update_acl_rule = AsyncMock(return_value=SAMPLE_CONTROLLER_RULE)
@@ -407,7 +409,7 @@ class TestUpdateAclRule:
 
         assert result["success"] is True
         update_data = mock_mgr.update_acl_rule.call_args[0][1]
-        assert update_data["traffic_source"]["specific_mac_addresses"] == macs
+        assert update_data["traffic_source"]["specific_mac_addresses"] == expected
 
     @pytest.mark.asyncio
     async def test_sibling_fields_preserved(self):

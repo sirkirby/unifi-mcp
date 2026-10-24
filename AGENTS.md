@@ -304,6 +304,15 @@ make pre-commit   # format + lint + sync-skills + test
 - Fixture controller hosts MUST use TEST-NET (`192.0.2.0/24`), never private-range or real gateway addresses.
 - Tests that need a real login or reconnect path MUST opt in with `@pytest.mark.real_reconnect` and mock the transport.
 
+### Test Assertions
+
+Branch coverage cannot see a weakened assertion; these rules guard what it misses.
+
+- A test that loops over a returned collection MUST first assert its length (or compare the whole collection), so an empty result fails.
+- An expected value MUST NOT be the same mutable object passed into the code under test; use an independent literal or `copy.deepcopy` taken before the call.
+- A test MAY be deleted only when a kept test asserts the same thing on the same input. A broader end-to-end test, a different input, or empty data does not count.
+- Folding tests into `@pytest.mark.parametrize` MUST keep every case and every assertion of the originals.
+
 ### Version and Manifest Rules
 
 - Version is derived from git tags via `hatch-vcs`. MUST NOT manually edit version in `pyproject.toml`.
