@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.devices import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -91,10 +92,6 @@ class TestFromController:
         assert d.ip is None
         assert d.location is None
 
-    def test_is_online_false_preserved(self) -> None:
-        d = from_controller({"id": "dev-2", "is_online": False})
-        assert d.is_online is False
-
     def test_proxy_shape_is_projected_without_losing_identity(self) -> None:
         d = from_controller(
             {
@@ -118,8 +115,15 @@ class TestFromController:
         assert d.ip == "192.168.1.21"
         assert d.location == AccessLocation(name="Side Door")
 
-    def test_api_connected_field_maps_to_is_online(self) -> None:
-        assert from_controller({"id": "aa:bb:cc:dd:ee:ff", "connected": False}).is_online is False
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            {"id": "dev-2", "is_online": False},
+            {"id": "aa:bb:cc:dd:ee:ff", "connected": False},
+        ],
+    )
+    def test_api_connected_field_maps_to_is_online(self, raw: dict) -> None:
+        assert from_controller(raw).is_online is False
 
     def test_handles_partial_dict(self) -> None:
         d = from_controller({"id": "dev-3", "name": "Garage Hub", "type": "UA-Hub"})

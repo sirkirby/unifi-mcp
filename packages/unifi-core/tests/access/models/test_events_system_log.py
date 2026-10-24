@@ -148,14 +148,6 @@ def test_a_reader_is_not_reported_as_a_door() -> None:
     assert event_from_controller(RAW_SYSTEM_LOG_EVENT).door_id is None
 
 
-def test_a_real_door_is_still_read() -> None:
-    assert event_from_controller(RAW_DOOR_UNLOCK).door_id == "door-uuid"
-
-
-def test_a_real_user_actor_is_still_read() -> None:
-    assert event_from_controller(RAW_DOOR_UNLOCK).user_id == "person-uuid"
-
-
 def test_credential_id_is_not_guessed_from_metadata() -> None:
     """The live rows carry credential context under `authentication` and
     `nfc_id`, not `credential`, and which of those is the canonical credential

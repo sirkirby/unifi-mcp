@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
 from unifi_core.access.models.events import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -244,15 +245,16 @@ class TestActivitySummaryFromController:
         s = activity_summary_from_controller(raw)
         assert s.period_start == dt.isoformat()
 
-    def test_top_users_dict_passthrough(self) -> None:
-        raw = {"top_users": {"u1": 30, "u2": 20}}
-        s = activity_summary_from_controller(raw)
-        assert s.top_users == {"u1": 30, "u2": 20}
-
-    def test_top_users_list_passthrough(self) -> None:
-        raw = {"top_users": [{"id": "u1", "count": 30}]}
-        s = activity_summary_from_controller(raw)
-        assert s.top_users == [{"id": "u1", "count": 30}]
+    @pytest.mark.parametrize(
+        "top_users",
+        [
+            {"u1": 30, "u2": 20},
+            [{"id": "u1", "count": 30}],
+        ],
+    )
+    def test_top_users_passthrough(self, top_users: dict | list) -> None:
+        s = activity_summary_from_controller({"top_users": top_users})
+        assert s.top_users == top_users
 
     def test_non_dict_raw_returns_empty_summary(self) -> None:
         """Non-dict, non-model-dump objects produce a summary with all None."""

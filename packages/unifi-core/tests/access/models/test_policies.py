@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.policies import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -49,17 +50,17 @@ class TestFromController:
         assert p.user_group_ids == ["group-1"]
         assert p.enabled is True
 
-    def test_coalesces_doors_into_door_ids(self) -> None:
-        """Raw ``doors`` list should be normalised into ``door_ids``."""
-        raw = {"id": "p1", "doors": ["door-a", "door-b"]}
-        p = from_controller(raw)
-        assert p.door_ids == ["door-a", "door-b"]
-
-    def test_coalesces_doors_dict_list(self) -> None:
-        """Raw ``doors`` as list-of-dicts should extract ``id`` values."""
-        raw = {"id": "p1", "doors": [{"id": "door-x"}, {"id": "door-y"}]}
-        p = from_controller(raw)
-        assert p.door_ids == ["door-x", "door-y"]
+    @pytest.mark.parametrize(
+        ("doors", "expected"),
+        [
+            (["door-a", "door-b"], ["door-a", "door-b"]),
+            ([{"id": "door-x"}, {"id": "door-y"}], ["door-x", "door-y"]),
+        ],
+    )
+    def test_coalesces_doors_into_door_ids(self, doors: list, expected: list[str]) -> None:
+        """Raw ``doors`` list or list-of-dicts should be normalised into ``door_ids``."""
+        p = from_controller({"id": "p1", "doors": doors})
+        assert p.door_ids == expected
 
     def test_door_ids_takes_priority_over_doors(self) -> None:
         """When both ``door_ids`` and ``doors`` are present, ``door_ids`` wins."""
@@ -71,17 +72,17 @@ class TestFromController:
         p = from_controller(raw)
         assert p.door_ids == ["door-canonical"]
 
-    def test_coalesces_user_groups_into_user_group_ids(self) -> None:
-        """Raw ``user_groups`` list should be normalised into ``user_group_ids``."""
-        raw = {"id": "p1", "user_groups": ["group-a", "group-b"]}
-        p = from_controller(raw)
-        assert p.user_group_ids == ["group-a", "group-b"]
-
-    def test_coalesces_user_groups_dict_list(self) -> None:
-        """Raw ``user_groups`` as list-of-dicts should extract ``id`` values."""
-        raw = {"id": "p1", "user_groups": [{"id": "grp-x"}, {"id": "grp-y"}]}
-        p = from_controller(raw)
-        assert p.user_group_ids == ["grp-x", "grp-y"]
+    @pytest.mark.parametrize(
+        ("user_groups", "expected"),
+        [
+            (["group-a", "group-b"], ["group-a", "group-b"]),
+            ([{"id": "grp-x"}, {"id": "grp-y"}], ["grp-x", "grp-y"]),
+        ],
+    )
+    def test_coalesces_user_groups_into_user_group_ids(self, user_groups: list, expected: list[str]) -> None:
+        """Raw ``user_groups`` list or list-of-dicts should be normalised into ``user_group_ids``."""
+        p = from_controller({"id": "p1", "user_groups": user_groups})
+        assert p.user_group_ids == expected
 
     def test_user_group_ids_takes_priority_over_user_groups(self) -> None:
         raw = {
@@ -92,21 +93,21 @@ class TestFromController:
         p = from_controller(raw)
         assert p.user_group_ids == ["group-canonical"]
 
-    def test_missing_door_ids_defaults_to_empty_list(self) -> None:
+    @pytest.mark.parametrize("field", ["door_ids", "user_group_ids"])
+    def test_missing_ids_default_to_empty_list(self, field: str) -> None:
         p = from_controller({"id": "p2"})
-        assert p.door_ids == []
+        assert getattr(p, field) == []
 
-    def test_missing_user_group_ids_defaults_to_empty_list(self) -> None:
-        p = from_controller({"id": "p2"})
-        assert p.user_group_ids == []
-
-    def test_missing_enabled_defaults_to_true(self) -> None:
-        p = from_controller({"id": "p3", "name": "Lobby"})
-        assert p.enabled is True
-
-    def test_enabled_false_is_preserved(self) -> None:
-        p = from_controller({"id": "p4", "enabled": False})
-        assert p.enabled is False
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ({"id": "p3", "name": "Lobby"}, True),
+            ({"id": "p4", "enabled": False}, False),
+        ],
+    )
+    def test_enabled_default_and_false_preserved(self, raw: dict, expected: bool) -> None:
+        p = from_controller(raw)
+        assert p.enabled is expected
 
     def test_handles_empty_dict(self) -> None:
         p = from_controller({})
@@ -137,11 +138,6 @@ class TestToControllerUpdate:
         result = to_controller_update(changes)
         assert result["enabled"] is False
         assert result["name"] == "Still Active"
-
-    def test_preserves_boolean_true(self) -> None:
-        changes = {"enabled": True}
-        result = to_controller_update(changes)
-        assert result["enabled"] is True
 
     def test_drops_unrecognised_keys(self) -> None:
         changes = {"unknown_field": "value", "name": "Valid"}

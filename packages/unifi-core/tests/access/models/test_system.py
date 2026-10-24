@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.system import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -154,15 +155,10 @@ class TestHealthFromController:
         health = health_from_controller(raw)
         assert health.status == "unhealthy"
 
-    def test_status_derived_from_is_connected_true(self) -> None:
-        raw = {"is_connected": True}
-        health = health_from_controller(raw)
-        assert health.status == "healthy"
-
-    def test_status_derived_from_is_connected_false(self) -> None:
-        raw = {"is_connected": False}
-        health = health_from_controller(raw)
-        assert health.status == "unknown"
+    @pytest.mark.parametrize(("connected", "status"), [(True, "healthy"), (False, "unknown")])
+    def test_status_derived_from_is_connected(self, connected: bool, status: str) -> None:
+        health = health_from_controller({"is_connected": connected})
+        assert health.status == status
 
     def test_explicit_status_wins_over_flags(self) -> None:
         """Explicit 'status' key takes precedence over computed flag logic."""

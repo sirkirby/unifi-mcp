@@ -10,84 +10,52 @@ from unifi_core.access.models._actions import (
     UnlockDoorInput,
 )
 
-# ---------------------------------------------------------------------------
-# LockDoorInput
-# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "model",
+    [LockDoorInput, UnlockDoorInput, RebootDeviceInput, DeleteVisitorInput],
+)
+def test_action_input_flag(model):
+    assert model.__action_input__ is True
 
 
-class TestLockDoorInput:
-    def test_action_input_flag(self):
-        assert LockDoorInput.__action_input__ is True
-
-    def test_required_door_id(self):
-        with pytest.raises(ValidationError):
-            LockDoorInput()
-
-    def test_valid_construction(self):
-        m = LockDoorInput(door_id="door-uuid-123")
-        assert m.door_id == "door-uuid-123"
+@pytest.mark.parametrize(
+    "model",
+    [LockDoorInput, UnlockDoorInput, RebootDeviceInput, DeleteVisitorInput],
+)
+def test_required_id(model):
+    with pytest.raises(ValidationError):
+        model()
 
 
-# ---------------------------------------------------------------------------
-# UnlockDoorInput
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("model", "field", "value"),
+    [
+        (LockDoorInput, "door_id", "door-uuid-123"),
+        (RebootDeviceInput, "device_id", "device-uuid-123"),
+        (DeleteVisitorInput, "visitor_id", "visitor-uuid-123"),
+    ],
+)
+def test_valid_construction(model, field, value):
+    constructed = model(**{field: value})
+    assert getattr(constructed, field) == value
 
 
 class TestUnlockDoorInput:
-    def test_action_input_flag(self):
-        assert UnlockDoorInput.__action_input__ is True
-
-    def test_required_door_id(self):
-        with pytest.raises(ValidationError):
-            UnlockDoorInput()
-
     def test_duration_default(self):
         m = UnlockDoorInput(door_id="door-uuid-456")
         assert m.duration == 2
 
-    def test_duration_boundary_min(self):
-        m = UnlockDoorInput(door_id="door-uuid-456", duration=1)
-        assert m.duration == 1
+    @pytest.mark.parametrize("duration", [1, 30, 300])
+    def test_duration_accepted(self, duration):
+        m = UnlockDoorInput(door_id="door-uuid-456", duration=duration)
+        assert m.door_id == "door-uuid-456"
+        assert m.duration == duration
 
-    def test_duration_boundary_max(self):
-        m = UnlockDoorInput(door_id="door-uuid-456", duration=300)
-        assert m.duration == 300
-
-    def test_duration_below_min(self):
+    @pytest.mark.parametrize("duration", [0, 301])
+    def test_duration_out_of_range(self, duration):
         with pytest.raises(ValidationError):
-            UnlockDoorInput(door_id="door-uuid-456", duration=0)
-
-    def test_duration_above_max(self):
-        with pytest.raises(ValidationError):
-            UnlockDoorInput(door_id="door-uuid-456", duration=301)
-
-    def test_valid_full(self):
-        m = UnlockDoorInput(door_id="door-uuid-789", duration=30)
-        assert m.door_id == "door-uuid-789"
-        assert m.duration == 30
-
-
-# ---------------------------------------------------------------------------
-# RebootDeviceInput
-# ---------------------------------------------------------------------------
-
-
-class TestRebootDeviceInput:
-    def test_action_input_flag(self):
-        assert RebootDeviceInput.__action_input__ is True
-
-    def test_required_device_id(self):
-        with pytest.raises(ValidationError):
-            RebootDeviceInput()
-
-    def test_valid_construction(self):
-        m = RebootDeviceInput(device_id="device-uuid-123")
-        assert m.device_id == "device-uuid-123"
-
-
-# ---------------------------------------------------------------------------
-# RevokeCredentialInput
-# ---------------------------------------------------------------------------
+            UnlockDoorInput(door_id="door-uuid-456", duration=duration)
 
 
 class TestRevokeCredentialInput:
@@ -101,21 +69,3 @@ class TestRevokeCredentialInput:
     def test_valid_construction(self):
         m = RevokeCredentialInput(credential_id="cred-uuid-123")
         assert m.credential_id == "cred-uuid-123"
-
-
-# ---------------------------------------------------------------------------
-# DeleteVisitorInput
-# ---------------------------------------------------------------------------
-
-
-class TestDeleteVisitorInput:
-    def test_action_input_flag(self):
-        assert DeleteVisitorInput.__action_input__ is True
-
-    def test_required_visitor_id(self):
-        with pytest.raises(ValidationError):
-            DeleteVisitorInput()
-
-    def test_valid_construction(self):
-        m = DeleteVisitorInput(visitor_id="visitor-uuid-123")
-        assert m.visitor_id == "visitor-uuid-123"

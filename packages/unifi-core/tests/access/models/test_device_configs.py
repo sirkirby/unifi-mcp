@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.device_configs import (
     build_config_write_body,
     from_controller,
@@ -201,17 +202,14 @@ class TestBuildConfigWriteBody:
             "greeting_text": {"key": "greeting_text", "value": "welcome", "tag": "device_setting"},
         }
 
-    def test_builds_key_tag_value_array(self) -> None:
-        body = build_config_write_body({"show_entry_greet": "no"}, self._current())
-        assert body == [{"key": "show_entry_greet", "tag": "device_setting", "value": "no"}]
-
-    def test_coerces_value_to_string(self) -> None:
-        body = build_config_write_body({"show_entry_greet": False}, self._current())
-        assert body[0]["value"] == "False"
-
-    def test_partial_update_single_entry(self) -> None:
-        body = build_config_write_body({"greeting_text": "hello"}, self._current())
-        assert len(body) == 1
-        assert body[0]["key"] == "greeting_text"
-        assert body[0]["tag"] == "device_setting"
-        assert body[0]["value"] == "hello"
+    @pytest.mark.parametrize(
+        ("updates", "expected"),
+        [
+            ({"show_entry_greet": False}, [{"key": "show_entry_greet", "tag": "device_setting", "value": "False"}]),
+            ({"show_entry_greet": "no"}, [{"key": "show_entry_greet", "tag": "device_setting", "value": "no"}]),
+            ({"greeting_text": "hello"}, [{"key": "greeting_text", "tag": "device_setting", "value": "hello"}]),
+        ],
+    )
+    def test_coerces_value_to_string(self, updates: dict, expected: list[dict]) -> None:
+        body = build_config_write_body(updates, self._current())
+        assert body == expected

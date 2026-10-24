@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.visitors import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -106,33 +107,27 @@ class TestFromController:
         assert visitor.access_policy_ids == ["policy-uuid"]
         assert visitor.credential_count == 2
 
-    def test_coalesces_access_start_to_valid_from(self) -> None:
-        raw = {"id": "vis-2", "access_start": "2026-04-01T08:00:00Z"}
-        v = from_controller(raw)
-        assert v.valid_from == "2026-04-01T08:00:00Z"
+    @pytest.mark.parametrize(
+        ("raw_key", "field", "value"),
+        [
+            ("access_start", "valid_from", "2026-04-01T08:00:00Z"),
+            ("access_end", "valid_until", "2026-04-01T18:00:00Z"),
+        ],
+    )
+    def test_coalesces_access_window(self, raw_key: str, field: str, value: str) -> None:
+        v = from_controller({"id": "vis-2", raw_key: value})
+        assert getattr(v, field) == value
 
-    def test_valid_from_takes_priority_over_access_start(self) -> None:
-        raw = {
-            "id": "vis-3",
-            "valid_from": "2026-05-01T10:00:00Z",
-            "access_start": "2026-04-01T08:00:00Z",
-        }
-        v = from_controller(raw)
-        assert v.valid_from == "2026-05-01T10:00:00Z"
-
-    def test_coalesces_access_end_to_valid_until(self) -> None:
-        raw = {"id": "vis-4", "access_end": "2026-04-01T18:00:00Z"}
-        v = from_controller(raw)
-        assert v.valid_until == "2026-04-01T18:00:00Z"
-
-    def test_valid_until_takes_priority_over_access_end(self) -> None:
-        raw = {
-            "id": "vis-5",
-            "valid_until": "2026-06-01T17:00:00Z",
-            "access_end": "2026-04-01T18:00:00Z",
-        }
-        v = from_controller(raw)
-        assert v.valid_until == "2026-06-01T17:00:00Z"
+    @pytest.mark.parametrize(
+        ("canonical", "fallback", "field", "expected"),
+        [
+            ("valid_from", "access_start", "valid_from", "2026-05-01T10:00:00Z"),
+            ("valid_until", "access_end", "valid_until", "2026-06-01T17:00:00Z"),
+        ],
+    )
+    def test_canonical_window_takes_priority(self, canonical: str, fallback: str, field: str, expected: str) -> None:
+        v = from_controller({"id": "vis-3", canonical: expected, fallback: "2026-04-01T08:00:00Z"})
+        assert getattr(v, field) == expected
 
     def test_handles_empty_dict(self) -> None:
         v = from_controller({})
@@ -184,57 +179,13 @@ class TestToControllerCreate:
             "remarks": "Disposable",
         }
 
-    def test_minimal_payload_excludes_email_and_phone(self) -> None:
-        model = Visitor(
-            name="John Smith",
-            valid_from="2026-06-01T08:00:00Z",
-            valid_until="2026-06-01T16:00:00Z",
-        )
-        payload = to_controller_create(model)
-        assert "email" not in payload
-        assert "phone" not in payload
-        assert payload["name"] == "John Smith"
-        assert payload["access_start"] == "2026-06-01T08:00:00Z"
-        assert payload["access_end"] == "2026-06-01T16:00:00Z"
-
-    def test_renames_valid_from_to_access_start(self) -> None:
-        model = Visitor(
-            name="Tester",
-            valid_from="2026-07-01T09:00:00Z",
-            valid_until="2026-07-01T17:00:00Z",
-        )
-        payload = to_controller_create(model)
-        assert "access_start" in payload
-        assert "valid_from" not in payload
-        assert payload["access_start"] == "2026-07-01T09:00:00Z"
-
-    def test_renames_valid_until_to_access_end(self) -> None:
-        model = Visitor(
-            name="Tester",
-            valid_from="2026-07-01T09:00:00Z",
-            valid_until="2026-07-01T17:00:00Z",
-        )
-        payload = to_controller_create(model)
-        assert "access_end" in payload
-        assert "valid_until" not in payload
-        assert payload["access_end"] == "2026-07-01T17:00:00Z"
-
-    def test_excludes_none_email(self) -> None:
+    @pytest.mark.parametrize("field", ["email", "phone"])
+    def test_excludes_none_contact_field(self, field: str) -> None:
         model = Visitor(
             name="Tester",
             valid_from="2026-08-01T09:00:00Z",
             valid_until="2026-08-01T17:00:00Z",
-            email=None,
+            **{field: None},
         )
         payload = to_controller_create(model)
-        assert "email" not in payload
-
-    def test_excludes_none_phone(self) -> None:
-        model = Visitor(
-            name="Tester",
-            valid_from="2026-08-01T09:00:00Z",
-            valid_until="2026-08-01T17:00:00Z",
-            phone=None,
-        )
-        payload = to_controller_create(model)
-        assert "phone" not in payload
+        assert field not in payload

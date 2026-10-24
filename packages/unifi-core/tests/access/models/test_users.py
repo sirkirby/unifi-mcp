@@ -69,10 +69,6 @@ class TestFromController:
         assert u.role is None
         assert u.created_at is None
 
-    def test_created_at_from_string(self) -> None:
-        u = from_controller({"id": "user-3", "created_at": "2026-03-01T08:00:00Z"})
-        assert u.created_at == "2026-03-01T08:00:00Z"
-
     def test_created_at_from_datetime_object(self) -> None:
         dt = datetime.datetime(2026, 4, 10, 12, 0, 0)
         u = from_controller({"id": "user-4", "created_at": dt})

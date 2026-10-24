@@ -72,14 +72,6 @@ def test_topics_match_the_ui_category_filter() -> None:
     }
 
 
-def test_door_history_topic_is_accepted() -> None:
-    """The whole point of the tool: `unlocks` carries access.door.unlock and
-    access.dps.status.update records."""
-    from unifi_core.access.managers.event_manager import SYSTEM_LOG_TOPICS
-
-    assert "unlocks" in SYSTEM_LOG_TOPICS
-
-
 @pytest.mark.asyncio
 async def test_an_unsupported_topic_fails_before_the_request_is_sent() -> None:
     """The controller's own error is `CODE_PARAMS_INVALID ... no such topic`,

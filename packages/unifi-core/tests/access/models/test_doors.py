@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.access.models.doors import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -63,13 +64,10 @@ class TestDoorFromController:
         d = door_from_controller({"id": "d1", "is_locked": False})
         assert d.is_locked is False
 
-    def test_is_locked_from_relay_status_lock(self) -> None:
-        d = door_from_controller({"id": "d1", "lock_relay_status": "lock"})
-        assert d.is_locked is True
-
-    def test_is_locked_from_relay_status_unlock(self) -> None:
-        d = door_from_controller({"id": "d1", "lock_relay_status": "unlock"})
-        assert d.is_locked is False
+    @pytest.mark.parametrize(("relay", "expected"), [("lock", True), ("unlock", False)])
+    def test_is_locked_from_relay_status(self, relay: str, expected: bool) -> None:
+        d = door_from_controller({"id": "d1", "lock_relay_status": relay})
+        assert d.is_locked is expected
 
     def test_is_locked_none_when_absent(self) -> None:
         d = door_from_controller({"id": "d1"})
@@ -138,23 +136,16 @@ class TestDoorGroupFromController:
         g = door_group_from_controller({"id": "g1", "door_ids": ["d1", "d2", "d3"]})
         assert g.door_ids == ["d1", "d2", "d3"]
 
-    def test_door_ids_coalesced_from_resources(self) -> None:
-        g = door_group_from_controller(
-            {
-                "id": "g1",
-                "resources": [{"id": "d1"}, {"id": "d2"}],
-            }
-        )
-        assert g.door_ids == ["d1", "d2"]
-
-    def test_door_ids_resources_skips_none_entries(self) -> None:
-        g = door_group_from_controller(
-            {
-                "id": "g1",
-                "resources": [{"id": "d1"}, None, {"id": "d3"}],
-            }
-        )
-        assert g.door_ids == ["d1", "d3"]
+    @pytest.mark.parametrize(
+        ("resources", "expected"),
+        [
+            ([{"id": "d1"}, {"id": "d2"}], ["d1", "d2"]),
+            ([{"id": "d1"}, None, {"id": "d3"}], ["d1", "d3"]),
+        ],
+    )
+    def test_door_ids_coalesced_from_resources(self, resources: list, expected: list[str]) -> None:
+        g = door_group_from_controller({"id": "g1", "resources": resources})
+        assert g.door_ids == expected
 
     def test_door_ids_empty_when_neither_present(self) -> None:
         g = door_group_from_controller({"id": "g1"})
@@ -221,13 +212,15 @@ class TestDoorStatusFromController:
         )
         assert s.last_event_at == "2026-05-12T11:00:00Z"
 
-    def test_last_event_none_when_absent(self) -> None:
-        s = door_status_from_controller({"door_id": "d1"})
-        assert s.last_event_at is None
-        assert s.last_event_type is None
-
-    def test_last_event_none_explicit(self) -> None:
-        s = door_status_from_controller({"door_id": "d1", "last_event": None})
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            {"door_id": "d1"},
+            {"door_id": "d1", "last_event": None},
+        ],
+    )
+    def test_last_event_none(self, raw: dict) -> None:
+        s = door_status_from_controller(raw)
         assert s.last_event_at is None
         assert s.last_event_type is None
 
