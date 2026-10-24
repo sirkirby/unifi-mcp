@@ -32,3 +32,27 @@ def fast_argon2_hasher():
         yield
     finally:
         api_key._HASHER = production_hasher
+
+
+@pytest.fixture(scope="session")
+def migrated_state_dir(tmp_path_factory):
+    """A state directory produced by one real first ``migrate`` run, copied per test.
+
+    The migration shells out to alembic and bootstraps the first admin key, which
+    is the same for every consumer, so it runs once. Tests copy the result and
+    never mutate the template.
+    """
+    from typer.testing import CliRunner
+
+    from unifi_api.cli import app
+
+    state_dir = tmp_path_factory.mktemp("migrated-state")
+    db_path = state_dir / "state.db"
+    cfg_path = state_dir / "config.yaml"
+    cfg_path.write_text(f"db:\n  path: {db_path}\n")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("UNIFI_API_DB_KEY", "test-passphrase")
+        mp.setenv("UNIFI_API_DB_PATH", str(db_path))
+        result = CliRunner().invoke(app, ["migrate", "--config-path", str(cfg_path)])
+    assert result.exit_code == 0, f"migrate failed: {result.output!r}"
+    return state_dir, result.output
