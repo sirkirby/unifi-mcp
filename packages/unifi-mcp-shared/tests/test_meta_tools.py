@@ -226,6 +226,40 @@ async def test_support_bundle_wrapper_never_logs_raw_failures_or_payloads(caplog
     assert "traceback" not in caplog.text.lower()
 
 
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_execute_normalizes_structured_inner_result(prefix):
+    payload = {"success": True, "data": {"id": "abc"}}
+    content = [TextContent(type="text", text=json.dumps(payload))]
+    server = SimpleNamespace(call_tool=AsyncMock(return_value=(content, payload)))
+    registered = _register_test_meta_tools(server=server, prefix=prefix)
+
+    result = await registered[f"{prefix}_execute"]["handler"](f"{prefix}_inner", {})
+
+    assert result == payload
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_batch_stores_normalized_structured_result(prefix):
+    stored = {}
+
+    async def start_async_tool(executor, arguments):
+        stored["result"] = await executor(**arguments)
+        return {"jobId": "job-1"}
+
+    payload = {"success": True, "count": 2}
+    content = [TextContent(type="text", text=json.dumps(payload))]
+    server = SimpleNamespace(call_tool=AsyncMock(return_value=(content, payload)))
+    registered = _register_test_meta_tools(
+        server=server,
+        prefix=prefix,
+        start_async_tool=start_async_tool,
+    )
+
+    await registered[f"{prefix}_batch"]["handler"]([{"tool": f"{prefix}_inner", "arguments": {}}])
+
+    assert stored["result"] == payload
+
+
 CONTENT_ONLY_RESULTS = [
     pytest.param([TextContent(type="text", text="plain text")], id="plain-text"),
     pytest.param(
@@ -272,6 +306,27 @@ async def test_execute_preserves_content_only_result(prefix, content):
     result = await registered[f"{prefix}_execute"]["handler"](f"{prefix}_inner", {})
 
     assert result is content
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+@pytest.mark.parametrize("content", CONTENT_ONLY_RESULTS[:2])
+async def test_batch_preserves_content_only_result(prefix, content):
+    stored = {}
+
+    async def start_async_tool(executor, arguments):
+        stored["result"] = await executor(**arguments)
+        return {"jobId": "job-1"}
+
+    server = SimpleNamespace(call_tool=AsyncMock(return_value=content))
+    registered = _register_test_meta_tools(
+        server=server,
+        prefix=prefix,
+        start_async_tool=start_async_tool,
+    )
+
+    await registered[f"{prefix}_batch"]["handler"]([{"tool": f"{prefix}_inner", "arguments": {}}])
+
+    assert stored["result"] is content
 
 
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])

@@ -29,6 +29,12 @@ def test_structured_content_not_assumed_for_old_or_unknown_revisions(revision):
     assert structured_content_supported(revision) is False
 
 
+def test_request_protocol_revision_reads_current_sdk_session():
+    context = MagicMock()
+    context.request_context.protocol_version = "2025-11-25"
+    assert get_request_protocol_revision(context) == "2025-11-25"
+
+
 def test_request_protocol_revision_returns_none_outside_request():
     assert get_request_protocol_revision(None) is None
 

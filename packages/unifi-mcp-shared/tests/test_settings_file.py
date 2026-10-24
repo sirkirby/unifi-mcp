@@ -124,6 +124,15 @@ def test_settings_file_cannot_name_another_settings_file():
 # -- precedence --------------------------------------------------------------
 
 
+def test_process_environment_wins_over_the_file(tmp_path):
+    path = settings(tmp_path, "UNIFI_NETWORK_HOST=from-file.invalid\nUNIFI_NETWORK_SITE=filesite\n")
+    env = {"UNIFI_SETTINGS_FILE": str(path), "UNIFI_NETWORK_HOST": "from-env.invalid"}
+    report = apply_settings_file(env)
+    assert report.state == "loaded"
+    assert env["UNIFI_NETWORK_HOST"] == "from-env.invalid"
+    assert env["UNIFI_NETWORK_SITE"] == "filesite"
+
+
 def test_tilde_is_expanded(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     settings(tmp_path, "UNIFI_NETWORK_HOST=192.0.2.10\n")
@@ -135,6 +144,13 @@ def test_tilde_is_expanded(tmp_path, monkeypatch):
 
 
 # -- missing, relative, unreadable -------------------------------------------
+
+
+def test_missing_file_loads_nothing_and_does_not_raise(tmp_path):
+    env = {"UNIFI_SETTINGS_FILE": str(tmp_path / "absent.env")}
+    report = apply_settings_file(env)
+    assert report.state == "missing"
+    assert env == {"UNIFI_SETTINGS_FILE": str(tmp_path / "absent.env")}
 
 
 @pytest.mark.parametrize("value", ["network.env", "./network.env", "config/network.env"])

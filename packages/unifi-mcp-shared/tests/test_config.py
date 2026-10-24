@@ -28,6 +28,15 @@ class TestSetupLogging:
 class TestLoadYamlConfig:
     """Tests for load_yaml_config."""
 
+    def test_loads_valid_yaml(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("server:\n  port: 3000\n  host: localhost\n")
+
+        cfg = load_yaml_config(config_file)
+
+        assert cfg.server.port == 3000
+        assert cfg.server.host == "localhost"
+
     def test_raises_on_missing_file(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             load_yaml_config(tmp_path / "nonexistent.yaml")

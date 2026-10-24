@@ -37,6 +37,17 @@ class TestValidateRegistrationMode:
 class TestAssertCredentialsConfigured:
     """Tests for assert_credentials_configured."""
 
+    def _cfg(self, host: str = ""):
+        return OmegaConf.create({"unifi": {"host": host}})
+
+    def test_passes_when_host_set(self):
+        assert_credentials_configured(
+            self._cfg("192.0.2.1"),
+            plugin_name="unifi-network",
+            env_prefix="NETWORK",
+            logger=logging.getLogger("test"),
+        )
+
     @pytest.mark.parametrize(
         "cfg_dict",
         [
@@ -275,10 +286,19 @@ class TestLoadServerConfigSecrets:
             logger=logging.getLogger("test"),
         )
 
+    def test_password_file_reaches_config(self, monkeypatch):
+        (self.tmp_path / "pw").write_text("filepw\n")
+        monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_FILE", str(self.tmp_path / "pw"))
+        assert self._load().unifi.password == "filepw"
+
     def test_api_key_file_reaches_config(self, monkeypatch):
         (self.tmp_path / "key").write_text("api-key-value\n")
         monkeypatch.setenv("UNIFI_NETWORK_API_KEY_FILE", str(self.tmp_path / "key"))
         assert self._load().unifi.api_key == "api-key-value"
+
+    def test_plain_password_still_works(self, monkeypatch):
+        monkeypatch.setenv("UNIFI_PASSWORD", "plainpw")
+        assert self._load().unifi.password == "plainpw"
 
     @pytest.mark.parametrize(
         "secret",

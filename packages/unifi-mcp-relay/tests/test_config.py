@@ -30,6 +30,20 @@ def test_config_missing_required_var_raises():
             load_config()
 
 
+def test_config_parses_server_list():
+    env = {
+        "UNIFI_RELAY_URL": "https://my-worker.workers.dev",
+        "UNIFI_RELAY_TOKEN": "test-token",
+        "UNIFI_RELAY_LOCATION_NAME": "Test",
+        "UNIFI_RELAY_SERVERS": "http://localhost:3000,http://localhost:3001,http://localhost:3002",
+    }
+    with patch.dict(os.environ, env, clear=False):
+        from unifi_mcp_relay.config import load_config
+
+        cfg = load_config()
+        assert cfg.servers == ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
+
+
 def test_config_defaults():
     env = {
         "UNIFI_RELAY_URL": "https://my-worker.workers.dev",

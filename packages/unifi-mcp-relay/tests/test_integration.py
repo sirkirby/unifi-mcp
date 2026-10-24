@@ -204,3 +204,84 @@ async def test_full_lifecycle(sample_tools: list[ToolInfo]) -> None:
 
     # Heartbeat was acknowledged
     assert mock_worker.heartbeat_ack_received is True
+
+
+async def test_tool_call_error_response(sample_tools: list[ToolInfo]) -> None:
+    """Test that a tool handler returning an error is correctly relayed."""
+    token = "error-test-token"
+
+    tool_result_received: dict | None = None
+
+    async def handler(ws: websockets.asyncio.server.ServerConnection) -> None:
+        nonlocal tool_result_received
+
+        # Receive register
+        raw = await ws.recv()
+        msg = json.loads(raw)
+        assert msg["type"] == "register"
+
+        # Send registered
+        await ws.send(
+            json.dumps({"type": "registered", "location_id": "loc_err", "location_name": msg["location_name"]})
+        )
+
+        # Send tool_call for an unknown tool
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "tool_call",
+                    "call_id": "call_err_001",
+                    "tool_name": "nonexistent_tool",
+                    "arguments": {},
+                }
+            )
+        )
+
+        # Receive tool_result (should be an error)
+        raw = await ws.recv()
+        tool_result_received = json.loads(raw)
+
+        await ws.close()
+
+    def select_sp(conn, subprotocols):
+        for sp in subprotocols:
+            if sp == "unifi-relay-v1":
+                return sp
+        return None
+
+    async with serve(handler, "localhost", 0, select_subprotocol=select_sp) as server:
+        port = server.sockets[0].getsockname()[1]
+
+        config = RelayConfig(
+            relay_url=f"http://localhost:{port}",
+            relay_token=token,
+            location_name="Error Test Lab",
+            reconnect_max_delay=1,
+        )
+        client = RelayClient(config)
+
+        async def tool_handler(name: str, args: dict) -> tuple[dict | None, str | None]:
+            return None, f"Unknown tool: {name}"
+
+        client_task = asyncio.create_task(client.run(sample_tools, tool_handler))
+
+        # Wait for the tool result to be received by the mock server
+        for _ in range(100):
+            if tool_result_received is not None:
+                break
+            await asyncio.sleep(0.05)
+
+        await asyncio.sleep(0.1)
+        await client.stop()
+
+        try:
+            await asyncio.wait_for(client_task, timeout=3.0)
+        except asyncio.TimeoutError:
+            client_task.cancel()
+
+    # Assert error result
+    assert tool_result_received is not None
+    assert tool_result_received["type"] == "tool_result"
+    assert tool_result_received["call_id"] == "call_err_001"
+    assert "error" in tool_result_received
+    assert "Unknown tool: nonexistent_tool" in tool_result_received["error"]

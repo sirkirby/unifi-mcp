@@ -1,12 +1,13 @@
 """Tests for the shared lazy_tools module."""
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_mcp_shared.lazy_tools import (
     LazyToolLoader,
     build_tool_module_map,
+    setup_lazy_loading,
 )
 
 
@@ -111,3 +112,18 @@ class TestLazyToolLoader:
         result = await loader.load_tool("unifi_test")
         assert result is True
         assert loader.is_loaded("unifi_test") is True
+
+
+class TestSetupLazyLoading:
+    """Tests for setup_lazy_loading."""
+
+    def test_returns_loader_and_patches_call_tool(self):
+        server = MagicMock()
+        server.call_tool = AsyncMock()
+        tool_map = {"unifi_test": "json"}
+
+        loader = setup_lazy_loading(server, MagicMock(), tool_map)
+
+        assert isinstance(loader, LazyToolLoader)
+        # call_tool should have been replaced
+        assert server.call_tool != loader  # It's a wrapper, not the loader itself

@@ -7,6 +7,18 @@ from unifi_core.validators import ResourceValidator, create_response
 class TestResourceValidator:
     """Tests for the ResourceValidator class."""
 
+    def test_valid_params(self):
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        }
+        validator = ResourceValidator(schema, "TestResource")
+        is_valid, error, params = validator.validate({"name": "test"})
+        assert is_valid is True
+        assert error is None
+        assert params == {"name": "test"}
+
     @pytest.mark.parametrize(
         ("schema", "resource_name", "payload", "expected_error"),
         [
@@ -64,6 +76,28 @@ class TestResourceValidator:
 
 class TestValidateAndApplyDefaults:
     """Tests for the opt-in create-path defaults helper."""
+
+    def test_fills_missing_defaults(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "enabled": {"type": "boolean", "default": True},
+                "schedule": {"type": "object", "default": {"mode": "ALWAYS"}},
+                "action": {"type": "string", "default": "BLOCK"},
+            },
+            "required": ["name"],
+        }
+        validator = ResourceValidator(schema, "Policy")
+        is_valid, error, params = validator.validate_and_apply_defaults({"name": "new"})
+        assert is_valid is True
+        assert error is None
+        assert params == {
+            "name": "new",
+            "enabled": True,
+            "schedule": {"mode": "ALWAYS"},
+            "action": "BLOCK",
+        }
 
     def test_does_not_overwrite_provided_values(self):
         schema = {

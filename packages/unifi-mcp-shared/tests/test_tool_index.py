@@ -57,6 +57,7 @@ class TestToolMetadata:
     def test_to_dict_excludes_none_permission_fields(self):
         meta = ToolMetadata(name="test", description="A test tool")
         d = meta.to_dict()
+        assert d["name"] == "test"
         assert "output_schema" not in d
         assert "permission_category" not in d
         assert "permission_action" not in d
@@ -75,6 +76,11 @@ class TestToolMetadata:
 
 class TestRegisterTool:
     """Tests for register_tool."""
+
+    def test_registers_tool(self):
+        register_tool(name="my_tool", description="Does something")
+        assert "my_tool" in TOOL_REGISTRY
+        assert TOOL_REGISTRY["my_tool"].description == "Does something"
 
     def test_default_input_schema(self):
         register_tool(name="my_tool", description="test")
@@ -107,6 +113,11 @@ class TestRegisterTool:
         assert meta.permission_category is None
         assert meta.permission_action is None
 
+    def test_register_with_title_metadata(self):
+        register_tool(name="my_tool", title="My Tool", description="test")
+        meta = TOOL_REGISTRY["my_tool"]
+        assert meta.title == "My Tool"
+
 
 class TestGetToolIndex:
     """Tests for get_tool_index."""
@@ -121,10 +132,27 @@ class TestGetToolIndex:
         result = get_tool_index(registration_mode=mode, manifest_path=manifest_path, include_schemas=include_schemas)
         assert result["tools"][0]["auth_method"] == requirement
 
+    def test_returns_registered_tools(self):
+        register_tool(name="tool_a", description="Tool A")
+        register_tool(name="tool_b", description="Tool B")
+        index = get_tool_index(registration_mode="eager")
+        assert index["count"] == 2
+        names = {t["name"] for t in index["tools"]}
+        assert names == {"tool_a", "tool_b"}
+
     def test_empty_registry(self):
         index = get_tool_index(registration_mode="eager")
         assert index["count"] == 0
         assert index["tools"] == []
+
+    def test_lazy_mode_with_manifest(self, tmp_path):
+        manifest = {"tools": [{"name": "from_manifest", "description": "A tool"}], "count": 1}
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path)
+        assert index["count"] == 1
+        assert index["tools"][0]["name"] == "from_manifest"
 
     def test_lazy_mode_missing_manifest_falls_back(self, tmp_path):
         register_tool(name="runtime_tool", description="From runtime")
@@ -193,7 +221,58 @@ class TestGetToolIndex:
         assert "read_tool" in names
         assert "denied_tool" in names
 
+    # --- Default compact response (names + descriptions, no schemas) ---
+
+    def test_default_returns_name_and_description_only(self):
+        """Default response should include name and description but not schemas."""
+        register_tool(
+            name="my_tool",
+            description="Does something useful",
+            input_schema={"type": "object", "properties": {"x": {"type": "integer"}}},
+        )
+        index = get_tool_index(registration_mode="eager")
+        tool = index["tools"][0]
+        assert tool["name"] == "my_tool"
+        assert tool["description"] == "Does something useful"
+        assert "schema" not in tool
+
+    def test_include_schemas_returns_full_tools(self):
+        """include_schemas=True should return full tool objects with schemas."""
+        register_tool(
+            name="my_tool",
+            description="Does something",
+            input_schema={"type": "object", "properties": {"x": {"type": "integer"}}},
+        )
+        index = get_tool_index(registration_mode="eager", include_schemas=True)
+        tool = index["tools"][0]
+        assert "schema" in tool
+        assert "input" in tool["schema"]
+
     # --- Category filtering ---
+
+    def test_category_filter_with_manifest(self, tmp_path):
+        """Category filter should use module_map to match tools."""
+        manifest = {
+            "tools": [
+                {"name": "unifi_list_clients", "description": "List clients"},
+                {"name": "unifi_list_devices", "description": "List devices"},
+                {"name": "unifi_block_client", "description": "Block a client"},
+            ],
+            "module_map": {
+                "unifi_list_clients": "app.tools.clients",
+                "unifi_list_devices": "app.tools.devices",
+                "unifi_block_client": "app.tools.clients",
+            },
+            "count": 3,
+        }
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path, category="clients")
+        assert index["count"] == 2
+        names = {t["name"] for t in index["tools"]}
+        assert names == {"unifi_list_clients", "unifi_block_client"}
+        assert index["filtered"] is True
 
     def test_category_filter_case_insensitive(self, tmp_path):
         """Category filter should be case-insensitive."""
@@ -210,6 +289,21 @@ class TestGetToolIndex:
         assert index["filtered"] is True
 
     # --- Search filtering ---
+
+    def test_search_matches_name(self):
+        register_tool(name="unifi_list_clients", description="List all clients")
+        register_tool(name="unifi_list_devices", description="List all devices")
+        index = get_tool_index(registration_mode="eager", search="client")
+        assert index["count"] == 1
+        assert index["tools"][0]["name"] == "unifi_list_clients"
+        assert index["filtered"] is True
+
+    def test_search_matches_description(self):
+        register_tool(name="unifi_get_stats", description="Get firewall statistics")
+        register_tool(name="unifi_list_devices", description="List all devices")
+        index = get_tool_index(registration_mode="eager", search="firewall")
+        assert index["count"] == 1
+        assert index["tools"][0]["name"] == "unifi_get_stats"
 
     def test_search_case_insensitive(self):
         register_tool(name="unifi_list_clients", description="List clients")
@@ -300,6 +394,28 @@ class TestGetToolIndex:
 
     # --- Categories metadata ---
 
+    def test_categories_always_present(self):
+        """Response should always include the categories list."""
+        index = get_tool_index(registration_mode="eager")
+        assert "categories" in index
+        assert isinstance(index["categories"], list)
+
+    def test_categories_derived_from_module_map(self, tmp_path):
+        manifest = {
+            "tools": [
+                {"name": "t1", "description": ""},
+                {"name": "t2", "description": ""},
+            ],
+            "module_map": {"t1": "app.tools.clients", "t2": "app.tools.firewall"},
+            "count": 2,
+        }
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path)
+        assert "clients" in index["categories"]
+        assert "firewall" in index["categories"]
+
     def test_categories_present_even_when_filtered(self, tmp_path):
         """Categories should list ALL categories, not just the filtered ones."""
         manifest = {
@@ -318,6 +434,13 @@ class TestGetToolIndex:
         # Both categories should still be listed
         assert "clients" in index["categories"]
         assert "firewall" in index["categories"]
+
+    # --- Filtered flag ---
+
+    def test_no_filtered_flag_without_filters(self):
+        register_tool(name="tool_a", description="A")
+        index = get_tool_index(registration_mode="eager")
+        assert "filtered" not in index
 
     # --- Combined filters ---
 
@@ -346,6 +469,50 @@ class TestGetToolIndex:
         )
         assert index["count"] == 1
         assert index["tools"][0]["name"] == "unifi_block_client"
+
+    def test_category_with_include_schemas(self, tmp_path):
+        manifest = {
+            "tools": [
+                {"name": "t1", "description": "D1", "schema": {"input": {"type": "object"}}},
+                {"name": "t2", "description": "D2", "schema": {"input": {"type": "object"}}},
+            ],
+            "module_map": {"t1": "app.tools.clients", "t2": "app.tools.firewall"},
+            "count": 2,
+        }
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+
+        index = get_tool_index(
+            registration_mode="lazy",
+            manifest_path=manifest_path,
+            category="clients",
+            include_schemas=True,
+        )
+        assert index["count"] == 1
+        assert "schema" in index["tools"][0]
+
+
+class TestToolMetadataAnnotations:
+    """Tests for annotations field in ToolMetadata."""
+
+    def test_tool_metadata_includes_annotations(self):
+        """ToolMetadata should accept and store annotations dict."""
+        meta = ToolMetadata(
+            name="test_tool",
+            description="A test tool",
+            input_schema={"type": "object"},
+            annotations={"readOnlyHint": True, "openWorldHint": False},
+        )
+        assert meta.annotations == {"readOnlyHint": True, "openWorldHint": False}
+
+    def test_tool_metadata_annotations_default_none(self):
+        """ToolMetadata annotations should default to None for backwards compatibility."""
+        meta = ToolMetadata(
+            name="test_tool",
+            description="A test tool",
+            input_schema={"type": "object"},
+        )
+        assert meta.annotations is None
 
 
 @pytest.mark.parametrize("mode", ["lazy", "eager", "meta_only"])

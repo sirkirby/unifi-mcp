@@ -16,6 +16,27 @@ from unifi_mcp_shared.tasks import (
 )
 
 
+def test_task_from_running_job_status():
+    task = task_from_job_status(
+        "job-123",
+        {
+            "status": "running",
+            "started": 1_700_000_000,
+            "result": None,
+            "error": None,
+        },
+    )
+
+    assert isinstance(task, Task)
+    assert task.task_id == "job-123"
+    assert task.status == "working"
+    assert task.status_message == "Operation is in progress."
+    assert task.created_at == "2023-11-14T22:13:20Z"
+    assert task.last_updated_at == task.created_at
+    assert task.ttl == DEFAULT_TASK_TTL_MS
+    assert task.poll_interval == DEFAULT_TASK_POLL_INTERVAL_MS
+
+
 @pytest.mark.parametrize(
     ("job_id", "job_status", "kwargs", "expected_status", "expected_msg", "expected_updated"),
     [

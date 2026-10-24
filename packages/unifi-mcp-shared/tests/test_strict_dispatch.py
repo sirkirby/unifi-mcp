@@ -287,3 +287,12 @@ async def test_mac_hint_does_not_disturb_the_rest_of_the_message(mac_manifest: p
         "Valid arguments: [limit, mac_address]. "
         "'unifi_get_client_sessions' takes the MAC address as 'mac_address'."
     )
+
+
+async def test_mac_spelling_is_not_accepted_as_an_alias(mac_manifest: pathlib.Path) -> None:
+    """Guidance only: the canonical contract is unchanged, so the call still fails."""
+    server = StrictKwargFastMCP("test", tools_manifest_path=mac_manifest)
+    with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=[])) as super_mock:
+        with pytest.raises(ToolError):
+            await server.call_tool("unifi_get_client_details", {"client_mac": "aa:bb:cc:dd:ee:ff"})
+    super_mock.assert_not_awaited()
