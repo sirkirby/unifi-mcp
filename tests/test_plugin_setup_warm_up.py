@@ -143,9 +143,11 @@ def test_warm_up_fails_softly(tmp_path, monkeypatch, mode) -> None:
     # In "silent" mode the reply-reader thread never sees an answer, so
     # warm_up()'s own `reader.join(timeout)` always blocks for the full
     # timeout. A small timeout still exercises the same "no reply in time"
-    # branch without spending a real second on it.
+    # branch without spending a real second on it. "exit" keeps the full
+    # second: the fake server must have exited before the deadline, or that
+    # case would take the "no reply in time" branch instead of its own.
     started = time.monotonic()
-    note = module.warm_up(root, "unifi-network", timeout=0.05)
+    note = module.warm_up(root, "unifi-network", timeout=0.05 if mode == "silent" else 1)
 
     assert time.monotonic() - started < 15
     assert note.startswith("Notice: unifi-network-mcp==")
