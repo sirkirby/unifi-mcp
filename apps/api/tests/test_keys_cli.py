@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
-
 from unifi_api.cli import app
 
 _KEY = re.compile(r"unifi_(live|test)_[A-Z2-7]{22}")
@@ -39,12 +38,12 @@ def state(tmp_path: Path, migrated_state_dir, monkeypatch) -> tuple[Path, Path]:
     return db_path, cfg_path
 
 
-def _run_subprocess(*args: str, db_path: Path) -> subprocess.CompletedProcess:
+def _run_subprocess(command: list[str], *args: str, db_path: Path) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["UNIFI_API_DB_KEY"] = "test-passphrase"
     env["UNIFI_API_DB_PATH"] = str(db_path)
     return subprocess.run(
-        ["uv", "run", "--package", "unifi-api-server", "unifi-api-server", *args],
+        [*command, *args],
         capture_output=True,
         text=True,
         check=False,
@@ -57,11 +56,19 @@ def _run_cli(*args: str, db_path: Path) -> _Result:
     return _Result(result.exit_code, result.output, result.output)
 
 
-def test_keys_create_emits_plaintext_once(state) -> None:
+def test_keys_create_emits_plaintext_once(state, api_server_command) -> None:
     # Real console script, real interpreter: the entry point the operator runs.
     db_path, cfg_path = state
     r = _run_subprocess(
-        "keys", "create", "ci-test", "--scopes", "read,write", "--config-path", str(cfg_path), db_path=db_path
+        api_server_command,
+        "keys",
+        "create",
+        "ci-test",
+        "--scopes",
+        "read,write",
+        "--config-path",
+        str(cfg_path),
+        db_path=db_path,
     )
     assert r.returncode == 0, f"create failed: {r.stderr}"
     combined = r.stdout + r.stderr

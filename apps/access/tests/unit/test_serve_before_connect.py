@@ -31,6 +31,8 @@ from unifi_core.access.managers.door_manager import DoorManager
 pytestmark = pytest.mark.real_reconnect
 
 WAIT_SECONDS = 0.5
+# Connect wait handed to the real stdio server; its calls must fail within this plus slack.
+STDIO_WAIT_SECONDS = 0.5
 RECONNECT_INTERVAL_SECONDS = 0.2
 
 
@@ -199,7 +201,7 @@ def test_stdio_initialize_and_tools_list_answer_while_the_controller_hangs(tmp_p
             env_prefix="ACCESS",
             port=silent.port,
             tool="access_list_doors",
-            wait_seconds=2.0,
+            wait_seconds=STDIO_WAIT_SECONDS,
         )
         assert silent.connections >= 1, "the server never tried the controller"
 
@@ -207,7 +209,7 @@ def test_stdio_initialize_and_tools_list_answer_while_the_controller_hangs(tmp_p
     assert run["list_seconds"] < 2.0
     assert run["initialize"]["serverInfo"]["name"] == "unifi-access-mcp"
     assert "access_tool_index" in run["tools"]
-    assert run["call_seconds"] < 2.0 + 2.0
+    assert run["call_seconds"] < STDIO_WAIT_SECONDS + 2.0
     payload = tool_payload(run["call"])
     assert payload["success"] is False
     assert "still connecting to UniFi Access" in payload["error"]
@@ -220,12 +222,12 @@ def test_stdio_call_against_a_closed_port_reports_the_controller_unreachable(tmp
         env_prefix="ACCESS",
         port=closed_port(),
         tool="access_list_doors",
-        wait_seconds=2.0,
+        wait_seconds=STDIO_WAIT_SECONDS,
     )
 
     assert run["initialize_seconds"] < 2.0
     assert "access_tool_index" in run["tools"]
-    assert run["call_seconds"] < 2.0 + 2.0
+    assert run["call_seconds"] < STDIO_WAIT_SECONDS + 2.0
     payload = tool_payload(run["call"])
     assert payload["success"] is False
     assert "Could not connect to UniFi Access at 127.0.0.1" in payload["error"]

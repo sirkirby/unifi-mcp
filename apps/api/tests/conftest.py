@@ -43,7 +43,6 @@ def migrated_state_dir(tmp_path_factory):
     never mutate the template.
     """
     from typer.testing import CliRunner
-
     from unifi_api.cli import app
 
     state_dir = tmp_path_factory.mktemp("migrated-state")
@@ -56,3 +55,17 @@ def migrated_state_dir(tmp_path_factory):
         result = CliRunner().invoke(app, ["migrate", "--config-path", str(cfg_path)])
     assert result.exit_code == 0, f"migrate failed: {result.output!r}"
     return state_dir, result.output
+
+
+@pytest.fixture(scope="session")
+def api_server_command() -> list[str]:
+    """Argv prefix for the real ``unifi-api-server`` console script.
+
+    Uses the script installed beside the running interpreter so a smoke test
+    does not also pay for ``uv run``'s environment resolution; falls back to
+    ``uv run`` when the script is not alongside it.
+    """
+    script = Path(sys.executable).with_name("unifi-api-server")
+    if script.exists():
+        return [str(script)]
+    return ["uv", "run", "--package", "unifi-api-server", "unifi-api-server"]

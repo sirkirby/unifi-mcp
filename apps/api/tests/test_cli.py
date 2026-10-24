@@ -7,21 +7,20 @@ screens run in-process through the Typer app.
 import subprocess
 
 from typer.testing import CliRunner
-
 from unifi_api.cli import app
 
 
-def _run(*args: str) -> subprocess.CompletedProcess:
+def _run(command: list[str], *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["uv", "run", "--package", "unifi-api-server", "unifi-api-server", *args],
+        [*command, *args],
         capture_output=True,
         text=True,
         check=False,
     )
 
 
-def test_help_lists_subcommands() -> None:
-    r = _run("--help")
+def test_help_lists_subcommands(api_server_command) -> None:
+    r = _run(api_server_command, "--help")
     assert r.returncode == 0
     out = r.stdout + r.stderr
     assert "serve" in out
