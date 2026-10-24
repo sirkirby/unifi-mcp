@@ -3,31 +3,29 @@
 import os
 from unittest.mock import patch
 
+import pytest
 from unifi_mcp_shared.response_policy import (
     resolve_mcp_content_mode,
     should_redact_response_sensitive_fields,
 )
 
 
-def test_mcp_content_mode_defaults_to_adaptive():
-    assert resolve_mcp_content_mode("network", env={}) == "adaptive"
-
-
-def test_server_specific_mcp_content_mode_wins():
-    env = {
-        "UNIFI_MCP_CONTENT_MODE": "compat",
-        "UNIFI_NETWORK_MCP_CONTENT_MODE": "compact",
-    }
-    assert resolve_mcp_content_mode("network", env=env) == "compact"
-
-
-def test_global_mcp_content_mode_is_fallback():
-    assert resolve_mcp_content_mode("protect", env={"UNIFI_MCP_CONTENT_MODE": "compat"}) == "compat"
-
-
-def test_config_mcp_content_mode_is_fallback():
-    config = {"policy": {"response": {"mcp_content_mode": "compact"}}}
-    assert resolve_mcp_content_mode("access", config=config, env={}) == "compact"
+@pytest.mark.parametrize(
+    ("server", "config", "env", "expected"),
+    [
+        ("network", None, {}, "adaptive"),
+        (
+            "network",
+            None,
+            {"UNIFI_MCP_CONTENT_MODE": "compat", "UNIFI_NETWORK_MCP_CONTENT_MODE": "compact"},
+            "compact",
+        ),
+        ("protect", None, {"UNIFI_MCP_CONTENT_MODE": "compat"}, "compat"),
+        ("access", {"policy": {"response": {"mcp_content_mode": "compact"}}}, {}, "compact"),
+    ],
+)
+def test_resolve_mcp_content_mode(server, config, env, expected):
+    assert resolve_mcp_content_mode(server, config=config, env=env) == expected
 
 
 def test_invalid_mcp_content_mode_falls_back_to_adaptive(caplog):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from mcp.types import CallToolResult, ImageContent, TextContent
 from unifi_mcp_shared.response_serialization import (
     compact_content_text,
@@ -37,19 +38,6 @@ def _mixed_content():
     )
 
 
-def _assert_mixed_content_compacted(compact, structured, explanatory_text, image):
-    summary = compact_content_text(structured, tool_name="unifi_test")
-
-    assert isinstance(compact, CallToolResult)
-    assert compact.structured_content == structured
-    assert len(compact.content) == 3
-    assert isinstance(compact.content[0], TextContent)
-    assert compact.content[0].text == summary
-    assert sum(isinstance(block, TextContent) and block.text == summary for block in compact.content) == 1
-    assert compact.content[1] is explanatory_text
-    assert compact.content[2] is image
-
-
 def _json_text_blocks(content):
     parsed = []
     for block in content:
@@ -70,51 +58,36 @@ def _non_identical_json_content():
     return [compatibility_text, explanatory_text, image], structured, explanatory_text, image
 
 
-def _assert_non_identical_json_compacted(compact, structured, explanatory_text, image):
-    summary = compact_content_text(structured, tool_name="unifi_list_records")
-
-    assert isinstance(compact, CallToolResult)
-    assert compact.structured_content == structured
-    assert len(compact.content) == 3
-    assert isinstance(compact.content[0], TextContent)
-    assert compact.content[0].text == summary
-    assert _json_text_blocks(compact.content) == []
-    assert compact.content[1] is explanatory_text
-    assert compact.content[2] is image
-
-
-def test_normalize_prefers_structured_tuple():
-    content = [TextContent(type="text", text='{"success": true}')]
-    structured = {"success": True, "data": {"id": "abc"}}
-    assert normalize_call_tool_result((content, structured)) == structured
-
-
-def test_normalize_prefers_direct_call_tool_structured_content():
-    result = CallToolResult(
-        content=[TextContent(type="text", text='{"success": true}')],
-        structuredContent={"success": True},
-    )
-    assert normalize_call_tool_result(result) == {"success": True}
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            ([TextContent(type="text", text='{"success": true}')], {"success": True, "data": {"id": "abc"}}),
+            {"success": True, "data": {"id": "abc"}},
+        ),
+        (
+            CallToolResult(
+                content=[TextContent(type="text", text='{"success": true}')], structuredContent={"success": True}
+            ),
+            {"success": True},
+        ),
+        ([TextContent(type="text", text='{"success": true, "count": 2}')], {"success": True, "count": 2}),
+        (([TextContent(type="text", text='{"old": true}')], {}), {}),
+    ],
+)
+def test_normalize_extracts_structured_or_json_dict(raw, expected):
+    assert normalize_call_tool_result(raw) == expected
 
 
-def test_normalize_parses_single_json_text_block():
-    content = [TextContent(type="text", text='{"success": true, "count": 2}')]
-    assert normalize_call_tool_result(content) == {"success": True, "count": 2}
-
-
-def test_normalize_preserves_plain_text_content():
-    content = [TextContent(type="text", text="plain text")]
+@pytest.mark.parametrize(
+    "content",
+    [
+        [TextContent(type="text", text="plain text")],
+        [ImageContent(type="image", data="AA==", mimeType="image/png")],
+    ],
+)
+def test_normalize_preserves_non_json_content(content):
     assert normalize_call_tool_result(content) is content
-
-
-def test_normalize_preserves_image_content():
-    content = [ImageContent(type="image", data="AA==", mimeType="image/png")]
-    assert normalize_call_tool_result(content) is content
-
-
-def test_normalize_prefers_empty_structured_object_over_content():
-    content = [TextContent(type="text", text='{"old": true}')]
-    assert normalize_call_tool_result((content, {})) == {}
 
 
 def test_adaptive_compacts_supported_revision():
@@ -133,29 +106,25 @@ def test_adaptive_compacts_supported_revision():
     assert _json_text_blocks(compact.content) == []
 
 
-def test_adaptive_preserves_legacy_revision():
-    result = _structured_tuple({"success": True})
+@pytest.mark.parametrize(
+    ("mode", "protocol_revision", "content_only"),
+    [
+        ("adaptive", "2025-03-26", False),
+        ("adaptive", None, False),
+        ("compat", "2026-07-28", False),
+        ("compact", "2026-07-28", True),
+    ],
+)
+def test_serialize_preserves_original_when_not_compacting(mode, protocol_revision, content_only):
+    original = [TextContent(type="text", text="plain text")] if content_only else _structured_tuple({"success": True})
     assert (
         serialize_call_tool_result(
-            result,
-            mode="adaptive",
-            protocol_revision="2025-03-26",
+            original,
+            mode=mode,
+            protocol_revision=protocol_revision,
             tool_name="unifi_test",
         )
-        is result
-    )
-
-
-def test_adaptive_preserves_unknown_context():
-    result = _structured_tuple({"success": True})
-    assert (
-        serialize_call_tool_result(
-            result,
-            mode="adaptive",
-            protocol_revision=None,
-            tool_name="unifi_test",
-        )
-        is result
+        is original
     )
 
 
@@ -171,84 +140,50 @@ def test_compact_override_works_without_revision():
     assert "controller unavailable" in result.content[0].text
 
 
-def test_compat_override_preserves_supported_revision():
-    original = _structured_tuple({"success": True})
-    assert (
-        serialize_call_tool_result(
-            original,
-            mode="compat",
-            protocol_revision="2026-07-28",
-            tool_name="unifi_test",
-        )
-        is original
-    )
-
-
-def test_content_only_result_is_never_rewritten():
-    content = [TextContent(type="text", text="plain text")]
-    assert (
-        serialize_call_tool_result(
-            content,
-            mode="compact",
-            protocol_revision="2026-07-28",
-            tool_name="unifi_test",
-        )
-        is content
-    )
-
-
-def test_compacting_direct_result_preserves_mixed_content():
+@pytest.mark.parametrize("as_direct_result", [True, False])
+def test_compacting_preserves_mixed_content(as_direct_result):
     content, structured, explanatory_text, image = _mixed_content()
-    original = CallToolResult(content=content, structuredContent=structured)
+    raw = CallToolResult(content=content, structuredContent=structured) if as_direct_result else (content, structured)
 
     compact = serialize_call_tool_result(
-        original,
+        raw,
         mode="compact",
         protocol_revision=None,
         tool_name="unifi_test",
     )
 
-    _assert_mixed_content_compacted(compact, structured, explanatory_text, image)
+    summary = compact_content_text(structured, tool_name="unifi_test")
+    assert isinstance(compact, CallToolResult)
+    assert compact.structured_content == structured
+    assert len(compact.content) == 3
+    assert isinstance(compact.content[0], TextContent)
+    assert compact.content[0].text == summary
+    assert sum(isinstance(block, TextContent) and block.text == summary for block in compact.content) == 1
+    assert compact.content[1] is explanatory_text
+    assert compact.content[2] is image
 
 
-def test_compacting_structured_tuple_preserves_mixed_content():
-    content, structured, explanatory_text, image = _mixed_content()
-
-    compact = serialize_call_tool_result(
-        (content, structured),
-        mode="compact",
-        protocol_revision=None,
-        tool_name="unifi_test",
-    )
-
-    _assert_mixed_content_compacted(compact, structured, explanatory_text, image)
-
-
-def test_compacting_direct_result_removes_non_identical_json_collection():
+@pytest.mark.parametrize("as_direct_result", [True, False])
+def test_compacting_removes_non_identical_json_collection(as_direct_result):
     content, structured, explanatory_text, image = _non_identical_json_content()
-    original = CallToolResult(content=content, structuredContent=structured)
+    raw = CallToolResult(content=content, structuredContent=structured) if as_direct_result else (content, structured)
 
     compact = serialize_call_tool_result(
-        original,
+        raw,
         mode="compact",
         protocol_revision=None,
         tool_name="unifi_list_records",
     )
 
-    _assert_non_identical_json_compacted(compact, structured, explanatory_text, image)
-
-
-def test_compacting_structured_tuple_removes_non_identical_json_collection():
-    content, structured, explanatory_text, image = _non_identical_json_content()
-
-    compact = serialize_call_tool_result(
-        (content, structured),
-        mode="compact",
-        protocol_revision=None,
-        tool_name="unifi_list_records",
-    )
-
-    _assert_non_identical_json_compacted(compact, structured, explanatory_text, image)
+    summary = compact_content_text(structured, tool_name="unifi_list_records")
+    assert isinstance(compact, CallToolResult)
+    assert compact.structured_content == structured
+    assert len(compact.content) == 3
+    assert isinstance(compact.content[0], TextContent)
+    assert compact.content[0].text == summary
+    assert _json_text_blocks(compact.content) == []
+    assert compact.content[1] is explanatory_text
+    assert compact.content[2] is image
 
 
 def test_compacting_direct_result_preserves_meta_and_error_status():

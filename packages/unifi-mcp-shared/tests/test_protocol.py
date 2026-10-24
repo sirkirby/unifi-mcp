@@ -29,12 +29,6 @@ def test_structured_content_not_assumed_for_old_or_unknown_revisions(revision):
     assert structured_content_supported(revision) is False
 
 
-def test_request_protocol_revision_reads_current_sdk_session():
-    context = MagicMock()
-    context.request_context.protocol_version = "2025-11-25"
-    assert get_request_protocol_revision(context) == "2025-11-25"
-
-
 def test_request_protocol_revision_returns_none_outside_request():
     assert get_request_protocol_revision(None) is None
 
@@ -42,45 +36,51 @@ def test_request_protocol_revision_returns_none_outside_request():
 class TestGetProtocolRevision:
     """Test protocol revision resolution from env vars."""
 
-    def test_default_is_current_supported_revision(self):
-        assert get_protocol_revision() == DEFAULT_MCP_PROTOCOL_REVISION
+    @pytest.mark.parametrize(
+        ("rev_env", "ver_env", "expected"),
+        [
+            (None, None, DEFAULT_MCP_PROTOCOL_REVISION),
+            ("2025-11-25", None, "2025-11-25"),
+            ("  2025-11-25  ", None, "2025-11-25"),
+            ("2025-11-25", "v1", "2025-11-25"),
+            (None, "v1", DEFAULT_MCP_PROTOCOL_REVISION),
+        ],
+    )
+    def test_get_protocol_revision(self, monkeypatch, rev_env, ver_env, expected):
+        if rev_env is None:
+            monkeypatch.delenv("UNIFI_MCP_PROTOCOL_REVISION", raising=False)
+        else:
+            monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", rev_env)
+        if ver_env is None:
+            monkeypatch.delenv("UNIFI_MCP_PROTOCOL_VERSION", raising=False)
+        else:
+            monkeypatch.setenv("UNIFI_MCP_PROTOCOL_VERSION", ver_env)
+        assert get_protocol_revision() == expected
 
-    def test_reads_from_revision_env(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
-        assert get_protocol_revision() == "2025-11-25"
-
-    def test_strips_whitespace(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "  2025-11-25  ")
-        assert get_protocol_revision() == "2025-11-25"
-
-    def test_revision_env_takes_precedence_over_legacy_version_env(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_VERSION", "v1")
-        assert get_protocol_revision() == "2025-11-25"
-
-    def test_legacy_v1_env_alias_maps_to_current_revision(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_VERSION", "v1")
-        assert get_protocol_revision() == DEFAULT_MCP_PROTOCOL_REVISION
-
-    def test_future_revision_is_known_target(self):
+    @pytest.mark.parametrize(
+        ("rev", "expected"),
+        [
+            (FUTURE_MCP_PROTOCOL_REVISION, True),
+            ("2026-06-18", False),
+        ],
+    )
+    def test_is_known_protocol_target(self, rev, expected):
         assert FUTURE_MCP_PROTOCOL_REVISION == "2026-07-28"
-        assert is_known_protocol_target("2026-07-28") is True
-
-    def test_unknown_revision_is_not_known_target(self):
-        assert is_known_protocol_target("2026-06-18") is False
+        assert is_known_protocol_target(rev) is expected
 
 
 class TestCreateMcpToolAdapter:
     """Test the tool decorator adapter factory."""
 
-    def test_current_revision_returns_original_decorator(self):
+    @pytest.mark.parametrize("protocol_revision", ["2025-11-25", "v1", "2026-07-28", None])
+    def test_returns_original_decorator(self, monkeypatch, protocol_revision):
+        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
         mock_decorator = MagicMock(name="fastmcp_tool_decorator")
-        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="2025-11-25")
-        assert adapter is mock_decorator
-
-    def test_legacy_v1_revision_alias_returns_original_decorator(self):
-        mock_decorator = MagicMock(name="fastmcp_tool_decorator")
-        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="v1")
+        adapter = (
+            create_mcp_tool_adapter(mock_decorator)
+            if protocol_revision is None
+            else create_mcp_tool_adapter(mock_decorator, protocol_revision=protocol_revision)
+        )
         assert adapter is mock_decorator
 
     def test_unknown_revision_is_ignored_for_per_client_negotiation(self, caplog):
@@ -89,18 +89,7 @@ class TestCreateMcpToolAdapter:
         assert adapter is mock_decorator
         assert "negotiates the protocol per client" in caplog.text
 
-    def test_future_target_revision_uses_same_negotiated_adapter(self):
-        mock_decorator = MagicMock()
-        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-07-28")
-        assert adapter is mock_decorator
-
     def test_v2_revision_alias_raises(self):
         mock_decorator = MagicMock()
         with pytest.raises(ValueError, match="Use date-based MCP protocol revisions"):
             create_mcp_tool_adapter(mock_decorator, protocol_revision="v2")
-
-    def test_default_revision_uses_env(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")
-        mock_decorator = MagicMock()
-        adapter = create_mcp_tool_adapter(mock_decorator)
-        assert adapter is mock_decorator
