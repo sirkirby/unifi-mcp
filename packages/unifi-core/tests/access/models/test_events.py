@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime
 
 import pytest
@@ -253,8 +254,9 @@ class TestActivitySummaryFromController:
         ],
     )
     def test_top_users_passthrough(self, top_users: dict | list) -> None:
+        expected = copy.deepcopy(top_users)
         s = activity_summary_from_controller({"top_users": top_users})
-        assert s.top_users == top_users
+        assert s.top_users == expected
 
     def test_non_dict_raw_returns_empty_summary(self) -> None:
         """Non-dict, non-model-dump objects produce a summary with all None."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 
 import pytest
@@ -606,11 +607,12 @@ class TestRuleToController:
         """
         from unifi_core.protect.models.alarms import rule_to_controller
 
+        expected = copy.deepcopy(metadata)
         body = {"actions": [{"metadata": metadata}]}
         meta = rule_to_controller(body)["actions"][0]["metadata"]
         assert meta["useThumbnail"] is True
         assert "use_thumbnail" not in meta
-        for key, value in metadata.items():
+        for key, value in expected.items():
             if key != "use_thumbnail":
                 assert meta[key] == value
 

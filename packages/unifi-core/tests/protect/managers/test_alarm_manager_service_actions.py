@@ -1,5 +1,6 @@
 """Tests for AlarmManagerService profile arm/disarm actions (v2 Alarm Manager)."""
 
+import copy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -26,12 +27,13 @@ def _service(response=_PROFILE, error=None):
     ids=["arm", "disarm"],
 )
 async def test_arm_profile_posts_v2_action(method, action, response):
+    expected = copy.deepcopy(response)
     service, api_request = _service(response=response)
     result = await getattr(service, method)(_PROFILE_ID)
     api_request.assert_awaited_once_with(
         f"profiles/{_PROFILE_ID}/actions/{action}", method="post", api_path="/api/v2/alarms/"
     )
-    assert result == response
+    assert result == expected
 
 
 @pytest.mark.asyncio
