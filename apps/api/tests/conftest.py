@@ -37,14 +37,20 @@ def fast_argon2_hasher():
 def _memoized(build):
     cache: dict = {}
 
-    def cached(**kwargs):
+    def _hashable(value):
+        return tuple(value) if isinstance(value, list) else value
+
+    def cached(*args, **kwargs):
         try:
-            key = tuple((name, tuple(value) if isinstance(value, list) else value) for name, value in kwargs.items())
+            key = (
+                tuple(_hashable(value) for value in args),
+                tuple((name, _hashable(value)) for name, value in kwargs.items()),
+            )
             hash(key)
         except TypeError:
-            return build(**kwargs)
+            return build(*args, **kwargs)
         if key not in cache:
-            cache[key] = build(**kwargs)
+            cache[key] = build(*args, **kwargs)
         return cache[key]
 
     return cached
