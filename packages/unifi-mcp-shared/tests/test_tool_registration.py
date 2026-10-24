@@ -58,12 +58,13 @@ class TestRegisterToolsForMode:
         assert "get_support_bundle" not in caplog.text
 
     @pytest.mark.asyncio
-    async def test_lazy_mode_registers_meta_tools_load_tools_and_lazy_loader(self):
+    @pytest.mark.parametrize(("mode", "loads_tools"), [("lazy", True), ("meta_only", False)])
+    async def test_lazy_and_meta_only_modes_register_meta_tools_and_lazy_loader(self, mode, loads_tools):
         server = _server()
         deps = _deps()
 
         await register_tools_for_mode(
-            mode="lazy",
+            mode=mode,
             server=server,
             base_package="unifi_network_mcp.tools",
             config=_config(),
@@ -74,34 +75,25 @@ class TestRegisterToolsForMode:
         deps["register_meta_tools"].assert_called_once()
         assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
         deps["setup_lazy_loading"].assert_called_once_with(server, deps["original_tool_decorator"])
-        deps["register_load_tools"].assert_called_once()
-        assert deps["register_load_tools"].call_args.kwargs["lazy_loader"] == "lazy-loader"
+        if loads_tools:
+            deps["register_load_tools"].assert_called_once()
+            assert deps["register_load_tools"].call_args.kwargs["lazy_loader"] == "lazy-loader"
+        else:
+            deps["register_load_tools"].assert_not_called()
         deps["auto_load_tools"].assert_not_called()
         server.list_tools.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_meta_only_mode_registers_only_meta_tools_with_lazy_execute_support(self):
-        server = _server()
-        deps = _deps()
-
-        await register_tools_for_mode(
-            mode="meta_only",
-            server=server,
-            base_package="unifi_network_mcp.tools",
-            config=_config(),
-            logger=logging.getLogger("test"),
-            **deps,
-        )
-
-        deps["register_meta_tools"].assert_called_once()
-        assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
-        deps["setup_lazy_loading"].assert_called_once_with(server, deps["original_tool_decorator"])
-        deps["register_load_tools"].assert_not_called()
-        deps["auto_load_tools"].assert_not_called()
-        server.list_tools.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_eager_mode_registers_direct_tools_through_auto_loader(self):
+    @pytest.mark.parametrize(
+        ("include_meta_tools", "cfg_kwargs", "expected_categories", "expected_tools"),
+        [
+            (True, {"enabled_categories": "clients,devices"}, ["clients", "devices"], None),
+            (False, {"enabled_tools": "unifi_get_system_info"}, None, ["unifi_get_system_info"]),
+        ],
+    )
+    async def test_eager_mode_registers_direct_tools_through_auto_loader(
+        self, include_meta_tools, cfg_kwargs, expected_categories, expected_tools
+    ):
         server = _server()
         deps = _deps()
 
@@ -109,40 +101,28 @@ class TestRegisterToolsForMode:
             mode="eager",
             server=server,
             base_package="unifi_network_mcp.tools",
-            config=_config(enabled_categories="clients,devices"),
+            config=_config(**cfg_kwargs),
             logger=logging.getLogger("test"),
+            include_meta_tools=include_meta_tools,
             **deps,
         )
 
-        deps["register_meta_tools"].assert_called_once()
-        assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
+        if include_meta_tools:
+            deps["register_meta_tools"].assert_called_once()
+            assert (
+                deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
+            )
+        else:
+            deps["register_meta_tools"].assert_not_called()
         deps["setup_lazy_loading"].assert_not_called()
         deps["register_load_tools"].assert_not_called()
         deps["auto_load_tools"].assert_called_once_with(
             base_package="unifi_network_mcp.tools",
-            enabled_categories=["clients", "devices"],
-            enabled_tools=None,
+            enabled_categories=expected_categories,
+            enabled_tools=expected_tools,
             server=server,
         )
         server.list_tools.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_eager_mode_can_omit_indirect_meta_tools(self):
-        server = _server()
-        deps = _deps()
-
-        await register_tools_for_mode(
-            mode="eager",
-            server=server,
-            base_package="unifi_network_mcp.tools",
-            config=_config(enabled_tools="unifi_get_system_info"),
-            logger=logging.getLogger("test"),
-            include_meta_tools=False,
-            **deps,
-        )
-
-        deps["register_meta_tools"].assert_not_called()
-        deps["auto_load_tools"].assert_called_once()
 
     @pytest.mark.asyncio
     async def test_eager_mode_cannot_omit_meta_tools_without_an_allowlist(self):
@@ -320,15 +300,11 @@ class TestLazyDirectTools:
     DIRECT = ("unifi_get_incident_evidence", "unifi_get_camera")
 
     @pytest.mark.asyncio
-    async def test_lists_only_the_named_tools_even_beside_other_tools_in_their_module(self, tool_package, tmp_path):
+    async def test_module_siblings_still_run_through_execute(self, tool_package, tmp_path):
         server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
-        listed = {tool.name: tool for tool in await server.list_tools()}
-        assert set(listed) == _LAZY_META_TOOLS | set(self.DIRECT)
-        assert all(listed[name].annotations.read_only_hint is True for name in self.DIRECT)
-
-    @pytest.mark.asyncio
-    async def test_a_listed_tool_runs_directly_and_through_execute(self, tool_package, tmp_path):
-        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
+        listed_initial = {tool.name: tool for tool in await server.list_tools()}
+        assert set(listed_initial) == _LAZY_META_TOOLS | set(self.DIRECT)
+        assert all(listed_initial[name].annotations.read_only_hint is True for name in self.DIRECT)
         assert await _call(server, "unifi_get_camera", {"camera_id": "cam-1"}) == {
             "success": True,
             "data": {"read": "cam-1"},
@@ -337,10 +313,6 @@ class TestLazyDirectTools:
             server, "unifi_execute", {"tool": "unifi_get_camera", "arguments": {"camera_id": "cam-1"}}
         )
         assert executed == {"success": True, "data": {"read": "cam-1"}}
-
-    @pytest.mark.asyncio
-    async def test_module_siblings_still_run_through_execute(self, tool_package, tmp_path):
-        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
         rebooted = await _call(
             server, "unifi_execute", {"tool": "unifi_reboot_camera", "arguments": {"camera_id": "cam-1"}}
         )
@@ -350,10 +322,6 @@ class TestLazyDirectTools:
         # As before, a tool runs once it is registered; nothing else was registered with it.
         names = {tool.name for tool in await server.list_tools()}
         assert names == _LAZY_META_TOOLS | set(self.DIRECT) | {"unifi_reboot_camera", "unifi_list_cameras"}
-
-    @pytest.mark.asyncio
-    async def test_the_index_still_lists_the_listed_tool_and_its_siblings(self, tool_package, tmp_path):
-        server = await _start(tool_package, tmp_path, "lazy", self.DIRECT)
         index = await _call(server, "unifi_tool_index", {})
         assert {"unifi_get_camera", "unifi_reboot_camera", "unifi_list_cameras"} <= {
             tool["name"] for tool in index["tools"]
