@@ -312,6 +312,7 @@ Branch coverage cannot see a weakened assertion; these rules guard what it misse
 - An expected value MUST NOT be the same mutable object passed into the code under test; use an independent literal or `copy.deepcopy` taken before the call.
 - A test MAY be deleted only when a kept test asserts the same thing on the same input. A broader end-to-end test, a different input, or empty data does not count.
 - Folding tests into `@pytest.mark.parametrize` MUST keep every case and every assertion of the originals.
+- A pass that deletes or folds tests at scale follows the `test-pruning` skill (`.agents/skills/test-pruning/`).
 
 ### Version and Manifest Rules
 
