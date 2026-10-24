@@ -53,8 +53,10 @@ _FILTER_FIELDS = (
     "source_ip",
     "source_host",
     "source_network_id",
+    "source_port",
     "destination_domain",
     "destination_ip",
+    "destination_port",
     "destination_region",
 )
 # Remaining array fields the endpoint expects present in the body; not exposed
@@ -62,13 +64,11 @@ _FILTER_FIELDS = (
 _ALL_ARRAY_FIELDS = _FILTER_FIELDS + (
     "policy",
     "policy_type",
-    "source_port",
     "source_domain",
     "source_zone_id",
     "source_region",
     "destination_host",
     "destination_mac",
-    "destination_port",
     "destination_network_id",
     "destination_zone_id",
     "in_network_id",

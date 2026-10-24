@@ -49,6 +49,34 @@ def test_serializer_maps_core_and_traffic_data():
     assert "region" not in flow.destination.model_dump()
 
 
+def test_query_accepts_port_filters_and_rejects_out_of_range():
+    q = TrafficFlowQuery(time_from=1, time_to=2, source_port=[51514], destination_port=[443, 7680])
+    assert q.source_port == [51514]
+    assert q.destination_port == [443, 7680]
+    for kwargs in ({"source_port": [-1]}, {"destination_port": [65536]}):
+        with pytest.raises(ValidationError):
+            TrafficFlowQuery(time_from=1, time_to=2, **kwargs)
+
+
+def test_serializer_maps_endpoint_ports():
+    flow = traffic_flow_from_controller(_first_record())
+    assert flow.source.port == 51514
+    assert flow.destination.port == 443
+
+
+@pytest.mark.parametrize("raw_port", [None, "", "443", True, -1, 65536, 1.5])
+def test_serializer_drops_malformed_port(raw_port):
+    flow = traffic_flow_from_controller({"destination": {"ip": "203.0.113.20", "port": raw_port}})
+    assert flow.destination.port is None
+    assert flow.destination.ip == "203.0.113.20"
+    assert "port" not in flow.model_dump(exclude_none=True)["destination"]
+
+
+def test_serializer_keeps_port_zero():
+    flow = traffic_flow_from_controller({"source": {"port": 0}})
+    assert flow.source.port == 0
+
+
 def test_endpoint_name_falls_back_to_host_name():
     flow = traffic_flow_from_controller({"source": {"host_name": "fallback-host"}})
     assert flow.source.name == "fallback-host"

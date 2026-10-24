@@ -11,11 +11,13 @@ No create/update/delete tools exist (read-only); MUTABLE_FIELDS = frozenset().
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from unifi_core.mac import normalize_mac
+
+Port = Annotated[int, Field(ge=0, le=65535)]
 
 
 class TrafficFlowQuery(BaseModel):
@@ -39,8 +41,10 @@ class TrafficFlowQuery(BaseModel):
     source_ip: Optional[list[str]] = Field(default=None, description="Filter by source IP")
     source_host: Optional[list[str]] = Field(default=None, description="Filter by source host/client name")
     source_network_id: Optional[list[str]] = Field(default=None, description="Filter by source network id")
+    source_port: Optional[list[Port]] = Field(default=None, description="Filter by source port")
     destination_domain: Optional[list[str]] = Field(default=None, description="Filter by destination domain")
     destination_ip: Optional[list[str]] = Field(default=None, description="Filter by destination IP")
+    destination_port: Optional[list[Port]] = Field(default=None, description="Filter by destination port")
     destination_region: Optional[list[str]] = Field(default=None, description="Filter by destination region")
 
     @field_validator("source_mac")
@@ -73,6 +77,7 @@ class TrafficFlowEndpoint(BaseModel):
         default=None, description="MAC address (LAN endpoints)", json_schema_extra={"mutable": False}
     )
     ip: Optional[str] = Field(default=None, description="IP address", json_schema_extra={"mutable": False})
+    port: Optional[int] = Field(default=None, description="Transport port", json_schema_extra={"mutable": False})
     network_name: Optional[str] = Field(
         default=None, description="Network/VLAN name", json_schema_extra={"mutable": False}
     )
@@ -126,12 +131,20 @@ class TrafficFlow(BaseModel):
     )
 
 
+def _port(value: Any) -> Optional[int]:
+    # A malformed port drops the field rather than failing the whole page.
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 65535:
+        return None
+    return value
+
+
 def _endpoint_from_controller(raw: Any) -> TrafficFlowEndpoint:
     name = _get(raw, "client_name") or _get(raw, "host_name")
     return TrafficFlowEndpoint(
         name=name or None,
         mac=_get(raw, "mac") or None,
         ip=_get(raw, "ip") or None,
+        port=_port(_get(raw, "port")),
         network_name=_get(raw, "network_name") or None,
         zone_name=_get(raw, "zone_name") or None,
         domains=list(_get(raw, "domains", []) or []),

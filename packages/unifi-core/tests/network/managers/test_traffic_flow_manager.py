@@ -60,6 +60,26 @@ async def test_missing_time_window_raises():
         await mgr.get_traffic_flows(TrafficFlowQuery(page_number=0, page_size=100))
 
 
+def test_port_filters_are_sent_and_default_to_empty():
+    mgr = TrafficFlowManager(_make_connection())
+
+    body = mgr._build_body(TrafficFlowQuery(time_from=1, time_to=2, destination_port=[7680]))
+    assert body["destination_port"] == [7680]
+    assert body["source_port"] == []
+
+    body = mgr._build_body(TrafficFlowQuery(time_from=1, time_to=2, source_port=[51514]))
+    assert body["source_port"] == [51514]
+    assert body["destination_port"] == []
+
+
+def test_body_field_set_is_unchanged_by_port_filters():
+    mgr = TrafficFlowManager(_make_connection())
+    plain = mgr._build_body(TrafficFlowQuery(time_from=1, time_to=2))
+    filtered = mgr._build_body(TrafficFlowQuery(time_from=1, time_to=2, source_port=[1], destination_port=[2]))
+    assert plain.keys() == filtered.keys()
+    assert {"source_port", "destination_port"} <= plain.keys()
+
+
 # ---------------------------------------------------------------------------
 # C. Response shaping — empty and malformed inputs
 # ---------------------------------------------------------------------------
