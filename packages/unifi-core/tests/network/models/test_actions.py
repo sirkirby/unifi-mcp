@@ -39,13 +39,6 @@ from unifi_core.network.models._actions import (
 
 
 class TestBlockClientInput:
-    def test_action_input_flag(self):
-        assert BlockClientInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            BlockClientInput()
-
     def test_valid_construction(self):
         m = BlockClientInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -57,13 +50,6 @@ class TestBlockClientInput:
 
 
 class TestUnblockClientInput:
-    def test_action_input_flag(self):
-        assert UnblockClientInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            UnblockClientInput()
-
     def test_valid_construction(self):
         m = UnblockClientInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -75,17 +61,6 @@ class TestUnblockClientInput:
 
 
 class TestRenameClientInput:
-    def test_action_input_flag(self):
-        assert RenameClientInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            RenameClientInput(name="My Device")
-
-    def test_required_name(self):
-        with pytest.raises(ValidationError):
-            RenameClientInput(mac_address="AA:BB:CC:DD:EE:FF")
-
     def test_valid_construction(self):
         m = RenameClientInput(mac_address="AA:BB:CC:DD:EE:FF", name="Living Room TV")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -98,13 +73,6 @@ class TestRenameClientInput:
 
 
 class TestForceReconnectClientInput:
-    def test_action_input_flag(self):
-        assert ForceReconnectClientInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            ForceReconnectClientInput()
-
     def test_valid_construction(self):
         m = ForceReconnectClientInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -178,13 +146,6 @@ class TestUnauthorizeGuestInput:
 
 
 class TestForgetClientInput:
-    def test_action_input_flag(self):
-        assert ForgetClientInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            ForgetClientInput()
-
     def test_valid_construction(self):
         m = ForgetClientInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -196,13 +157,6 @@ class TestForgetClientInput:
 
 
 class TestSetClientIpSettingsInput:
-    def test_action_input_flag(self):
-        assert SetClientIpSettingsInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            SetClientIpSettingsInput()
-
     def test_all_optional_fields_default_none(self):
         m = SetClientIpSettingsInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.use_fixedip is None
@@ -257,17 +211,6 @@ class TestSetClientFixedApInput:
 
 
 class TestLocateDeviceInput:
-    def test_action_input_flag(self):
-        assert LocateDeviceInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            LocateDeviceInput(enabled=True)
-
-    def test_required_enabled(self):
-        with pytest.raises(ValidationError):
-            LocateDeviceInput(device_mac="AA:BB:CC:DD:EE:FF")
-
     def test_valid_construction(self):
         m = LocateDeviceInput(device_mac="AA:BB:CC:DD:EE:FF", enabled=True)
         assert m.device_mac == "AA:BB:CC:DD:EE:FF"
@@ -280,13 +223,6 @@ class TestLocateDeviceInput:
 
 
 class TestRebootDeviceInput:
-    def test_action_input_flag(self):
-        assert RebootDeviceInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            RebootDeviceInput()
-
     def test_valid_construction(self):
         m = RebootDeviceInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -298,13 +234,6 @@ class TestRebootDeviceInput:
 
 
 class TestAdoptDeviceInput:
-    def test_action_input_flag(self):
-        assert AdoptDeviceInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            AdoptDeviceInput()
-
     def test_valid_construction(self):
         m = AdoptDeviceInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -316,13 +245,6 @@ class TestAdoptDeviceInput:
 
 
 class TestUpgradeDeviceInput:
-    def test_action_input_flag(self):
-        assert UpgradeDeviceInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            UpgradeDeviceInput()
-
     def test_valid_construction(self):
         m = UpgradeDeviceInput(mac_address="AA:BB:CC:DD:EE:FF")
         assert m.mac_address == "AA:BB:CC:DD:EE:FF"
@@ -334,17 +256,6 @@ class TestUpgradeDeviceInput:
 
 
 class TestRenameDeviceInput:
-    def test_action_input_flag(self):
-        assert RenameDeviceInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            RenameDeviceInput(name="Office AP")
-
-    def test_required_name(self):
-        with pytest.raises(ValidationError):
-            RenameDeviceInput(mac_address="AA:BB:CC:DD:EE:FF")
-
     def test_valid_construction(self):
         m = RenameDeviceInput(mac_address="AA:BB:CC:DD:EE:FF", name="Office AP")
         assert m.name == "Office AP"
@@ -356,17 +267,6 @@ class TestRenameDeviceInput:
 
 
 class TestSetDeviceLedInput:
-    def test_action_input_flag(self):
-        assert SetDeviceLedInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            SetDeviceLedInput(led_state="on")
-
-    def test_required_led_state(self):
-        with pytest.raises(ValidationError):
-            SetDeviceLedInput(device_mac="AA:BB:CC:DD:EE:FF")
-
     def test_valid_states(self):
         for state in ("on", "off", "default"):
             m = SetDeviceLedInput(device_mac="AA:BB:CC:DD:EE:FF", led_state=state)
@@ -379,13 +279,6 @@ class TestSetDeviceLedInput:
 
 
 class TestForceProvisionDeviceInput:
-    def test_action_input_flag(self):
-        assert ForceProvisionDeviceInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            ForceProvisionDeviceInput()
-
     def test_valid_construction(self):
         m = ForceProvisionDeviceInput(device_mac="AA:BB:CC:DD:EE:FF")
         assert m.device_mac == "AA:BB:CC:DD:EE:FF"
@@ -397,17 +290,6 @@ class TestForceProvisionDeviceInput:
 
 
 class TestSetSwitchPortProfileInput:
-    def test_action_input_flag(self):
-        assert SetSwitchPortProfileInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            SetSwitchPortProfileInput(port_overrides=[{"port_idx": 1, "portconf_id": "abc"}])
-
-    def test_required_port_overrides(self):
-        with pytest.raises(ValidationError):
-            SetSwitchPortProfileInput(device_mac="AA:BB:CC:DD:EE:FF")
-
     def test_valid_construction(self):
         overrides = [{"port_idx": 1, "portconf_id": "profile-abc"}]
         m = SetSwitchPortProfileInput(device_mac="AA:BB:CC:DD:EE:FF", port_overrides=overrides)
@@ -421,24 +303,9 @@ class TestSetSwitchPortProfileInput:
 
 
 class TestSetOutletStateInput:
-    def test_action_input_flag(self):
-        assert SetOutletStateInput.__action_input__ is True
-
-    def test_required_mac(self):
-        with pytest.raises(ValidationError):
-            SetOutletStateInput(outlet_index=1, relay_state=True)
-
-    def test_required_outlet_index(self):
-        with pytest.raises(ValidationError):
-            SetOutletStateInput(mac_address="AA:BB:CC:DD:EE:FF", relay_state=True)
-
     def test_outlet_index_minimum(self):
         m = SetOutletStateInput(mac_address="AA:BB:CC:DD:EE:FF", outlet_index=1, relay_state=True)
         assert m.outlet_index == 1
-
-    def test_outlet_index_below_minimum(self):
-        with pytest.raises(ValidationError):
-            SetOutletStateInput(mac_address="AA:BB:CC:DD:EE:FF", outlet_index=0, relay_state=True)
 
     def test_cycle_enabled_default_none(self):
         m = SetOutletStateInput(mac_address="AA:BB:CC:DD:EE:FF", outlet_index=2, relay_state=False)
@@ -462,13 +329,6 @@ class TestSetOutletStateInput:
 
 
 class TestConfigurePortAggregationInput:
-    def test_action_input_flag(self):
-        assert ConfigurePortAggregationInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            ConfigurePortAggregationInput(port_overrides=[])
-
     def test_valid_construction(self):
         overrides = [{"port_idx": 1, "op_mode": "aggregate", "aggregate_members": [1, 2], "lag_idx": 1}]
         m = ConfigurePortAggregationInput(device_mac="AA:BB:CC:DD:EE:FF", port_overrides=overrides)
@@ -481,13 +341,6 @@ class TestConfigurePortAggregationInput:
 
 
 class TestConfigurePortMirrorInput:
-    def test_action_input_flag(self):
-        assert ConfigurePortMirrorInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            ConfigurePortMirrorInput(port_overrides=[])
-
     def test_valid_construction(self):
         overrides = [{"port_idx": 1, "op_mode": "mirror", "mirror_port_idx": "2"}]
         m = ConfigurePortMirrorInput(device_mac="AA:BB:CC:DD:EE:FF", port_overrides=overrides)
@@ -500,17 +353,6 @@ class TestConfigurePortMirrorInput:
 
 
 class TestSetJumboFramesInput:
-    def test_action_input_flag(self):
-        assert SetJumboFramesInput.__action_input__ is True
-
-    def test_required_device_mac(self):
-        with pytest.raises(ValidationError):
-            SetJumboFramesInput(enabled=True)
-
-    def test_required_enabled(self):
-        with pytest.raises(ValidationError):
-            SetJumboFramesInput(device_mac="AA:BB:CC:DD:EE:FF")
-
     def test_valid_enable(self):
         m = SetJumboFramesInput(device_mac="AA:BB:CC:DD:EE:FF", enabled=True)
         assert m.enabled is True
@@ -526,13 +368,6 @@ class TestSetJumboFramesInput:
 
 
 class TestSetSiteLedsInput:
-    def test_action_input_flag(self):
-        assert SetSiteLedsInput.__action_input__ is True
-
-    def test_required_enabled(self):
-        with pytest.raises(ValidationError):
-            SetSiteLedsInput()
-
     def test_valid_enable(self):
         m = SetSiteLedsInput(enabled=True)
         assert m.enabled is True
@@ -574,13 +409,6 @@ class TestCreateVoucherInput:
 
 
 class TestRevokeVoucherInput:
-    def test_action_input_flag(self):
-        assert RevokeVoucherInput.__action_input__ is True
-
-    def test_required_voucher_id(self):
-        with pytest.raises(ValidationError):
-            RevokeVoucherInput()
-
     def test_valid_construction(self):
         m = RevokeVoucherInput(voucher_id="voucher-uuid-123")
         assert m.voucher_id == "voucher-uuid-123"
@@ -592,32 +420,9 @@ class TestRevokeVoucherInput:
 
 
 class TestQosRuleSimpleInput:
-    def test_action_input_flag(self):
-        assert QosRuleSimpleInput.__action_input__ is True
-
-    def test_required_name(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(interface="wan", direction="upload", limit_kbps=1000)
-
-    def test_required_interface(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="Test", direction="upload", limit_kbps=1000)
-
-    def test_required_direction(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="Test", interface="wan", limit_kbps=1000)
-
-    def test_required_limit_kbps(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="Test", interface="wan", direction="upload")
-
     def test_limit_kbps_minimum(self):
         m = QosRuleSimpleInput(name="Test", interface="wan", direction="upload", limit_kbps=1)
         assert m.limit_kbps == 1
-
-    def test_limit_kbps_below_minimum(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="Test", interface="wan", direction="upload", limit_kbps=0)
 
     def test_enabled_default_true(self):
         m = QosRuleSimpleInput(name="Test", interface="wan", direction="download", limit_kbps=500)
@@ -628,14 +433,6 @@ class TestQosRuleSimpleInput:
         assert m.dscp_value == 0
         m2 = QosRuleSimpleInput(name="T", interface="lan", direction="upload", limit_kbps=100, dscp_value=63)
         assert m2.dscp_value == 63
-
-    def test_dscp_value_below_min(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="T", interface="lan", direction="upload", limit_kbps=100, dscp_value=-1)
-
-    def test_dscp_value_above_max(self):
-        with pytest.raises(ValidationError):
-            QosRuleSimpleInput(name="T", interface="lan", direction="upload", limit_kbps=100, dscp_value=64)
 
     def test_target_optional(self):
         m = QosRuleSimpleInput(name="Test", interface="wan", direction="upload", limit_kbps=1000)
@@ -674,25 +471,6 @@ class TestPortForwardCreateInput:
                 name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10", destination_ip=destination
             )
 
-    def test_action_input_flag(self):
-        assert PortForwardCreateInput.__action_input__ is True
-
-    def test_required_name(self):
-        with pytest.raises(ValidationError):
-            PortForwardCreateInput(dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10")
-
-    def test_required_dst_port(self):
-        with pytest.raises(ValidationError):
-            PortForwardCreateInput(name="Web", fwd_port="8080", fwd_ip="192.168.1.10")
-
-    def test_required_fwd_port(self):
-        with pytest.raises(ValidationError):
-            PortForwardCreateInput(name="Web", dst_port="80", fwd_ip="192.168.1.10")
-
-    def test_required_fwd_ip(self):
-        with pytest.raises(ValidationError):
-            PortForwardCreateInput(name="Web", dst_port="80", fwd_port="8080")
-
     def test_protocol_default(self):
         m = PortForwardCreateInput(name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10")
         assert m.protocol == "tcp_udp"
@@ -726,9 +504,6 @@ class TestPortForwardUpdateInput:
         m = PortForwardUpdateInput(destination_ip=None)
         assert "destination_ip" in m.model_fields_set
 
-    def test_action_input_flag(self):
-        assert PortForwardUpdateInput.__action_input__ is True
-
     def test_all_fields_optional(self):
         # Should succeed with no args — all fields optional
         m = PortForwardUpdateInput()
@@ -758,21 +533,6 @@ class TestPortForwardUpdateInput:
 
 
 class TestPortForwardSimpleInput:
-    def test_action_input_flag(self):
-        assert PortForwardSimpleInput.__action_input__ is True
-
-    def test_required_name(self):
-        with pytest.raises(ValidationError):
-            PortForwardSimpleInput(ext_port="8443", to_ip="192.168.1.10")
-
-    def test_required_ext_port(self):
-        with pytest.raises(ValidationError):
-            PortForwardSimpleInput(name="Home Web", to_ip="192.168.1.10")
-
-    def test_required_to_ip(self):
-        with pytest.raises(ValidationError):
-            PortForwardSimpleInput(name="Home Web", ext_port="8443")
-
     def test_int_port_optional(self):
         m = PortForwardSimpleInput(name="Home Web", ext_port="8443", to_ip="192.168.1.10")
         assert m.int_port is None
@@ -816,3 +576,94 @@ class TestPortForwardInputStrictness:
     def test_update_unknown_key_is_rejected(self):
         with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
             PortForwardUpdateInput(fwd="192.168.1.10")
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        BlockClientInput,
+        UnblockClientInput,
+        RenameClientInput,
+        ForceReconnectClientInput,
+        ForgetClientInput,
+        SetClientIpSettingsInput,
+        LocateDeviceInput,
+        RebootDeviceInput,
+        AdoptDeviceInput,
+        UpgradeDeviceInput,
+        RenameDeviceInput,
+        SetDeviceLedInput,
+        ForceProvisionDeviceInput,
+        SetSwitchPortProfileInput,
+        SetOutletStateInput,
+        ConfigurePortAggregationInput,
+        ConfigurePortMirrorInput,
+        SetJumboFramesInput,
+        SetSiteLedsInput,
+        RevokeVoucherInput,
+        QosRuleSimpleInput,
+        PortForwardCreateInput,
+        PortForwardUpdateInput,
+        PortForwardSimpleInput,
+    ],
+)
+def test_action_input_flag(model):
+    assert model.__action_input__ is True
+
+
+@pytest.mark.parametrize(
+    "model, fields",
+    [
+        (BlockClientInput, {}),
+        (UnblockClientInput, {}),
+        (RenameClientInput, {"name": "My Device"}),
+        (RenameClientInput, {"mac_address": "AA:BB:CC:DD:EE:FF"}),
+        (ForceReconnectClientInput, {}),
+        (ForgetClientInput, {}),
+        (SetClientIpSettingsInput, {}),
+        (LocateDeviceInput, {"enabled": True}),
+        (LocateDeviceInput, {"device_mac": "AA:BB:CC:DD:EE:FF"}),
+        (RebootDeviceInput, {}),
+        (AdoptDeviceInput, {}),
+        (UpgradeDeviceInput, {}),
+        (RenameDeviceInput, {"name": "Office AP"}),
+        (RenameDeviceInput, {"mac_address": "AA:BB:CC:DD:EE:FF"}),
+        (SetDeviceLedInput, {"led_state": "on"}),
+        (SetDeviceLedInput, {"device_mac": "AA:BB:CC:DD:EE:FF"}),
+        (ForceProvisionDeviceInput, {}),
+        (SetSwitchPortProfileInput, {"port_overrides": [{"port_idx": 1, "portconf_id": "abc"}]}),
+        (SetSwitchPortProfileInput, {"device_mac": "AA:BB:CC:DD:EE:FF"}),
+        (SetOutletStateInput, {"outlet_index": 1, "relay_state": True}),
+        (SetOutletStateInput, {"mac_address": "AA:BB:CC:DD:EE:FF", "relay_state": True}),
+        (SetOutletStateInput, {"mac_address": "AA:BB:CC:DD:EE:FF", "outlet_index": 0, "relay_state": True}),
+        (ConfigurePortAggregationInput, {"port_overrides": []}),
+        (ConfigurePortMirrorInput, {"port_overrides": []}),
+        (SetJumboFramesInput, {"enabled": True}),
+        (SetJumboFramesInput, {"device_mac": "AA:BB:CC:DD:EE:FF"}),
+        (SetSiteLedsInput, {}),
+        (RevokeVoucherInput, {}),
+        (QosRuleSimpleInput, {"interface": "wan", "direction": "upload", "limit_kbps": 1000}),
+        (QosRuleSimpleInput, {"name": "Test", "direction": "upload", "limit_kbps": 1000}),
+        (QosRuleSimpleInput, {"name": "Test", "interface": "wan", "limit_kbps": 1000}),
+        (QosRuleSimpleInput, {"name": "Test", "interface": "wan", "direction": "upload"}),
+        (QosRuleSimpleInput, {"name": "Test", "interface": "wan", "direction": "upload", "limit_kbps": 0}),
+        (
+            QosRuleSimpleInput,
+            {"name": "T", "interface": "lan", "direction": "upload", "limit_kbps": 100, "dscp_value": -1},
+        ),
+        (
+            QosRuleSimpleInput,
+            {"name": "T", "interface": "lan", "direction": "upload", "limit_kbps": 100, "dscp_value": 64},
+        ),
+        (PortForwardCreateInput, {"dst_port": "80", "fwd_port": "8080", "fwd_ip": "192.168.1.10"}),
+        (PortForwardCreateInput, {"name": "Web", "fwd_port": "8080", "fwd_ip": "192.168.1.10"}),
+        (PortForwardCreateInput, {"name": "Web", "dst_port": "80", "fwd_ip": "192.168.1.10"}),
+        (PortForwardCreateInput, {"name": "Web", "dst_port": "80", "fwd_port": "8080"}),
+        (PortForwardSimpleInput, {"ext_port": "8443", "to_ip": "192.168.1.10"}),
+        (PortForwardSimpleInput, {"name": "Home Web", "to_ip": "192.168.1.10"}),
+        (PortForwardSimpleInput, {"name": "Home Web", "ext_port": "8443"}),
+    ],
+)
+def test_invalid_action_input(model, fields):
+    with pytest.raises(ValidationError):
+        model(**fields)
