@@ -114,6 +114,7 @@ class TestInitialize:
             password="secret",
             api_key="test-api-key",
             verify_ssl=False,
+            max_retries=0,
         )
         mock_client.update.assert_awaited_once()
 

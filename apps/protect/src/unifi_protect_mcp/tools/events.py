@@ -5,7 +5,7 @@ events from the websocket buffer (in-memory), and managing event state.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
@@ -43,6 +43,15 @@ def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
         return dt
     except (ValueError, TypeError):
         return None
+
+
+def _default_window(start: Optional[datetime], end: Optional[datetime]) -> tuple[datetime, datetime]:
+    """Apply the documented range defaults: ``end`` is now, ``start`` 24 hours before ``end``.
+
+    The NVR rejects a ``limit`` above 100 unless both ends of the range are sent.
+    """
+    end = end or datetime.now(timezone.utc)
+    return start or end - timedelta(hours=24), end
 
 
 # ---------------------------------------------------------------------------
@@ -114,9 +123,10 @@ async def protect_list_events(
         "protect_list_events called (type=%s, camera=%s, limit=%s, compact=%s)", event_type, camera_id, limit, compact
     )
     try:
+        start_at, end_at = _default_window(_parse_datetime(start), _parse_datetime(end))
         raw_events = await event_manager.list_events(
-            start=_parse_datetime(start),
-            end=_parse_datetime(end),
+            start=start_at,
+            end=end_at,
             event_type=event_type,
             camera_id=camera_id,
             limit=limit,
@@ -273,9 +283,10 @@ async def protect_list_smart_detections(
         compact,
     )
     try:
+        start_at, end_at = _default_window(_parse_datetime(start), _parse_datetime(end))
         raw_detections = await event_manager.list_smart_detections(
-            start=_parse_datetime(start),
-            end=_parse_datetime(end),
+            start=start_at,
+            end=end_at,
             camera_id=camera_id,
             detection_type=detection_type,
             min_confidence=min_confidence,

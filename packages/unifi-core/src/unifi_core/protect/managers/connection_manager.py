@@ -56,6 +56,13 @@ BOOTSTRAP_REFRESH_SECONDS = 60.0
 RECONNECT_MIN_INTERVAL_SECONDS = 30.0
 RECONNECT_ATTEMPT_TIMEOUT_SECONDS = 30.0
 
+# uiprotect resends any request, whatever its method, on 408/429/5xx. The
+# Protect app answers 500 when its own 30 s timeout expires while the work it
+# started keeps running, so a resent DELETE or PATCH repeats that work, and a
+# resent login on 429 brings a lockout closer. A mutation's outcome is unknown
+# after such an answer; the caller decides whether to try again.
+SDK_MAX_RETRIES = 0
+
 # Auth-circuit cool-down, as in Network: a rejected or rate-limited login
 # blocks automatic reconnects for the base interval, doubling per consecutive
 # failure up to the cap, so repeated calls cannot lock the account out. The
@@ -287,6 +294,7 @@ class ProtectConnectionManager:
             password=self.password,
             api_key=self._api_key,
             verify_ssl=self.verify_ssl,
+            max_retries=SDK_MAX_RETRIES,
         )
         # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
         try:

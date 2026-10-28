@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -90,15 +91,14 @@ class TestProtectListEvents:
         assert "connection lost" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_invalid_datetime_passes_none(self, mock_event_manager):
+    async def test_invalid_datetime_falls_back_to_the_default_start(self, mock_event_manager):
         from unifi_protect_mcp.tools.events import protect_list_events
 
         mock_event_manager.list_events = AsyncMock(return_value=[])
         result = await protect_list_events(start="not-a-date")
         assert result["success"] is True
-        # Invalid date should be passed as None
         call_kwargs = mock_event_manager.list_events.call_args.kwargs
-        assert call_kwargs["start"] is None
+        assert call_kwargs["end"] - call_kwargs["start"] == timedelta(hours=24)
 
 
 # ---------------------------------------------------------------------------
@@ -436,3 +436,43 @@ class TestParseDatetime:
         from unifi_protect_mcp.tools.events import _parse_datetime
 
         assert _parse_datetime(value) is None
+
+
+# ---------------------------------------------------------------------------
+# Documented range defaults (issue #930)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "manager_method"),
+    [("protect_list_events", "list_events"), ("protect_list_smart_detections", "list_smart_detections")],
+)
+class TestDocumentedRangeDefaults:
+    async def _call(self, mock_event_manager, tool_name, manager_method, **kwargs):
+        from unifi_protect_mcp.tools import events
+
+        setattr(mock_event_manager, manager_method, AsyncMock(return_value=[]))
+        result = await getattr(events, tool_name)(**kwargs)
+        assert result["success"] is True
+        return getattr(mock_event_manager, manager_method).call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_omitted_range_is_the_last_24_hours(self, mock_event_manager, tool_name, manager_method):
+        before = datetime.now(timezone.utc)
+        sent = await self._call(mock_event_manager, tool_name, manager_method)
+        assert before <= sent["end"] <= datetime.now(timezone.utc)
+        assert sent["end"] - sent["start"] == timedelta(hours=24)
+
+    @pytest.mark.asyncio
+    async def test_start_without_end_ends_now(self, mock_event_manager, tool_name, manager_method):
+        before = datetime.now(timezone.utc)
+        sent = await self._call(mock_event_manager, tool_name, manager_method, start="2026-03-16T00:00:00Z", limit=500)
+        assert sent["start"] == datetime(2026, 3, 16, tzinfo=timezone.utc)
+        assert before <= sent["end"] <= datetime.now(timezone.utc)
+        assert sent["limit"] == 500
+
+    @pytest.mark.asyncio
+    async def test_end_without_start_starts_24_hours_earlier(self, mock_event_manager, tool_name, manager_method):
+        sent = await self._call(mock_event_manager, tool_name, manager_method, end="2026-03-17T00:00:00Z")
+        assert sent["start"] == datetime(2026, 3, 16, tzinfo=timezone.utc)
+        assert sent["end"] == datetime(2026, 3, 17, tzinfo=timezone.utc)
