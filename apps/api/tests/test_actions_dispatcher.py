@@ -625,7 +625,9 @@ async def test_read_only_mode_still_serves_reads(monkeypatch) -> None:
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=manager)
 
-    assert await _dispatch_read_only_entry(read, factory, confirm=False) is expected
+    result = await _dispatch_read_only_entry(read, factory, confirm=False)
+    assert result is expected
+    assert result == {"success": True, "data": []}
     manager.list_resources.assert_awaited_once_with()
 
 
@@ -651,7 +653,9 @@ async def test_read_only_mode_off_leaves_mutations_unchanged(monkeypatch, env) -
     assert preview.payload["requires_confirmation"] is True
     factory.get_domain_manager.assert_not_awaited()
 
-    assert await _dispatch_read_only_entry(mutation, factory, confirm=True) is expected
+    result = await _dispatch_read_only_entry(mutation, factory, confirm=True)
+    assert result is expected
+    assert result == {"success": True}
     manager.apply_action.assert_awaited_once_with()
 
 
