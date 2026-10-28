@@ -334,6 +334,61 @@ async def test_action_endpoint_redacts_sensitive_preview_fields(tmp_path, monkey
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("read_only_var", ["UNIFI_READ_ONLY", "UNIFI_ACCESS_READ_ONLY"])
+async def test_action_endpoint_read_only_mode_forbids_mutations_and_serves_reads(
+    tmp_path, monkeypatch, read_only_var
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    for var in ("UNIFI_READ_ONLY", "UNIFI_ACCESS_READ_ONLY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv(read_only_var, "true")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="access")
+
+    manager = MagicMock()
+    manager.list_doors = AsyncMock(return_value=[])
+    manager.apply_unlock_door = AsyncMock(return_value=True)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        read_response = await client.post(
+            "/v1/actions/access_list_doors",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+        assert read_response.status_code == 200
+        assert read_response.json()["success"] is True
+        manager.list_doors.assert_awaited_once_with()
+
+        factory.get_domain_manager.reset_mock()
+        mutation_statuses = []
+        for confirm in (False, True):
+            response = await client.post(
+                "/v1/actions/access_unlock_door",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "site": "default",
+                    "controller": cid,
+                    "args": {"door_id": "door-1", "duration": 2},
+                    "confirm": confirm,
+                },
+            )
+            mutation_statuses.append((response.status_code, response.json()["detail"]))
+
+    denial = "Update is disabled for door: the access server is in read-only mode, which no policy gate overrides."
+    assert mutation_statuses == [(403, denial), (403, denial)]
+    factory.get_domain_manager.assert_not_awaited()
+    manager.apply_unlock_door.assert_not_awaited()
+
+    async with app.state.sessionmaker() as session:
+        rows = (await session.execute(select(AuditLog))).scalars().all()
+    denied = [(row.outcome, row.error_kind) for row in rows if row.target == "access_unlock_door"]
+    assert denied == [("denied", "read_only_mode")] * 2
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_dispatches_and_audits(tmp_path, monkeypatch) -> None:
     """Happy path: known tool, valid controller, audit log entry written."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")

@@ -13,6 +13,7 @@ from unifi_api.services.actions import (
     DispatchEntry,
     DispatchEntryMissing,
     MutationPreview,
+    ReadOnlyModeDenied,
     build_dispatch_table,
     dispatch_action,
 )
@@ -550,6 +551,108 @@ async def test_confirmed_mutation_actions_reach_manager_unchanged(permission_act
 
     assert result is expected
     manager.apply_action.assert_awaited_once_with(**args)
+
+
+@pytest.fixture
+def _clear_read_only_env(monkeypatch):
+    for var in ("UNIFI_READ_ONLY", "UNIFI_ACCESS_READ_ONLY", "UNIFI_PROTECT_READ_ONLY"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def _read_only_test_entries() -> tuple[ToolEntry, ToolEntry]:
+    mutation = ToolEntry(
+        name="access_update_test_resource",
+        product="access",
+        category="test",
+        manager="test_manager",
+        method="apply_action",
+        permission_action="update",
+        read_only_hint=False,
+    )
+    read = ToolEntry(
+        name="access_list_test_resources",
+        product="access",
+        category="test",
+        manager="test_manager",
+        method="list_resources",
+        permission_action="read",
+        read_only_hint=True,
+    )
+    return mutation, read
+
+
+async def _dispatch_read_only_entry(entry: ToolEntry, factory: MagicMock, *, confirm: bool):
+    return await dispatch_action(
+        registry=ManifestRegistry({entry.name: entry}),
+        factory=factory,
+        session=MagicMock(),
+        tool_name=entry.name,
+        controller_id="cid",
+        controller_products=[entry.product],
+        site="default",
+        args={},
+        confirm=confirm,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("_clear_read_only_env")
+@pytest.mark.parametrize("read_only_var", ["UNIFI_READ_ONLY", "UNIFI_ACCESS_READ_ONLY"])
+@pytest.mark.parametrize("confirm", [False, True])
+async def test_read_only_mode_denies_mutation_preview_and_execution(monkeypatch, read_only_var, confirm) -> None:
+    monkeypatch.setenv(read_only_var, "true")
+    mutation, _ = _read_only_test_entries()
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock()
+
+    with pytest.raises(ReadOnlyModeDenied) as exc_info:
+        await _dispatch_read_only_entry(mutation, factory, confirm=confirm)
+
+    assert str(exc_info.value) == (
+        "Update is disabled for test: the access server is in read-only mode, which no policy gate overrides."
+    )
+    factory.get_domain_manager.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("_clear_read_only_env")
+async def test_read_only_mode_still_serves_reads(monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_READ_ONLY", "true")
+    _, read = _read_only_test_entries()
+    expected = {"success": True, "data": []}
+    manager = MagicMock()
+    manager.list_resources = AsyncMock(return_value=expected)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+
+    assert await _dispatch_read_only_entry(read, factory, confirm=False) is expected
+    manager.list_resources.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("_clear_read_only_env")
+@pytest.mark.parametrize(
+    "env",
+    [{}, {"UNIFI_READ_ONLY": "false"}, {"UNIFI_PROTECT_READ_ONLY": "true"}],
+    ids=["unset", "global-false", "other-product-on"],
+)
+async def test_read_only_mode_off_leaves_mutations_unchanged(monkeypatch, env) -> None:
+    for var, value in env.items():
+        monkeypatch.setenv(var, value)
+    mutation, _ = _read_only_test_entries()
+    expected = {"success": True}
+    manager = MagicMock()
+    manager.apply_action = AsyncMock(return_value=expected)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+
+    preview = await _dispatch_read_only_entry(mutation, factory, confirm=False)
+    assert isinstance(preview, MutationPreview)
+    assert preview.payload["requires_confirmation"] is True
+    factory.get_domain_manager.assert_not_awaited()
+
+    assert await _dispatch_read_only_entry(mutation, factory, confirm=True) is expected
+    manager.apply_action.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio

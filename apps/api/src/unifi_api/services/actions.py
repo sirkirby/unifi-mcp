@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from unifi_core.confirmation import create_preview, delete_preview, preview_response
+from unifi_core.policy import PolicyGateChecker, resolve_read_only
 from unifi_core.redaction import redaction_marker_paths
 
 from unifi_api.services.dispatch_overrides import (
@@ -37,6 +38,10 @@ class CapabilityMismatch(Exception):
 
 class DispatchEntryMissing(Exception):
     """Raised when a catalog entry has no callable Core manager binding."""
+
+
+class ReadOnlyModeDenied(Exception):
+    """Raised when read-only mode is on for the action's product and the action is a mutation."""
 
 
 @dataclass(frozen=True)
@@ -268,6 +273,12 @@ async def dispatch_action(
         )
 
     action_kind = _classify_action(entry)
+
+    # Read-only mode is resolved per product, exactly as the MCP server for that
+    # product resolves it, and refuses previews as well as confirmed calls.
+    if action_kind == "mutation" and resolve_read_only(entry.product):
+        message = PolicyGateChecker(entry.product).denial_message(entry.category, entry.permission_action)
+        raise ReadOnlyModeDenied(message)
 
     if dispatch_table is None:
         binding = DispatchEntry(entry.manager_attr, entry.manager_method)

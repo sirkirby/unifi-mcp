@@ -245,6 +245,17 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             )
             await session.commit()
             return {"success": False, "error": f"unknown tool: {tool_name}"}
+        except actions_svc.ReadOnlyModeDenied as e:
+            await write_audit(
+                session,
+                key_id_prefix=key_prefix,
+                controller=body.controller,
+                target=tool_name,
+                outcome="denied",
+                error_kind="read_only_mode",
+            )
+            await session.commit()
+            raise HTTPException(status_code=403, detail=str(e))
         except actions_svc.CapabilityMismatch:
             await write_audit(
                 session,

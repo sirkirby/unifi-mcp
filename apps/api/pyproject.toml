@@ -27,7 +27,7 @@ dependencies = [
     # Bounded incident evidence collection and its client view require Core 0.4.71.
     # Windowed stats and 10.x DPI/IPS (unifi_core.network.time_window) require Core 0.4.76.
     # Reporting IPS fallback failures instead of an empty threat log requires Core 0.4.77.
-    "unifi-core[network,protect,access]>=0.4.79,<0.5",
+    "unifi-core[network,protect,access]>=0.4.80,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.

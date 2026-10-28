@@ -8,7 +8,7 @@ dependencies = [
     # The settings-file startup report and setup mode require Shared 0.6.28.
     # The fail-closed import-time tool decorator requires Shared 0.6.34.
     # Keeping an unknown write outcome (mutation_applied: null) in structured responses requires Shared 0.6.35.
-    "unifi-mcp-shared>=0.6.35,<0.7",
+    "unifi-mcp-shared>=0.6.36,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
@@ -21,7 +21,7 @@ dependencies = [
     # False rather than raising, which requires Core 0.4.69.
     # Serving MCP before the controller connects (bounded, shared connection
     # attempt) requires Core 0.4.70.
-    "unifi-core[access]>=0.4.70,<0.5",
+    "unifi-core[access]>=0.4.80,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
