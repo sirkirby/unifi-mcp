@@ -730,8 +730,10 @@ class EventManager:
             return SourcePage(rows=[], cap=0)
         # uiprotect answers a start without types by walking the whole range,
         # 100 events per request, and only then applying the limit. The NVR
-        # itself honours start/end without types in one request.
-        use_raw_path = bool(camera_id) or bool(metadata_fields) or (start is not None and not event_type)
+        # itself honours start/end without types in one request, but rejects
+        # a start without an end once limit is above 100.
+        bounded = start is not None and end is not None
+        use_raw_path = bool(camera_id) or bool(metadata_fields) or (bounded and not event_type)
 
         if use_raw_path:
             params: dict[str, Any] = {

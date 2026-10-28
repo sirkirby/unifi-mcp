@@ -313,6 +313,19 @@ class TestEventManagerListEvents:
         assert "types" not in params
 
     @pytest.mark.asyncio
+    async def test_start_without_end_keeps_the_sdk(self):
+        # The NVR rejects a start without an end when limit is above 100.
+        cm = _make_connection_manager()
+        cm.client.api_request_list = AsyncMock(return_value=[])
+        mgr = EventManager(cm)
+        start = datetime(2026, 3, 15, tzinfo=timezone.utc)
+        await mgr.list_events(start=start, limit=150)
+        cm.client.api_request_list.assert_not_awaited()
+        call_kwargs = cm.client.get_events.call_args.kwargs
+        assert call_kwargs["start"] == start
+        assert "end" not in call_kwargs
+
+    @pytest.mark.asyncio
     async def test_typed_time_range_uses_the_sdk(self):
         cm = _make_connection_manager()
         mgr = EventManager(cm)
