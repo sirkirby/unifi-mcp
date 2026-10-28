@@ -283,7 +283,7 @@ async def test_sdk_events_page_never_proves_the_end() -> None:
     # uiprotect drops unknown, non-device and low-score events after the NVR
     # applied the limit, so a short SDK result says nothing about the NVR.
     manager, client = _protect_manager([])
-    page = await manager.list_events_page(start=START, end=START + timedelta(hours=1), limit=30)
+    page = await manager.list_events_page(start=START, end=START + timedelta(hours=1), event_type="motion", limit=30)
     client.get_events.assert_awaited_once()
     assert page.has_more is None and page.post_filtered
     source = normalize_protect_page(page, _context(page=page)).source

@@ -716,18 +716,22 @@ class EventManager:
     ) -> SourcePage:
         """Query events from the NVR via the REST API, with the facts evidence needs.
 
-        When camera_id or metadata_fields is set, bypasses uiprotect's
-        get_events() (which has no camera filter and drops several metadata
-        fields) and calls UniFi's events endpoint directly. Otherwise
-        delegates to the existing uiprotect path for full backwards
-        compatibility.
+        When camera_id or metadata_fields is set, or a range is given without
+        an event type, bypasses uiprotect's get_events() (which has no camera
+        filter, drops several metadata fields, and pages through every event
+        in a range sent without types) and calls UniFi's events endpoint
+        directly. Otherwise delegates to the existing uiprotect path for full
+        backwards compatibility.
         """
         # The controller requires limit=1..100 when no time range is supplied.
         # Zero requests no results and must not turn into an invalid or uncapped
         # remote query on either the SDK or raw metadata path.
         if limit == 0:
             return SourcePage(rows=[], cap=0)
-        use_raw_path = bool(camera_id) or bool(metadata_fields)
+        # uiprotect answers a start without types by walking the whole range,
+        # 100 events per request, and only then applying the limit. The NVR
+        # itself honours start/end without types in one request.
+        use_raw_path = bool(camera_id) or bool(metadata_fields) or (start is not None and not event_type)
 
         if use_raw_path:
             params: dict[str, Any] = {

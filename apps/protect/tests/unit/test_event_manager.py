@@ -295,15 +295,34 @@ class TestEventManagerListEvents:
         assert call_kwargs["limit"] == 10
 
     @pytest.mark.asyncio
-    async def test_list_with_time_range(self):
+    async def test_untyped_time_range_is_one_raw_request(self):
+        # uiprotect's get_events pages through the whole range when types is
+        # missing, so an untyped range must go to the events endpoint directly.
+        cm = _make_connection_manager()
+        cm.client.api_request_list = AsyncMock(return_value=[])
+        mgr = EventManager(cm)
+        start = datetime(2026, 3, 15, tzinfo=timezone.utc)
+        end = datetime(2026, 3, 16, tzinfo=timezone.utc)
+        await mgr.list_events(start=start, end=end, limit=150)
+        cm.client.get_events.assert_not_awaited()
+        cm.client.api_request_list.assert_awaited_once()
+        params = cm.client.api_request_list.call_args.kwargs["params"]
+        assert params["start"] == int(start.timestamp() * 1000)
+        assert params["end"] == int(end.timestamp() * 1000)
+        assert params["limit"] == 150
+        assert "types" not in params
+
+    @pytest.mark.asyncio
+    async def test_typed_time_range_uses_the_sdk(self):
         cm = _make_connection_manager()
         mgr = EventManager(cm)
         start = datetime(2026, 3, 15, tzinfo=timezone.utc)
         end = datetime(2026, 3, 16, tzinfo=timezone.utc)
-        await mgr.list_events(start=start, end=end)
+        await mgr.list_events(start=start, end=end, event_type="motion")
         call_kwargs = cm.client.get_events.call_args.kwargs
         assert call_kwargs["start"] == start
         assert call_kwargs["end"] == end
+        assert call_kwargs["types"] == [EventType.MOTION]
 
     @pytest.mark.asyncio
     async def test_empty_results(self):
