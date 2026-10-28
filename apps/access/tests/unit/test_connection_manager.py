@@ -847,6 +847,21 @@ class TestDeveloperRequest:
         with pytest.raises(UniFiConnectionError, match="Access API code CODE_NOT_FOUND"):
             await cm_api_only.developer_request("GET", "visitors/missing", operation="Get visitor")
 
+    @pytest.mark.asyncio
+    async def test_timeout_names_the_timeout(self, cm_api_only):
+        session = MagicMock()
+        session.request = MagicMock(side_effect=TimeoutError())
+        cm_api_only._api_session = session
+        cm_api_only._api_client = MagicMock()
+        cm_api_only._api_client_available = True
+
+        with pytest.raises(UniFiConnectionError) as excinfo:
+            await cm_api_only.developer_request("GET", "visitors/v1", operation="Get visitor")
+
+        assert str(excinfo.value) == (
+            "Get visitor failed: timed out after 10s GET https://192.0.2.1:12445/api/v1/developer/visitors/v1"
+        )
+
     def test_has_api_key_reports_configuration(self, cm_api_only, cm_proxy_only):
         assert cm_api_only.has_api_key is True
         assert cm_proxy_only.has_api_key is False

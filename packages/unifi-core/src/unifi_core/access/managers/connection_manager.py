@@ -56,6 +56,8 @@ logger = logging.getLogger(__name__)
 _RECONNECT_MIN_INTERVAL_SECONDS = 30.0
 _CONNECT_ATTEMPT_TIMEOUT_SECONDS = 15.0
 
+_DEVELOPER_REQUEST_TIMEOUT_SECONDS = 10.0
+
 # Auth-circuit cool-down: a rejected login blocks automatic reconnects for the
 # base interval, doubling per consecutive rejection up to the cap, then allows
 # one half-open attempt. Retrying a rejected login on every call is what locks
@@ -563,7 +565,7 @@ class AccessConnectionManager:
                 json=json,
                 params=params,
                 ssl=self._ssl_context,
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=_DEVELOPER_REQUEST_TIMEOUT_SECONDS),
             ) as resp:
                 try:
                     payload = await resp.json(content_type=None)
@@ -598,7 +600,12 @@ class AccessConnectionManager:
                 return payload["data"]
         except (UniFiAuthError, UniFiConnectionError):
             raise
-        except (TimeoutError, aiohttp.ClientError, OSError) as exc:
+        except TimeoutError as exc:
+            # A timeout carries no message, so name it or the error ends at the colon.
+            raise UniFiConnectionError(
+                f"{operation} failed: timed out after {_DEVELOPER_REQUEST_TIMEOUT_SECONDS:.0f}s {method} {url}"
+            ) from exc
+        except (aiohttp.ClientError, OSError) as exc:
             raise UniFiConnectionError(f"{operation} failed: {exc}") from exc
 
     # ------------------------------------------------------------------
