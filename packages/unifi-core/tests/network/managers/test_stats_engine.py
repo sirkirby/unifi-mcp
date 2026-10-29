@@ -28,6 +28,7 @@ def _points(start: int, count: int, step: int = 300_000, **values: Any) -> List[
 
 def _manager(responses: Dict[str, Any]) -> tuple[StatsManager, MagicMock]:
     """A manager whose controller answers by path prefix; an exception value is raised."""
+    responses = {"/self": [{"site_id": SITE}], **responses}
     connection = MagicMock()
     connection.site = "default"
     connection.get_cached.return_value = None
@@ -46,6 +47,10 @@ def _manager(responses: Dict[str, Any]) -> tuple[StatsManager, MagicMock]:
 
 def _paths(connection: MagicMock) -> List[str]:
     return [call[0][0].path for call in connection.request.call_args_list]
+
+
+def _series_paths(connection: MagicMock) -> List[str]:
+    return [path for path in _paths(connection) if path.startswith("/recent/series")]
 
 
 # --- pure helpers ---------------------------------------------------------------------
@@ -128,12 +133,20 @@ async def test_legacy_controller_without_the_endpoint_keeps_the_report() -> None
 
 
 @pytest.mark.asyncio
-async def test_failed_probe_is_not_cached_and_reads_the_report() -> None:
+async def test_failed_probe_with_an_empty_report_is_a_retryable_error_not_cached() -> None:
+    """The history may be in the new engine, so an empty legacy report proves nothing."""
     manager, connection = _manager({"/source": RequestError("timeout"), "/stat/report/": []})
 
-    assert await manager.get_network_stats(duration_hours=1) == []
-    connection._update_cache.assert_called_once()  # the empty report only, not the probe
-    assert connection._update_cache.call_args[0][0] != "stats_engine_source"
+    with pytest.raises(RequestError, match="Retry"):
+        await manager.get_network_stats(duration_hours=1)
+    connection._update_cache.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_probe_still_reads_a_populated_report() -> None:
+    manager, _ = _manager({"/source": RequestError("timeout"), "/stat/report/": [{"time": 1}]})
+
+    assert await manager.get_network_stats(duration_hours=1) == [{"time": 1}]
 
 
 @pytest.mark.asyncio
@@ -170,7 +183,7 @@ async def test_network_stats_read_wan_and_client_series() -> None:
         }
     ]
     assert not any(path.startswith("/stat/report") for path in _paths(connection))
-    assert all("period=HOUR" in path and f"end={END}" in path for path in _paths(connection)[1:])
+    assert all("period=HOUR" in path and f"end={END}" in path for path in _series_paths(connection))
 
 
 @pytest.mark.asyncio
@@ -179,7 +192,7 @@ async def test_site_series_on_a_multi_site_controller_keep_only_this_site() -> N
         {"siteId": SITE, "series": _points(END - HOUR, 1, rxBytes=10)},
         {"siteId": OTHER_SITE, "series": _points(END - HOUR, 1, rxBytes=1000)},
     ]
-    manager, _ = _manager({"/source": ["MODERN"], "/recent/series": series, "/self": [{"site_id": SITE}]})
+    manager, _ = _manager({"/source": ["MODERN"], "/recent/series": series})
     devices = AsyncMock(return_value=[{"mac": AP_MAC, "type": "uap"}])
 
     with patch("unifi_core.network.managers.stats_manager.DeviceManager") as device_manager:
@@ -212,7 +225,7 @@ async def test_ap_stats_filter_by_device_and_carry_band_counts() -> None:
     rows = await manager.get_device_stats(AP_MAC, duration_hours=1, granularity="5minutes", device_type="ap")
 
     assert rows == [{"time": END - HOUR, "ap": AP_MAC, "num_sta": 6, "satisfaction": 95, "na-num_sta": 4}]
-    (path,) = _paths(connection)[1:]
+    (path,) = _series_paths(connection)
     assert "schema=wirelessBySiteByDevice" in path and f"filter=deviceMac.eq('{AP_MAC}')" in path
     assert "nested(byRadioBand)" in path
 
@@ -231,7 +244,7 @@ async def test_gateway_stats_read_the_gateway_device_series() -> None:
         rows = await manager.get_gateway_stats(duration_hours=1, granularity="hourly")
 
     assert rows == [{"time": END - HOUR, "gw": GW_MAC, "wan-rx_bytes": 14, "wan-tx_bytes": 6, "cpu": 20}]
-    assert all(f"deviceMac.eq('{GW_MAC}')" in path for path in _paths(connection)[1:])
+    assert all(f"deviceMac.eq('{GW_MAC}')" in path for path in _series_paths(connection))
 
 
 @pytest.mark.asyncio
@@ -255,7 +268,7 @@ async def test_client_stats_read_the_client_series_from_the_network_side() -> No
     rows = await manager.get_client_stats(CLIENT_MAC.upper(), duration_hours=1)
 
     assert rows == [{"time": END - HOUR, "user": CLIENT_MAC, "tx_bytes": 200, "rx_bytes": 6, "bytes": 206}]
-    (path,) = _paths(connection)[1:]
+    (path,) = _series_paths(connection)
     assert "schema=activityBySiteByClient" in path and f"filter=clientId.eq('{CLIENT_MAC}')" in path
 
 
@@ -267,7 +280,7 @@ async def test_top_clients_sum_this_sites_client_series_over_the_window() -> Non
         {"siteId": SITE, "clientId": "aa:bb:cc:00:00:22", "series": _points(END - HOUR, 1, rxBytes=0, txBytes=0)},
         {"siteId": OTHER_SITE, "clientId": "aa:bb:cc:00:00:23", "series": _points(END - HOUR, 1, txBytes=9999)},
     ]
-    manager, connection = _manager({"/source": ["MODERN"], "/recent/series": series, "/self": [{"site_id": SITE}]})
+    manager, connection = _manager({"/source": ["MODERN"], "/recent/series": series})
 
     ranked = await manager.get_top_clients(duration_hours=1, sort_by="upload")
 
@@ -294,3 +307,59 @@ async def test_top_clients_series_refusal_keeps_the_role_message() -> None:
 
     with pytest.raises(RequestError, match="Full Admin"):
         await manager.get_top_clients(duration_hours=1)
+
+
+@pytest.mark.asyncio
+async def test_series_holding_only_another_sites_rows_are_empty_here() -> None:
+    series = [{"siteId": OTHER_SITE, "series": _points(END - HOUR, 1, rxBytes=1000)}]
+    manager, _ = _manager({"/source": ["MODERN"], "/recent/series": series})
+
+    assert await manager.get_network_stats(duration_hours=1) == []
+
+
+@pytest.mark.asyncio
+async def test_client_history_filtered_by_mac_keeps_only_this_sites_rows() -> None:
+    series = [
+        {"siteId": SITE, "clientId": CLIENT_MAC, "series": _points(END - HOUR, 1, rxBytes=10)},
+        {"siteId": OTHER_SITE, "clientId": CLIENT_MAC, "series": _points(END - HOUR, 1, rxBytes=1000)},
+    ]
+    manager, _ = _manager({"/source": ["MODERN"], "/recent/series": series})
+
+    rows = await manager.get_client_stats(CLIENT_MAC, duration_hours=1)
+
+    assert [row["tx_bytes"] for row in rows] == [10]
+
+
+@pytest.mark.asyncio
+async def test_windows_longer_than_a_month_are_refused_not_truncated() -> None:
+    manager, connection = _manager({"/source": ["MODERN"], "/recent/series": []})
+
+    with pytest.raises(ValueError, match="30 days"):
+        await manager.get_client_stats(CLIENT_MAC, start_ms=END - 31 * 24 * HOUR, end_ms=END)
+    with pytest.raises(ValueError, match="30 days"):
+        await manager.get_top_clients(start_ms=END - 90 * 24 * HOUR, end_ms=END)
+    assert _series_paths(connection) == []
+
+
+@pytest.mark.asyncio
+async def test_the_monthly_duration_fits_one_read() -> None:
+    manager, connection = _manager({"/source": ["MODERN"], "/recent/series": []})
+
+    assert await manager.get_network_stats(duration_hours=720, granularity="daily") == []
+    assert all("period=MONTH" in path for path in _series_paths(connection))
+
+
+@pytest.mark.asyncio
+async def test_top_clients_on_network_11_with_an_empty_window_do_not_use_lifetime_counters() -> None:
+    manager, connection = _manager({"/source": ["MODERN"], "/recent/series": []})
+
+    assert await manager.get_top_clients(duration_hours=1) == []
+    assert not any(path.startswith("/stat/sta") for path in _paths(connection))
+
+
+@pytest.mark.asyncio
+async def test_top_clients_for_a_duration_name_the_role_when_forbidden() -> None:
+    manager, _ = _manager({"/source": Forbidden("403"), "/stat/report/": []})
+
+    with pytest.raises(RequestError, match="Full Admin"):
+        await manager.get_top_clients(duration_hours=24)

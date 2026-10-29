@@ -90,6 +90,10 @@ _STATS_FORBIDDEN = (
     "This controller keeps statistics in the Network 11 statistics engine, and the account lacks "
     "permission for /v2/api/stats (HTTP 403). Use a Network account with the Full Admin role."
 )
+_STATS_SOURCE_UNKNOWN = (
+    "The legacy statistics report returned nothing, and the check for the Network 11 statistics "
+    "engine failed, so the history may be there instead. Retry the call."
+)
 _STATS_SOURCE_FORBIDDEN = "FORBIDDEN"
 _STATS_SOURCE_LEGACY = "LEGACY"
 
@@ -99,6 +103,13 @@ class StatsPermissionError(RequestError):
 
     def __init__(self) -> None:
         super().__init__(_STATS_FORBIDDEN)
+
+
+class StatsWindowError(ValueError):
+    """The window is longer than the Network 11 statistics engine answers in one read."""
+
+    def __init__(self) -> None:
+        super().__init__("Network 11 statistics cover at most 30 days per call. Split the window into 30-day ranges.")
 
 
 # Report retention on current controllers: 5-minute rows for ~12-24h, hourly
@@ -274,11 +285,13 @@ class StatsManager:
         return source
 
     async def _legacy_report(self, api_request: ApiRequest, source: Optional[str]) -> List[Dict[str, Any]]:
-        """Read a legacy report. Empty because the account cannot read the new engine is an error."""
+        """Read a legacy report. Empty is an error when the new engine may hold the data instead."""
         response = await self._connection.request(api_request)
         rows = response if isinstance(response, list) else []
         if not rows and source == _STATS_SOURCE_FORBIDDEN:
             raise StatsPermissionError()
+        if not rows and source is None:
+            raise RequestError(_STATS_SOURCE_UNKNOWN)
         return rows
 
     async def _series(
@@ -295,6 +308,26 @@ class StatsManager:
     ) -> Dict[int, Dict[str, Any]]:
         """Read one schema's series for this site and fold it into report rows."""
         projection = f"values({','.join(fields)})" + (f",nested({nested[0]})" if nested else "")
+        rows = await self._series_site_rows(
+            schema, start_ms, end_ms, device_mac=device_mac, client_mac=client_mac, projection=projection
+        )
+        return stats_series.legacy_rows(
+            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested
+        )
+
+    async def _series_site_rows(
+        self,
+        schema: str,
+        start_ms: int,
+        end_ms: int,
+        *,
+        device_mac: Optional[str] = None,
+        client_mac: Optional[str] = None,
+        projection: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """This site's series rows for the window. The series are controller-wide, even when filtered."""
+        if not stats_series.window_fits(start_ms, end_ms):
+            raise StatsWindowError()
         path = stats_series.series_path(
             schema,
             stats_series.period_for_window(start_ms, end_ms),
@@ -303,21 +336,14 @@ class StatsManager:
             client_mac=client_mac,
             projection=projection,
         )
-        rows = await self._series_site_rows(path, filtered=bool(device_mac or client_mac))
-        return stats_series.legacy_rows(
-            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested
-        )
-
-    async def _series_site_rows(self, path: str, *, filtered: bool) -> List[Dict[str, Any]]:
-        """Read a series and keep this site's rows. A device or client filter already selects one site."""
         try:
             response = await self._connection.request(stats_series.StatsApiRequest(method="get", path=path))
         except Forbidden:
             raise StatsPermissionError() from None
         rows = stats_series.series_rows(response)
-        if not filtered and len(stats_series.site_ids(rows)) > 1:
-            rows = stats_series.series_rows(rows, site_id=await self._series_site_id())
-        return rows
+        if not rows:
+            return []
+        return stats_series.series_rows(rows, site_id=await self._series_site_id())
 
     async def _series_site_id(self) -> str:
         """The statistics engine's UUID for this site, which the site's ``self`` record carries."""
@@ -661,7 +687,7 @@ class StatsManager:
                     per_client = await self._top_clients_from_series(granularity, start_time, end_time)
                 else:
                     per_client = await self._top_clients_from_report(granularity, start_time, end_time)
-            except StatsPermissionError:
+            except (StatsPermissionError, StatsWindowError):
                 raise
             except Exception as e:
                 logger.error("Top clients report read failed: %s", type(e).__name__)
@@ -670,9 +696,10 @@ class StatsManager:
                 self._connection._update_cache(cache_key, per_client, timeout=120)
 
         if not per_client:
-            if explicit_window:
-                if source == _STATS_SOURCE_FORBIDDEN:
-                    raise StatsPermissionError()
+            if source == _STATS_SOURCE_FORBIDDEN:
+                raise StatsPermissionError()
+            # Lifetime counters stand in only where no windowed history exists.
+            if explicit_window or source == stats_series.STATS_SOURCE_MODERN:
                 return []
             try:
                 per_client = await self._top_clients_from_live_counters()
@@ -685,14 +712,11 @@ class StatsManager:
 
     async def _top_clients_from_series(self, granularity: str, start_time: int, end_time: int) -> List[Dict[str, Any]]:
         """Sum each client's activity series over a window, counted from the client's side."""
-        path = stats_series.series_path(
-            "activityBySiteByClient",
-            stats_series.period_for_window(start_time, end_time),
-            end_time,
-            projection="values(rxBytes,txBytes)",
+        rows = await self._series_site_rows(
+            "activityBySiteByClient", start_time, end_time, projection="values(rxBytes,txBytes)"
         )
         per_client = []
-        for row in await self._series_site_rows(path, filtered=False):
+        for row in rows:
             mac = normalize_mac(row["clientId"]) if isinstance(row.get("clientId"), str) else None
             if not mac:
                 continue

@@ -14,8 +14,11 @@ requested granularity bucket, with ``time`` in epoch milliseconds.
 
 The window is requested as a ``period`` ending at ``end`` rather than
 ``start``/``end``, because Network 11 releases before 11.0.89 ignore
-``start``. The period fixes the bucket size: HOUR and DAY return 5-minute
-points, WEEK hourly points and MONTH 8-hour points. Points outside the
+``start``. The longest period is 30 days; further back the engine keeps
+calendar-month buckets that a request must align to in the controller's
+time zone, so a longer window is refused rather than paged. The period
+fixes the bucket size: HOUR and DAY return 5-minute points, WEEK hourly
+points and MONTH 8-hour points. Points outside the
 window are dropped, and a granularity finer than the period's buckets
 yields the period's buckets.
 """
@@ -58,6 +61,11 @@ def period_for_window(start_ms: int, end_ms: int) -> str:
     return _PERIODS[-1][0]
 
 
+def window_fits(start_ms: int, end_ms: int) -> bool:
+    """Whether one series request covers the window: the longest period is 30 days."""
+    return end_ms - start_ms <= _PERIODS[-1][1]
+
+
 def series_path(
     schema: str,
     period: str,
@@ -84,10 +92,6 @@ def series_rows(response: Any, *, site_id: Optional[str] = None) -> List[Dict[st
     if site_id is not None:
         rows = [row for row in rows if row.get("siteId") == site_id]
     return rows
-
-
-def site_ids(rows: Iterable[Mapping[str, Any]]) -> set[str]:
-    return {row["siteId"] for row in rows if isinstance(row.get("siteId"), str)}
 
 
 def _reducer(field: str) -> Callable[[List[float]], float]:
