@@ -33,7 +33,7 @@ def _manager(responses: Dict[str, Any]) -> tuple[StatsManager, MagicMock]:
     connection.site = "default"
     connection.get_cached.return_value = None
 
-    async def request(api_request, return_raw=False):
+    async def request(api_request):
         for prefix, answer in responses.items():
             if api_request.path.startswith(prefix):
                 if isinstance(answer, BaseException):

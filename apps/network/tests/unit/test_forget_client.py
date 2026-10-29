@@ -47,7 +47,7 @@ class TestForgetClient:
         state = {"known": before, "forgotten": False}
         record = {"_id": "u1", "mac": "aa:bb:cc:dd:ee:ff"}
 
-        async def request(api_request, return_raw=False):
+        async def request(api_request):
             if api_request.path.startswith("/stat/user/"):
                 if not stat_user_served:
                     raise ResponseError("Call https://h/proxy/network/api/s/default/stat/user/x received 404 Not Found")

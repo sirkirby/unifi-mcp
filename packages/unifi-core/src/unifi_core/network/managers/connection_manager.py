@@ -1396,13 +1396,13 @@ class ConnectionManager:
         """A controller's negative answer is routine on a read, worth a warning on a write."""
         return logging.INFO if api_request.method.lower() == "get" else logging.WARNING
 
-    async def request(self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False) -> Any:
+    async def request(self, api_request: ApiRequest | ApiRequestV2) -> Any:
         """Request controller data, keeping settings failures safe for every caller."""
         # Every Network manager reaches the controller through here, so this is
         # the one place a re-targeting path can be refused for all of them.
         check_request_path(api_request.path)
         try:
-            return await self._request_with_reauthentication(api_request, return_raw=return_raw)
+            return await self._request_with_reauthentication(api_request)
         except Exception as error:
             if isinstance(error, SettingsControllerRejection):
                 raise
@@ -1413,10 +1413,8 @@ class ConnectionManager:
                 raise RequestError(f"Controller settings request failed ({type(error).__name__}).") from None
             raise
 
-    async def _request_with_reauthentication(
-        self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False
-    ) -> Any:
-        """Make a request to the controller API, handling raw responses."""
+    async def _request_with_reauthentication(self, api_request: ApiRequest | ApiRequestV2) -> Any:
+        """Make a request to the controller API, re-authenticating once on LoginRequired."""
         if not await self.ensure_connected() or not self.controller:
             raise self._not_connected_error()
         # A bounded read charges (or refuses) each attempt before it is sent.
@@ -1436,7 +1434,7 @@ class ConnectionManager:
                 original_controller.connectivity.is_unifi_os = self._unifi_os_override
 
         auth_generation = self._auth_generation
-        request_method = self.controller.connectivity._request if return_raw else self.controller.request
+        request_method = self.controller.request
         safe_rejection: SettingsControllerRejection | None = None
 
         try:
@@ -1460,7 +1458,7 @@ class ConnectionManager:
                     )
             except Exception:
                 pass
-            return response if return_raw else response.get("data")
+            return response.get("data")
 
         except LoginRequired as e:
             # Bound and scrubbed even though this branch does not re-raise it:
@@ -1474,7 +1472,7 @@ class ConnectionManager:
                 if not self.controller:
                     raise ConnectionError("Re-authentication failed, controller not available.")
                 logger.info("Re-authentication successful, retrying original request...")
-                request_method = self.controller.connectivity._request if return_raw else self.controller.request
+                request_method = self.controller.request
                 charge_request()
                 try:
                     start_ts = _time.perf_counter()
@@ -1496,7 +1494,7 @@ class ConnectionManager:
                             )
                     except Exception:
                         pass
-                    return retry_response if return_raw else retry_response.get("data")
+                    return retry_response.get("data")
                 except Exception as retry_e:
                     retry_code = controller_error_code(retry_e)
                     self._scrub_error(retry_e, api_request)
