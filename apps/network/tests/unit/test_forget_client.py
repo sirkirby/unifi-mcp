@@ -7,6 +7,8 @@ from aiounifi.errors import AiounifiException, ResponseError
 
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 
+_UNSET = object()
+
 
 class TestForgetClient:
     """Tests for ClientManager.forget_client."""
@@ -38,9 +40,11 @@ class TestForgetClient:
         return ClientManager(mock_connection)
 
     @staticmethod
-    def _controller(mock_connection, *, before=True, after=False, stat_user_served=True, forget_error=None):
+    def _controller(
+        mock_connection, *, before=True, after=False, stat_user_served=True, forget_error=None, user_table=_UNSET
+    ):
         """Answer the per-MAC lookup with the record before and after the forget command."""
-        state = {"known": before}
+        state = {"known": before, "forgotten": False}
         record = {"_id": "u1", "mac": "aa:bb:cc:dd:ee:ff"}
 
         async def request(api_request, return_raw=False):
@@ -51,11 +55,14 @@ class TestForgetClient:
                     return [record]
                 raise AiounifiException({"meta": {"rc": "error", "msg": "api.err.UnknownUser"}, "data": []})
             if api_request.path == "/rest/user":
+                if user_table is not _UNSET and state["forgotten"]:
+                    return user_table
                 return [record] if state["known"] else []
             if api_request.path == "/cmd/stamgr":
                 if forget_error:
                     raise forget_error
                 state["known"] = after
+                state["forgotten"] = True
                 return [record] if not after else []
             raise AssertionError(f"unexpected request {api_request.path}")
 
@@ -112,4 +119,31 @@ class TestForgetClient:
         self._controller(mock_connection, forget_error=Exception("API error"))
 
         with pytest.raises(Exception, match="API error"):
+            await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "user_table",
+        [None, {"data": []}, ["not-a-record"]],
+        ids=["empty-body", "mapping", "non-record-rows"],
+    )
+    async def test_an_unreadable_user_table_never_confirms_the_forget(
+        self, client_manager, mock_connection, user_table
+    ):
+        """A no-op forget must not read as confirmed because the readback could not be parsed."""
+        self._controller(mock_connection, stat_user_served=False, after=True, user_table=user_table)
+
+        with pytest.raises(UniFiOperationError, match="could not be determined"):
+            await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
+
+    @pytest.mark.asyncio
+    async def test_a_capped_user_table_without_the_client_never_confirms_the_forget(
+        self, client_manager, mock_connection
+    ):
+        from unifi_core.network.managers.client_manager import REST_USER_ROW_CAP
+
+        others = [{"mac": f"02:00:00:{i >> 8 & 255:02x}:{i & 255:02x}:00"} for i in range(REST_USER_ROW_CAP)]
+        self._controller(mock_connection, stat_user_served=False, after=True, user_table=others)
+
+        with pytest.raises(UniFiOperationError, match="row cap"):
             await client_manager.forget_client("AA:BB:CC:DD:EE:FF")

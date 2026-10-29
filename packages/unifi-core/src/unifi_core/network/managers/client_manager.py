@@ -450,7 +450,20 @@ class ClientManager:
                 raise
         # The controller does not serve /stat/user: read the user table itself, uncached.
         users = await self._connection.request(ApiRequest(method="get", path="/rest/user"))
-        return any(isinstance(user, dict) and mac_equal(user.get("mac"), path_mac) for user in users or [])
+        if not isinstance(users, list) or not all(isinstance(user, dict) for user in users):
+            raise UniFiOperationError(
+                f"/rest/user reply had unexpected shape {type(users).__name__}; "
+                "whether the client is known could not be determined"
+            )
+        if any(mac_equal(user.get("mac"), path_mac) for user in users):
+            return True
+        if len(users) >= REST_USER_ROW_CAP:
+            # A full window can leave the record out although the controller keeps it.
+            raise UniFiOperationError(
+                f"/rest/user returned its {REST_USER_ROW_CAP}-row cap without this client; "
+                "whether the client is known could not be determined"
+            )
+        return False
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
