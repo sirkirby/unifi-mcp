@@ -103,7 +103,7 @@ async def test_top_clients_cache_holds_full_ranking_for_other_sorts_and_limits()
     first = await manager.get_top_clients(start_ms=1_000, end_ms=2_000, limit=1, sort_by="upload")
     second = await manager.get_top_clients(start_ms=1_000, end_ms=2_000, limit=2, sort_by="download")
 
-    assert connection.request.await_count == 1
+    assert len([c for c in connection.request.call_args_list if c[0][0].path.startswith("/stat/")]) == 1
     assert [r["mac"] for r in first] == ["aa:bb:cc:00:00:01"]
     assert [r["mac"] for r in second] == ["aa:bb:cc:00:00:02", "aa:bb:cc:00:00:01"]
 
@@ -246,9 +246,8 @@ async def test_client_stats_end_only_cache_key_includes_duration() -> None:
     await manager.get_client_stats("aa:bb:cc:00:00:01", duration_hours=168, end_ms=NOW)
     await manager.get_client_stats("aa:bb:cc:00:00:01", duration_hours=1, end_ms=NOW)
 
-    assert connection.request.await_count == 2
-    starts = [call[0][0].data["start"] for call in connection.request.call_args_list]
-    assert starts == [NOW - HOUR, NOW - 168 * HOUR]
+    reports = [call[0][0] for call in connection.request.call_args_list if call[0][0].path.startswith("/stat/")]
+    assert [request.data["start"] for request in reports] == [NOW - HOUR, NOW - 168 * HOUR]
 
 
 # --- v2 DPI ---------------------------------------------------------------------------

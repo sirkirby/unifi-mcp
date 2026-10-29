@@ -38,7 +38,7 @@ async def test_top_clients_distinct_explicit_windows_do_not_share_cache() -> Non
     second = await manager.get_top_clients(start_ms=SECOND[0], end_ms=SECOND[1], granularity="5minutes")
     again = await manager.get_top_clients(start_ms=FIRST[0], end_ms=FIRST[1], granularity="5minutes")
 
-    assert connection.request.await_count == 2
+    assert len([c for c in connection.request.call_args_list if c[0][0].path.startswith("/stat/")]) == 2
     assert (first[0]["start"], first[0]["end"]) == FIRST
     assert (second[0]["start"], second[0]["end"]) == SECOND
     assert (again[0]["start"], again[0]["end"]) == FIRST

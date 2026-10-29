@@ -255,9 +255,9 @@ async def get_device_stats(
         "Rank clients by traffic inside a time window — the first call when working an upload or "
         "egress spike ('who sent data between 02:00 and 05:00?'). Sums the controller's per-client "
         "report over the window; upload_bytes is what each client sent, download_bytes what it "
-        "received. Use sort_by='upload' for exfiltration questions. Covers clients the controller "
-        "meters individually (wireless on current gateways); wired clients, cluster nodes included, "
-        "are absent. Entries with source='live_counters' are a fallback for controllers without the "
+        "received. Use sort_by='upload' for exfiltration questions. Network 11 covers every client; "
+        "older controllers cover only clients they meter individually (wireless on current "
+        "gateways), so wired clients, cluster nodes included, are absent there. Entries with source='live_counters' are a fallback for controllers without the "
         "report and are cumulative since association, not scoped to the window."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
