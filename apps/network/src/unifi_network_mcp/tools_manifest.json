@@ -6575,7 +6575,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects.",
+      "description": "Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects. Only known clients (with a user-table record) can be forgotten; a client that appears only in historical statistics returns an error and nothing is removed.",
       "name": "unifi_forget_client",
       "permission_action": "update",
       "permission_category": "clients",

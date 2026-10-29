@@ -473,7 +473,7 @@ async def force_reconnect_client(
 
 @server.tool(
     name="unifi_forget_client",
-    description="Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects.",
+    description="Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects. Only known clients (with a user-table record) can be forgotten; a client that appears only in historical statistics returns an error and nothing is removed.",
     permission_category="clients",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),

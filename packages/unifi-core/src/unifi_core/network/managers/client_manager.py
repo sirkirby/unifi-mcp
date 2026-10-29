@@ -398,13 +398,29 @@ class ClientManager:
             raise
 
     async def forget_client(self, client_mac: str) -> bool:
-        """Forget/remove a client from the controller's known client history.
+        """Forget a known client: delete its user-table record.
 
-        Idempotent: forgetting an unknown MAC returns success (the controller
-        also accepts unknown MACs without erroring), preserving the
-        delete-style semantics from spec §6.3.
+        The controller answers ``forget-sta`` with ``rc: ok`` whether or not
+        it removed anything, and a client that appears only in historical
+        statistics has no user-table record to remove. So the record is
+        looked up per MAC before and after the command, and success means it
+        existed and is gone.
+
+        Raises:
+            UniFiNotFoundError: The controller has no known-client record for
+                the MAC, so nothing was sent.
+            UniFiOperationError: The controller still lists the client after
+                accepting the command.
         """
         client_mac = normalize_mac(client_mac) or client_mac
+        path_mac = canonical_mac(client_mac)
+        if path_mac is None or not await self._is_known_client(path_mac):
+            raise UniFiNotFoundError(
+                "client",
+                client_mac,
+                f"client '{client_mac}' has no known-client record, so there is nothing to forget. "
+                "A client that appears only in historical statistics cannot be removed through this API.",
+            )
         try:
             api_request = ApiRequest(
                 method="post",
@@ -414,10 +430,27 @@ class ClientManager:
             await self._connection.request(api_request)
             logger.info("Forget command sent for client [redacted]")
             self._connection._invalidate_cache(f"{CACHE_PREFIX_CLIENTS}")
-            return True
         except Exception as e:
             logger.error("Error forgetting client [redacted]: %s", type(e).__name__)
             raise
+        if await self._is_known_client(path_mac):
+            raise UniFiOperationError(
+                f"the controller accepted the forget command but still lists client '{client_mac}'"
+            )
+        return True
+
+    async def _is_known_client(self, path_mac: str) -> bool:
+        """Whether the controller has a user-table record for the MAC, read per MAC."""
+        try:
+            return await self._get_user_by_mac(path_mac) is not None
+        except Exception as e:
+            if controller_error_code(e) == UNKNOWN_USER_CODE:
+                return False
+            if response_status(e) != 404:
+                raise
+        # The controller does not serve /stat/user: read the user table itself, uncached.
+        users = await self._connection.request(ApiRequest(method="get", path="/rest/user"))
+        return any(isinstance(user, dict) and mac_equal(user.get("mac"), path_mac) for user in users or [])
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
