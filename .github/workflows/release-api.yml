@@ -232,8 +232,16 @@ jobs:
           else
             PRERELEASE_FLAG=""
           fi
+          # Without a start tag GitHub compares against the newest release of
+          # any package in the monorepo, not the previous API release.
+          PREVIOUS_TAG=$(git tag -l 'api/v*' --sort=-v:refname | grep -vxF "${REF_NAME}" | head -1)
+          NOTES_START=()
+          if [ -n "${PREVIOUS_TAG}" ]; then
+            NOTES_START=(--notes-start-tag "${PREVIOUS_TAG}")
+          fi
           gh release create "${REF_NAME}" \
             --generate-notes \
+            "${NOTES_START[@]}" \
             --title "unifi-api-server ${REF_NAME}" \
             ${PRERELEASE_FLAG} \
             dist/*.whl
