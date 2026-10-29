@@ -1123,6 +1123,28 @@ def _translate_recent_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dic
     return (), out
 
 
+def _translate_event_window(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Parse ``start``/``end`` and apply the documented defaults, as the MCP tools do.
+
+    ``end`` defaults to now and ``start`` to 24 hours before ``end``; a naive
+    timestamp is read as UTC. The NVR rejects a ``limit`` above 100 unless
+    both ends of the range are sent.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    def utc(value: Any) -> Any:
+        parsed = _parse_iso_datetime(value)
+        if parsed is not None and parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    out = dict(args)
+    end = utc(out.get("end")) or datetime.now(timezone.utc)
+    out["end"] = end
+    out["start"] = utc(out.get("start")) or end - timedelta(hours=24)
+    return (), out
+
+
 def _translate_create_client_group(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     return (), {
         "group_data": {
@@ -1847,6 +1869,27 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "protect_alarm_delete_rule": _spec(_translate_alarm_delete, "rule_id"),
     "protect_get_snapshot": _spec(_translate_snapshot, "camera_id", "width", "height"),
     "protect_recent_events": _spec(_translate_recent_events, "event_type", "camera_id", "min_confidence", "limit"),
+    "protect_list_events": _spec(
+        _translate_event_window,
+        "start",
+        "end",
+        "event_type",
+        "camera_id",
+        "limit",
+        "compact",
+        "metadata_fields",
+    ),
+    "protect_list_smart_detections": _spec(
+        _translate_event_window,
+        "start",
+        "end",
+        "camera_id",
+        "detection_type",
+        "min_confidence",
+        "limit",
+        "compact",
+        "metadata_fields",
+    ),
     # Network identifier aliases.
     "unifi_adopt_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
     "unifi_reboot_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
