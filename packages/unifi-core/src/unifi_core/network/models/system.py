@@ -531,7 +531,7 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         num_guest=_get(raw, "num_guest"),
         num_iot=_get(raw, "num_iot"),
         # The controller's rx_bytes-r/tx_bytes-r are rates; they never stand in
-        # for the cumulative counters, which are often absent here (#948).
+        # for the cumulative counters, which are often absent here.
         rx_bytes=_get(raw, "rx_bytes"),
         tx_bytes=_get(raw, "tx_bytes"),
         rx_bytes_per_sec=_get(raw, "rx_bytes-r"),
