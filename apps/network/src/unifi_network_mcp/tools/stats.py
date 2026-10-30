@@ -478,7 +478,7 @@ async def get_speedtest_results(
 )
 async def get_site_dpi_traffic(
     group_by: Annotated[
-        str,
+        Literal["by_app", "by_cat"],
         Field(description="Group results: 'by_app' (default) for per-application or 'by_cat' for per-category"),
     ] = "by_app",
     duration: Annotated[
@@ -527,7 +527,7 @@ async def get_site_dpi_traffic(
 async def get_client_dpi_traffic(
     mac_address: Annotated[str, Field(description="Client MAC address")],
     group_by: Annotated[
-        str,
+        Literal["by_app", "by_cat"],
         Field(description="Group results: 'by_app' (default) for per-application or 'by_cat' for per-category"),
     ] = "by_app",
     duration: Annotated[

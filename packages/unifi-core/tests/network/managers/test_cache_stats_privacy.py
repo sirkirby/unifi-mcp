@@ -49,8 +49,10 @@ async def test_client_device_failure_translation_is_safe(method: str, caplog: py
     connection.ensure_connected = AsyncMock(return_value=True)
     connection.request = AsyncMock(side_effect=RuntimeError(f"{MAC} {CANARY}"))
     manager = SwitchManager(connection) if method == "_get_device_stat" else StatsManager(connection, MagicMock())
+    # Site DPI takes no MAC; its first parameter is the grouping, which is validated.
+    args = () if method == "get_site_dpi_traffic" else (MAC,)
     with caplog.at_level(logging.DEBUG), pytest.raises(RequestError) as caught:
-        await getattr(manager, method)(MAC)
+        await getattr(manager, method)(*args)
     # DPI tries the v2 aggregate before the legacy endpoint, so it may await twice;
     # what matters here is that no attempt leaks the MAC or controller text.
     connection.request.assert_awaited()

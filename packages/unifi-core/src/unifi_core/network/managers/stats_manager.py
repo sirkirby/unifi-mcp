@@ -222,6 +222,24 @@ def _v2_traffic_payload(response: Any) -> Dict[str, Any]:
     return response if isinstance(response, dict) else {}
 
 
+DPI_GROUPINGS = ("by_app", "by_cat")
+
+
+class StatsGroupingError(RequestError):
+    """A DPI grouping the controller does not have."""
+
+    def __init__(self) -> None:
+        # The value is not echoed: callers pass it positionally, where an
+        # identifier can land by mistake.
+        super().__init__(f"Invalid group_by: must be one of {', '.join(DPI_GROUPINGS)}.")
+
+
+def _check_dpi_grouping(by: str) -> None:
+    """Refuse an unknown grouping instead of returning per-app rows under its name (#947)."""
+    if by not in DPI_GROUPINGS:
+        raise StatsGroupingError()
+
+
 def _group_dpi_usage(entries: List[Dict[str, Any]], by: str) -> List[Dict[str, Any]]:
     """Normalise v2 usage rows and optionally fold them into categories, largest first."""
     if by == "by_cat":
@@ -1007,6 +1025,7 @@ class StatsManager:
         Args:
             by: Grouping type, e.g. 'by_app' or 'by_cat'.
         """
+        _check_dpi_grouping(by)
         start_time, end_time = _window_ms(duration_hours, start_ms, end_ms)
         cache_key = (
             f"{CACHE_PREFIX_STATS_SITE_DPI}_{by}_{_window_cache_key(start_time, end_time, start_ms, end_ms)}"
@@ -1057,6 +1076,7 @@ class StatsManager:
             client_mac: MAC address of the client.
             by: Grouping type, e.g. 'by_app' or 'by_cat'.
         """
+        _check_dpi_grouping(by)
         client_mac = normalize_mac(client_mac) or client_mac
         start_time, end_time = _window_ms(duration_hours, start_ms, end_ms)
         window_key = _window_cache_key(start_time, end_time, start_ms, end_ms)

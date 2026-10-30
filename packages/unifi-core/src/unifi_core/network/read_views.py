@@ -58,6 +58,22 @@ def _with_inventory_source(response: dict[str, Any], records: list[Any]) -> dict
     return response
 
 
+# Filter values the list views accept. An unknown value is refused rather than
+# matching nothing or skipping the filter, which would echo a filter that was
+# never applied (#947). Device types are what ``classify_device`` can return.
+CLIENT_TYPE_FILTERS = ("all", "wired", "wireless")
+DEVICE_TYPE_FILTERS = ("all", "ap", "switch", "gateway", "pdu", "wan", "unknown")
+DEVICE_STATUS_STATES = {"online": 1, "offline": 0, "pending": 2, "adopting": 4, "provisioning": 5, "upgrading": 6}
+DEVICE_STATUS_FILTERS = ("all", *DEVICE_STATUS_STATES)
+
+
+def invalid_filter(name: str, value: Any, allowed: tuple[str, ...]) -> dict[str, Any] | None:
+    """The error envelope for a filter value outside ``allowed``, or None when it is valid."""
+    if value in allowed:
+        return None
+    return {"success": False, "error": f"Invalid {name} '{value}'. Must be one of: {', '.join(allowed)}."}
+
+
 def classify_device(device: dict[str, Any]) -> str:
     """Classify a raw controller device into its public semantic category."""
     if device.get("source_api") == "integration":
@@ -105,6 +121,8 @@ def shape_client_list(
     fields: str | None = None,
 ) -> dict[str, Any]:
     """Apply the public client-list filters, projection, and envelope."""
+    if error := invalid_filter("filter_type", filter_type, CLIENT_TYPE_FILTERS):
+        return error
     clients_raw = [_raw(client) for client in clients]
     if filter_type == "wireless":
         clients_raw = [client for client in clients_raw if client.get("is_wired", False) is False]
@@ -488,13 +506,16 @@ def shape_device_list(
             "success": False,
             "error": "Unknown device projection field. Supported fields: " + ", ".join(sorted(DEVICE_LIST_FIELDS)),
         }
+    if error := invalid_filter("device_type", device_type, DEVICE_TYPE_FILTERS) or invalid_filter(
+        "status", status, DEVICE_STATUS_FILTERS
+    ):
+        return error
     devices_raw = [_raw(device) for device in devices]
     if device_type != "all":
         devices_raw = [device for device in devices_raw if classify_device(device) == device_type]
     if status != "all":
-        state = {"online": 1, "offline": 0, "pending": 2, "adopting": 4, "provisioning": 5, "upgrading": 6}.get(status)
-        if state is not None:
-            devices_raw = [device for device in devices_raw if device.get("state") == state]
+        state = DEVICE_STATUS_STATES[status]
+        devices_raw = [device for device in devices_raw if device.get("state") == state]
     if search and search.strip():
         search_lower = search.strip().lower()
         devices_raw = [

@@ -5,7 +5,7 @@ This module provides MCP tools to manage network clients/devices on a Unifi Netw
 """
 
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -94,7 +94,8 @@ async def lookup_by_ip(
 )
 async def list_clients(
     filter_type: Annotated[
-        str, Field(description="Filter clients by connection type: 'all' (default), 'wired', or 'wireless'")
+        Literal["all", "wired", "wireless"],
+        Field(description="Filter clients by connection type: 'all' (default), 'wired', or 'wireless'"),
     ] = "all",
     include_offline: Annotated[
         bool,

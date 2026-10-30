@@ -5,7 +5,7 @@ This module provides MCP tools to manage devices in a Unifi Network Controller.
 """
 
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -61,13 +61,13 @@ logger = logging.getLogger(__name__)
 )
 async def list_devices(
     device_type: Annotated[
-        str,
+        Literal["all", "ap", "switch", "gateway", "pdu"],
         Field(
             description="Filter by device type: 'all' (default), 'ap' (access points), 'switch', 'gateway', or 'pdu'"
         ),
     ] = "all",
     status: Annotated[
-        str,
+        Literal["all", "online", "offline", "pending", "adopting", "provisioning", "upgrading"],
         Field(
             description="Filter by device status: 'all' (default), 'online', 'offline', 'pending', 'adopting', 'provisioning', or 'upgrading'"
         ),
