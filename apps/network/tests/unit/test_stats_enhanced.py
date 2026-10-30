@@ -456,7 +456,7 @@ class TestStatsToolArguments:
 
 @pytest.mark.asyncio
 async def test_speedtest_report_asks_which_wan_ran_each_test():
-    """Dual-WAN results are only distinguishable when the WAN fields are requested (#950)."""
+    """Dual-WAN results are only distinguishable when the WAN fields are requested."""
     from unifi_core.network.managers.stats_manager import StatsManager
 
     conn = MagicMock()

@@ -971,7 +971,7 @@ class StatsManager:
                     "xput_upload",
                     "latency",
                     "time",
-                    # Which uplink ran the test, so dual-WAN results can be told apart (#950).
+                    # Which uplink ran the test, so dual-WAN results can be told apart.
                     "interface_name",
                     "wan_networkgroup",
                 ],
