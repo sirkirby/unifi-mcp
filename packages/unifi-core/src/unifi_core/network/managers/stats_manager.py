@@ -662,7 +662,7 @@ class StatsManager:
         raw = device.raw if hasattr(device, "raw") else device
         device_mac = raw.get("mac", device_id)
         device_type = raw.get("type", "unknown")
-        report_type = {"uap": "ap", "ugw": "gw", "udm": "gw"}.get(device_type, "dev")
+        report_type = {"uap": "ap", "ugw": "gw", "udm": "gw", "uxg": "gw"}.get(device_type, "dev")
         return await self.get_device_stats(
             device_mac,
             duration_hours=duration_hours,

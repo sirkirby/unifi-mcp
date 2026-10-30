@@ -70,6 +70,25 @@ async def test_client_stats_bridge_resolves_controller_id_to_mac() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("device_type", ["ugw", "udm", "uxg"])
+async def test_device_stats_bridge_routes_gateways_to_the_gateway_report(monkeypatch, device_type) -> None:
+    device_manager = MagicMock()
+    device_manager.get_device_details = AsyncMock(
+        return_value=MagicMock(raw={"mac": "11:22:33:44:55:66", "type": device_type})
+    )
+    monkeypatch.setattr(
+        "unifi_core.network.managers.stats_manager.DeviceManager",
+        MagicMock(return_value=device_manager),
+    )
+    manager = StatsManager(MagicMock(), MagicMock())
+    manager.get_device_stats = AsyncMock(return_value=[])
+
+    await manager.get_device_stats_for_identifier("device-object-id")
+
+    assert manager.get_device_stats.await_args.kwargs["device_type"] == "gw"
+
+
+@pytest.mark.asyncio
 async def test_device_stats_bridge_resolves_identifier_and_report_family(monkeypatch) -> None:
     device_manager = MagicMock()
     device_manager.get_device_details = AsyncMock(
