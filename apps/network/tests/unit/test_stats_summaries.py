@@ -1,4 +1,4 @@
-"""Stats summaries total the rows they summarize on a legacy controller (#945)."""
+"""Stats summaries total the rows they summarize on a legacy controller."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch

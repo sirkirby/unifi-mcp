@@ -598,12 +598,14 @@ class StatsManager:
             # Route endpoint and attrs based on device_type
             if device_type == "ap":
                 endpoint = f"/stat/report/{granularity}.ap"
-                traffic_prefixes: tuple[str, ...] = ("ng", "na")
+                # 2.4, 5 and 6 GHz radios; the 6 GHz fields are absent on APs without one.
+                traffic_prefixes: tuple[str, ...] = ("ng", "na", "6e")
                 attrs = [
                     "time",
                     "num_sta",
                     "ng-num_sta",
                     "na-num_sta",
+                    "6e-num_sta",
                     "satisfaction",
                     "tx_retries",
                     "wifi_tx_attempts",
@@ -612,6 +614,8 @@ class StatsManager:
                     "na-tx_bytes",
                     "ng-rx_bytes",
                     "na-rx_bytes",
+                    "6e-tx_bytes",
+                    "6e-rx_bytes",
                 ]
             elif device_type == "gw":
                 endpoint = f"/stat/report/{granularity}.gw"

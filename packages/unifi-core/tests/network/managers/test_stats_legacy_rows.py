@@ -1,4 +1,4 @@
-"""Legacy report rows carry their bucket time and the traffic totals the summaries read (#945, #946)."""
+"""Legacy report rows carry their bucket time and the traffic totals the summaries read."""
 
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
@@ -91,6 +91,27 @@ async def test_ap_rows_total_their_radio_bands() -> None:
 
     assert "time" in _report_attrs(connection)
     assert (row["rx_bytes"], row["tx_bytes"], row["bytes"]) == (25.0, 41.0, 66.0)
+
+
+@pytest.mark.asyncio
+async def test_ap_rows_include_the_6ghz_band() -> None:
+    manager, connection = _manager(
+        [
+            {
+                "time": 1,
+                "ng-rx_bytes": 1.0,
+                "na-rx_bytes": 2.0,
+                "6e-rx_bytes": 4.0,
+                "6e-tx_bytes": 20.0,
+                "ng-tx_bytes": 10,
+            }
+        ]
+    )
+
+    (row,) = await manager.get_device_stats(AP_MAC, duration_hours=1, device_type="ap")
+
+    assert {"6e-rx_bytes", "6e-tx_bytes"} <= set(_report_attrs(connection))
+    assert (row["rx_bytes"], row["tx_bytes"], row["bytes"]) == (7.0, 30.0, 37.0)
 
 
 @pytest.mark.asyncio
