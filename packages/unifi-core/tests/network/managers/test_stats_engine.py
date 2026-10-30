@@ -128,7 +128,7 @@ async def test_legacy_controller_without_the_endpoint_keeps_the_report() -> None
         }
     )
 
-    assert await manager.get_network_stats(duration_hours=1) == [{"time": 1, "rx_bytes": 5}]
+    assert await manager.get_network_stats(duration_hours=1) == [{"time": 1, "rx_bytes": 5, "bytes": 5}]
     assert _paths(connection) == ["/source", "/stat/report/hourly.site"]
 
 
@@ -243,7 +243,18 @@ async def test_gateway_stats_read_the_gateway_device_series() -> None:
         device_manager.return_value.get_devices = AsyncMock(return_value=[{"mac": GW_MAC, "type": "udm"}])
         rows = await manager.get_gateway_stats(duration_hours=1, granularity="hourly")
 
-    assert rows == [{"time": END - HOUR, "gw": GW_MAC, "wan-rx_bytes": 14, "wan-tx_bytes": 6, "cpu": 20}]
+    assert rows == [
+        {
+            "time": END - HOUR,
+            "gw": GW_MAC,
+            "wan-rx_bytes": 14,
+            "wan-tx_bytes": 6,
+            "cpu": 20,
+            "rx_bytes": 14,
+            "tx_bytes": 6,
+            "bytes": 20,
+        }
+    ]
     assert all(f"deviceMac.eq('{GW_MAC}')" in path for path in _series_paths(connection))
 
 

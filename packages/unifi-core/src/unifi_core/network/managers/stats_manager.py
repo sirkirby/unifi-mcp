@@ -134,6 +134,31 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _with_traffic_totals(rows: List[Dict[str, Any]], *prefixes: str) -> List[Dict[str, Any]]:
+    """Give report rows the ``rx_bytes``/``tx_bytes``/``bytes`` the summaries read.
+
+    Site and gateway reports count their traffic under ``wan-*`` and AP reports
+    under each radio band (``ng-*``, ``na-*``), so the totals are built from
+    those. A total the controller sent itself is kept.
+    """
+    for row in rows:
+        for direction in ("rx_bytes", "tx_bytes"):
+            if row.get(direction) is None:
+                parts = [
+                    row[f"{prefix}-{direction}"] for prefix in prefixes if row.get(f"{prefix}-{direction}") is not None
+                ]
+                if parts:
+                    row[direction] = sum(parts)
+        if row.get("bytes") is None and (row.get("rx_bytes") is not None or row.get("tx_bytes") is not None):
+            row["bytes"] = (row.get("rx_bytes") or 0) + (row.get("tx_bytes") or 0)
+    return rows
+
+
+def _by_time(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Legacy report rows in time order; the report does not promise one."""
+    return sorted(rows, key=lambda row: _safe_int(row.get("time")))
+
+
 def _window_ms(
     duration_hours: int,
     start_ms: Optional[int] = None,
@@ -369,27 +394,22 @@ class StatsManager:
     async def _series_network_rows(self, start_ms: int, end_ms: int, granularity: str) -> List[Dict[str, Any]]:
         wan = await self._series("wanBySite", _SERIES_SITE_WAN, start_ms, end_ms, granularity)
         clients = await self._series("clientCountBySite", _SERIES_SITE_CLIENTS, start_ms, end_ms, granularity)
-        rows = stats_series.merge_rows(wan, clients)
-        for row in rows:
-            # The site report's rx/tx is its WAN traffic.
-            row.setdefault("rx_bytes", row.get("wan-rx_bytes", 0))
-            row.setdefault("tx_bytes", row.get("wan-tx_bytes", 0))
-            row["bytes"] = row["rx_bytes"] + row["tx_bytes"]
-        return rows
+        # The site report's rx/tx is its WAN traffic.
+        return _with_traffic_totals(stats_series.merge_rows(wan, clients), "wan")
 
     async def _series_gateway_rows(
         self, gateway_mac: Optional[str], start_ms: int, end_ms: int, granularity: str
     ) -> List[Dict[str, Any]]:
         if gateway_mac is None:
             wan = await self._series("wanBySite", _SERIES_GATEWAY_WAN, start_ms, end_ms, granularity)
-            return stats_series.merge_rows(wan)
+            return _with_traffic_totals(stats_series.merge_rows(wan), "wan")
         wan = await self._series(
             "wanBySiteByDevice", _SERIES_GATEWAY_WAN, start_ms, end_ms, granularity, device_mac=gateway_mac
         )
         system = await self._series(
             "systemBySiteByDevice", _SERIES_GATEWAY_SYSTEM, start_ms, end_ms, granularity, device_mac=gateway_mac
         )
-        return stats_series.merge_rows(wan, system, extra={"gw": gateway_mac})
+        return _with_traffic_totals(stats_series.merge_rows(wan, system, extra={"gw": gateway_mac}), "wan")
 
     async def _series_device_rows(
         self, device_mac: str, device_type: str, start_ms: int, end_ms: int, granularity: str
@@ -436,6 +456,7 @@ class StatsManager:
             # Use non-rate attributes commonly available on report endpoints
             payload = {
                 "attrs": [
+                    "time",
                     "bytes",  # total bytes (if provided by controller)
                     "rx_bytes",  # some controllers provide rx/tx at site level
                     "tx_bytes",
@@ -450,7 +471,9 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
             }
-            result = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            rows = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            # The site report's rx/tx is its WAN traffic.
+            result = _with_traffic_totals(_by_time(rows), "wan")
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
@@ -496,6 +519,7 @@ class StatsManager:
             endpoint = f"/stat/report/{granularity}.user"
             payload = {
                 "attrs": [
+                    "time",
                     "rx_bytes",
                     "tx_bytes",
                     "bytes",
@@ -510,7 +534,7 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
             }
-            result = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            result = _by_time(await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source))
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
@@ -574,7 +598,9 @@ class StatsManager:
             # Route endpoint and attrs based on device_type
             if device_type == "ap":
                 endpoint = f"/stat/report/{granularity}.ap"
+                traffic_prefixes: tuple[str, ...] = ("ng", "na")
                 attrs = [
+                    "time",
                     "num_sta",
                     "ng-num_sta",
                     "na-num_sta",
@@ -589,7 +615,9 @@ class StatsManager:
                 ]
             elif device_type == "gw":
                 endpoint = f"/stat/report/{granularity}.gw"
+                traffic_prefixes = ("wan",)
                 attrs = [
+                    "time",
                     "wan-rx_bytes",
                     "wan-tx_bytes",
                     "lan-rx_bytes",
@@ -600,7 +628,9 @@ class StatsManager:
                 ]
             else:
                 endpoint = f"/stat/report/{granularity}.dev"
+                traffic_prefixes = ()
                 attrs = [
+                    "time",
                     "rx_bytes",
                     "tx_bytes",
                     "bytes",
@@ -613,7 +643,8 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
             }
-            result = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            rows = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            result = _with_traffic_totals(_by_time(rows), *traffic_prefixes)
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
@@ -933,6 +964,7 @@ class StatsManager:
             endpoint = f"/stat/report/{granularity}.gw"
             payload = {
                 "attrs": [
+                    "time",
                     "wan-rx_bytes",
                     "wan-tx_bytes",
                     "lan-rx_bytes",
@@ -946,7 +978,7 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
             }
-            result = await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source)
+            result = _by_time(await self._legacy_report(ApiRequest(method="post", path=endpoint, data=payload), source))
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:

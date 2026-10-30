@@ -208,7 +208,7 @@ async def get_device_stats(
         device_type = device_raw.get("type", "unknown")
 
         # Auto-detect device type for the stats endpoint
-        device_type_map = {"uap": "ap", "ugw": "gw", "udm": "gw"}
+        device_type_map = {"uap": "ap", "ugw": "gw", "udm": "gw", "uxg": "gw"}
         stats_device_type = device_type_map.get(device_type, "dev")
 
         stats = await stats_manager.get_device_stats(
