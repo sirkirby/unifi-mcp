@@ -2120,7 +2120,8 @@ type SnmpSettings {
 
 """A speedtest result entry."""
 type SpeedtestResult {
-  timestamp: Int
+  """When the test ran, in epoch milliseconds."""
+  timestamp: BigInt
   downloadMbps: Float
   uploadMbps: Float
   latencyMs: Float

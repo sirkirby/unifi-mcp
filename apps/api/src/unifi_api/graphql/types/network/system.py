@@ -555,7 +555,7 @@ class TopClient:
 
 @strawberry.type(description="A speedtest result entry.")
 class SpeedtestResult:
-    timestamp: int | None
+    timestamp: BigInt | None = strawberry.field(description="When the test ran, in epoch milliseconds.")
     download_mbps: float | None
     upload_mbps: float | None
     latency_ms: float | None
