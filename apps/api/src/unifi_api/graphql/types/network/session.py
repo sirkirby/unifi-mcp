@@ -22,6 +22,8 @@ from typing import Any
 
 import strawberry
 
+from unifi_api.graphql.scalars import BigInt
+
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
     """Return the first non-None value among the listed keys."""
@@ -103,6 +105,15 @@ class ClientWifiDetails:
     tx_rate: int | None
     rx_rate: int | None
     channel: int | None
+    noise: int | None = strawberry.field(description="Noise floor in dBm.")
+    satisfaction: int | None = strawberry.field(description="Controller-computed satisfaction score (0-100).")
+    tx_retries: BigInt | None = strawberry.field(description="Transmit retry count since association.")
+    wifi_tx_attempts: BigInt | None = strawberry.field(description="Transmit attempt count since association.")
+    roam_count: int | None = strawberry.field(description="Number of roams since association.")
+    radio: str | None = strawberry.field(description="Radio band identifier (e.g. na, ng).")
+    bssid: str | None = strawberry.field(description="BSSID of the AP radio the client is associated to.")
+    nss: int | None = strawberry.field(description="Number of spatial streams.")
+    is_11r: bool | None = strawberry.field(description="Whether the client uses 802.11r fast roaming.")
     # Tracks whether the source was None (legacy serializer returned ``{}``
     # for ``None`` inputs).
     _was_none: strawberry.Private[bool] = False
@@ -122,6 +133,15 @@ class ClientWifiDetails:
                 tx_rate=None,
                 rx_rate=None,
                 channel=None,
+                noise=None,
+                satisfaction=None,
+                tx_retries=None,
+                wifi_tx_attempts=None,
+                roam_count=None,
+                radio=None,
+                bssid=None,
+                nss=None,
+                is_11r=None,
                 _was_none=True,
             )
         if not isinstance(obj, dict):
@@ -135,6 +155,15 @@ class ClientWifiDetails:
             tx_rate=_get(obj, "tx_rate"),
             rx_rate=_get(obj, "rx_rate"),
             channel=_get(obj, "channel"),
+            noise=_get(obj, "noise"),
+            satisfaction=_get(obj, "satisfaction"),
+            tx_retries=_get(obj, "tx_retries"),
+            wifi_tx_attempts=_get(obj, "wifi_tx_attempts"),
+            roam_count=_get(obj, "roam_count"),
+            radio=_get(obj, "radio"),
+            bssid=_get(obj, "bssid"),
+            nss=_get(obj, "nss"),
+            is_11r=_get(obj, "is_11r"),
         )
 
     def to_dict(self) -> dict:

@@ -42,6 +42,15 @@ def test_client_wifi_details_detail_serializer_shape() -> None:
         "tx_rate": 866000,
         "rx_rate": 433000,
         "channel": 36,
+        "noise": -95,
+        "satisfaction": 98,
+        "tx_retries": 12,
+        "wifi_tx_attempts": 900,
+        "roam_count": 2,
+        "radio": "na",
+        "bssid": "11:22:33:44:55:77",
+        "nss": 2,
+        "is_11r": False,
     }
     out = ClientWifiDetails.from_manager_output(sample).to_dict()
     assert out["mac"] == "aa:bb:cc:dd:ee:ff"
@@ -51,6 +60,9 @@ def test_client_wifi_details_detail_serializer_shape() -> None:
     assert out["tx_rate"] == 866000
     assert out["rx_rate"] == 433000
     assert out["channel"] == 36
+    assert {key: out[key] for key in sample if key not in ("mac", "essid", "ap_mac")} == {
+        key: value for key, value in sample.items() if key not in ("mac", "essid", "ap_mac")
+    }
     assert ClientWifiDetails.render_hint("detail")["kind"] == "detail"
 
 

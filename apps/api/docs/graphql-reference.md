@@ -506,6 +506,33 @@ type ClientWifiDetails {
   txRate: Int
   rxRate: Int
   channel: Int
+
+  """Noise floor in dBm."""
+  noise: Int
+
+  """Controller-computed satisfaction score (0-100)."""
+  satisfaction: Int
+
+  """Transmit retry count since association."""
+  txRetries: BigInt
+
+  """Transmit attempt count since association."""
+  wifiTxAttempts: BigInt
+
+  """Number of roams since association."""
+  roamCount: Int
+
+  """Radio band identifier (e.g. na, ng)."""
+  radio: String
+
+  """BSSID of the AP radio the client is associated to."""
+  bssid: String
+
+  """Number of spatial streams."""
+  nss: Int
+
+  """Whether the client uses 802.11r fast roaming."""
+  is11r: Boolean
 }
 
 """A content-filtering profile (V2 /content-filtering entry)."""
