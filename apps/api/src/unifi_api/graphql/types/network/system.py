@@ -182,8 +182,18 @@ class NetworkHealth:
     num_user: int | None
     num_guest: int | None
     num_iot: int | None
-    rx_bytes: int | None
-    tx_bytes: int | None
+    rx_bytes: BigInt | None = strawberry.field(
+        description="Cumulative bytes received on this subsystem, when the controller sends a counter."
+    )
+    tx_bytes: BigInt | None = strawberry.field(
+        description="Cumulative bytes transmitted on this subsystem, when the controller sends a counter."
+    )
+    rx_bytes_per_sec: float | None = strawberry.field(
+        description="Current receive rate on this subsystem in bytes per second (not a total)."
+    )
+    tx_bytes_per_sec: float | None = strawberry.field(
+        description="Current transmit rate on this subsystem in bytes per second (not a total)."
+    )
     _was_dict: strawberry.Private[bool] = True
 
     @classmethod
@@ -195,8 +205,8 @@ class NetworkHealth:
                 "subsystem",
                 "status",
                 "num_user",
-                "rx_bytes",
-                "tx_bytes",
+                "rx_bytes_per_sec",
+                "tx_bytes_per_sec",
             ],
         }
 
@@ -211,6 +221,8 @@ class NetworkHealth:
                 num_iot=None,
                 rx_bytes=None,
                 tx_bytes=None,
+                rx_bytes_per_sec=None,
+                tx_bytes_per_sec=None,
                 _was_dict=False,
             )
         return cls(
@@ -219,8 +231,10 @@ class NetworkHealth:
             num_user=_get(record, "num_user"),
             num_guest=_get(record, "num_guest"),
             num_iot=_get(record, "num_iot"),
-            rx_bytes=_get(record, "rx_bytes-r", "rx_bytes"),
-            tx_bytes=_get(record, "tx_bytes-r", "tx_bytes"),
+            rx_bytes=_get(record, "rx_bytes"),
+            tx_bytes=_get(record, "tx_bytes"),
+            rx_bytes_per_sec=_get(record, "rx_bytes-r"),
+            tx_bytes_per_sec=_get(record, "tx_bytes-r"),
             _was_dict=True,
         )
 

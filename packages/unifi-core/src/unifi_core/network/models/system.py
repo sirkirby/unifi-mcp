@@ -446,12 +446,22 @@ class NetworkHealth(BaseModel):
     )
     rx_bytes: Optional[int] = Field(
         default=None,
-        description="Received bytes on this subsystem",
+        description="Cumulative bytes received on this subsystem, when the controller sends a counter",
         json_schema_extra={"mutable": False},
     )
     tx_bytes: Optional[int] = Field(
         default=None,
-        description="Transmitted bytes on this subsystem",
+        description="Cumulative bytes transmitted on this subsystem, when the controller sends a counter",
+        json_schema_extra={"mutable": False},
+    )
+    rx_bytes_per_sec: Optional[float] = Field(
+        default=None,
+        description="Current receive rate on this subsystem in bytes per second (not a total)",
+        json_schema_extra={"mutable": False},
+    )
+    tx_bytes_per_sec: Optional[float] = Field(
+        default=None,
+        description="Current transmit rate on this subsystem in bytes per second (not a total)",
         json_schema_extra={"mutable": False},
     )
     site_to_site_enabled: Optional[bool] = Field(
@@ -520,8 +530,12 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         num_user=_get(raw, "num_user"),
         num_guest=_get(raw, "num_guest"),
         num_iot=_get(raw, "num_iot"),
-        rx_bytes=raw.get("rx_bytes-r") or raw.get("rx_bytes"),
-        tx_bytes=raw.get("tx_bytes-r") or raw.get("tx_bytes"),
+        # The controller's rx_bytes-r/tx_bytes-r are rates; they never stand in
+        # for the cumulative counters, which are often absent here (#948).
+        rx_bytes=_get(raw, "rx_bytes"),
+        tx_bytes=_get(raw, "tx_bytes"),
+        rx_bytes_per_sec=_get(raw, "rx_bytes-r"),
+        tx_bytes_per_sec=_get(raw, "tx_bytes-r"),
         site_to_site_enabled=_as_bool(raw.get("site_to_site_enabled")),
         site_to_site_num_active=_get(raw, "site_to_site_num_active"),
         site_to_site_num_inactive=_get(raw, "site_to_site_num_inactive"),

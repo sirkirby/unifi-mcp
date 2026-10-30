@@ -103,8 +103,10 @@ def test_network_health_list_serializer_shape() -> None:
     assert rows[0]["subsystem"] == "wan"
     assert rows[0]["status"] == "ok"
     assert rows[0]["num_user"] == 5
-    assert rows[0]["rx_bytes"] == 100
-    assert rows[0]["tx_bytes"] == 200
+    assert rows[0]["rx_bytes"] is None
+    assert rows[0]["tx_bytes"] is None
+    assert rows[0]["rx_bytes_per_sec"] == 100
+    assert rows[0]["tx_bytes_per_sec"] == 200
     assert rows[1]["subsystem"] == "wlan"
 
 

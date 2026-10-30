@@ -1288,8 +1288,26 @@ type NetworkHealth {
   numUser: Int
   numGuest: Int
   numIot: Int
-  rxBytes: Int
-  txBytes: Int
+
+  """
+  Cumulative bytes received on this subsystem, when the controller sends a counter.
+  """
+  rxBytes: BigInt
+
+  """
+  Cumulative bytes transmitted on this subsystem, when the controller sends a counter.
+  """
+  txBytes: BigInt
+
+  """
+  Current receive rate on this subsystem in bytes per second (not a total).
+  """
+  rxBytesPerSec: Float
+
+  """
+  Current transmit rate on this subsystem in bytes per second (not a total).
+  """
+  txBytesPerSec: Float
 }
 
 """Paginated page of network configurations."""
