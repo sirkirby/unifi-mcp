@@ -235,7 +235,7 @@ class StatsGroupingError(RequestError):
 
 
 def _check_dpi_grouping(by: str) -> None:
-    """Refuse an unknown grouping instead of returning per-app rows under its name (#947)."""
+    """Refuse an unknown grouping instead of returning per-app rows under its name."""
     if by not in DPI_GROUPINGS:
         raise StatsGroupingError()
 

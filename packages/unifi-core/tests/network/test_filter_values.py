@@ -1,4 +1,4 @@
-"""Unknown filter values are refused, never echoed as if applied (#947)."""
+"""Unknown filter values are refused, never echoed as if applied."""
 
 from unittest.mock import AsyncMock, MagicMock
 

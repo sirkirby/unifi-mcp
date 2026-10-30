@@ -60,7 +60,7 @@ def _with_inventory_source(response: dict[str, Any], records: list[Any]) -> dict
 
 # Filter values the list views accept. An unknown value is refused rather than
 # matching nothing or skipping the filter, which would echo a filter that was
-# never applied (#947). Device types are what ``classify_device`` can return.
+# never applied. Device types are what ``classify_device`` can return.
 CLIENT_TYPE_FILTERS = ("all", "wired", "wireless")
 DEVICE_TYPE_FILTERS = ("all", "ap", "switch", "gateway", "pdu", "wan", "unknown")
 DEVICE_STATUS_STATES = {"online": 1, "offline": 0, "pending": 2, "adopting": 4, "provisioning": 5, "upgrading": 6}
