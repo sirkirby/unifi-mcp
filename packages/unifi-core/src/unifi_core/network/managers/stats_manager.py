@@ -247,6 +247,20 @@ def _v2_traffic_payload(response: Any) -> Dict[str, Any]:
     return response if isinstance(response, dict) else {}
 
 
+def _speedtest_rows(response: Any, start_ms: int, end_ms: int) -> List[Dict[str, Any]]:
+    """Speedtest history rows inside the window, oldest first.
+
+    The v2 ``/speedtest`` endpoint wraps its rows in ``[{"data": [...]}]`` and
+    ignores any window parameter, returning its whole retained history.
+    """
+    payload = _v2_traffic_payload(response)
+    rows = payload["data"] if "data" in payload else response
+    if not isinstance(rows, list):
+        return []
+    in_window = [row for row in rows if isinstance(row, dict) and start_ms <= _safe_int(row.get("time")) <= end_ms]
+    return sorted(in_window, key=lambda row: _safe_int(row.get("time")))
+
+
 DPI_GROUPINGS = ("by_app", "by_cat")
 
 
@@ -1008,38 +1022,59 @@ class StatsManager:
             raise
 
     async def get_speedtest_results(self, duration_hours: int = 24) -> List[Dict[str, Any]]:
-        """Get speed test results from the controller archive."""
+        """Get speed test results for the window.
+
+        Network 11 keeps speedtest history behind the site's v2 ``/speedtest``
+        endpoint and leaves the legacy archive empty, so only a legacy-engine
+        controller, or one without that endpoint, reads the archive.
+        """
         cache_key = f"{CACHE_PREFIX_STATS_SPEEDTEST}_{duration_hours}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
         if cached_data is not None:
             return cached_data
 
         try:
-            start_time = int((datetime.now() - timedelta(hours=duration_hours)).timestamp() * 1000)
-            end_time = int(datetime.now().timestamp() * 1000)
-
-            endpoint = "/stat/report/archive.speedtest"
-            payload = {
-                "attrs": [
-                    "xput_download",
-                    "xput_upload",
-                    "latency",
-                    "time",
-                    # Which uplink ran the test, so dual-WAN results can be told apart.
-                    "interface_name",
-                    "wan_networkgroup",
-                ],
-                "start": start_time,
-                "end": end_time,
-            }
-            api_request = ApiRequest(method="post", path=endpoint, data=payload)
-            response = await self._connection.request(api_request)
-            result = response if isinstance(response, list) else []
+            start_time, end_time = _window_ms(duration_hours)
+            result = None
+            if await self._stats_source() != _STATS_SOURCE_LEGACY:
+                result = await self._v2_speedtest_results(start_time, end_time)
+            if result is None:
+                result = await self._archive_speedtest_results(start_time, end_time)
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
             logger.error("Error getting speedtest results: %s", e)
             raise
+
+    async def _v2_speedtest_results(self, start_ms: int, end_ms: int) -> Optional[List[Dict[str, Any]]]:
+        """Read the v2 speedtest history, or None when the controller has no such endpoint."""
+        try:
+            response = await self._connection.request(ApiRequestV2(method="get", path="/speedtest"))
+        except Exception as e:
+            if response_status(e) != 404:
+                raise
+            return None
+        return _speedtest_rows(response, start_ms, end_ms)
+
+    async def _archive_speedtest_results(self, start_ms: int, end_ms: int) -> List[Dict[str, Any]]:
+        """Read the legacy ``archive.speedtest`` report."""
+        payload = {
+            "attrs": [
+                "xput_download",
+                "xput_upload",
+                "latency",
+                "time",
+                # Which uplink ran the test, so dual-WAN results can be told apart.
+                "interface_name",
+                "wan_networkgroup",
+            ],
+            "start": start_ms,
+            "end": end_ms,
+        }
+        response = await self._connection.request(
+            ApiRequest(method="post", path="/stat/report/archive.speedtest", data=payload)
+        )
+        return response if isinstance(response, list) else []
 
     async def _get_v2_traffic(self, start_ms: int, end_ms: int) -> Dict[str, Any]:
         """Read the v2 DPI traffic aggregate (Network 9.x+) for a window."""
