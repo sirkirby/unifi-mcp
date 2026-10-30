@@ -545,6 +545,10 @@ class SpeedtestResult:
     download_mbps: float | None
     upload_mbps: float | None
     latency_ms: float | None
+    wan_networkgroup: str | None = strawberry.field(
+        description="WAN the test ran on (e.g. WAN, WAN2); null when the controller does not say."
+    )
+    interface_name: str | None = strawberry.field(description="Gateway interface the test ran on (e.g. eth8).")
     _was_dict: strawberry.Private[bool] = True
 
     @classmethod
@@ -553,6 +557,7 @@ class SpeedtestResult:
             "kind": kind,
             "display_columns": [
                 "timestamp",
+                "wan_networkgroup",
                 "download_mbps",
                 "upload_mbps",
                 "latency_ms",
@@ -568,6 +573,8 @@ class SpeedtestResult:
                 download_mbps=None,
                 upload_mbps=None,
                 latency_ms=None,
+                wan_networkgroup=None,
+                interface_name=None,
                 _was_dict=False,
             )
         return cls(
@@ -575,6 +582,8 @@ class SpeedtestResult:
             download_mbps=_get(record, "xput_download", "download_mbps"),
             upload_mbps=_get(record, "xput_upload", "upload_mbps"),
             latency_ms=_get(record, "latency", "latency_ms"),
+            wan_networkgroup=_get(record, "wan_networkgroup"),
+            interface_name=_get(record, "interface_name"),
             _was_dict=True,
         )
 

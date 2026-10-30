@@ -235,6 +235,13 @@ def test_speedtest_list_serializer_shape() -> None:
     assert item["download_mbps"] == 500.5
     assert item["upload_mbps"] == 50.1
     assert item["latency_ms"] == 12
+    assert item["wan_networkgroup"] is None
+
+
+def test_speedtest_serializer_names_the_wan() -> None:
+    sample = {"time": 1, "xput_download": 314.0, "wan_networkgroup": "WAN2", "interface_name": "eth7"}
+    item = SpeedtestResult.from_manager_output(sample).to_dict()
+    assert (item["wan_networkgroup"], item["interface_name"]) == ("WAN2", "eth7")
 
 
 # ---- System mutation acks (still serializer-backed) ----

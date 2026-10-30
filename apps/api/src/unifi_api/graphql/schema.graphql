@@ -2095,6 +2095,14 @@ type SpeedtestResult {
   downloadMbps: Float
   uploadMbps: Float
   latencyMs: Float
+
+  """
+  WAN the test ran on (e.g. WAN, WAN2); null when the controller does not say.
+  """
+  wanNetworkgroup: String
+
+  """Gateway interface the test ran on (e.g. eth8)."""
+  interfaceName: String
 }
 
 """Paginated page of speedtest result entries."""

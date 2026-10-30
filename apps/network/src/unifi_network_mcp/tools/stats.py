@@ -431,7 +431,11 @@ async def get_gateway_stats(
 
 @server.tool(
     name="unifi_get_speedtest_results",
-    description="Get historical speedtest results including download, upload (Mbps), and latency (ms).",
+    description=(
+        "Get historical speedtest results including download, upload (Mbps), and latency (ms). "
+        "On a multi-WAN site each result names its uplink in wan_networkgroup (e.g. WAN, WAN2) and "
+        "interface_name; group by it rather than averaging across uplinks."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_speedtest_results(

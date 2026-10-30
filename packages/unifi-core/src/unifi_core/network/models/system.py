@@ -879,6 +879,16 @@ class SpeedtestResult(BaseModel):
         description="Measured latency in milliseconds",
         json_schema_extra={"mutable": False},
     )
+    wan_networkgroup: Optional[str] = Field(
+        default=None,
+        description="WAN the test ran on (e.g. WAN, WAN2); null when the controller does not say",
+        json_schema_extra={"mutable": False},
+    )
+    interface_name: Optional[str] = Field(
+        default=None,
+        description="Gateway interface the test ran on (e.g. eth8)",
+        json_schema_extra={"mutable": False},
+    )
 
 
 SPEEDTESTRESULT_MUTABLE_FIELDS: frozenset[str] = frozenset()
@@ -894,4 +904,6 @@ def speedtest_result_from_controller(raw: Any) -> SpeedtestResult:
         download_mbps=_get(raw, "xput_download", "download_mbps"),
         upload_mbps=_get(raw, "xput_upload", "upload_mbps"),
         latency_ms=_get(raw, "latency", "latency_ms"),
+        wan_networkgroup=_get(raw, "wan_networkgroup"),
+        interface_name=_get(raw, "interface_name"),
     )

@@ -452,3 +452,18 @@ class TestStatsToolArguments:
 
         with pytest.raises(ValueError, match="UTC offset"):
             _epoch_ms("2026-10-02T06:35:00")
+
+
+@pytest.mark.asyncio
+async def test_speedtest_report_asks_which_wan_ran_each_test():
+    """Dual-WAN results are only distinguishable when the WAN fields are requested (#950)."""
+    from unifi_core.network.managers.stats_manager import StatsManager
+
+    conn = MagicMock()
+    conn.site = "default"
+    conn.get_cached = MagicMock(return_value=None)
+    conn.request = AsyncMock(return_value=[])
+    await StatsManager(conn, MagicMock()).get_speedtest_results(duration_hours=24)
+
+    attrs = conn.request.call_args[0][0].data["attrs"]
+    assert {"time", "wan_networkgroup", "interface_name"} <= set(attrs)
