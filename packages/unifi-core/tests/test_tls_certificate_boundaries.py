@@ -446,6 +446,21 @@ class TestAccessRequests:
         finally:
             await access_manager.close()
 
+    async def test_visitor_tool_route_does_not_blame_the_token(self, access_manager):
+        """Visitors are the main users of the developer path, and reach it through their own manager."""
+        from unifi_core.access.managers.visitor_manager import VisitorManager
+
+        await self._connect(access_manager, developer=certificate_failure(_mismatch(), env_prefix="ACCESS"))
+        try:
+            with pytest.raises(CertificateVerificationError) as excinfo:
+                await VisitorManager(access_manager).list_visitors()
+            message = str(excinfo.value)
+            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+            assert "12445" in message
+            assert "API token" not in message
+        finally:
+            await access_manager.close()
+
     async def test_proxy_path_failure_is_named(self, access_manager):
         await self._connect(access_manager, proxy=certificate_failure(_mismatch(), env_prefix="ACCESS"))
         try:

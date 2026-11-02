@@ -19,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 _VISITORS_PATH = "visitors"
 _PAGE_SIZE = 100
-_TOKEN_REMEDIATION = (
-    "Create a UniFi Access API token and set UNIFI_ACCESS_API_KEY (or UNIFI_API_KEY) for the Access MCP server."
-)
 
 
 @reconnects_on_demand
@@ -31,18 +28,8 @@ class VisitorManager:
     def __init__(self, connection_manager: AccessConnectionManager) -> None:
         self._cm = connection_manager
 
-    def _require_developer_api(self, operation: str) -> None:
-        """Fail before any proxy fallback when Developer API auth is unavailable."""
-        if not self._cm.has_api_key:
-            raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {_TOKEN_REMEDIATION}")
-        if not self._cm.has_api_client:
-            raise UniFiAuthError(
-                f"{operation} requires an authenticated UniFi Access Developer API session. "
-                f"The configured token did not authenticate. {_TOKEN_REMEDIATION}"
-            )
-
     async def _request(self, method: str, path: str, *, operation: str, **kwargs: Any) -> Any:
-        self._require_developer_api(operation)
+        """Developer API only: it raises when that path is unavailable, with no proxy fallback."""
         return await self._cm.developer_request(method, path, operation=operation, **kwargs)
 
     @staticmethod

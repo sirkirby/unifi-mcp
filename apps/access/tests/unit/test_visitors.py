@@ -51,13 +51,17 @@ class TestListVisitors:
         ]
 
     @pytest.mark.asyncio
-    async def test_list_visitors_requires_api_key_without_proxy_fallback(self, visitor_mgr, cm_api):
-        cm_api.has_api_key = False
+    async def test_list_visitors_requires_api_key_without_proxy_fallback(self):
+        cm = AccessConnectionManager("192.0.2.1", "admin", "secret")
+        cm._proxy_available = True
+        cm._proxy_session = MagicMock()
+        cm._initialized = True
+        cm.proxy_request = AsyncMock()
 
         with pytest.raises(UniFiAuthError, match="UNIFI_ACCESS_API_KEY"):
-            await visitor_mgr.list_visitors()
+            await VisitorManager(cm).list_visitors()
 
-        cm_api.developer_request.assert_not_awaited()
+        cm.proxy_request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_list_visitors_rejects_unexpected_shape(self, visitor_mgr, cm_api):
