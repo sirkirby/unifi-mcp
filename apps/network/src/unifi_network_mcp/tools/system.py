@@ -225,7 +225,8 @@ async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
     name="unifi_get_system_info",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
     description=(
-        "Returns controller version, uptime, hostname, memory/CPU usage, and update availability. "
+        "Returns controller version, uptime, hostname, device and client counts, update availability, "
+        "and console CPU and memory usage. "
         "Use for basic 'is the controller healthy?' checks. "
         "For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. "
         "For network subsystem details, use unifi_get_network_health."

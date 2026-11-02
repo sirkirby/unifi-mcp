@@ -139,6 +139,9 @@ class SystemInfo:
     uptime: int | None
     num_devices: int | None
     num_clients: int | None
+    update_available: bool | None
+    cpu_percent: float | None
+    memory_percent: float | None
     _was_dict: strawberry.Private[bool] = True
 
     @classmethod
@@ -155,6 +158,9 @@ class SystemInfo:
                 uptime=None,
                 num_devices=None,
                 num_clients=None,
+                update_available=None,
+                cpu_percent=None,
+                memory_percent=None,
                 _was_dict=False,
             )
         return cls(
@@ -164,6 +170,9 @@ class SystemInfo:
             uptime=_get(obj, "uptime"),
             num_devices=_get(obj, "num_devices"),
             num_clients=_get(obj, "num_clients"),
+            update_available=_get(obj, "update_available"),
+            cpu_percent=_get(obj, "cpu_percent"),
+            memory_percent=_get(obj, "memory_percent"),
             _was_dict=True,
         )
 

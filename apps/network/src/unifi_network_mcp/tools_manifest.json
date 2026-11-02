@@ -11990,7 +11990,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Returns controller version, uptime, hostname, memory/CPU usage, and update availability. Use for basic 'is the controller healthy?' checks. For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. For network subsystem details, use unifi_get_network_health.",
+      "description": "Returns controller version, uptime, hostname, device and client counts, update availability, and console CPU and memory usage. Use for basic 'is the controller healthy?' checks. For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. For network subsystem details, use unifi_get_network_health.",
       "name": "unifi_get_system_info",
       "schema": {
         "input": {

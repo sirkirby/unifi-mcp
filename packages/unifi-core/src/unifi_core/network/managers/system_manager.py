@@ -35,6 +35,30 @@ CACHE_PREFIX_SITES = "sites"
 CACHE_PREFIX_ADMINS = "admin_users"
 
 
+def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The managed device that hosts this controller, if there is one.
+
+    ``/stat/sysinfo`` lists the controller's own addresses in ``ip_addrs``, and a
+    console's ``network_table`` carries them. A gateway beside a self-hosted
+    controller has addresses of its own, so its CPU and memory are never reported
+    as the controller's.
+    """
+    addresses = set(info.get("ip_addrs") or [])
+    for device in devices:
+        for network in device.get("network_table") or []:
+            if isinstance(network, dict) and network.get("ip") in addresses:
+                return device
+    return None
+
+
+def _percent(value: Any) -> Optional[float]:
+    """A ``system-stats`` reading as a number; the controller sends them as strings."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class SystemManager:
     """Manages system, site, and user operations on the Unifi Controller."""
 
@@ -62,11 +86,48 @@ class SystemManager:
                 info = response
             else:
                 info = {}
+            if info:
+                info = {**info, **await self._live_system_fields(info)}
             self._connection._update_cache(cache_key, info, timeout=15)
             return info
         except Exception as e:
             logger.error("Error getting system info: %s", e)
             raise
+
+    async def _live_system_fields(self, info: Dict[str, Any]) -> Dict[str, Any]:
+        """Counts and console usage that ``/stat/sysinfo`` does not carry.
+
+        Each comes from a list of its own and is left out when that list cannot be
+        read, so a failed list never costs the caller the rest of the system info.
+        """
+        if getattr(self._connection, "integration_inventory_only", False) is True:
+            return {}
+
+        fields: Dict[str, Any] = {}
+        clients = await self._collection_records("clients")
+        if clients is not None:
+            fields["num_clients"] = len(clients)
+
+        devices = await self._collection_records("devices")
+        if devices is not None:
+            fields["num_devices"] = len(devices)
+            console = _console_device(info, devices)
+            stats = console.get("system-stats") if console else None
+            if isinstance(stats, dict):
+                for field, key in (("cpu_percent", "cpu"), ("memory_percent", "mem")):
+                    reading = _percent(stats.get(key))
+                    if reading is not None:
+                        fields[field] = reading
+        return fields
+
+    async def _collection_records(self, name: str) -> Optional[List[Dict[str, Any]]]:
+        """The raw records of a freshly refreshed collection, or ``None`` if it cannot be read."""
+        try:
+            await self._connection.refresh_handler(name)
+            return [item.raw for item in getattr(self._connection.controller, name).values()]
+        except Exception as e:
+            logger.debug("Could not read %s for system info: %s", name, type(e).__name__)
+            return None
 
     async def get_controller_status(self) -> Dict[str, Any]:
         """Get status information about the controller."""

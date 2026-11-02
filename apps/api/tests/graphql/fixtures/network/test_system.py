@@ -35,6 +35,9 @@ async def test_system_info(tmp_path, monkeypatch):
                 "version": "7.4.0",
                 "hostname": "unifi.local",
                 "uptime": 86400,
+                "update_available": False,
+                "cpu_percent": 12.5,
+                "memory_percent": 40.25,
             },
         },
     )
@@ -43,7 +46,7 @@ async def test_system_info(tmp_path, monkeypatch):
         key,
         f'''{{
         network {{ systemInfo(controller: "{cid}") {{
-            name version hostname uptime
+            name version hostname uptime updateAvailable cpuPercent memoryPercent
         }} }}
     }}''',
     )
@@ -51,6 +54,9 @@ async def test_system_info(tmp_path, monkeypatch):
     info = body["data"]["network"]["systemInfo"]
     assert info["name"] == "MyController"
     assert info["version"] == "7.4.0"
+    assert info["updateAvailable"] is False
+    assert info["cpuPercent"] == 12.5
+    assert info["memoryPercent"] == 40.25
 
 
 @pytest.mark.asyncio
