@@ -360,7 +360,7 @@ async def _replace_handler_items(handler: Any) -> None:
     none: ``ClientsAll`` and ``Devices`` declare no ``remove_messages``, and
     ``Clients`` removes only on a deleted user, never on a disconnect. So a
     long-running server kept forgotten client records, disconnected "online"
-    clients, removed devices and deleted DPI entries until it restarted (#963).
+    clients, removed devices and deleted DPI entries until it restarted.
 
     This does what ``update()`` does (the handler's own request, then
     ``process_raw()``) and then removes, through ``remove_item()``, every item
@@ -369,8 +369,10 @@ async def _replace_handler_items(handler: Any) -> None:
 
     - Only a reply that carries a ``data`` list is a snapshot. aiounifi decodes
       a non-JSON reply (an HTML login or proxy page) to ``{}``, which ``update()``
-      treated as an empty list; it changes nothing here. A JSON reply whose ``data`` is empty is the controller's answer
-      and does empty the collection.
+      treated as an empty list; it changes nothing here. A JSON reply whose
+      ``data`` is empty is the controller's answer and does empty the collection.
+    - Rows of which none carries the handler's id key are a shape this code does
+      not recognize, not an empty list, so they remove nothing.
     - An item a websocket message adds or changes while the request is in
       flight is kept even if the reply predates it.
 
@@ -399,6 +401,8 @@ async def _replace_handler_items(handler: Any) -> None:
 
     handler.process_raw(rows)
     listed = {obj_id for row in rows if (obj_id := _handler_obj_id(handler, row)) is not None}
+    if rows and not listed:
+        return
     for obj_id, item in before.items():
         if obj_id in listed or obj_id in websocket_refreshed:
             continue

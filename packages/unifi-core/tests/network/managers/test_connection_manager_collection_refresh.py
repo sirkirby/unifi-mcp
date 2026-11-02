@@ -1,11 +1,10 @@
-"""A handler refresh replaces the collection instead of merging into it (#963).
+"""A handler refresh replaces the collection instead of merging into it.
 
 aiounifi's ``APIHandler.update()`` only adds and replaces items; it drops one
 only when a websocket remove message names it, and ``ClientsAll`` and
 ``Devices`` have no remove messages at all. A long-running server therefore kept
-client records forgotten on the controller (113 records against the UI's 76 in
-the report), clients that had disconnected, and removed devices, until it
-restarted.
+client records forgotten on the controller, clients that had disconnected, and
+removed devices, until it restarted.
 
 These tests drive the real aiounifi handlers against a scripted
 ``controller.request`` so they exercise the library's own add/replace and
@@ -219,6 +218,7 @@ NOT_A_SNAPSHOT = [
     pytest.param({}, id="non-JSON reply decodes to an empty body"),
     pytest.param({"meta": {"rc": "ok"}}, id="envelope without data"),
     pytest.param({"meta": {"rc": "ok"}, "data": None}, id="data is not a list"),
+    pytest.param(_ok([{"unexpected": "shape"}]), id="rows without the id key"),
 ]
 
 
