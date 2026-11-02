@@ -83,6 +83,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - ConnectionManager translates failed `/get/setting/` and `/set/setting/` requests into a new `RequestError` with fixed operation context and the original exception class, suppressing original traceback context. This protects all settings callers, including those that log the received exception.
 - StatsManager DPI refresh failures use the same safe-error translation before leaving the core manager; REST and GraphQL bypass the MCP tool wrapper.
 - ConnectionManager handler refresh failures are translated to safe RequestError instances after reauthentication/circuit handling. All collection callers, including clients and devices, must receive safe text and suppressed original traceback context.
+- Every Network, Protect and Access controller session carries `unifi_core.tls.certificate_safe_middleware`, which replaces a failed certificate check with a context-free `CertificateVerificationError` below aiounifi, uiprotect and py-unifi-access. The aiohttp error names the controller and, for a pin mismatch, both fingerprints, and each SDK wraps it with that text. A new controller session must carry the middleware; code that formats an exception from a session without it uses `safe_error_text()`.
 
 - All log output MUST go to stderr (stdout is reserved for JSON-RPC in stdio mode)
 - Use `%s` format strings in logger calls, not f-strings, for lazy evaluation

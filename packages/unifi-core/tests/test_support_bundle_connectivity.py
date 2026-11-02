@@ -113,7 +113,7 @@ async def test_network_probe_uses_existing_session_once_without_reconnect(verify
     assert session.calls[0][0][1] == f"{manager.url_base}{path}"
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["allow_redirects"] is False
-    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
+    assert session.calls[0][1]["ssl"] is verify_ssl
     assert context.exited is True
     assert context.body_read is False
     manager.initialize.assert_not_awaited()
@@ -143,7 +143,7 @@ async def test_protect_probe_uses_existing_private_session_without_sdk_retry(ver
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["headers"] == {"X-CSRF-Token": "private-token"}
     assert session.calls[0][1]["allow_redirects"] is False
-    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
+    assert session.calls[0][1]["ssl"] is verify_ssl
     assert context.body_read is False
     assert context.exited is True
     manager.initialize.assert_not_awaited()
@@ -353,7 +353,7 @@ async def test_aiohttp_stale_connection_has_one_wire_attempt_for_support_only(
                     manager._proxy_available = True
                     manager._proxy_session = session
             manager._initialized = True
-            warm_ssl = manager._ssl_context if product.startswith("access") else False
+            warm_ssl = manager._ssl_context if product.startswith("access") else manager.ssl
             async with session.get(f"{base}/warm", ssl=warm_ssl) as response:
                 await response.read()
             result = await manager.support_connectivity_probe()

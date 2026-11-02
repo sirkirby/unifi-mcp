@@ -34,4 +34,4 @@ class TestConnectionConfig:
 
     def test_ssl_context_when_verify_true(self):
         cfg = ConnectionConfig(host="192.0.2.1", verify_ssl=True)
-        assert cfg.ssl_context is None
+        assert cfg.ssl_context is True

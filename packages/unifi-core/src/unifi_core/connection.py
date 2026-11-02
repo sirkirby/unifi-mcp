@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import aiohttp  # noqa: F401
 
+from unifi_core.tls import SslSetting, ssl_setting
+
 
 @dataclass
 class ConnectionConfig:
@@ -11,13 +13,13 @@ class ConnectionConfig:
     port: int = 443
     verify_ssl: bool = False
     timeout: float = 30.0
+    ssl_fingerprint: str | None = None
 
     @property
     def url_base(self) -> str:
         return f"https://{self.host}:{self.port}"
 
     @property
-    def ssl_context(self):
-        if self.verify_ssl:
-            return None
-        return False
+    def ssl_context(self) -> SslSetting:
+        """The aiohttp ``ssl=`` value; a fingerprint pins (see :mod:`unifi_core.tls`)."""
+        return ssl_setting(self.verify_ssl, self.ssl_fingerprint)
