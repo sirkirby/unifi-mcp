@@ -771,6 +771,10 @@ class ConnectionManager:
         self._application_version = None
         self._unifi_os_version = None
         try:
+            # Post-login detection may have corrected the controller type; this
+            # request does not go through request(), which applies it per call.
+            if self._unifi_os_override is not None:
+                self.controller.connectivity.is_unifi_os = self._unifi_os_override
             reply = await asyncio.wait_for(
                 self.controller.request(ApiRequest(method="get", path="/stat/sysinfo")),
                 timeout=_CONTROLLER_VERSION_READ_TIMEOUT_SECONDS,

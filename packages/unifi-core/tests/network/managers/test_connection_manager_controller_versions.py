@@ -69,6 +69,25 @@ async def test_a_failed_read_on_reconnecting_does_not_keep_the_old_versions():
     await manager.cleanup()
 
 
+async def test_the_read_uses_the_controller_type_found_after_login():
+    """Detection can change its answer after login, and the wrong one selects the wrong API prefix."""
+    manager, _ = await _connect(AsyncMock(return_value=_sysinfo()))
+    controller = manager.controller
+    controller.connectivity.is_unifi_os = True
+    manager._unifi_os_override = False
+    seen: list[bool] = []
+
+    async def _request(_api_request: Any) -> dict[str, Any]:
+        seen.append(controller.connectivity.is_unifi_os)
+        return _sysinfo()
+
+    controller.request = AsyncMock(side_effect=_request)
+    await manager._read_controller_versions()
+
+    assert seen == [False]
+    await manager.cleanup()
+
+
 async def test_a_controller_without_a_console_version_has_only_the_application_version():
     manager, _ = await _connect(AsyncMock(return_value={"data": [{"version": "9.0.0"}]}))
 
