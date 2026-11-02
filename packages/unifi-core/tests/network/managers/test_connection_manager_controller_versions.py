@@ -49,6 +49,26 @@ async def test_connecting_remembers_both_versions():
     await manager.cleanup()
 
 
+async def test_a_sysinfo_record_outside_a_list_is_read_too():
+    """``SystemManager.get_system_info`` already accepts this form."""
+    manager, _ = await _connect(AsyncMock(return_value={"data": {"version": "11.0.99"}}))
+
+    assert _versions(manager) == ("11.0.99", None)
+    await manager.cleanup()
+
+
+async def test_a_failed_read_on_reconnecting_does_not_keep_the_old_versions():
+    """The controller may have been upgraded while the connection was down."""
+    manager, _ = await _connect(AsyncMock(return_value=_sysinfo()))
+    assert _versions(manager) == ("11.0.99", "6.0.16")
+
+    manager.controller.request = AsyncMock(side_effect=RuntimeError("private detail"))
+    await manager._read_controller_versions()
+
+    assert _versions(manager) == (None, None)
+    await manager.cleanup()
+
+
 async def test_a_controller_without_a_console_version_has_only_the_application_version():
     manager, _ = await _connect(AsyncMock(return_value={"data": [{"version": "9.0.0"}]}))
 

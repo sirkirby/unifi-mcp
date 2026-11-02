@@ -12,11 +12,14 @@ full history and tags.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 PACKAGES = {"core": "unifi-core", "shared": "unifi-mcp-shared"}
 NO_TAG_VERSION = "0.0.0"
+# Each package's ``tag_regex`` keeps only the leading numbers of a tag.
+_RELEASE_RE = re.compile(r"\d+(?:\.\d+)*")
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -34,7 +37,10 @@ def package_version(root: Path, prefix: str, package: str) -> str:
     if described.returncode != 0:
         return NO_TAG_VERSION
     tag = described.stdout.strip()
-    base = tag.removeprefix(f"{prefix}/v")
+    release = _RELEASE_RE.match(tag.removeprefix(f"{prefix}/v"))
+    if release is None:
+        return NO_TAG_VERSION
+    base = release.group()
     paths = [f"packages/{package}/src", f"packages/{package}/pyproject.toml"]
     if _git(root, "diff", "--quiet", tag, "HEAD", "--", *paths).returncode == 0:
         return base

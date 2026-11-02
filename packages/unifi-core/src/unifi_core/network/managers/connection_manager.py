@@ -765,14 +765,18 @@ class ConnectionManager:
 
         The support bundle reports them from memory: its summary probe never
         contacts the controller, and its connectivity probe returns only a fixed
-        outcome.
+        outcome. The old versions are cleared first, because the controller may have
+        been upgraded while the connection was down.
         """
+        self._application_version = None
+        self._unifi_os_version = None
         try:
             reply = await asyncio.wait_for(
                 self.controller.request(ApiRequest(method="get", path="/stat/sysinfo")),
                 timeout=_CONTROLLER_VERSION_READ_TIMEOUT_SECONDS,
             )
-            row = reply["data"][0]
+            data = reply.get("data")
+            row = data[0] if isinstance(data, list) and data else data
             if isinstance(row, Mapping):
                 self.remember_controller_versions(row)
         except Exception as error:

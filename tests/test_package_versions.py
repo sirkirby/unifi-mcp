@@ -75,6 +75,27 @@ def test_a_changed_package_sorts_after_the_release_it_builds_on(repo: Path, chan
     assert version in SpecifierSet(">=0.4.83,<0.5", prereleases=True)
 
 
+@pytest.mark.parametrize("tag", ["core/v0.4.85-rc1", "core/v0.4.85rc1", "core/v0.4.85-beta.2"])
+def test_a_prerelease_tag_reads_as_its_release_as_the_package_does(repo: Path, tag: str) -> None:
+    """Each package's ``tag_regex`` keeps only the leading numbers, and an image build must not crash on the rest."""
+    _commit(repo, "packages/unifi-core/src/core.py", "two\n")
+    _git(repo, "tag", tag)
+
+    assert package_versions.package_version(repo, "core", "unifi-core") == "0.4.85"
+
+    _commit(repo, "packages/unifi-core/src/core.py", "three\n")
+    sha = _git(repo, "rev-parse", "--short", "HEAD")
+
+    assert package_versions.package_version(repo, "core", "unifi-core") == f"0.4.86.dev1+g{sha}"
+
+
+def test_a_tag_with_no_version_reports_the_fallback(repo: Path) -> None:
+    _commit(repo, "packages/unifi-core/src/core.py", "two\n")
+    _git(repo, "tag", "core/vnext")
+
+    assert package_versions.package_version(repo, "core", "unifi-core") == "0.0.0"
+
+
 def test_a_package_with_no_tag_reports_the_fallback(repo: Path) -> None:
     assert package_versions.package_version(repo, "shared", "unifi-mcp-shared") == "0.0.0"
 
