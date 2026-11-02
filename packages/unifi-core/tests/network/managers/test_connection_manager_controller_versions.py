@@ -88,6 +88,17 @@ async def test_the_read_uses_the_controller_type_found_after_login():
     await manager.cleanup()
 
 
+async def test_losing_the_connection_forgets_the_versions():
+    """A fallback to the API-key route reports connected, so old versions would pass as current."""
+    manager, _ = await _connect(AsyncMock(return_value=_sysinfo()))
+    assert _versions(manager) == ("11.0.99", "6.0.16")
+
+    await manager._discard_connection()
+
+    assert _versions(manager) == (None, None)
+    await manager.cleanup()
+
+
 async def test_a_controller_without_a_console_version_has_only_the_application_version():
     manager, _ = await _connect(AsyncMock(return_value={"data": [{"version": "9.0.0"}]}))
 

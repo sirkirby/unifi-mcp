@@ -840,6 +840,8 @@ class ConnectionManager:
         self._aiohttp_session = None
         self.controller = None
         self._initialized = False
+        self._application_version = None
+        self._unifi_os_version = None
 
     async def initialize(self) -> bool:
         """Initialize an independent session or API-key route.
@@ -1444,8 +1446,6 @@ class ConnectionManager:
             self._clear_reconnect_block()
             self._auth_generation = 0
             self._last_reauthentication_attempt_at = None
-            self._application_version = None
-            self._unifi_os_version = None
             self._key_mode = False
             self._key_retry_until = 0.0
             self._integration_prefix = None
