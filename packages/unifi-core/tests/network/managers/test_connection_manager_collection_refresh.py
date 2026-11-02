@@ -215,16 +215,16 @@ async def test_the_refresh_leaves_no_subscription_behind():
     await manager.cleanup()
 
 
-@pytest.mark.parametrize(
-    "reply",
-    [
-        pytest.param({}, id="non-JSON reply decodes to an empty body"),
-        pytest.param({"meta": {"rc": "ok"}}, id="envelope without data"),
-        pytest.param(_ok([]), id="empty list"),
-    ],
-)
-async def test_a_reply_that_refreshes_nothing_keeps_the_collection(reply):
-    """An empty reply may be a failed read, so it never empties a populated collection."""
+NOT_A_SNAPSHOT = [
+    pytest.param({}, id="non-JSON reply decodes to an empty body"),
+    pytest.param({"meta": {"rc": "ok"}}, id="envelope without data"),
+    pytest.param({"meta": {"rc": "ok"}, "data": None}, id="data is not a list"),
+]
+
+
+@pytest.mark.parametrize("reply", NOT_A_SNAPSHOT)
+async def test_a_reply_that_is_not_a_snapshot_keeps_the_collection(reply):
+    """A reply with no data list may be a failed read, so it never removes anything."""
     controller = _Controller()
     manager = _manager(controller)
     controller.replies = [_ok([_client(MAC_KEPT), _client(MAC_DELETED)]), reply]
@@ -233,6 +233,42 @@ async def test_a_reply_that_refreshes_nothing_keeps_the_collection(reply):
     await manager.refresh_handler("clients_all")
 
     assert sorted(controller.clients_all) == [MAC_KEPT, MAC_DELETED]
+    await manager.cleanup()
+
+
+@pytest.mark.parametrize("reply", NOT_A_SNAPSHOT)
+async def test_a_websocket_update_during_a_failed_read_removes_nothing(reply):
+    """A websocket refresh of one client must not turn a non-snapshot into a prune of the rest."""
+    controller = _Controller()
+    manager = _manager(controller)
+
+    def _websocket_update_then(reply_body: dict[str, Any]) -> Any:
+        def _reply() -> dict[str, Any]:
+            controller.clients.process_item(_client(MAC_KEPT, name="from websocket"))
+            return reply_body
+
+        return _reply
+
+    controller.replies = [_ok([_client(MAC_KEPT), _client(MAC_DELETED)]), _websocket_update_then(reply)]
+
+    await manager.refresh_handler("clients")
+    await manager.refresh_handler("clients")
+
+    assert sorted(controller.clients) == [MAC_KEPT, MAC_DELETED]
+    assert controller.clients[MAC_KEPT].raw["name"] == "from websocket"
+    await manager.cleanup()
+
+
+async def test_an_empty_data_list_is_the_controllers_answer_and_empties_the_collection():
+    controller = _Controller()
+    manager = _manager(controller)
+    controller.replies = [_ok([_client(MAC_KEPT), _client(MAC_DELETED)]), _ok([])]
+
+    await manager.refresh_handler("clients")
+    assert sorted(controller.clients) == [MAC_KEPT, MAC_DELETED]
+    await manager.refresh_handler("clients")
+
+    assert list(controller.clients) == []
     await manager.cleanup()
 
 

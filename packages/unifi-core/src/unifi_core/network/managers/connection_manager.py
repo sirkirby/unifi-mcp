@@ -362,17 +362,17 @@ async def _replace_handler_items(handler: Any) -> None:
     long-running server kept forgotten client records, disconnected "online"
     clients, removed devices and deleted DPI entries until it restarted (#963).
 
-    Every item in the response is processed and signalled ``ADDED`` or
-    ``CHANGED``, so the items present before the refresh and not signalled
-    during it were missing from the response; they are removed through
-    ``remove_item()``, which also signals ``DELETED`` to subscribers. An item a
-    websocket message refreshes while the request is in flight counts as
-    present, which it is.
+    This does what ``update()`` does (the handler's own request, then
+    ``process_raw()``) and then removes, through ``remove_item()``, every item
+    present before the refresh that the reply did not list. ``remove_item()``
+    signals ``DELETED`` to subscribers.
 
-    aiounifi decodes a non-JSON reply (an HTML login or proxy page) to empty
-    data, which looks the same here as a controller with nothing to list. When
-    a refresh signals nothing at all, the collection is left as it was rather
-    than emptied on what may be a failed read.
+    - Only a reply that carries a ``data`` list is a snapshot. aiounifi decodes
+      a non-JSON reply (an HTML login or proxy page) to ``{}``, which ``update()``
+      treated as an empty list; it changes nothing here. A JSON reply whose ``data`` is empty is the controller's answer
+      and does empty the collection.
+    - An item a websocket message adds or changes while the request is in
+      flight is kept even if the reply predates it.
 
     Handlers that are not aiounifi ``APIHandler`` instances are refreshed with
     plain ``update()``.
@@ -382,22 +382,37 @@ async def _replace_handler_items(handler: Any) -> None:
         return
 
     before = dict(handler.items())
-    refreshed: set[str] = set()
+    websocket_refreshed: set[str] = set()
 
     def _seen(_event: ItemEvent, obj_id: str) -> None:
-        refreshed.add(obj_id)
+        websocket_refreshed.add(obj_id)
 
     unsubscribe = handler.subscribe(_seen, (ItemEvent.ADDED, ItemEvent.CHANGED))
     try:
-        await handler.update()
+        raw = await handler.controller.request(handler.api_request)
     finally:
         unsubscribe()
 
-    if not refreshed:
+    rows = raw.get("data") if isinstance(raw, Mapping) else None
+    if not isinstance(rows, list):
         return
+
+    handler.process_raw(rows)
+    listed = {obj_id for row in rows if (obj_id := _handler_obj_id(handler, row)) is not None}
     for obj_id, item in before.items():
-        if obj_id not in refreshed and handler.get(obj_id) is item:
+        if obj_id in listed or obj_id in websocket_refreshed:
+            continue
+        if handler.get(obj_id) is item:
             handler.remove_item(item.raw)
+
+
+def _handler_obj_id(handler: APIHandler, row: Any) -> Optional[str]:
+    """The id ``process_item()`` files a raw row under: the first ``obj_id_key`` it carries."""
+    if not isinstance(row, Mapping):
+        return None
+    keys = (handler.obj_id_key,) if isinstance(handler.obj_id_key, str) else handler.obj_id_key
+    key = next((key for key in keys if key in row), None)
+    return None if key is None else row[key]
 
 
 class ConnectionManager:
