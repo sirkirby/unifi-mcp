@@ -593,7 +593,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
 | `unifi_get_site_settings` | Read | Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers. |
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |
-| `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, memory/CPU usage, and update availability. |
+| `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, device and client counts, update availability, and console CPU and memory usage. |
 | `unifi_get_threat_management_settings` | Read | Get site-wide threat management (IDS/IPS) and traffic identification settings. |
 | `unifi_get_threat_posture` | Read | Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH, including allowlisted gateway signature status. |
 | `unifi_list_backups` | Read | List available backups on the controller. |
