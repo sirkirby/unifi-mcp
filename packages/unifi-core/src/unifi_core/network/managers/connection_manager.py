@@ -19,6 +19,7 @@ from aiounifi.errors import (
     TwoFaTokenRequired,
     Unauthorized,
 )
+from aiounifi.interfaces.api_handlers import APIHandler, ItemEvent
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
@@ -349,6 +350,86 @@ async def detect_unifi_os_proactively(
 # stays on structured values, where the write-back guards look for it.
 _CREDENTIAL_MASK = "<redacted>"
 
+# The controller caps GET /rest/user at this many rows; a client past the
+# window is absent from the list scan although the controller has its record,
+# so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
+REST_USER_ROW_CAP = 3000
+
+
+async def _replace_handler_items(handler: Any) -> None:
+    """Refresh an aiounifi handler so it holds what the controller listed, nothing more.
+
+    ``APIHandler.update()`` requests the full list and feeds it to
+    ``process_raw()``, which only adds and replaces items. aiounifi drops an
+    item only when a websocket remove message names it, and most handlers have
+    none: ``ClientsAll`` and ``Devices`` declare no ``remove_messages``, and
+    ``Clients`` removes only on a deleted user, never on a disconnect. So a
+    long-running server kept forgotten client records, disconnected "online"
+    clients, removed devices and deleted DPI entries until it restarted.
+
+    This does what ``update()`` does (the handler's own request, then
+    ``process_raw()``) and then removes, through ``remove_item()``, every item
+    present before the refresh that the reply did not list. ``remove_item()``
+    signals ``DELETED`` to subscribers.
+
+    - Only a reply that carries a ``data`` list is a snapshot. aiounifi decodes
+      a non-JSON reply (an HTML login or proxy page) to ``{}``, which ``update()``
+      treated as an empty list; it changes nothing here. A JSON reply whose
+      ``data`` is empty is the controller's answer and does empty the collection.
+    - Rows of which none carries the handler's id key are a shape this code does
+      not recognize, not an empty list, so they remove nothing.
+    - A ``/rest/user`` reply of ``REST_USER_ROW_CAP`` rows or more may be a window
+      of a longer list. Absence from it does not show a record is gone, so it
+      removes nothing, and a list that large merges as ``update()`` does.
+    - An item a websocket message adds or changes while the request is in
+      flight is kept even if the reply predates it. The caller runs one refresh
+      of a collection at a time, so only websocket messages signal during the
+      request, not the reply of an overlapping refresh.
+
+    Handlers that are not aiounifi ``APIHandler`` instances are refreshed with
+    plain ``update()``.
+    """
+    if not isinstance(handler, APIHandler):
+        await handler.update()
+        return
+
+    before = dict(handler.items())
+    websocket_refreshed: set[str] = set()
+
+    def _seen(_event: ItemEvent, obj_id: str) -> None:
+        websocket_refreshed.add(obj_id)
+
+    unsubscribe = handler.subscribe(_seen, (ItemEvent.ADDED, ItemEvent.CHANGED))
+    try:
+        raw = await handler.controller.request(handler.api_request)
+    finally:
+        unsubscribe()
+
+    rows = raw.get("data") if isinstance(raw, Mapping) else None
+    if not isinstance(rows, list):
+        return
+
+    handler.process_raw(rows)
+    listed = {obj_id for row in rows if (obj_id := _handler_obj_id(handler, row)) is not None}
+    if rows and not listed:
+        return
+    if handler.api_request.path == "/rest/user" and len(rows) >= REST_USER_ROW_CAP:
+        return
+    for obj_id, item in before.items():
+        if obj_id in listed or obj_id in websocket_refreshed:
+            continue
+        if handler.get(obj_id) is item:
+            handler.remove_item(item.raw)
+
+
+def _handler_obj_id(handler: APIHandler, row: Any) -> Optional[str]:
+    """The id ``process_item()`` files a raw row under: the first ``obj_id_key`` it carries."""
+    if not isinstance(row, Mapping):
+        return None
+    keys = (handler.obj_id_key,) if isinstance(handler.obj_id_key, str) else handler.obj_id_key
+    key = next((key for key in keys if key in row), None)
+    return None if key is None else row[key]
+
 
 class ConnectionManager:
     """Manages the connection and session with the Unifi Network Controller."""
@@ -393,6 +474,7 @@ class ConnectionManager:
         self._aiohttp_session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
         self._connect_lock = asyncio.Lock()
+        self._collection_refresh_locks: Dict[str, asyncio.Lock] = {}
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
         self._cache_generations: Dict[str, int] = {}
@@ -1335,6 +1417,16 @@ class ConnectionManager:
             logger.error("Controller collection refresh failed: %s", type(error).__name__)
             raise RequestError(f"Controller collection refresh failed ({type(error).__name__}).") from None
 
+    async def _replace_collection(self, name: str) -> None:
+        """Refresh one collection at a time, so overlapping replies cannot undo each other's pruning.
+
+        Without this, an older reply can shield a record from a newer reply that
+        omits it, or bring it back after that reply removed it. Each collection
+        has its own lock, so a slow refresh does not hold up the others.
+        """
+        async with self._collection_refresh_locks.setdefault(name, asyncio.Lock()):
+            await _replace_handler_items(getattr(self.controller, name))
+
     async def _refresh_handler_with_reauthentication(self, name: str) -> Any:
         """Refresh an aiounifi handler collection, recovering an expired session.
 
@@ -1348,13 +1440,16 @@ class ConnectionManager:
         The handler is resolved by *name* rather than passed in, so the retry
         reads it off ``self.controller`` again — the same reason ``request()``
         re-derives its request method after re-authenticating.
+
+        A refresh replaces the collection rather than merging into it; see
+        ``_replace_handler_items``.
         """
         if not await self.ensure_connected() or not self.controller:
             raise self._not_connected_error()
 
         auth_generation = self._auth_generation
         try:
-            return await getattr(self.controller, name).update()
+            return await self._replace_collection(name)
         except LoginRequired:
             logger.warning("Login required detected during %s refresh, attempting explicit re-authentication...", name)
             if not await self._reauthenticate(auth_generation):
@@ -1363,7 +1458,7 @@ class ConnectionManager:
                 raise ConnectionError("Re-authentication failed, controller not available.")
             logger.info("Re-authentication successful, retrying %s refresh...", name)
             try:
-                return await getattr(self.controller, name).update()
+                return await self._replace_collection(name)
             except LoginRequired as retry_error:
                 # Same terminal treatment ``request()`` applies: a second
                 # LoginRequired means the refreshed session was rejected, so

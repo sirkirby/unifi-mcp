@@ -8,6 +8,7 @@ from aiounifi.models.client import Client
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
 from unifi_core.mac import canonical_mac, mac_equal, normalize_mac
 from unifi_core.network.managers.connection_manager import (
+    REST_USER_ROW_CAP,
     ConnectionManager,
     controller_error_code,
     response_status,
@@ -18,10 +19,6 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_CLIENTS = "clients"
 
-# The controller caps GET /rest/user at this many rows; a client past the
-# window is absent from the list scan although the controller has its record,
-# so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
-REST_USER_ROW_CAP = 3000
 UNKNOWN_USER_CODE = "api.err.UnknownUser"
 
 
