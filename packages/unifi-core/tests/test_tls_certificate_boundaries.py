@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from unifi_core.access.managers.connection_manager import AccessUnavailableError
+from unifi_core.exceptions import UniFiAuthError
 from unifi_core.tls import (
     CertificateVerificationError,
     certificate_failure,
@@ -417,6 +419,67 @@ class TestAccessRequests:
             await session.close()
         # Not py-unifi-access's ApiSSLError(str(mismatch)).
         _assert_safe(excinfo.value, "ACCESS")
+
+    @staticmethod
+    async def _connect(manager, *, developer=None, proxy=None):
+        """Initialize with each path's login outcome, so one path can fail while the other connects."""
+        client = MagicMock()
+        client.authenticate = AsyncMock(side_effect=developer)
+        with (
+            patch("unifi_access_api.UnifiAccessApiClient", return_value=client),
+            patch.object(manager, "_proxy_login", AsyncMock(side_effect=proxy)),
+        ):
+            assert await manager.initialize() is True
+
+    async def test_developer_path_failure_does_not_blame_the_token(self, access_manager, caplog):
+        with caplog.at_level(logging.WARNING):
+            await self._connect(access_manager, developer=certificate_failure(_mismatch(), env_prefix="ACCESS"))
+        try:
+            with pytest.raises(CertificateVerificationError) as excinfo:
+                await access_manager.developer_request("GET", "/visitors", operation="List visitors")
+            message = str(excinfo.value)
+            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+            assert "12445" in message
+            assert "API token" not in message
+            assert "12445" in _rendered(caplog)
+            _assert_absent(message, FINGERPRINT_MARKERS)
+        finally:
+            await access_manager.close()
+
+    async def test_proxy_path_failure_is_named(self, access_manager):
+        await self._connect(access_manager, proxy=certificate_failure(_mismatch(), env_prefix="ACCESS"))
+        try:
+            with pytest.raises(AccessUnavailableError) as excinfo:
+                await access_manager.proxy_request("GET", "credentials")
+            message = str(excinfo.value)
+            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+            assert str(PORT) in message
+            _assert_absent(message, FINGERPRINT_MARKERS)
+        finally:
+            await access_manager.close()
+
+    async def test_a_rejected_token_still_gets_the_token_advice(self, access_manager):
+        await self._connect(access_manager, developer=RuntimeError("rejected"))
+        try:
+            with pytest.raises(UniFiAuthError, match="API token"):
+                await access_manager.developer_request("GET", "/visitors", operation="List visitors")
+        finally:
+            await access_manager.close()
+
+    async def test_a_later_clean_attempt_forgets_the_failure(self, access_manager):
+        await self._connect(access_manager, proxy=certificate_failure(_mismatch(), env_prefix="ACCESS"))
+        assert "FINGERPRINT" in str(access_manager.unavailable_error("Proxy session is not available"))
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        with (
+            patch("unifi_access_api.UnifiAccessApiClient", return_value=client),
+            patch.object(access_manager, "_proxy_login", AsyncMock(side_effect=RuntimeError("rejected"))),
+        ):
+            await access_manager._connect_once()
+        try:
+            assert "FINGERPRINT" not in str(access_manager.unavailable_error("Proxy session is not available"))
+        finally:
+            await access_manager.close()
 
     async def test_both_sessions_carry_the_middleware(self, access_manager):
         with patch("aiohttp.TCPConnector", _StalePinConnector), patch("unifi_access_api.UnifiAccessApiClient") as cls:

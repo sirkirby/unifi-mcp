@@ -48,6 +48,7 @@ from unifi_core.support_bundle import (
 )
 from unifi_core.support_transport import no_retry_support_request
 from unifi_core.tls import (
+    CertificateVerificationError,
     SslSetting,
     certificate_error_hint,
     certificate_safe_middleware,
@@ -147,6 +148,8 @@ class AccessConnectionManager:
         self._initialized = False
         self._last_connection_error: str | None = None
         self._path_failures: list[BaseException] = []
+        self._api_certificate_failed = False
+        self._proxy_certificate_failed = False
         self._last_attempt_at: float | None = None
         self._reconnect_lock = asyncio.Lock()
         self._attempt = ConnectAttempt()
@@ -323,6 +326,8 @@ class AccessConnectionManager:
         reached.
         """
         self._path_failures = []
+        self._api_certificate_failed = False
+        self._proxy_certificate_failed = False
         try:
             async with asyncio.timeout(_CONNECT_ATTEMPT_TIMEOUT_SECONDS):
                 await self._try_api_client()
@@ -337,6 +342,9 @@ class AccessConnectionManager:
                 f"{self.host}. Check that the controller is reachable."
             ) from None
         if self._api_client_available or self._proxy_available:
+            note = self._certificate_failure_note()
+            if note:
+                logger.warning("[access-cm] %s", note)
             return
         if any(self._is_rejected_login(failure) for failure in self._path_failures):
             raise UniFiAuthError(self._rejected_message())
@@ -437,6 +445,22 @@ class AccessConnectionManager:
         """Why the last connection attempt failed, or ``None`` after a success."""
         return self._last_connection_error
 
+    def _certificate_failure_note(self) -> str | None:
+        """Which path failed its certificate check, for when the other one connected.
+
+        Names the port because each path has its own: the certificate that fails
+        is the one to look at.
+        """
+        ports = []
+        if self._api_certificate_failed:
+            ports.append(self._api_port)
+        if self._proxy_certificate_failed:
+            ports.append(self.port)
+        if not ports:
+            return None
+        where = " and ".join(str(port) for port in ports)
+        return f"On port {where}: {certificate_error_hint(env_prefix=self.tls_env_prefix)}"
+
     def unavailable_error(self, message: str) -> AccessUnavailableError:
         """Build the error a manager raises when its auth path is unavailable.
 
@@ -451,7 +475,8 @@ class AccessConnectionManager:
                 "background and a later call uses the connection once it succeeds."
             )
         if not self._last_connection_error:
-            return AccessUnavailableError(message)
+            note = self._certificate_failure_note()
+            return AccessUnavailableError(f"{message}: {note}" if note else message)
         detail = f"{message}: {self._last_connection_error}"
         blocked = self._reconnect_block_remaining()
         if blocked > 0:
@@ -500,6 +525,7 @@ class AccessConnectionManager:
             logger.info("[access-cm] API client authenticated on port %s", self._api_port)
         except Exception as exc:
             self._path_failures.append(exc)
+            self._api_certificate_failed = is_certificate_error(exc)
             self._api_support_attempt = connection_attempt_failed(exc)
             # Class name only: a certificate failure's text carries the host,
             # port and both fingerprints. The fixed remediation is added by
@@ -535,6 +561,7 @@ class AccessConnectionManager:
             logger.info("[access-cm] Proxy session established via %s:%s", self.host, self.port)
         except Exception as exc:
             self._path_failures.append(exc)
+            self._proxy_certificate_failed = is_certificate_error(exc)
             self._proxy_support_attempt = connection_attempt_failed(exc)
             logger.warning(
                 "[access-cm] Proxy login failed (non-fatal if API client available): %s",
@@ -593,6 +620,10 @@ class AccessConnectionManager:
         )
         if not self._api_key:
             raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {remediation}")
+        if self._api_certificate_failed:
+            raise CertificateVerificationError(
+                f"{operation} needs the Developer API. {self._certificate_failure_note()}"
+            )
         if not self.has_api_client or self._api_session is None:
             raise UniFiAuthError(
                 f"{operation} requires an authenticated UniFi Access Developer API session. "
