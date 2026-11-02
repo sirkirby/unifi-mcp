@@ -1,0 +1,40 @@
+name: Shared package versions
+description: >-
+  Work out the release versions of unifi-core and unifi-mcp-shared for a Docker
+  build, which has no git metadata of its own. A package unchanged since its tag
+  gets that tag's version, even when other packages have moved on. Needs a
+  checkout with full history and tags.
+
+outputs:
+  core:
+    description: unifi-core version
+    value: ${{ steps.versions.outputs.core }}
+  shared:
+    description: unifi-mcp-shared version
+    value: ${{ steps.versions.outputs.shared }}
+
+runs:
+  using: composite
+  steps:
+    - id: versions
+      shell: bash
+      run: |
+        version_of() {
+          local prefix=$1 package=$2 tag base
+          local paths=("packages/$package/src" "packages/$package/pyproject.toml")
+          if ! tag=$(git describe --tags --match "$prefix/v*" --abbrev=0 HEAD 2>/dev/null); then
+            echo "0.0.0"
+            return
+          fi
+          base=${tag#"$prefix/v"}
+          if git diff --quiet "$tag" HEAD -- "${paths[@]}"; then
+            echo "$base"
+          else
+            echo "$base.dev$(git rev-list --count "$tag..HEAD" -- "${paths[@]}")+g$(git rev-parse --short HEAD)"
+          fi
+        }
+        core=$(version_of core unifi-core)
+        shared=$(version_of shared unifi-mcp-shared)
+        echo "core=$core" >> "$GITHUB_OUTPUT"
+        echo "shared=$shared" >> "$GITHUB_OUTPUT"
+        echo "unifi-core $core, unifi-mcp-shared $shared"

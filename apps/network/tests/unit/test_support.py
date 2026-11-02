@@ -39,6 +39,43 @@ async def test_network_summary_uses_only_public_safe_connection_status():
     assert "controller.example.invalid" not in repr(evidence)
 
 
+def _connected_status(**extra):
+    return {
+        "initialized": True,
+        "connected": True,
+        "tls_verification_enabled": True,
+        "last_attempt": connection_attempt_succeeded(),
+        "session_available": True,
+        "controller_type": "proxy",
+        "reconnect_circuit": "closed",
+        **extra,
+    }
+
+
+async def test_network_summary_reports_versions_held_in_memory():
+    manager = SimpleNamespace(
+        support_status=lambda: _connected_status(application_version="11.0.99", unifi_os_version="6.0.16")
+    )
+
+    evidence = await NetworkSupportBundleAdapter(manager, integration_api_key_configured=False).collect("summary", None)
+
+    assert evidence.controller.application_version == "11.0.99"
+    assert evidence.controller.unifi_os_version == "6.0.16"
+
+
+async def test_network_bundle_reports_no_versions_while_disconnected():
+    manager = SimpleNamespace(
+        support_status=lambda: _connected_status(
+            connected=False, session_available=False, application_version="11.0.99", unifi_os_version="6.0.16"
+        )
+    )
+
+    evidence = await NetworkSupportBundleAdapter(manager, integration_api_key_configured=False).collect("summary", None)
+
+    assert evidence.controller.application_version is None
+    assert evidence.controller.unifi_os_version is None
+
+
 async def test_network_failed_initialization_keeps_category_not_raw_error():
     canary = "https://user:secret@controller.example.invalid"
     manager = SimpleNamespace(

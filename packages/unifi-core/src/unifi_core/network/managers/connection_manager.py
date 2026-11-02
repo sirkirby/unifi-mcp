@@ -45,6 +45,7 @@ from unifi_core.support_bundle import (
     connection_attempt_succeeded,
     connectivity_http_outcome,
     connectivity_probe_result,
+    safe_controller_version,
 )
 from unifi_core.support_transport import no_retry_support_request
 
@@ -355,6 +356,9 @@ _CREDENTIAL_MASK = "<redacted>"
 # so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
 REST_USER_ROW_CAP = 3000
 
+# Reading the controller's versions never holds up a connection for longer than this.
+_CONTROLLER_VERSION_READ_TIMEOUT_SECONDS = 5
+
 
 async def _replace_handler_items(handler: Any) -> bool:
     """Refresh an aiounifi handler so it holds what the controller listed, nothing more.
@@ -492,6 +496,8 @@ class ConnectionManager:
         self._reconnect_block_count: int = 0
         self._auth_generation = 0
         self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
+        self._application_version: Optional[str] = None
+        self._unifi_os_version: Optional[str] = None
 
         # Path detection state
         self._unifi_os_override: Optional[bool] = None
@@ -745,7 +751,32 @@ class ConnectionManager:
             "session_available": session_available,
             "controller_type": controller_type,
             "reconnect_circuit": "open" if self.reconnect_blocked else "closed",
+            "application_version": self._application_version,
+            "unifi_os_version": self._unifi_os_version,
         }
+
+    def remember_controller_versions(self, sysinfo: Mapping[str, Any]) -> None:
+        """Keep the versions from a ``/stat/sysinfo`` record for the support bundle."""
+        self._application_version = safe_controller_version(sysinfo.get("version"))
+        self._unifi_os_version = safe_controller_version(sysinfo.get("console_display_version"))
+
+    async def _read_controller_versions(self) -> None:
+        """Read the controller's versions once on connecting, without ever failing the connection.
+
+        The support bundle reports them from memory: its summary probe never
+        contacts the controller, and its connectivity probe returns only a fixed
+        outcome.
+        """
+        try:
+            reply = await asyncio.wait_for(
+                self.controller.request(ApiRequest(method="get", path="/stat/sysinfo")),
+                timeout=_CONTROLLER_VERSION_READ_TIMEOUT_SECONDS,
+            )
+            row = reply["data"][0]
+            if isinstance(row, Mapping):
+                self.remember_controller_versions(row)
+        except Exception as error:
+            logger.debug("Could not read controller versions: %s", type(error).__name__)
 
     async def support_connectivity_probe(self) -> ConnectivityProbe:
         """Perform one bounded request through the existing authenticated session."""
@@ -1218,6 +1249,7 @@ class ConnectionManager:
                     self._clear_reconnect_block()
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
+                    await self._read_controller_versions()
                     self._connected_event.set()
                     return True
 
@@ -1404,6 +1436,8 @@ class ConnectionManager:
             self._clear_reconnect_block()
             self._auth_generation = 0
             self._last_reauthentication_attempt_at = None
+            self._application_version = None
+            self._unifi_os_version = None
             self._key_mode = False
             self._key_retry_until = 0.0
             self._integration_prefix = None

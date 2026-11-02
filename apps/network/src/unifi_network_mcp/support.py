@@ -48,6 +48,8 @@ class NetworkSupportBundleAdapter:
         return SupportBundleEvidence(
             controller=ControllerSection(
                 status=EvidenceStatus.AVAILABLE if connected else EvidenceStatus.NOT_CONNECTED,
+                application_version=status.get("application_version") if connected else None,
+                unifi_os_version=status.get("unifi_os_version") if connected else None,
                 api_surface=api_surface,
                 capability_flags=(ControllerCapabilityFlag.CACHED_STATE,) if connected else (),
             ),

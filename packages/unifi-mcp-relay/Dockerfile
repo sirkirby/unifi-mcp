@@ -3,6 +3,11 @@ WORKDIR /app
 
 ARG VERSION=0.0.0.dev0
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
+# unifi-core and unifi-mcp-shared carry their own release versions, not the image's
+ARG CORE_VERSION=0.0.0.dev0
+ARG SHARED_VERSION=0.0.0.dev0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_UNIFI_CORE=${CORE_VERSION}
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_UNIFI_MCP_SHARED=${SHARED_VERSION}
 
 RUN pip install --upgrade pip && pip install uv
 

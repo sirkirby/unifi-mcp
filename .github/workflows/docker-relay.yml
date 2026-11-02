@@ -60,6 +60,10 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VERSION"
 
+      - name: Get shared package versions
+        id: package_versions
+        uses: ./.github/actions/package-versions
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v6
@@ -83,5 +87,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
+            CORE_VERSION=${{ steps.package_versions.outputs.core }}
+            SHARED_VERSION=${{ steps.package_versions.outputs.shared }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

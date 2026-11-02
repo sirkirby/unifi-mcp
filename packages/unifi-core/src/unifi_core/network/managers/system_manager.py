@@ -99,6 +99,7 @@ class SystemManager:
             else:
                 info = {}
             if info:
+                self._connection.remember_controller_versions(info)
                 info = {**info, **await self._live_system_fields(info)}
             self._connection._update_cache(cache_key, info, timeout=15)
             return info
