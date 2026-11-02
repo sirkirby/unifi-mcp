@@ -435,10 +435,12 @@ class AccessConnectionManager:
         return message
 
     def _rejected_message(self) -> str:
-        return (
+        message = (
             f"UniFi Access at {self.host} rejected the configured credentials "
             f"(tried {' and '.join(self._configured_paths())}). Check the username/password or API key."
         )
+        note = self._certificate_failure_note()
+        return f"{message} {note}" if note else message
 
     @property
     def last_connection_error(self) -> str | None:

@@ -473,6 +473,14 @@ class TestAccessRequests:
         finally:
             await access_manager.close()
 
+    async def test_a_rejected_login_does_not_hide_the_other_paths_certificate(self, access_manager):
+        access_manager._path_failures = [certificate_failure(_mismatch(), env_prefix="ACCESS")]
+        access_manager._api_certificate_failed = True
+        message = access_manager._rejected_message()
+        assert "12445" in message
+        assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+        _assert_absent(message, FINGERPRINT_MARKERS)
+
     async def test_a_rejected_token_still_gets_the_token_advice(self, access_manager):
         await self._connect(access_manager, developer=RuntimeError("rejected"))
         try:
