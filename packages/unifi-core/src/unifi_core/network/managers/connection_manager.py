@@ -1181,7 +1181,7 @@ class ConnectionManager:
                 )
             rows = await self.integration_pages(f"/v1/sites/{matches[0].id}/{suffixes[domain]}")
             return PublicInventory(PublicInventoryItem.model_validate(row).inventory_record(domain) for row in rows)
-        except UniFiAuthError:
+        except (UniFiAuthError, CertificateVerificationError):
             raise
         except Exception as error:
             raise UniFiAuthError(f"Invalid Network public inventory ({type(error).__name__}).") from None
@@ -1538,6 +1538,8 @@ class ConnectionManager:
         """
         try:
             return await self._refresh_handler_with_reauthentication(name)
+        except CertificateVerificationError:
+            raise
         except Exception as error:
             logger.error("Controller collection refresh failed: %s", type(error).__name__)
             raise RequestError(f"Controller collection refresh failed ({type(error).__name__}).") from None
@@ -1624,7 +1626,7 @@ class ConnectionManager:
         try:
             return await self._request_with_reauthentication(api_request)
         except Exception as error:
-            if isinstance(error, SettingsControllerRejection):
+            if isinstance(error, (SettingsControllerRejection, CertificateVerificationError)):
                 raise
             if api_request.path.startswith(("/get/setting/", "/set/setting/")):
                 # Domain managers and tools may log the returned error and its

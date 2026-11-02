@@ -15,7 +15,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from unifi_core.tls import CertificateVerificationError, certificate_safe_middleware, safe_error_text
+from unifi_core.tls import (
+    CertificateVerificationError,
+    certificate_failure,
+    certificate_safe_middleware,
+    safe_error_text,
+)
 
 HOST = "198.51.100.7"
 PORT = 8443
@@ -248,6 +253,57 @@ class TestNetworkRequests:
                 await manager.request_integration("/v1/sites")
         _assert_safe(excinfo.value, "NETWORK")
         _assert_absent(_rendered(caplog))
+
+
+class TestNetworkWrappersKeepTheRemediation:
+    """Wrappers that hide unsafe failures must let this one through: its text is fixed and tells the user what to do."""
+
+    async def test_public_inventory(self, caplog):
+        from unifi_core.auth import UniFiAuth
+        from unifi_core.network.managers.connection_manager import ConnectionManager
+
+        manager = ConnectionManager(
+            HOST,
+            "",
+            "",
+            port=PORT,
+            ssl_fingerprint=EXPECTED.hex(),
+            auth=UniFiAuth(api_key="synthetic-key"),
+            tls_env_prefix="NETWORK",
+        )
+        with patch("aiohttp.client.TCPConnector", _StalePinConnector), caplog.at_level(logging.DEBUG):
+            with pytest.raises(CertificateVerificationError) as excinfo:
+                await manager.public_inventory("devices")
+        _assert_safe(excinfo.value, "NETWORK")
+        _assert_absent(_rendered(caplog))
+
+    async def test_collection_refresh(self, network_manager):
+        network_manager._refresh_handler_with_reauthentication = AsyncMock(
+            side_effect=certificate_failure(_mismatch(), env_prefix="NETWORK")
+        )
+        with pytest.raises(CertificateVerificationError) as excinfo:
+            await network_manager.refresh_handler("clients")
+        assert "UNIFI_NETWORK_SSL_FINGERPRINT" in str(excinfo.value)
+        _assert_absent(str(excinfo.value))
+
+    async def test_settings_request(self, network_manager):
+        from aiounifi.models.api import ApiRequest
+
+        network_manager._request_with_reauthentication = AsyncMock(
+            side_effect=certificate_failure(_mismatch(), env_prefix="NETWORK")
+        )
+        with pytest.raises(CertificateVerificationError) as excinfo:
+            await network_manager.request(ApiRequest(method="get", path="/get/setting/mgmt"))
+        assert "UNIFI_NETWORK_SSL_FINGERPRINT" in str(excinfo.value)
+        _assert_absent(str(excinfo.value))
+
+    async def test_other_refresh_failures_stay_hidden(self, network_manager):
+        from aiounifi.errors import RequestError
+
+        network_manager._refresh_handler_with_reauthentication = AsyncMock(side_effect=RuntimeError(f"secret {HOST}"))
+        with pytest.raises(RequestError) as excinfo:
+            await network_manager.refresh_handler("clients")
+        assert HOST not in str(excinfo.value)
 
 
 class TestConsumerWithoutTheVariables:
