@@ -356,8 +356,11 @@ _CREDENTIAL_MASK = "<redacted>"
 REST_USER_ROW_CAP = 3000
 
 
-async def _replace_handler_items(handler: Any) -> None:
+async def _replace_handler_items(handler: Any) -> bool:
     """Refresh an aiounifi handler so it holds what the controller listed, nothing more.
+
+    Returns whether the reply was a list the collection can be trusted to reflect.
+    After ``False`` the collection still holds whatever it held before.
 
     ``APIHandler.update()`` requests the full list and feeds it to
     ``process_raw()``, which only adds and replaces items. aiounifi drops an
@@ -391,7 +394,7 @@ async def _replace_handler_items(handler: Any) -> None:
     """
     if not isinstance(handler, APIHandler):
         await handler.update()
-        return
+        return True
 
     before = dict(handler.items())
     websocket_refreshed: set[str] = set()
@@ -407,19 +410,20 @@ async def _replace_handler_items(handler: Any) -> None:
 
     rows = raw.get("data") if isinstance(raw, Mapping) else None
     if not isinstance(rows, list):
-        return
+        return False
 
     handler.process_raw(rows)
     listed = {obj_id for row in rows if (obj_id := _handler_obj_id(handler, row)) is not None}
     if rows and not listed:
-        return
+        return False
     if handler.api_request.path == "/rest/user" and len(rows) >= REST_USER_ROW_CAP:
-        return
+        return True
     for obj_id, item in before.items():
         if obj_id in listed or obj_id in websocket_refreshed:
             continue
         if handler.get(obj_id) is item:
             handler.remove_item(item.raw)
+    return True
 
 
 def _handler_obj_id(handler: APIHandler, row: Any) -> Optional[str]:
@@ -1409,15 +1413,19 @@ class ConnectionManager:
         """Close the connection using the common manager lifecycle contract."""
         await self.cleanup()
 
-    async def refresh_handler(self, name: str) -> Any:
-        """Refresh a collection while exposing only safe failure context to callers."""
+    async def refresh_handler(self, name: str) -> bool:
+        """Refresh a collection while exposing only safe failure context to callers.
+
+        Returns ``False`` when the reply was not a list, such as a login page, and
+        the collection keeps what it held before.
+        """
         try:
             return await self._refresh_handler_with_reauthentication(name)
         except Exception as error:
             logger.error("Controller collection refresh failed: %s", type(error).__name__)
             raise RequestError(f"Controller collection refresh failed ({type(error).__name__}).") from None
 
-    async def _replace_collection(self, name: str) -> None:
+    async def _replace_collection(self, name: str) -> bool:
         """Refresh one collection at a time, so overlapping replies cannot undo each other's pruning.
 
         Without this, an older reply can shield a record from a newer reply that
@@ -1425,9 +1433,9 @@ class ConnectionManager:
         has its own lock, so a slow refresh does not hold up the others.
         """
         async with self._collection_refresh_locks.setdefault(name, asyncio.Lock()):
-            await _replace_handler_items(getattr(self.controller, name))
+            return await _replace_handler_items(getattr(self.controller, name))
 
-    async def _refresh_handler_with_reauthentication(self, name: str) -> Any:
+    async def _refresh_handler_with_reauthentication(self, name: str) -> bool:
         """Refresh an aiounifi handler collection, recovering an expired session.
 
         ``request()`` is not the only way this project reaches the controller:

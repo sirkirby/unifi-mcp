@@ -208,6 +208,30 @@ class TestGetSystemInfoLiveFields:
         assert "cpu_percent" not in info
 
     @pytest.mark.asyncio
+    async def test_a_reply_that_is_not_a_list_leaves_out_stale_records(self, system_manager, connection):
+        """A login page leaves the old collection in place, so its count and usage say nothing current."""
+
+        async def refresh(name):
+            return name != "devices"
+
+        connection.refresh_handler = AsyncMock(side_effect=refresh)
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_clients"] == 2
+        assert "num_devices" not in info
+        assert "cpu_percent" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_real_empty_list_counts_as_zero(self, system_manager, connection):
+        connection.refresh_handler = AsyncMock(return_value=True)
+        connection.controller.clients = {}
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_clients"] == 0
+
+    @pytest.mark.asyncio
     async def test_an_empty_sysinfo_reads_no_lists(self, system_manager, connection):
         connection.request.return_value = []
 

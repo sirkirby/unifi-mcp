@@ -133,9 +133,10 @@ class SystemManager:
         return fields
 
     async def _collection_records(self, name: str) -> Optional[List[Dict[str, Any]]]:
-        """The raw records of a freshly refreshed collection, or ``None`` if it cannot be read."""
+        """The raw records of a freshly refreshed collection, or ``None`` if the refresh gave no list."""
         try:
-            await self._connection.refresh_handler(name)
+            if await self._connection.refresh_handler(name) is False:
+                return None
             return [item.raw for item in getattr(self._connection.controller, name).values()]
         except Exception as e:
             logger.debug("Could not read %s for system info: %s", name, type(e).__name__)
