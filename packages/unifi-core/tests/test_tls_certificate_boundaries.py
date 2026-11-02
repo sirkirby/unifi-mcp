@@ -484,3 +484,30 @@ class TestProtectRequests:
             await client.close_session()
             await client.close_public_api_session()
         _assert_safe(excinfo.value, "PROTECT")
+
+    async def test_later_tool_calls_get_the_remediation(self):
+        """A tool call finds no client after the failed connect, and only its error reaches the user."""
+        pytest.importorskip("uiprotect")
+        from unifi_core.exceptions import UniFiConnectionError
+        from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+
+        manager = ProtectConnectionManager(
+            HOST, "admin", "secret", port=PORT, ssl_fingerprint=EXPECTED.hex(), tls_env_prefix="PROTECT"
+        )
+        with patch("aiohttp.TCPConnector", _StalePinConnector), patch("asyncio.sleep", AsyncMock()):
+            await manager.initialize()
+        with pytest.raises(UniFiConnectionError) as excinfo:
+            _ = manager.client
+        assert "UNIFI_PROTECT_SSL_FINGERPRINT" in str(excinfo.value)
+        assert "reachable" not in str(excinfo.value)
+        _assert_absent(str(excinfo.value), FINGERPRINT_MARKERS)
+
+    def test_other_failures_keep_the_reachability_advice(self):
+        pytest.importorskip("uiprotect")
+        from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+
+        manager = ProtectConnectionManager(HOST, "admin", "secret", port=PORT, tls_env_prefix="PROTECT")
+        manager._connection_failed(aiohttp.ClientConnectionError("refused"))
+        message = manager._not_connected_message()
+        assert "reachable" in message
+        assert "FINGERPRINT" not in message

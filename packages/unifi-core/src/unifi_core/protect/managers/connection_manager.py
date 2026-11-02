@@ -162,6 +162,7 @@ class ProtectConnectionManager:
         self._reconnect_attempt_timeout = RECONNECT_ATTEMPT_TIMEOUT_SECONDS
         self._last_connect_attempt_at: float | None = None
         self._last_failure_class: str | None = None
+        self._last_failure_was_certificate = False
         self._reconnect_block_class: str | None = None
         self._reconnect_block_until = 0.0
         self._reconnect_block_count = 0
@@ -374,6 +375,7 @@ class ProtectConnectionManager:
         self._initialization_failure = None
         self._support_attempt = connection_attempt_succeeded()
         self._last_failure_class = None
+        self._last_failure_was_certificate = False
         self._clear_reconnect_block()
         self._start_bootstrap_refresh()
         for hook in list(self._connect_hooks):
@@ -385,6 +387,7 @@ class ProtectConnectionManager:
     def _connection_failed(self, error: BaseException) -> None:
         self._initialized = False
         self._last_failure_class = type(error).__name__
+        self._last_failure_was_certificate = is_certificate_error(error)
         # The exception can quote NVR responses: keep its category and status only.
         # uiprotect wraps a timed-out request in NvrError; classify it by its cause.
         cause = error.__cause__ if isinstance(error.__cause__, TimeoutError) else error
@@ -450,6 +453,12 @@ class ProtectConnectionManager:
                 "UniFi Protect connection is not initialized: the controller rejected the login "
                 f"({self._reconnect_block_class}). Automatic reconnect is paused for about {remaining:.0f} seconds; "
                 "check the Protect username and password, or wait for a login lockout to clear."
+            )
+        if self._last_failure_was_certificate:
+            return (
+                "UniFi Protect connection is not initialized: the last connection attempt failed "
+                f"({self._last_failure_class}). {certificate_error_hint(env_prefix=self.tls_env_prefix)} "
+                "A later call tries to connect again."
             )
         if self._last_failure_class is not None:
             return (
@@ -525,6 +534,7 @@ class ProtectConnectionManager:
         self._closed = True
         self._last_connect_attempt_at = None
         self._last_failure_class = None
+        self._last_failure_was_certificate = False
         self._clear_reconnect_block()
         logger.info("[protect-cm] Connection closed.")
 
