@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any, Dict, List, Optional
@@ -38,13 +39,19 @@ CACHE_PREFIX_ADMINS = "admin_users"
 def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """The managed device that hosts this controller, if there is one.
 
-    ``/stat/sysinfo`` lists the controller's own addresses in ``ip_addrs``, and a
-    console's ``network_table`` carries them. A gateway beside a self-hosted
-    controller has addresses of its own, so its CPU and memory are never reported
-    as the controller's.
+    ``/stat/sysinfo`` names the console's hardware in ``ubnt_device_type`` and its
+    addresses in ``ip_addrs``. A device must match both. A remote site can reuse
+    the controller's address range, so an address alone could report a gateway's
+    CPU and memory as the controller's; a USG or UXG has a model that cannot host
+    Network. A controller that names no hardware has no console to report.
     """
+    model = info.get("ubnt_device_type")
+    if not model:
+        return None
     addresses = set(info.get("ip_addrs") or [])
     for device in devices:
+        if device.get("model") != model:
+            continue
         for network in device.get("network_table") or []:
             if isinstance(network, dict) and network.get("ip") in addresses:
                 return device
@@ -52,11 +59,16 @@ def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Opti
 
 
 def _percent(value: Any) -> Optional[float]:
-    """A ``system-stats`` reading as a number; the controller sends them as strings."""
+    """A ``system-stats`` reading as a finite number; the controller sends them as strings.
+
+    ``float()`` also accepts ``"NaN"``, ``"Infinity"`` and ``"1e1000"``, none of
+    which JSON or a GraphQL ``Float`` can carry.
+    """
     try:
-        return float(value)
+        reading = float(value)
     except (TypeError, ValueError):
         return None
+    return reading if math.isfinite(reading) else None
 
 
 class SystemManager:
