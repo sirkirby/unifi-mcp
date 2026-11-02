@@ -295,6 +295,22 @@ async def test_a_reply_at_the_row_cap_does_not_prove_a_record_is_gone(rows_liste
     await manager.cleanup()
 
 
+async def test_the_row_cap_applies_only_to_the_capped_endpoint():
+    """A complete online list of the same length still removes a disconnected client."""
+    controller = _Controller()
+    manager = _manager(controller)
+    rows = [_client(f"02:00:01:{i >> 8 & 255:02x}:{i & 255:02x}:00") for i in range(REST_USER_ROW_CAP)]
+    controller.replies = [_ok([_client(MAC_DELETED)]), _ok(rows)]
+
+    await manager.refresh_handler("clients")
+    await manager.refresh_handler("clients")
+
+    assert controller.requested_paths == ["/stat/sta", "/stat/sta"]
+    assert MAC_DELETED not in controller.clients
+    assert len(list(controller.clients)) == REST_USER_ROW_CAP
+    await manager.cleanup()
+
+
 def _held_until(release: asyncio.Event, body: dict[str, Any]) -> Any:
     async def _reply() -> dict[str, Any]:
         await release.wait()
