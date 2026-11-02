@@ -83,6 +83,23 @@ class TestGetSystemInfo:
         assert result == {"version": "8.6.9"}
         mock_connection._update_cache.assert_called_once_with("system_info_default", {"version": "8.6.9"}, timeout=15)
 
+    @pytest.mark.asyncio
+    async def test_a_read_updates_the_versions_the_support_bundle_reports(self, system_manager, mock_connection):
+        """An application update while the server runs keeps the session, so connecting again won't catch it."""
+        mock_connection.request.return_value = [{"version": "8.6.9"}]
+
+        await system_manager.get_system_info()
+
+        mock_connection.remember_controller_versions.assert_called_once_with({"version": "8.6.9"})
+
+    @pytest.mark.asyncio
+    async def test_a_cache_hit_leaves_the_versions_alone(self, system_manager, mock_connection):
+        mock_connection.get_cached.return_value = {"version": "8.6.9"}
+
+        await system_manager.get_system_info()
+
+        mock_connection.remember_controller_versions.assert_not_called()
+
 
 CONSOLE_IP = "192.0.2.1"
 

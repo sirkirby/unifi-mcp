@@ -62,7 +62,7 @@ The closed, versioned JSON schema can include:
 - configured transport, content, and tool-registration modes;
 - generated manifest tool count and fixed feature flags;
 - normalized connection state, TLS-verification state, last-attempt category, and remediation code;
-- controller application and UniFi OS versions when already available in trusted memory;
+- controller application and UniFi OS versions when already available in trusted memory (Network reads them once on connecting and on each system-info read);
 - fixed product capability flags, such as whether an authenticated session or API key path is configured;
 - for connectivity, a fixed outcome and coarse duration bucket;
 - sanitizer bounds and suppression/truncation indicators.

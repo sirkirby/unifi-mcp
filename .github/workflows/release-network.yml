@@ -152,6 +152,10 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Get shared package versions
+        id: package_versions
+        uses: ./.github/actions/package-versions
+
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
@@ -162,6 +166,8 @@ jobs:
           tags: ${{ steps.version.outputs.tags }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
+            CORE_VERSION=${{ steps.package_versions.outputs.core }}
+            SHARED_VERSION=${{ steps.package_versions.outputs.shared }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

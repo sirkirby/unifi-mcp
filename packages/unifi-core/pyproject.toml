@@ -45,6 +45,7 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 source = "vcs"
 raw-options.root = "../.."
+raw-options.dist_name = "unifi-core"
 raw-options.tag_regex = "^core/v(?P<version>\\d+(?:\\.\\d+)*)(?:\\S*)$"
 raw-options.git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "core/v*"]
 raw-options.fallback_version = "0.0.0"

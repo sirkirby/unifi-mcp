@@ -1021,5 +1021,17 @@ def _validated_version(value: str, field_name: str) -> str:
     return _validated(value, _VERSION_RE, field_name)
 
 
+def safe_controller_version(value: Any) -> str | None:
+    """A version string the bundle's schema accepts, or ``None``.
+
+    ``ControllerSection`` raises on anything else, which would cost the caller
+    the whole bundle over one field a controller sent in an unexpected form.
+    """
+    try:
+        return _validated_version(value, "controller version")
+    except ValueError:
+        return None
+
+
 StructuralShape.model_rebuild()
 ShapeField.model_rebuild()

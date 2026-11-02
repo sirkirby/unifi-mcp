@@ -10,6 +10,9 @@ WORKDIR /build
 # Version passed from CI/CD (used by hatch-vcs when git is unavailable)
 ARG VERSION=0.0.0.dev0
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
+# unifi-core carries its own release version, not the image's
+ARG CORE_VERSION=0.0.0.dev0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_UNIFI_CORE=${CORE_VERSION}
 
 RUN pip install --no-cache-dir uv
 

@@ -1,0 +1,20 @@
+name: Shared package versions
+description: >-
+  Work out the release versions of unifi-core and unifi-mcp-shared for a Docker
+  build, which has no git metadata of its own. See scripts/package_versions.py.
+  Needs a checkout with full history and tags.
+
+outputs:
+  core:
+    description: unifi-core version
+    value: ${{ steps.versions.outputs.core }}
+  shared:
+    description: unifi-mcp-shared version
+    value: ${{ steps.versions.outputs.shared }}
+
+runs:
+  using: composite
+  steps:
+    - id: versions
+      shell: bash
+      run: python3 scripts/package_versions.py | tee -a "$GITHUB_OUTPUT"
