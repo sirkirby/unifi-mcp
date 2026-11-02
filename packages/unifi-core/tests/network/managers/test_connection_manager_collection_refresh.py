@@ -11,6 +11,8 @@ These tests drive the real aiounifi handlers against a scripted
 subscription behaviour, not a stand-in for it.
 """
 
+import asyncio
+import inspect
 from types import SimpleNamespace
 from typing import Any
 
@@ -21,7 +23,7 @@ from aiounifi.interfaces.clients import Clients
 from aiounifi.interfaces.clients_all import ClientsAll
 from aiounifi.interfaces.devices import Devices
 from aiounifi.interfaces.dpi_restriction_apps import DPIRestrictionApps
-from unifi_core.network.managers.client_manager import ClientManager
+from unifi_core.network.managers.client_manager import REST_USER_ROW_CAP, ClientManager
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
 MAC_KEPT = "02:00:00:00:00:01"
@@ -43,8 +45,8 @@ class _Session:
 class _Controller:
     """Fake aiounifi ``Controller``: real handlers, scripted ``request()`` replies.
 
-    Each reply is a decoded body, an exception to raise, or a callable run
-    while the request is "in flight" that returns the body.
+    Each reply is a decoded body, an exception to raise, or a callable, sync or
+    async, run while the request is "in flight" that returns the body.
     """
 
     def __init__(self) -> None:
@@ -64,8 +66,8 @@ class _Controller:
         if isinstance(reply, BaseException):
             raise reply
         if callable(reply):
-            return reply()
-        return reply
+            reply = reply()
+        return await reply if inspect.isawaitable(reply) else reply
 
     async def login(self) -> None:
         self.login_calls += 1
@@ -269,6 +271,83 @@ async def test_an_empty_data_list_is_the_controllers_answer_and_empties_the_coll
     await manager.refresh_handler("clients")
 
     assert list(controller.clients) == []
+    await manager.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("rows_listed", "unlisted_record_kept"),
+    [
+        pytest.param(REST_USER_ROW_CAP, True, id="full window may have left the record out"),
+        pytest.param(REST_USER_ROW_CAP - 1, False, id="below the cap the list is complete"),
+    ],
+)
+async def test_a_reply_at_the_row_cap_does_not_prove_a_record_is_gone(rows_listed, unlisted_record_kept):
+    controller = _Controller()
+    manager = _manager(controller)
+    rows = [_client(f"02:00:01:{i >> 8 & 255:02x}:{i & 255:02x}:00") for i in range(rows_listed)]
+    controller.replies = [_ok([_client(MAC_KEPT)]), _ok(rows)]
+
+    await manager.refresh_handler("clients_all")
+    await manager.refresh_handler("clients_all")
+
+    assert (MAC_KEPT in controller.clients_all) is unlisted_record_kept
+    assert len(list(controller.clients_all)) == rows_listed + (1 if unlisted_record_kept else 0)
+    await manager.cleanup()
+
+
+def _held_until(release: asyncio.Event, body: dict[str, Any]) -> Any:
+    async def _reply() -> dict[str, Any]:
+        await release.wait()
+        return body
+
+    return _reply
+
+
+async def _let_tasks_run() -> None:
+    for _ in range(10):
+        await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize("older_reply_lands_first", [True, False], ids=["older reply first", "newer reply first"])
+async def test_overlapping_refreshes_end_on_the_newest_snapshot(older_reply_lands_first):
+    """An older reply neither shields a record from a newer one nor brings it back."""
+    controller = _Controller()
+    manager = _manager(controller)
+    controller.replies = [_ok([_client(MAC_KEPT), _client(MAC_DELETED)])]
+    await manager.refresh_handler("clients_all")
+
+    older_release, newer_release = asyncio.Event(), asyncio.Event()
+    controller.replies = [
+        _held_until(older_release, _ok([_client(MAC_KEPT), _client(MAC_DELETED)])),
+        _held_until(newer_release, _ok([_client(MAC_KEPT)])),
+    ]
+    older = asyncio.create_task(manager.refresh_handler("clients_all"))
+    await _let_tasks_run()
+    newer = asyncio.create_task(manager.refresh_handler("clients_all"))
+    await _let_tasks_run()
+
+    for release in (older_release, newer_release) if older_reply_lands_first else (newer_release, older_release):
+        release.set()
+        await _let_tasks_run()
+    await asyncio.gather(older, newer)
+
+    assert list(controller.clients_all) == [MAC_KEPT]
+    await manager.cleanup()
+
+
+async def test_a_slow_refresh_does_not_hold_up_another_collection():
+    controller = _Controller()
+    manager = _manager(controller)
+    release = asyncio.Event()
+    controller.replies = [_held_until(release, _ok([_client(MAC_KEPT)])), _ok([_client(MAC_NEW)])]
+
+    slow = asyncio.create_task(manager.refresh_handler("clients"))
+    await _let_tasks_run()
+    await asyncio.wait_for(manager.refresh_handler("clients_all"), timeout=1)
+
+    assert list(controller.clients_all) == [MAC_NEW]
+    release.set()
+    await slow
     await manager.cleanup()
 
 

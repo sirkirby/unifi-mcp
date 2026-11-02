@@ -350,6 +350,11 @@ async def detect_unifi_os_proactively(
 # stays on structured values, where the write-back guards look for it.
 _CREDENTIAL_MASK = "<redacted>"
 
+# The controller caps GET /rest/user at this many rows; a client past the
+# window is absent from the list scan although the controller has its record,
+# so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
+REST_USER_ROW_CAP = 3000
+
 
 async def _replace_handler_items(handler: Any) -> None:
     """Refresh an aiounifi handler so it holds what the controller listed, nothing more.
@@ -373,8 +378,13 @@ async def _replace_handler_items(handler: Any) -> None:
       ``data`` is empty is the controller's answer and does empty the collection.
     - Rows of which none carries the handler's id key are a shape this code does
       not recognize, not an empty list, so they remove nothing.
+    - A reply of ``REST_USER_ROW_CAP`` rows or more may be a window of a longer
+      list. Absence from it does not show a record is gone, so it removes
+      nothing, and a list that large merges as ``update()`` does.
     - An item a websocket message adds or changes while the request is in
-      flight is kept even if the reply predates it.
+      flight is kept even if the reply predates it. The caller runs one refresh
+      of a collection at a time, so only websocket messages signal during the
+      request, not the reply of an overlapping refresh.
 
     Handlers that are not aiounifi ``APIHandler`` instances are refreshed with
     plain ``update()``.
@@ -401,7 +411,7 @@ async def _replace_handler_items(handler: Any) -> None:
 
     handler.process_raw(rows)
     listed = {obj_id for row in rows if (obj_id := _handler_obj_id(handler, row)) is not None}
-    if rows and not listed:
+    if (rows and not listed) or len(rows) >= REST_USER_ROW_CAP:
         return
     for obj_id, item in before.items():
         if obj_id in listed or obj_id in websocket_refreshed:
@@ -462,6 +472,7 @@ class ConnectionManager:
         self._aiohttp_session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
         self._connect_lock = asyncio.Lock()
+        self._collection_refresh_locks: Dict[str, asyncio.Lock] = {}
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
         self._cache_generations: Dict[str, int] = {}
@@ -1404,6 +1415,16 @@ class ConnectionManager:
             logger.error("Controller collection refresh failed: %s", type(error).__name__)
             raise RequestError(f"Controller collection refresh failed ({type(error).__name__}).") from None
 
+    async def _replace_collection(self, name: str) -> None:
+        """Refresh one collection at a time, so overlapping replies cannot undo each other's pruning.
+
+        Without this, an older reply can shield a record from a newer reply that
+        omits it, or bring it back after that reply removed it. Each collection
+        has its own lock, so a slow refresh does not hold up the others.
+        """
+        async with self._collection_refresh_locks.setdefault(name, asyncio.Lock()):
+            await _replace_handler_items(getattr(self.controller, name))
+
     async def _refresh_handler_with_reauthentication(self, name: str) -> Any:
         """Refresh an aiounifi handler collection, recovering an expired session.
 
@@ -1426,7 +1447,7 @@ class ConnectionManager:
 
         auth_generation = self._auth_generation
         try:
-            return await _replace_handler_items(getattr(self.controller, name))
+            return await self._replace_collection(name)
         except LoginRequired:
             logger.warning("Login required detected during %s refresh, attempting explicit re-authentication...", name)
             if not await self._reauthenticate(auth_generation):
@@ -1435,7 +1456,7 @@ class ConnectionManager:
                 raise ConnectionError("Re-authentication failed, controller not available.")
             logger.info("Re-authentication successful, retrying %s refresh...", name)
             try:
-                return await _replace_handler_items(getattr(self.controller, name))
+                return await self._replace_collection(name)
             except LoginRequired as retry_error:
                 # Same terminal treatment ``request()`` applies: a second
                 # LoginRequired means the refreshed session was rejected, so
