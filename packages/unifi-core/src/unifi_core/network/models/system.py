@@ -391,6 +391,21 @@ class SystemInfo(BaseModel):
         description="Number of connected clients",
         json_schema_extra={"mutable": False},
     )
+    update_available: Optional[bool] = Field(
+        default=None,
+        description="Whether a Network application update is available",
+        json_schema_extra={"mutable": False},
+    )
+    cpu_percent: Optional[float] = Field(
+        default=None,
+        description="Console CPU usage percent; null unless the console is itself a managed device",
+        json_schema_extra={"mutable": False},
+    )
+    memory_percent: Optional[float] = Field(
+        default=None,
+        description="Console memory usage percent; null unless the console is itself a managed device",
+        json_schema_extra={"mutable": False},
+    )
 
 
 SYSTEMINFO_MUTABLE_FIELDS: frozenset[str] = frozenset()
@@ -408,6 +423,9 @@ def system_info_from_controller(raw: Any) -> SystemInfo:
         uptime=_get(raw, "uptime"),
         num_devices=_get(raw, "num_devices"),
         num_clients=_get(raw, "num_clients"),
+        update_available=_get(raw, "update_available"),
+        cpu_percent=_get(raw, "cpu_percent"),
+        memory_percent=_get(raw, "memory_percent"),
     )
 
 

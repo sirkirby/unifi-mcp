@@ -2208,6 +2208,9 @@ type SystemInfo {
   uptime: Int
   numDevices: Int
   numClients: Int
+  updateAvailable: Boolean
+  cpuPercent: Float
+  memoryPercent: Float
 }
 
 """

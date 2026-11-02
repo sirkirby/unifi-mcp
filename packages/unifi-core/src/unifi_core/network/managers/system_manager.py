@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,41 @@ CACHE_PREFIX_SITES = "sites"
 CACHE_PREFIX_ADMINS = "admin_users"
 
 
+def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The managed device that hosts this controller, if there is one.
+
+    ``/stat/sysinfo`` names the console's hardware in ``ubnt_device_type`` and its
+    addresses in ``ip_addrs``. A device must match both. A remote site can reuse
+    the controller's address range, so an address alone could report a gateway's
+    CPU and memory as the controller's; a USG or UXG has a model that cannot host
+    Network. A controller that names no hardware has no console to report.
+    """
+    model = info.get("ubnt_device_type")
+    if not model:
+        return None
+    addresses = set(info.get("ip_addrs") or [])
+    for device in devices:
+        if device.get("model") != model:
+            continue
+        for network in device.get("network_table") or []:
+            if isinstance(network, dict) and network.get("ip") in addresses:
+                return device
+    return None
+
+
+def _percent(value: Any) -> Optional[float]:
+    """A ``system-stats`` reading as a finite number; the controller sends them as strings.
+
+    ``float()`` also accepts ``"NaN"``, ``"Infinity"`` and ``"1e1000"``, none of
+    which JSON or a GraphQL ``Float`` can carry.
+    """
+    try:
+        reading = float(value)
+    except (TypeError, ValueError):
+        return None
+    return reading if math.isfinite(reading) else None
+
+
 class SystemManager:
     """Manages system, site, and user operations on the Unifi Controller."""
 
@@ -62,11 +98,49 @@ class SystemManager:
                 info = response
             else:
                 info = {}
+            if info:
+                info = {**info, **await self._live_system_fields(info)}
             self._connection._update_cache(cache_key, info, timeout=15)
             return info
         except Exception as e:
             logger.error("Error getting system info: %s", e)
             raise
+
+    async def _live_system_fields(self, info: Dict[str, Any]) -> Dict[str, Any]:
+        """Counts and console usage that ``/stat/sysinfo`` does not carry.
+
+        Each comes from a list of its own and is left out when that list cannot be
+        read, so a failed list never costs the caller the rest of the system info.
+        """
+        if getattr(self._connection, "integration_inventory_only", False) is True:
+            return {}
+
+        fields: Dict[str, Any] = {}
+        clients = await self._collection_records("clients")
+        if clients is not None:
+            fields["num_clients"] = len(clients)
+
+        devices = await self._collection_records("devices")
+        if devices is not None:
+            fields["num_devices"] = len(devices)
+            console = _console_device(info, devices)
+            stats = console.get("system-stats") if console else None
+            if isinstance(stats, dict):
+                for field, key in (("cpu_percent", "cpu"), ("memory_percent", "mem")):
+                    reading = _percent(stats.get(key))
+                    if reading is not None:
+                        fields[field] = reading
+        return fields
+
+    async def _collection_records(self, name: str) -> Optional[List[Dict[str, Any]]]:
+        """The raw records of a freshly refreshed collection, or ``None`` if the refresh gave no list."""
+        try:
+            if await self._connection.refresh_handler(name) is False:
+                return None
+            return [item.raw for item in getattr(self._connection.controller, name).values()]
+        except Exception as e:
+            logger.debug("Could not read %s for system info: %s", name, type(e).__name__)
+            return None
 
     async def get_controller_status(self) -> Dict[str, Any]:
         """Get status information about the controller."""

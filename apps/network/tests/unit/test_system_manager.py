@@ -4,6 +4,7 @@ This module tests system info, controller status, firmware update,
 and network health operations.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -81,6 +82,170 @@ class TestGetSystemInfo:
 
         assert result == {"version": "8.6.9"}
         mock_connection._update_cache.assert_called_once_with("system_info_default", {"version": "8.6.9"}, timeout=15)
+
+
+CONSOLE_IP = "192.0.2.1"
+
+
+def _record(**raw):
+    return SimpleNamespace(raw=raw)
+
+
+CONSOLE_MODEL = "UDMPROSE"
+
+
+def _console(cpu="12.5", mem="40.25"):
+    return _record(
+        mac="02:00:00:00:00:01",
+        type="udm",
+        model=CONSOLE_MODEL,
+        network_table=[{"name": "LAN", "ip": CONSOLE_IP}],
+        **{"system-stats": {"cpu": cpu, "mem": mem, "uptime": "100"}},
+    )
+
+
+def _other_gateway(ip="192.0.2.254", model="UGW3"):
+    return _record(
+        mac="02:00:00:00:00:02",
+        type="ugw",
+        model=model,
+        network_table=[{"name": "LAN", "ip": ip}],
+        **{"system-stats": {"cpu": "99", "mem": "99"}},
+    )
+
+
+def _switch():
+    return _record(mac="02:00:00:00:00:03", type="usw", **{"system-stats": {"cpu": "1", "mem": "1"}})
+
+
+class TestGetSystemInfoLiveFields:
+    """Counts come from the device and client lists, and CPU and memory from the console's own device record."""
+
+    @pytest.fixture
+    def connection(self, mock_connection):
+        mock_connection.integration_inventory_only = False
+        mock_connection.refresh_handler = AsyncMock()
+        mock_connection.request.return_value = [
+            {"version": "8.6.9", "ubnt_device_type": CONSOLE_MODEL, "ip_addrs": [CONSOLE_IP, "198.51.100.1"]}
+        ]
+        mock_connection.controller = SimpleNamespace(
+            devices={"a": _console(), "b": _switch()},
+            clients={"c": _record(mac="02:00:00:00:01:01"), "d": _record(mac="02:00:00:00:01:02")},
+        )
+        return mock_connection
+
+    @pytest.mark.asyncio
+    async def test_counts_and_console_usage_are_filled(self, system_manager, connection):
+        info = await system_manager.get_system_info()
+
+        assert info["num_devices"] == 2
+        assert info["num_clients"] == 2
+        assert info["cpu_percent"] == 12.5
+        assert info["memory_percent"] == 40.25
+        assert info["version"] == "8.6.9"
+
+    @pytest.mark.asyncio
+    async def test_the_cache_holds_the_filled_fields(self, system_manager, connection):
+        info = await system_manager.get_system_info()
+
+        connection._update_cache.assert_called_once_with("system_info_default", info, timeout=15)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "gateway",
+        [
+            pytest.param(_other_gateway(), id="different address and model"),
+            pytest.param(_other_gateway(ip=CONSOLE_IP), id="overlapping address, different model"),
+            pytest.param(_other_gateway(model=CONSOLE_MODEL), id="same model, different address"),
+        ],
+    )
+    async def test_a_device_that_is_not_the_console_gives_no_usage(self, system_manager, connection, gateway):
+        """A USG beside a self-hosted controller has its own CPU, even on an overlapping address range."""
+        connection.controller.devices = {"a": gateway, "b": _switch()}
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_devices"] == 2
+        assert "cpu_percent" not in info
+        assert "memory_percent" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_controller_that_names_no_console_model_gives_no_usage(self, system_manager, connection):
+        connection.request.return_value = [{"version": "8.6.9", "ip_addrs": [CONSOLE_IP]}]
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_devices"] == 2
+        assert "cpu_percent" not in info
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "cpu",
+        ["", "n/a", None, "NaN", "Infinity", "-Infinity", "1e1000"],
+        ids=["blank", "text", "missing", "nan", "infinity", "negative-infinity", "overflow"],
+    )
+    async def test_an_unreadable_reading_is_left_out(self, system_manager, connection, cpu):
+        connection.controller.devices = {"a": _console(cpu=cpu)}
+
+        info = await system_manager.get_system_info()
+
+        assert "cpu_percent" not in info
+        assert info["memory_percent"] == 40.25
+
+    @pytest.mark.asyncio
+    async def test_a_failed_list_leaves_only_its_own_fields_out(self, system_manager, connection):
+        async def refresh(name):
+            if name == "devices":
+                raise RuntimeError("devices unavailable")
+
+        connection.refresh_handler = AsyncMock(side_effect=refresh)
+
+        info = await system_manager.get_system_info()
+
+        assert info["version"] == "8.6.9"
+        assert info["num_clients"] == 2
+        assert "num_devices" not in info
+        assert "cpu_percent" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_reply_that_is_not_a_list_leaves_out_stale_records(self, system_manager, connection):
+        """A login page leaves the old collection in place, so its count and usage say nothing current."""
+
+        async def refresh(name):
+            return name != "devices"
+
+        connection.refresh_handler = AsyncMock(side_effect=refresh)
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_clients"] == 2
+        assert "num_devices" not in info
+        assert "cpu_percent" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_real_empty_list_counts_as_zero(self, system_manager, connection):
+        connection.refresh_handler = AsyncMock(return_value=True)
+        connection.controller.clients = {}
+
+        info = await system_manager.get_system_info()
+
+        assert info["num_clients"] == 0
+
+    @pytest.mark.asyncio
+    async def test_an_empty_sysinfo_reads_no_lists(self, system_manager, connection):
+        connection.request.return_value = []
+
+        assert await system_manager.get_system_info() == {}
+        connection.refresh_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_an_integration_only_connection_reads_no_lists(self, system_manager, connection):
+        connection.integration_inventory_only = True
+
+        info = await system_manager.get_system_info()
+
+        assert "num_devices" not in info
+        connection.refresh_handler.assert_not_called()
 
 
 class TestGetNetworkHealth:

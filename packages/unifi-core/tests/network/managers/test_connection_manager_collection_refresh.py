@@ -239,6 +239,30 @@ async def test_a_reply_that_is_not_a_snapshot_keeps_the_collection(reply):
 
 
 @pytest.mark.parametrize("reply", NOT_A_SNAPSHOT)
+async def test_a_refresh_reports_a_reply_that_is_not_a_snapshot(reply):
+    """A caller must be able to tell a failed read from a list it can trust."""
+    controller = _Controller()
+    manager = _manager(controller)
+    controller.replies = [reply]
+
+    assert await manager.refresh_handler("clients_all") is False
+    await manager.cleanup()
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [pytest.param([], id="empty list"), pytest.param([_client(MAC_KEPT)], id="listed rows")],
+)
+async def test_a_refresh_reports_a_list_it_can_trust(rows):
+    controller = _Controller()
+    manager = _manager(controller)
+    controller.replies = [_ok(rows)]
+
+    assert await manager.refresh_handler("clients_all") is True
+    await manager.cleanup()
+
+
+@pytest.mark.parametrize("reply", NOT_A_SNAPSHOT)
 async def test_a_websocket_update_during_a_failed_read_removes_nothing(reply):
     """A websocket refresh of one client must not turn a non-snapshot into a prune of the rest."""
     controller = _Controller()
