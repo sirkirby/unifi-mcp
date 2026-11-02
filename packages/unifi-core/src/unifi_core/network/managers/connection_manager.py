@@ -19,6 +19,7 @@ from aiounifi.errors import (
     TwoFaTokenRequired,
     Unauthorized,
 )
+from aiounifi.interfaces.api_handlers import APIHandler, ItemEvent
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
@@ -348,6 +349,55 @@ async def detect_unifi_os_proactively(
 # ``redaction.REDACTED`` because it reads inside a sentence; the payload marker
 # stays on structured values, where the write-back guards look for it.
 _CREDENTIAL_MASK = "<redacted>"
+
+
+async def _replace_handler_items(handler: Any) -> None:
+    """Refresh an aiounifi handler so it holds what the controller listed, nothing more.
+
+    ``APIHandler.update()`` requests the full list and feeds it to
+    ``process_raw()``, which only adds and replaces items. aiounifi drops an
+    item only when a websocket remove message names it, and most handlers have
+    none: ``ClientsAll`` and ``Devices`` declare no ``remove_messages``, and
+    ``Clients`` removes only on a deleted user, never on a disconnect. So a
+    long-running server kept forgotten client records, disconnected "online"
+    clients, removed devices and deleted DPI entries until it restarted (#963).
+
+    Every item in the response is processed and signalled ``ADDED`` or
+    ``CHANGED``, so the items present before the refresh and not signalled
+    during it were missing from the response; they are removed through
+    ``remove_item()``, which also signals ``DELETED`` to subscribers. An item a
+    websocket message refreshes while the request is in flight counts as
+    present, which it is.
+
+    aiounifi decodes a non-JSON reply (an HTML login or proxy page) to empty
+    data, which looks the same here as a controller with nothing to list. When
+    a refresh signals nothing at all, the collection is left as it was rather
+    than emptied on what may be a failed read.
+
+    Handlers that are not aiounifi ``APIHandler`` instances are refreshed with
+    plain ``update()``.
+    """
+    if not isinstance(handler, APIHandler):
+        await handler.update()
+        return
+
+    before = dict(handler.items())
+    refreshed: set[str] = set()
+
+    def _seen(_event: ItemEvent, obj_id: str) -> None:
+        refreshed.add(obj_id)
+
+    unsubscribe = handler.subscribe(_seen, (ItemEvent.ADDED, ItemEvent.CHANGED))
+    try:
+        await handler.update()
+    finally:
+        unsubscribe()
+
+    if not refreshed:
+        return
+    for obj_id, item in before.items():
+        if obj_id not in refreshed and handler.get(obj_id) is item:
+            handler.remove_item(item.raw)
 
 
 class ConnectionManager:
@@ -1348,13 +1398,16 @@ class ConnectionManager:
         The handler is resolved by *name* rather than passed in, so the retry
         reads it off ``self.controller`` again — the same reason ``request()``
         re-derives its request method after re-authenticating.
+
+        A refresh replaces the collection rather than merging into it; see
+        ``_replace_handler_items``.
         """
         if not await self.ensure_connected() or not self.controller:
             raise self._not_connected_error()
 
         auth_generation = self._auth_generation
         try:
-            return await getattr(self.controller, name).update()
+            return await _replace_handler_items(getattr(self.controller, name))
         except LoginRequired:
             logger.warning("Login required detected during %s refresh, attempting explicit re-authentication...", name)
             if not await self._reauthenticate(auth_generation):
@@ -1363,7 +1416,7 @@ class ConnectionManager:
                 raise ConnectionError("Re-authentication failed, controller not available.")
             logger.info("Re-authentication successful, retrying %s refresh...", name)
             try:
-                return await getattr(self.controller, name).update()
+                return await _replace_handler_items(getattr(self.controller, name))
             except LoginRequired as retry_error:
                 # Same terminal treatment ``request()`` applies: a second
                 # LoginRequired means the refreshed session was rejected, so
