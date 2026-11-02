@@ -81,6 +81,12 @@ class TestSslSetting:
         """aiohttp's connection pool keys on this object's identity."""
         assert ssl_setting(False, HEX) is ssl_setting(True, COLON)
 
+    def test_a_pin_keeps_its_object_while_others_come_and_go(self):
+        first = ssl_setting(False, HEX)
+        for value in range(64):
+            ssl_setting(False, f"{value:064x}")
+        assert ssl_setting(False, HEX) is first
+
 
 class TestWarning:
     def test_warns_only_when_disabled(self, caplog):
@@ -164,6 +170,16 @@ class TestCertificateError:
         hint = certificate_error_hint(env_prefix="PROTECT")
         assert "UNIFI_PROTECT_SSL_FINGERPRINT" in hint
         assert "UNIFI_PROTECT_VERIFY_SSL=false" in hint
+
+    def test_hint_says_a_pin_must_be_cleared_to_turn_the_check_off(self):
+        """A pin wins over ``verify_ssl``, so the flag alone leaves the same check failing."""
+        hint = certificate_error_hint(env_prefix="PROTECT")
+        assert "clear" in hint[: hint.index("UNIFI_PROTECT_VERIFY_SSL=false")]
+        assert ssl_setting(False, HEX) is not False
+
+    def test_hint_asks_to_confirm_a_changed_certificate(self):
+        hint = certificate_error_hint(env_prefix="PROTECT")
+        assert "confirm" in hint
 
     def test_hint_names_no_variables_for_a_consumer_that_does_not_read_them(self):
         hint = certificate_error_hint()

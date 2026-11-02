@@ -60,9 +60,13 @@ def parse_fingerprint(value: str | None) -> bytes | None:
     return bytes.fromhex(digest)
 
 
-@functools.lru_cache(maxsize=8)
+@functools.cache
 def _pin(digest: bytes) -> aiohttp.Fingerprint:
-    """One ``Fingerprint`` per digest: aiohttp's connection pool keys on the object's identity."""
+    """One ``Fingerprint`` per digest: aiohttp's connection pool keys on the object's identity.
+
+    Never evicts: a replaced object would change the pool key of a session still
+    using the pin. Digests only come from configuration, so the cache stays small.
+    """
     return aiohttp.Fingerprint(digest)
 
 
@@ -169,9 +173,10 @@ def certificate_error_hint(*, env_prefix: str | None = None) -> str:
         )
     return (
         "The controller's TLS certificate failed verification. For a self-signed console certificate, "
-        f"set UNIFI_{env_prefix}_SSL_FINGERPRINT (or UNIFI_SSL_FINGERPRINT) to its SHA-256 fingerprint; "
-        f"if the fingerprint is already set, the certificate has changed. UNIFI_{env_prefix}_VERIFY_SSL=false "
-        "disables the check entirely."
+        f"set UNIFI_{env_prefix}_SSL_FINGERPRINT (or UNIFI_SSL_FINGERPRINT) to its SHA-256 fingerprint. "
+        "If a fingerprint is already set, the certificate has changed: confirm the change is expected, "
+        "then update the fingerprint. To turn the check off instead, clear any fingerprint and set "
+        f"UNIFI_{env_prefix}_VERIFY_SSL=false."
     )
 
 
