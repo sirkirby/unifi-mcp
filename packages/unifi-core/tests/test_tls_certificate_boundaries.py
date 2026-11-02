@@ -11,6 +11,7 @@ reaches the caller and the log.
 """
 
 import logging
+import traceback
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -79,6 +80,18 @@ class TestMiddleware:
             with pytest.raises(CertificateVerificationError) as excinfo:
                 await session.get(f"https://{HOST}:{PORT}/")
         _assert_safe(excinfo.value, "NETWORK")
+
+    async def test_does_not_carry_the_exception_a_caller_is_handling(self):
+        """A caller's fallback runs inside its ``except``; a traceback must not render what that caught."""
+        async with aiohttp.ClientSession(
+            connector=_StalePinConnector(), middlewares=(certificate_safe_middleware(env_prefix="NETWORK"),)
+        ) as session:
+            with pytest.raises(CertificateVerificationError) as excinfo:
+                try:
+                    raise RuntimeError("earlier response details")
+                except RuntimeError:
+                    await session.get(f"https://{HOST}:{PORT}/")
+        assert "earlier response details" not in "".join(traceback.format_exception(excinfo.value))
 
     async def test_other_failures_pass_through(self):
         class Refused(aiohttp.TCPConnector):

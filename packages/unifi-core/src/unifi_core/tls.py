@@ -136,7 +136,8 @@ class CertificateVerificationError(UniFiConnectionError):
     Carries fixed remediation text and the failing exception's class only. The
     aiohttp exception it replaces names the controller host and port, and a pin
     mismatch also both fingerprints; build it with :func:`certificate_failure`
-    and raise it outside the ``except`` block so the original is not chained.
+    and raise it ``from None`` outside the ``except`` block, so neither the original
+    nor an exception a caller is handling renders with it.
     """
 
 
@@ -208,7 +209,7 @@ def certificate_safe_middleware(*, env_prefix: str | None = None) -> aiohttp.Cli
     ``ClientError`` in their own exception with the controller URL and the raw
     error in its text. :class:`CertificateVerificationError` is not a
     ``ClientError``, so it passes through them unwrapped, and it is raised
-    outside the ``except`` block, so no traceback renders the original.
+    ``from None`` outside the ``except`` block, so no traceback renders the original.
     """
 
     async def middleware(request: aiohttp.ClientRequest, handler: aiohttp.ClientHandlerType) -> aiohttp.ClientResponse:
@@ -217,6 +218,6 @@ def certificate_safe_middleware(*, env_prefix: str | None = None) -> aiohttp.Cli
             return await handler(request)
         except (aiohttp.ClientConnectorCertificateError, aiohttp.ServerFingerprintMismatch) as error:
             failure = certificate_failure(error, env_prefix=env_prefix)
-        raise failure
+        raise failure from None
 
     return middleware

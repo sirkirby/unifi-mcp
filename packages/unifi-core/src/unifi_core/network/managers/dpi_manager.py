@@ -96,9 +96,10 @@ class DpiManager:
             # The certificate error's text names the controller and, for a pin
             # mismatch, both fingerprints. Keep the class and fixed guidance only.
             cert_failure = certificate_failure(e, env_prefix=self._connection.tls_env_prefix)
-        # Raised outside the handler so the original is not chained as context.
+        # Raised outside the handler, and from None, so no traceback renders the original
+        # or an exception a caller is handling.
         logger.error("Error calling integration API %s: %s", path, cert_failure)
-        raise cert_failure
+        raise cert_failure from None
 
     async def get_dpi_applications(
         self,

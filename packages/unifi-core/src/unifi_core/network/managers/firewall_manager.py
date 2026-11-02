@@ -205,8 +205,9 @@ class FirewallManager:
             cert_failure = certificate_failure(e, env_prefix=self._connection.tls_env_prefix)
         finally:
             await session.close()
-        # Raised outside the handler so the original is not chained as context.
-        raise cert_failure
+        # Raised outside the handler, and from None, so no traceback renders the original
+        # or an exception a caller is handling.
+        raise cert_failure from None
 
     def _require_integration_api_key(self, operation: str) -> None:
         """Fail before controller I/O when an Integration API mutation lacks auth."""

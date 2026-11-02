@@ -6,6 +6,7 @@ it reaches their logs, the tool logs (which carry ``exc_info``) or the MCP respo
 """
 
 import logging
+import traceback
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -84,6 +85,16 @@ def _assert_absent(text: str) -> None:
         assert marker not in text
 
 
+async def _failure_while_handling_another(call) -> str:
+    """The rendered traceback of a certificate failure raised during a caller's fallback."""
+    with pytest.raises(CertificateVerificationError) as excinfo:
+        try:
+            raise RuntimeError("earlier response details")
+        except RuntimeError:
+            await call()
+    return "".join(traceback.format_exception(excinfo.value))
+
+
 class TestDpi:
     @pytest.fixture
     def manager(self):
@@ -103,6 +114,13 @@ class TestDpi:
         assert caplog.records
         _assert_absent(_rendered(caplog))
         manager.session.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_carry_the_exception_a_caller_is_handling(self, manager):
+        rendered = await _failure_while_handling_another(
+            lambda: manager._request_integration_api("/v1/dpi/applications")
+        )
+        assert "earlier response details" not in rendered
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tool_name", ["list_dpi_applications", "list_dpi_categories"])
@@ -137,6 +155,11 @@ class TestFirewall:
         _assert_safe(excinfo.value)
         _assert_absent(_rendered(caplog))
         manager.session.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_carry_the_exception_a_caller_is_handling(self, manager):
+        rendered = await _failure_while_handling_another(lambda: manager._request_integration_api("get", "/v1/sites"))
+        assert "earlier response details" not in rendered
 
     @pytest.mark.asyncio
     async def test_other_errors_still_propagate_unchanged(self, manager):
