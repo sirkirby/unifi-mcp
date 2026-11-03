@@ -92,6 +92,13 @@ def test_pinning_only_the_developer_port_does_not_warn(startup, caplog, monkeypa
     assert _warnings(caplog) == []
 
 
+def test_blank_developer_pin_still_warns(startup, caplog, monkeypatch):
+    """Blank counts as unset, so nothing is checked and the warning has to fire."""
+    monkeypatch.setenv("UNIFI_ACCESS_API_SSL_FINGERPRINT", "   ")
+    startup()
+    assert len(_warnings(caplog)) == 1
+
+
 def test_shared_pin_does_not_reach_the_developer_port(startup, monkeypatch):
     """That port presents a different certificate, so the shared pin could never match it."""
     monkeypatch.setenv("UNIFI_SSL_FINGERPRINT", GOOD)

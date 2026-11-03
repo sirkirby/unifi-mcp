@@ -159,11 +159,11 @@ def _access_tls_settings(cfg: Any) -> tuple[bool, str | None, str | None]:
     fingerprint = _ssl_fingerprint(cfg)
     api_fingerprint = _ssl_fingerprint(cfg, "api_ssl_fingerprint")
     try:
-        parse_fingerprint(api_fingerprint)
+        api_pinned = parse_fingerprint(api_fingerprint) is not None
     except ValueError as error:
         logger.critical("Invalid UNIFI_ACCESS_API_SSL_FINGERPRINT: %s", error)
         raise SystemExit(2) from None
-    server_ssl_setting(logger, verify_ssl or bool(api_fingerprint), fingerprint, product="Access", env_prefix="ACCESS")
+    server_ssl_setting(logger, verify_ssl or api_pinned, fingerprint, product="Access", env_prefix="ACCESS")
     return verify_ssl, fingerprint, api_fingerprint
 
 
