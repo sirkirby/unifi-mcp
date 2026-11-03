@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 from unifi_core.network.managers.dpi_manager import DpiManager
 
@@ -152,9 +153,9 @@ async def test_full_catalog_rejects_missing_or_inconsistent_totals(manager, conn
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("verify_ssl", [True, False])
+@pytest.mark.parametrize("verify_ssl", [True, False, aiohttp.Fingerprint(b"\x00" * 32)])
 async def test_integration_request_propagates_tls_verification(connection, auth, verify_ssl):
-    connection.verify_ssl = verify_ssl
+    connection.ssl = verify_ssl
     response = AsyncMock()
     response.status = 200
     response.json = AsyncMock(return_value={"data": []})

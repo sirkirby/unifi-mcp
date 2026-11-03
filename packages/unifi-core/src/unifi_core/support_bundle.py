@@ -215,7 +215,13 @@ def classify_error(exc: BaseException) -> tuple[ErrorCategory, int | None, Remed
         return ErrorCategory.AUTHENTICATION, status, RemediationCode.CHECK_CREDENTIALS
     if name in {"Forbidden", "NoPermission"}:
         return ErrorCategory.PERMISSION, status, RemediationCode.CHECK_PERMISSIONS
-    if name in {"ServerDisconnectedError", "ClientConnectionError", "ClientConnectorError"}:
+    if name in {
+        "ServerDisconnectedError",
+        "ClientConnectionError",
+        "ClientConnectorError",
+        "ClientConnectorCertificateError",
+        "ServerFingerprintMismatch",
+    }:
         return ErrorCategory.CONNECTION, status, RemediationCode.CHECK_CONNECTIVITY
     if name in {"ContentTypeError", "JSONDecodeError"}:
         return ErrorCategory.INVALID_RESPONSE, status, RemediationCode.UPDATE_DEPENDENCIES

@@ -113,7 +113,7 @@ async def test_network_probe_uses_existing_session_once_without_reconnect(verify
     assert session.calls[0][0][1] == f"{manager.url_base}{path}"
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["allow_redirects"] is False
-    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
+    assert session.calls[0][1]["ssl"] is verify_ssl
     assert context.exited is True
     assert context.body_read is False
     manager.initialize.assert_not_awaited()
@@ -143,7 +143,7 @@ async def test_protect_probe_uses_existing_private_session_without_sdk_retry(ver
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["headers"] == {"X-CSRF-Token": "private-token"}
     assert session.calls[0][1]["allow_redirects"] is False
-    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
+    assert session.calls[0][1]["ssl"] is verify_ssl
     assert context.body_read is False
     assert context.exited is True
     manager.initialize.assert_not_awaited()
@@ -185,6 +185,33 @@ async def test_access_probe_prefers_existing_developer_session_and_never_reauthe
 
 
 @pytest.mark.asyncio
+async def test_access_probe_checks_each_session_against_its_own_pin() -> None:
+    """A per-request pin overrides the session's, so the wrong one would report a healthy path as failed."""
+    developer = _Session(_ResponseContext(200))
+    manager = AccessConnectionManager(
+        "controller.example.invalid",
+        "private-user",
+        "private-password",
+        api_key="private-token",
+        ssl_fingerprint="ab" * 32,
+        api_ssl_fingerprint="cd" * 32,
+    )
+    manager._initialized = True
+    manager._api_client_available = True
+    manager._api_client = object()
+    manager._api_session = developer
+    await manager.support_connectivity_probe()
+    assert developer.calls[0][1]["ssl"].fingerprint == bytes.fromhex("cd" * 32)
+
+    proxy = _Session(_ResponseContext(200))
+    manager._api_client_available = False
+    manager._api_session = None
+    manager._proxy_available = True
+    manager._proxy_session = proxy
+    await manager.support_connectivity_probe()
+    assert proxy.calls[0][1]["ssl"].fingerprint == bytes.fromhex("ab" * 32)
+
+
 async def test_access_probe_uses_existing_proxy_session_without_reading_body_or_reauthenticating() -> None:
     context = _ResponseContext(200)
     session = _Session(context)
@@ -353,7 +380,7 @@ async def test_aiohttp_stale_connection_has_one_wire_attempt_for_support_only(
                     manager._proxy_available = True
                     manager._proxy_session = session
             manager._initialized = True
-            warm_ssl = manager._ssl_context if product.startswith("access") else False
+            warm_ssl = manager._ssl_context if product.startswith("access") else manager.ssl
             async with session.get(f"{base}/warm", ssl=warm_ssl) as response:
                 await response.read()
             result = await manager.support_connectivity_probe()

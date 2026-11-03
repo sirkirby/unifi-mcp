@@ -47,6 +47,16 @@ from unifi_core.support_bundle import (
     connectivity_probe_result,
 )
 from unifi_core.support_transport import no_retry_support_request
+from unifi_core.tls import (
+    CertificateVerificationError,
+    SslSetting,
+    certificate_error_hint,
+    certificate_failure,
+    certificate_safe_middleware,
+    is_certificate_error,
+    parse_fingerprint,
+    ssl_setting,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +96,19 @@ class AccessConnectionManager:
     port:
         HTTPS port for the UniFi OS Console (default 443).
     verify_ssl:
-        Whether to verify the server's TLS certificate.
+        Whether to verify the server's TLS certificate (default ``False``).
+    ssl_fingerprint:
+        SHA-256 fingerprint of the certificate on ``port``. When set, it pins
+        the proxy path and takes precedence over ``verify_ssl``; see
+        :mod:`unifi_core.tls`.
+    api_ssl_fingerprint:
+        The same for the developer API on ``api_port``, which presents a
+        different certificate. A path with no pin and no ``verify_ssl`` is
+        refused while the other path is pinned, before its credentials are sent.
+    tls_env_prefix:
+        Server-specific prefix naming the settings a certificate error points
+        at, e.g. ``"ACCESS"``. Leave unset for a consumer that does not read
+        those variables.
     api_key:
         Optional API key for the official Access API (port ``api_port``).
     api_port:
@@ -102,12 +124,21 @@ class AccessConnectionManager:
         verify_ssl: bool = False,
         api_key: str | None = None,
         api_port: int = 12445,
+        ssl_fingerprint: str | None = None,
+        tls_env_prefix: str | None = None,
+        api_ssl_fingerprint: str | None = None,
     ) -> None:
         self.host = host
         self.username = username
         self.password = password
         self.port = port
         self.verify_ssl = verify_ssl
+        self.ssl_fingerprint = ssl_fingerprint
+        self.api_ssl_fingerprint = api_ssl_fingerprint
+        self.tls_env_prefix = tls_env_prefix
+        # A malformed pin fails here, not on the first request.
+        ssl_setting(verify_ssl, ssl_fingerprint)
+        ssl_setting(verify_ssl, api_ssl_fingerprint)
 
         # Path 1: py-unifi-access (API key auth on dedicated port)
         self._api_client: Any | None = None  # UnifiAccessApiClient
@@ -126,6 +157,8 @@ class AccessConnectionManager:
         self._initialized = False
         self._last_connection_error: str | None = None
         self._path_failures: list[BaseException] = []
+        self._api_certificate_failure: str | None = None
+        self._proxy_certificate_failure: str | None = None
         self._last_attempt_at: float | None = None
         self._reconnect_lock = asyncio.Lock()
         self._attempt = ConnectAttempt()
@@ -149,18 +182,51 @@ class AccessConnectionManager:
     # ------------------------------------------------------------------
 
     @functools.cached_property
-    def _ssl_context(self) -> ssl.SSLContext | bool:
-        """Return an SSL context appropriate for the current verify_ssl setting.
-
-        Cached to avoid recreating the SSL context (and reloading the CA bundle)
-        on every request.
-        """
-        if self.verify_ssl:
-            return True
+    def _unverified_context(self) -> ssl.SSLContext:
+        """Cached to avoid recreating the SSL context (and reloading the CA bundle) on every request."""
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
+
+    def _path_context(self, fingerprint: str | None) -> ssl.SSLContext | SslSetting:
+        """A path's aiohttp ``ssl=`` value: its pin if set, otherwise ``verify_ssl`` decides."""
+        setting = ssl_setting(self.verify_ssl, fingerprint)
+        return self._unverified_context if setting is False else setting
+
+    @property
+    def _ssl_context(self) -> ssl.SSLContext | SslSetting:
+        """The proxy path's ``ssl=`` value."""
+        return self._path_context(self.ssl_fingerprint)
+
+    @property
+    def _api_ssl_context(self) -> ssl.SSLContext | SslSetting:
+        """The developer API path's ``ssl=`` value."""
+        return self._path_context(self.api_ssl_fingerprint)
+
+    @staticmethod
+    def _unpinned_beside_a_pin(context: ssl.SSLContext | SslSetting, other_fingerprint: str | None) -> bool:
+        """Whether a path would go unchecked though the operator pinned the other one."""
+        return isinstance(context, ssl.SSLContext) and parse_fingerprint(other_fingerprint) is not None
+
+    @property
+    def _api_pin_variable(self) -> str | None:
+        return f"UNIFI_{self.tls_env_prefix}_API_SSL_FINGERPRINT" if self.tls_env_prefix else None
+
+    def _unpinned_path_refusal(self, pin_variable: str | None) -> CertificateVerificationError:
+        fix = f"Set {pin_variable}" if pin_variable else "Pin it"
+        return CertificateVerificationError(
+            f"Not used: the other path is pinned and this one is not, so its certificate would go unchecked. {fix} "
+            "with this port's SHA-256 fingerprint."
+        )
+
+    def _path_certificate_failure(self, error: BaseException, pin_variable: str | None) -> str | None:
+        """The fixed text to report for a path's failed attempt, when it was a certificate failure."""
+        if not is_certificate_error(error):
+            return None
+        if isinstance(error, CertificateVerificationError):
+            return str(error)
+        return str(certificate_failure(error, env_prefix=self.tls_env_prefix, pin_variable=pin_variable))
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -295,6 +361,8 @@ class AccessConnectionManager:
         reached.
         """
         self._path_failures = []
+        self._api_certificate_failure = None
+        self._proxy_certificate_failure = None
         try:
             async with asyncio.timeout(_CONNECT_ATTEMPT_TIMEOUT_SECONDS):
                 await self._try_api_client()
@@ -309,6 +377,9 @@ class AccessConnectionManager:
                 f"{self.host}. Check that the controller is reachable."
             ) from None
         if self._api_client_available or self._proxy_available:
+            note = self._certificate_failure_note()
+            if note:
+                logger.warning("[access-cm] %s", note)
             return
         if any(self._is_rejected_login(failure) for failure in self._path_failures):
             raise UniFiAuthError(self._rejected_message())
@@ -389,22 +460,36 @@ class AccessConnectionManager:
 
     def _unreachable_message(self) -> str:
         # A rejected login has its own message; this one never blames the credentials.
-        return (
+        message = (
             f"Could not connect to UniFi Access at {self.host} "
             f"(tried {' and '.join(self._configured_paths())}). Check that the controller is reachable "
             "from this machine and that UniFi Access is running on it."
         )
+        if any(is_certificate_error(failure) for failure in self._path_failures):
+            note = self._certificate_failure_note()
+            message += " " + (note or certificate_error_hint(env_prefix=self.tls_env_prefix))
+        return message
 
     def _rejected_message(self) -> str:
-        return (
+        message = (
             f"UniFi Access at {self.host} rejected the configured credentials "
             f"(tried {' and '.join(self._configured_paths())}). Check the username/password or API key."
         )
+        note = self._certificate_failure_note()
+        return f"{message} {note}" if note else message
 
     @property
     def last_connection_error(self) -> str | None:
         """Why the last connection attempt failed, or ``None`` after a success."""
         return self._last_connection_error
+
+    def _certificate_failure_note(self) -> str | None:
+        """Which path failed its certificate check, and how to fix it. Each port has its own certificate."""
+        failures = (
+            (self._api_port, self._api_certificate_failure),
+            (self.port, self._proxy_certificate_failure),
+        )
+        return " ".join(f"On port {port}: {text}" for port, text in failures if text) or None
 
     def unavailable_error(self, message: str) -> AccessUnavailableError:
         """Build the error a manager raises when its auth path is unavailable.
@@ -420,7 +505,8 @@ class AccessConnectionManager:
                 "background and a later call uses the connection once it succeeds."
             )
         if not self._last_connection_error:
-            return AccessUnavailableError(message)
+            note = self._certificate_failure_note()
+            return AccessUnavailableError(f"{message}: {note}" if note else message)
         detail = f"{message}: {self._last_connection_error}"
         blocked = self._reconnect_block_remaining()
         if blocked > 0:
@@ -431,6 +517,16 @@ class AccessConnectionManager:
             )
         return AccessUnavailableError(detail)
 
+    def _session_middlewares(self, *, pin_variable: str | None = None) -> tuple[aiohttp.ClientMiddlewareType, ...]:
+        """Middlewares for both controller sessions.
+
+        A failed certificate check is replaced with a fixed-text
+        ``CertificateVerificationError`` before py-unifi-access or the proxy
+        helpers see it: the aiohttp error names the controller and, for a pin
+        mismatch, both fingerprints, and every tool returns ``str(e)``.
+        """
+        return (certificate_safe_middleware(env_prefix=self.tls_env_prefix, pin_variable=pin_variable),)
+
     async def _try_api_client(self) -> None:
         """Attempt to initialise the py-unifi-access API client."""
         if not self.authentication_status.configured(AuthMethod.API_KEY_ONLY):
@@ -440,15 +536,24 @@ class AccessConnectionManager:
 
         self._api_support_attempt = connection_attempt_started()
         try:
+            context = self._api_ssl_context
+            if self._unpinned_beside_a_pin(context, self.ssl_fingerprint):
+                raise self._unpinned_path_refusal(self._api_pin_variable)
+
             from unifi_access_api import UnifiAccessApiClient
 
-            connector = aiohttp.TCPConnector(ssl=self._ssl_context)
-            self._api_session = aiohttp.ClientSession(connector=connector)
+            connector = aiohttp.TCPConnector(ssl=context)
+            self._api_session = aiohttp.ClientSession(
+                connector=connector, middlewares=self._session_middlewares(pin_variable=self._api_pin_variable)
+            )
             self._api_client = UnifiAccessApiClient(
                 host=f"https://{self.host}:{self._api_port}",
                 api_token=self._api_key,
                 session=self._api_session,
-                verify_ssl=self.verify_ssl,
+                # Pinned: the SDK sends ssl=True per request and the session's
+                # connector applies the fingerprint (aiohttp checks a connector
+                # pin even when the request asks for no verification).
+                verify_ssl=not isinstance(context, ssl.SSLContext),
             )
             await self._api_client.authenticate()
             self._api_client_available = True
@@ -456,10 +561,14 @@ class AccessConnectionManager:
             logger.info("[access-cm] API client authenticated on port %s", self._api_port)
         except Exception as exc:
             self._path_failures.append(exc)
+            self._api_certificate_failure = self._path_certificate_failure(exc, self._api_pin_variable)
             self._api_support_attempt = connection_attempt_failed(exc)
+            # Class name only: a certificate failure's text carries the host,
+            # port and both fingerprints. The fixed remediation is added by
+            # _unreachable_message() once every path has failed.
             logger.warning(
                 "[access-cm] API client auth failed (non-fatal, will try proxy): %s",
-                exc,
+                type(exc).__name__,
             )
             # Clean up the failed session
             if self._api_session and not self._api_session.closed:
@@ -477,9 +586,15 @@ class AccessConnectionManager:
 
         self._proxy_support_attempt = connection_attempt_started()
         try:
+            context = self._ssl_context
+            if self._unpinned_beside_a_pin(context, self.api_ssl_fingerprint):
+                raise self._unpinned_path_refusal(
+                    f"UNIFI_{self.tls_env_prefix}_SSL_FINGERPRINT" if self.tls_env_prefix else None
+                )
             self._proxy_session = aiohttp.ClientSession(
-                connector=aiohttp.TCPConnector(ssl=self._ssl_context),
+                connector=aiohttp.TCPConnector(ssl=context),
                 cookie_jar=aiohttp.CookieJar(unsafe=True),
+                middlewares=self._session_middlewares(),
             )
             await self._proxy_login()
             self._proxy_available = True
@@ -487,10 +602,11 @@ class AccessConnectionManager:
             logger.info("[access-cm] Proxy session established via %s:%s", self.host, self.port)
         except Exception as exc:
             self._path_failures.append(exc)
+            self._proxy_certificate_failure = self._path_certificate_failure(exc, None)
             self._proxy_support_attempt = connection_attempt_failed(exc)
             logger.warning(
                 "[access-cm] Proxy login failed (non-fatal if API client available): %s",
-                exc,
+                type(exc).__name__,
             )
             if self._proxy_session and not self._proxy_session.closed:
                 await self._proxy_session.close()
@@ -545,6 +661,10 @@ class AccessConnectionManager:
         )
         if not self._api_key:
             raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {remediation}")
+        if self._api_certificate_failure:
+            raise CertificateVerificationError(
+                f"{operation} needs the Developer API. On port {self._api_port}: {self._api_certificate_failure}"
+            )
         if not self.has_api_client or self._api_session is None:
             raise UniFiAuthError(
                 f"{operation} requires an authenticated UniFi Access Developer API session. "
@@ -564,7 +684,7 @@ class AccessConnectionManager:
                 headers=headers,
                 json=json,
                 params=params,
-                ssl=self._ssl_context,
+                ssl=self._api_ssl_context,
                 timeout=aiohttp.ClientTimeout(total=_DEVELOPER_REQUEST_TIMEOUT_SECONDS),
             ) as resp:
                 try:
@@ -862,7 +982,9 @@ class AccessConnectionManager:
         return {
             "initialized": self._initialized,
             "connected": self.is_connected,
-            "tls_verification_enabled": self.verify_ssl,
+            "tls_verification_enabled": not (
+                isinstance(self._ssl_context, ssl.SSLContext) and isinstance(self._api_ssl_context, ssl.SSLContext)
+            ),
             "last_attempt": dict(self._support_attempt),
             "developer_api_available": self.has_api_client,
             "proxy_session_available": self.has_proxy,
@@ -882,7 +1004,9 @@ class AccessConnectionManager:
                 f"https://{self.host}:{self._api_port}/api/v1/developer/doors/settings/emergency",
                 {"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"},
             )
+            path_context = self._api_ssl_context
         elif self.has_proxy and self._proxy_session is not None and not self._proxy_session.closed:
+            path_context = self._ssl_context
             request = (
                 self._proxy_session,
                 f"https://{self.host}:{self.port}/proxy/access/api/v2/access/info",
@@ -905,7 +1029,7 @@ class AccessConnectionManager:
                 url,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=10),
-                ssl=self._ssl_context,
+                ssl=path_context,
                 allow_redirects=False,
                 middlewares=(no_retry_support_request,),
             ) as response:
