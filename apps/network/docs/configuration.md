@@ -18,7 +18,8 @@ The Network server supports server-specific environment variables with the `UNIF
 | `UNIFI_NETWORK_API_KEY` | `UNIFI_API_KEY` | No | `""` | Inventory reads and explicit Integration API tools; legacy mutations/full details may still require username/password. Public fallback has limited fields and separate UUIDs; see the README authentication section. |
 | `UNIFI_NETWORK_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port |
 | `UNIFI_NETWORK_SITE` | `UNIFI_SITE` | No | `default` | UniFi site name |
-| `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |
+| `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | TLS certificate verification; see [Checking the controller's identity](../../../docs/tls-verification.md) |
+| `UNIFI_NETWORK_SSL_FINGERPRINT` | `UNIFI_SSL_FINGERPRINT` | No | none | SHA-256 fingerprint pinning the controller certificate; overrides verify_ssl |
 | `UNIFI_NETWORK_WEBSOCKET_ENABLED` | -- | No | `true` | Start the real-time event listener that feeds `unifi_recent_events` |
 | `UNIFI_NETWORK_EVENT_BUFFER_SIZE` | -- | No | `100` | Positive maximum events held in the websocket ring buffer; invalid values prevent startup |
 | `UNIFI_NETWORK_EVENT_BUFFER_TTL` | -- | No | `300` | Positive seconds before buffered events expire; invalid values prevent startup |

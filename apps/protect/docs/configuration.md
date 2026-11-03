@@ -16,7 +16,8 @@ The Protect server supports server-specific environment variables with the `UNIF
 | `UNIFI_PROTECT_USERNAME` | `UNIFI_USERNAME` | Yes | -- | Local admin username |
 | `UNIFI_PROTECT_PASSWORD` | `UNIFI_PASSWORD` | Yes | -- | Admin password |
 | `UNIFI_PROTECT_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port |
-| `UNIFI_PROTECT_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |
+| `UNIFI_PROTECT_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | TLS certificate verification; see [Checking the controller's identity](../../../docs/tls-verification.md) |
+| `UNIFI_PROTECT_SSL_FINGERPRINT` | `UNIFI_SSL_FINGERPRINT` | No | none | SHA-256 fingerprint pinning the controller certificate; overrides verify_ssl |
 | `UNIFI_PROTECT_API_KEY` | `UNIFI_API_KEY` | For public settings | `""` | Required for camera HDR/microphone volume, light power/brightness/PIR sensitivity/duration, sensor settings, viewer liveview assignments, and per-camera chime ring settings; username/password still required |
 
 **Resolution order:** `UNIFI_PROTECT_*` > `UNIFI_*` > YAML config > hardcoded default.

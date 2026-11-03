@@ -54,6 +54,11 @@
           "default": "false"
         },
         {
+          "name": "UNIFI_SSL_FINGERPRINT",
+          "description": "SHA-256 fingerprint pinning the controller certificate (overrides UNIFI_VERIFY_SSL)",
+          "isRequired": false
+        },
+        {
           "name": "UNIFI_SITE",
           "description": "UniFi site name",
           "isRequired": false,

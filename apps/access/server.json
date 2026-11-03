@@ -52,6 +52,16 @@
           "description": "SSL certificate verification",
           "isRequired": false,
           "default": "false"
+        },
+        {
+          "name": "UNIFI_SSL_FINGERPRINT",
+          "description": "SHA-256 fingerprint pinning the controller certificate (overrides UNIFI_VERIFY_SSL)",
+          "isRequired": false
+        },
+        {
+          "name": "UNIFI_ACCESS_API_SSL_FINGERPRINT",
+          "description": "SHA-256 fingerprint pinning the developer API port's certificate",
+          "isRequired": false
         }
       ]
     }

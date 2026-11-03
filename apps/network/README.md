@@ -132,6 +132,7 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 # UNIFI_NETWORK_PORT=443             # Controller HTTPS port
 # UNIFI_NETWORK_SITE=default         # UniFi site name
 # UNIFI_NETWORK_VERIFY_SSL=false     # SSL certificate verification
+# UNIFI_NETWORK_SSL_FINGERPRINT=      # Pin the controller certificate by SHA-256
 # UNIFI_NETWORK_WEBSOCKET_ENABLED=true   # Real-time event listener feeding unifi_recent_events
 # UNIFI_NETWORK_EVENT_BUFFER_SIZE=100    # Positive ring buffer capacity; invalid values prevent startup
 # UNIFI_NETWORK_EVENT_BUFFER_TTL=300     # Positive lifetime in seconds; invalid values prevent startup

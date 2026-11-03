@@ -57,15 +57,26 @@ If the server starts, run `access_get_support_bundle(probe="summary")` and revie
 
 ### SSL certificate verification errors
 
-**Symptoms:** `SSL: CERTIFICATE_VERIFY_FAILED` or similar errors.
+**Symptoms:** A `CertificateVerificationError`, `CERTIFICATE_VERIFY_FAILED` or similar error.
 
-**Fix:** Set `UNIFI_ACCESS_VERIFY_SSL=false` (most UniFi controllers use self-signed certificates).
+**Cause:** `UNIFI_VERIFY_SSL=true` is set and the certificate isn't trusted for that address, or a pinned fingerprint no longer matches.
+
+**Fix:** For a self-signed console certificate, pin it:
 
 ```bash
-export UNIFI_ACCESS_VERIFY_SSL=false
+openssl s_client -connect <console>:443 </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+export UNIFI_ACCESS_SSL_FINGERPRINT=AB:CD:...    # the value printed above
 ```
 
-This is the default, so this error typically only occurs if you explicitly set it to `true`.
+If a fingerprint is already set, the certificate has changed. Confirm the change is expected before you update it.
+
+To turn the check off instead, clear any fingerprint and set `UNIFI_ACCESS_VERIFY_SSL=false`.
+
+### A tool says port 12445 failed its certificate check
+
+The API key port can present a different certificate from port 443, so it has its own pin. Run the command above with port 12445 and set `UNIFI_ACCESS_API_SSL_FINGERPRINT`.
+
+See [Checking the controller's identity](../../../docs/tls-verification.md).
 
 ## Missing Tools
 

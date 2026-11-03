@@ -40,6 +40,11 @@ _SHARED_ENV_VARS = [
         "isRequired": False,
         "default": "false",
     },
+    {
+        "name": "UNIFI_SSL_FINGERPRINT",
+        "description": "SHA-256 fingerprint pinning the controller certificate (overrides UNIFI_VERIFY_SSL)",
+        "isRequired": False,
+    },
 ]
 
 # Per-app configuration
@@ -62,7 +67,13 @@ APP_CONFIGS = {
         "title": "UniFi Access MCP",
         "description": "Manage UniFi Access doors, credentials, policies, visitors, and events via MCP.",
         "tag_prefixes": ["access/v", "v"],
-        "extra_env_vars": [],
+        "extra_env_vars": [
+            {
+                "name": "UNIFI_ACCESS_API_SSL_FINGERPRINT",
+                "description": "SHA-256 fingerprint pinning the developer API port's certificate",
+                "isRequired": False,
+            },
+        ],
     },
 }
 

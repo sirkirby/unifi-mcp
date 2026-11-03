@@ -26,6 +26,8 @@ from typing import Any
 from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
+from unifi_core.tls import server_ssl_setting
+from unifi_mcp_shared.bootstrap import resolve_env
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
 from unifi_mcp_shared.server import UniFiMCPServer, resolve_allowed_hosts
@@ -151,16 +153,32 @@ def _unifi_settings() -> Any:
     return cfg
 
 
+def _ssl_fingerprint(cfg: Any, key: str = "ssl_fingerprint") -> str | None:
+    """A pin from the environment, or from an operator's ``CONFIG_PATH`` file.
+
+    Read here rather than through ``load_config``'s keys, which log their values at
+    debug level: a malformed pin is rejected without being echoed, and the value
+    may be something pasted by mistake.
+    """
+    value = resolve_env(key, env_prefix="NETWORK", logger=logger) or cfg.get(key)
+    return str(value) if value else None
+
+
 @lru_cache
 def get_connection_manager() -> ConnectionManager:
     cfg = _unifi_settings()
+    verify_ssl = str(cfg.verify_ssl).lower() in ("true", "1", "yes")
+    fingerprint = _ssl_fingerprint(cfg)
+    server_ssl_setting(logger, verify_ssl, fingerprint, product="Network", env_prefix="NETWORK")
     return ConnectionManager(
         host=cfg.host,
         username=cfg.username,
         password=cfg.password,
         port=cfg.port,
         site=cfg.site,
-        verify_ssl=str(cfg.verify_ssl).lower() in ("true", "1", "yes"),
+        verify_ssl=verify_ssl,
+        ssl_fingerprint=fingerprint,
+        tls_env_prefix="NETWORK",
         auth=get_auth(),
     )
 
