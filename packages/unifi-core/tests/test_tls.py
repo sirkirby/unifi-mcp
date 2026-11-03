@@ -181,6 +181,12 @@ class TestCertificateError:
         hint = certificate_error_hint(env_prefix="PROTECT")
         assert "confirm" in hint
 
+    def test_hint_can_name_a_paths_own_variable(self):
+        hint = certificate_error_hint(env_prefix="ACCESS", pin_variable="UNIFI_ACCESS_API_SSL_FINGERPRINT")
+        assert "UNIFI_ACCESS_API_SSL_FINGERPRINT" in hint
+        assert "UNIFI_SSL_FINGERPRINT" not in hint
+        assert "UNIFI_ACCESS_VERIFY_SSL=false" in hint
+
     def test_hint_names_no_variables_for_a_consumer_that_does_not_read_them(self):
         hint = certificate_error_hint()
         assert "UNIFI_" not in hint

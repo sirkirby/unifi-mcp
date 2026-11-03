@@ -371,7 +371,14 @@ def access_manager():
     from unifi_core.access.managers.connection_manager import AccessConnectionManager
 
     return AccessConnectionManager(
-        HOST, "admin", "secret", port=PORT, api_key="key", ssl_fingerprint=EXPECTED.hex(), tls_env_prefix="ACCESS"
+        HOST,
+        "admin",
+        "secret",
+        port=PORT,
+        api_key="key",
+        ssl_fingerprint=EXPECTED.hex(),
+        api_ssl_fingerprint=EXPECTED.hex(),
+        tls_env_prefix="ACCESS",
     )
 
 
@@ -438,7 +445,7 @@ class TestAccessRequests:
             with pytest.raises(CertificateVerificationError) as excinfo:
                 await access_manager.developer_request("GET", "/visitors", operation="List visitors")
             message = str(excinfo.value)
-            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+            assert "SSL_FINGERPRINT" in message
             assert "12445" in message
             assert "API token" not in message
             assert "12445" in _rendered(caplog)
@@ -455,7 +462,7 @@ class TestAccessRequests:
             with pytest.raises(CertificateVerificationError) as excinfo:
                 await VisitorManager(access_manager).list_visitors()
             message = str(excinfo.value)
-            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+            assert "SSL_FINGERPRINT" in message
             assert "12445" in message
             assert "API token" not in message
         finally:
@@ -474,11 +481,12 @@ class TestAccessRequests:
             await access_manager.close()
 
     async def test_a_rejected_login_does_not_hide_the_other_paths_certificate(self, access_manager):
-        access_manager._path_failures = [certificate_failure(_mismatch(), env_prefix="ACCESS")]
-        access_manager._api_certificate_failed = True
+        failure = certificate_failure(_mismatch(), env_prefix="ACCESS", pin_variable="UNIFI_ACCESS_API_SSL_FINGERPRINT")
+        access_manager._path_failures = [failure]
+        access_manager._api_certificate_failure = str(failure)
         message = access_manager._rejected_message()
         assert "12445" in message
-        assert "UNIFI_ACCESS_SSL_FINGERPRINT" in message
+        assert "UNIFI_ACCESS_API_SSL_FINGERPRINT" in message
         _assert_absent(message, FINGERPRINT_MARKERS)
 
     async def test_a_rejected_token_still_gets_the_token_advice(self, access_manager):
@@ -511,9 +519,13 @@ class TestAccessRequests:
             await access_manager._try_api_client()
             await access_manager._try_proxy_session()
         try:
-            for session in (access_manager._api_session, access_manager._proxy_session):
-                with pytest.raises(CertificateVerificationError):
-                    await session.get(f"https://{HOST}:{PORT}/")
+            with pytest.raises(CertificateVerificationError) as developer:
+                await access_manager._api_session.get(f"https://{HOST}:{PORT}/")
+            with pytest.raises(CertificateVerificationError) as proxy:
+                await access_manager._proxy_session.get(f"https://{HOST}:{PORT}/")
+            # Each path's error names the variable that pins that path.
+            assert "UNIFI_ACCESS_API_SSL_FINGERPRINT" in str(developer.value)
+            assert "UNIFI_ACCESS_SSL_FINGERPRINT" in str(proxy.value)
         finally:
             await access_manager._api_session.close()
             await access_manager._proxy_session.close()

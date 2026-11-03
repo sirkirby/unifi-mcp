@@ -161,33 +161,39 @@ def is_certificate_error(error: BaseException) -> bool:
     return False
 
 
-def certificate_error_hint(*, env_prefix: str | None = None) -> str:
+def certificate_error_hint(*, env_prefix: str | None = None, pin_variable: str | None = None) -> str:
     """Fixed remediation text for a failed certificate check. Never quotes the certificate.
 
     Names the ``UNIFI_*`` settings only when ``env_prefix`` says the caller reads
     them; another consumer of these managers, such as the API server, does not.
+    ``pin_variable`` names the setting that pins this path, when it isn't the
+    server's usual one.
     """
     if env_prefix is None:
         return (
             "The controller's TLS certificate failed verification. Check the certificate on the controller "
             "and this connection's TLS settings; if a fingerprint is pinned, the certificate has changed."
         )
+    pin = pin_variable or f"UNIFI_{env_prefix}_SSL_FINGERPRINT (or UNIFI_SSL_FINGERPRINT)"
     return (
         "The controller's TLS certificate failed verification. For a self-signed console certificate, "
-        f"set UNIFI_{env_prefix}_SSL_FINGERPRINT (or UNIFI_SSL_FINGERPRINT) to its SHA-256 fingerprint. "
+        f"set {pin} to its SHA-256 fingerprint. "
         "If a fingerprint is already set, the certificate has changed: confirm the change is expected, "
         "then update the fingerprint. To turn the check off instead, clear any fingerprint and set "
         f"UNIFI_{env_prefix}_VERIFY_SSL=false."
     )
 
 
-def certificate_failure(error: BaseException, *, env_prefix: str | None = None) -> CertificateVerificationError:
+def certificate_failure(
+    error: BaseException, *, env_prefix: str | None = None, pin_variable: str | None = None
+) -> CertificateVerificationError:
     """Replace a failed certificate check with an error that is safe to log and return to a caller.
 
     The message is the exception class plus :func:`certificate_error_hint`; nothing from
     ``str(error)`` is kept.
     """
-    return CertificateVerificationError(f"{type(error).__name__}: {certificate_error_hint(env_prefix=env_prefix)}")
+    hint = certificate_error_hint(env_prefix=env_prefix, pin_variable=pin_variable)
+    return CertificateVerificationError(f"{type(error).__name__}: {hint}")
 
 
 def safe_error_text(error: BaseException, *, env_prefix: str | None = None) -> Any:
@@ -201,7 +207,9 @@ def safe_error_text(error: BaseException, *, env_prefix: str | None = None) -> A
     return error
 
 
-def certificate_safe_middleware(*, env_prefix: str | None = None) -> aiohttp.ClientMiddlewareType:
+def certificate_safe_middleware(
+    *, env_prefix: str | None = None, pin_variable: str | None = None
+) -> aiohttp.ClientMiddlewareType:
     """Session middleware that replaces a failed certificate check with :class:`CertificateVerificationError`.
 
     Installed on every controller session so the translation happens below the
@@ -217,7 +225,7 @@ def certificate_safe_middleware(*, env_prefix: str | None = None) -> aiohttp.Cli
         try:
             return await handler(request)
         except (aiohttp.ClientConnectorCertificateError, aiohttp.ServerFingerprintMismatch) as error:
-            failure = certificate_failure(error, env_prefix=env_prefix)
+            failure = certificate_failure(error, env_prefix=env_prefix, pin_variable=pin_variable)
         raise failure from None
 
     return middleware

@@ -185,6 +185,33 @@ async def test_access_probe_prefers_existing_developer_session_and_never_reauthe
 
 
 @pytest.mark.asyncio
+async def test_access_probe_checks_each_session_against_its_own_pin() -> None:
+    """A per-request pin overrides the session's, so the wrong one would report a healthy path as failed."""
+    developer = _Session(_ResponseContext(200))
+    manager = AccessConnectionManager(
+        "controller.example.invalid",
+        "private-user",
+        "private-password",
+        api_key="private-token",
+        ssl_fingerprint="ab" * 32,
+        api_ssl_fingerprint="cd" * 32,
+    )
+    manager._initialized = True
+    manager._api_client_available = True
+    manager._api_client = object()
+    manager._api_session = developer
+    await manager.support_connectivity_probe()
+    assert developer.calls[0][1]["ssl"].fingerprint == bytes.fromhex("cd" * 32)
+
+    proxy = _Session(_ResponseContext(200))
+    manager._api_client_available = False
+    manager._api_session = None
+    manager._proxy_available = True
+    manager._proxy_session = proxy
+    await manager.support_connectivity_probe()
+    assert proxy.calls[0][1]["ssl"].fingerprint == bytes.fromhex("ab" * 32)
+
+
 async def test_access_probe_uses_existing_proxy_session_without_reading_body_or_reauthenticating() -> None:
     context = _ResponseContext(200)
     session = _Session(context)
