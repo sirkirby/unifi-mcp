@@ -54,6 +54,10 @@ export UNIFI_TOOL_REGISTRATION_MODE=lazy  # default, recommended
 #### [Sanitized Support Bundles](support-bundles.md)
 Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe.
 
+#### [Checking the Controller's Identity](tls-verification.md)
+
+Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to.
+
 #### [Credential Providers](credential-providers.md)
 Keep the controller password and API key out of the MCP client's environment with the `_FILE` and `_COMMAND` spellings, and the contract the command provider runs under: supported platforms, executable resolution, and process lifecycle.
 
@@ -180,6 +184,7 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 ### Core Documentation (docs/)
 - [context-optimization-comparison.md](context-optimization-comparison.md) - Mode comparison
 - [credential-providers.md](credential-providers.md) - Credential indirection contract
+- [tls-verification.md](tls-verification.md) - Pinning or verifying the controller's certificate
 - [agent-install.md](agent-install.md) - Installing UniFi MCP with an agent, per client
 - [plugin-support.md](plugin-support.md) - Plugin support matrix
 - [plugin-upgrade.md](plugin-upgrade.md) - Plugin upgrade guide

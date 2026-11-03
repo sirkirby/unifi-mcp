@@ -99,6 +99,7 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 # UNIFI_PROTECT_API_KEY=             # Required for camera HDR/mic volume and light power/brightness/PIR settings
 # UNIFI_PROTECT_PORT=443             # Controller HTTPS port
 # UNIFI_PROTECT_VERIFY_SSL=false     # SSL certificate verification
+# UNIFI_PROTECT_SSL_FINGERPRINT=      # Pin the controller certificate by SHA-256
 ```
 
 Camera HDR and microphone volume, plus floodlight power, brightness, PIR sensitivity,

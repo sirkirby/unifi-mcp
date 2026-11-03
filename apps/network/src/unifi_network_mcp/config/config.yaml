@@ -5,6 +5,9 @@ unifi:
   port: ${oc.env:UNIFI_PORT,443}
   site: ${oc.env:UNIFI_SITE,default}
   verify_ssl: ${oc.env:UNIFI_VERIFY_SSL,false}
+  # SHA-256 of the certificate on the console's port; pins it and overrides verify_ssl.
+  # Prefer UNIFI_NETWORK_SSL_FINGERPRINT or UNIFI_SSL_FINGERPRINT.
+  ssl_fingerprint: ""
   controller_type: ${oc.env:UNIFI_CONTROLLER_TYPE,auto}
   api_key: ${oc.env:UNIFI_API_KEY,""}
 

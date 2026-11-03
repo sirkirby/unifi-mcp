@@ -48,6 +48,8 @@ from unifi_core.access.managers.policy_manager import PolicyManager
 from unifi_core.access.managers.system_manager import SystemManager
 from unifi_core.access.managers.visitor_manager import VisitorManager
 from unifi_core.auth import UniFiAuth
+from unifi_core.tls import parse_fingerprint, server_ssl_setting
+from unifi_mcp_shared.bootstrap import resolve_env
 
 # ---------------------------------------------------------------------------
 # Core singletons
@@ -136,9 +138,39 @@ def _unifi_settings() -> Any:
     return cfg
 
 
+def _ssl_fingerprint(cfg: Any, key: str = "ssl_fingerprint") -> str | None:
+    """A pin from the environment, or from an operator's ``CONFIG_PATH`` file.
+
+    Read here rather than through ``load_config``'s keys, which log their values at
+    debug level: a malformed pin is rejected without being echoed, and the value
+    may be something pasted by mistake.
+    """
+    value = resolve_env(key, env_prefix="ACCESS", logger=logger) or cfg.get(key)
+    return str(value) if value else None
+
+
+def _access_tls_settings(cfg: Any) -> tuple[bool, str | None, str | None]:
+    """``verify_ssl`` and the pins for port 443 and the developer API port, checked at startup.
+
+    Pinning either port stops the startup warning: the other path is then refused
+    rather than left unchecked.
+    """
+    verify_ssl = str(cfg.verify_ssl).lower() in ("true", "1", "yes")
+    fingerprint = _ssl_fingerprint(cfg)
+    api_fingerprint = _ssl_fingerprint(cfg, "api_ssl_fingerprint")
+    try:
+        parse_fingerprint(api_fingerprint)
+    except ValueError as error:
+        logger.critical("Invalid UNIFI_ACCESS_API_SSL_FINGERPRINT: %s", error)
+        raise SystemExit(2) from None
+    server_ssl_setting(logger, verify_ssl or bool(api_fingerprint), fingerprint, product="Access", env_prefix="ACCESS")
+    return verify_ssl, fingerprint, api_fingerprint
+
+
 @lru_cache
 def get_connection_manager() -> AccessConnectionManager:
     cfg = _unifi_settings()
+    verify_ssl, fingerprint, api_fingerprint = _access_tls_settings(cfg)
     full_cfg = get_config()
     api_key = getattr(cfg, "api_key", None) or os.environ.get("UNIFI_ACCESS_API_KEY") or os.environ.get("UNIFI_API_KEY")
     # Access-specific API port from config.yaml access.api_port (default 12445)
@@ -152,9 +184,12 @@ def get_connection_manager() -> AccessConnectionManager:
         username=cfg.username,
         password=cfg.password,
         port=int(cfg.port),
-        verify_ssl=str(cfg.verify_ssl).lower() in ("true", "1", "yes"),
+        verify_ssl=verify_ssl,
         api_key=api_key if api_key else None,
         api_port=api_port,
+        ssl_fingerprint=fingerprint,
+        api_ssl_fingerprint=api_fingerprint,
+        tls_env_prefix="ACCESS",
     )
 
 

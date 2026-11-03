@@ -16,7 +16,9 @@ The Access server supports server-specific environment variables with the `UNIFI
 | `UNIFI_ACCESS_USERNAME` | `UNIFI_USERNAME` | Yes* | -- | Local admin username (*required for proxy path) |
 | `UNIFI_ACCESS_PASSWORD` | `UNIFI_PASSWORD` | Yes* | -- | Admin password (*required for proxy path) |
 | `UNIFI_ACCESS_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port (UniFi OS Console) |
-| `UNIFI_ACCESS_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |
+| `UNIFI_ACCESS_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | TLS certificate verification; see [Checking the controller's identity](../../../docs/tls-verification.md) |
+| `UNIFI_ACCESS_SSL_FINGERPRINT` | `UNIFI_SSL_FINGERPRINT` | No | none | SHA-256 fingerprint pinning the controller certificate; overrides verify_ssl |
+| `UNIFI_ACCESS_API_SSL_FINGERPRINT` | none | No | none | The same for the API key port, which can present a different certificate |
 | `UNIFI_ACCESS_API_KEY` | `UNIFI_API_KEY` | No | `""` | Official UniFi API key (for API-key auth path) |
 
 **Resolution order:** `UNIFI_ACCESS_*` > `UNIFI_*` > YAML config > hardcoded default.
