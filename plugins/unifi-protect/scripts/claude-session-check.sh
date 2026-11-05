@@ -10,8 +10,9 @@ case "$1" in
 esac
 plugin="unifi-$1"
 # A certificate pin set in Claude Code's environment no longer reaches the server:
-# the plugin passes its own, empty, option in its place, which leaves the
-# connection unchecked. Name the variable, never its value.
+# the plugin passes its own, empty, option in its place. Say that the pin is not
+# used; whether the connection is still checked depends on a shared pin or Verify
+# SSL. Name the variable, never its value.
 masked=
 for pin in SSL_FINGERPRINT API_SSL_FINGERPRINT; do
   [ "$pin" = API_SSL_FINGERPRINT ] && [ "$upper" != ACCESS ] && continue
@@ -22,9 +23,9 @@ for pin in SSL_FINGERPRINT API_SSL_FINGERPRINT; do
   fi
 done
 if [ -n "$masked" ]; then
-  case "$masked" in *' and '*) verb=are ;; *) verb=is ;; esac
-  printf '{"systemMessage":"%s plugin: %s %s set in Claude Code'"'"'s environment, but the plugin passes its own certificate fingerprint option, which is empty, so the %s server does not check the certificate. Ask Claude to save the pin as the plugin option with the %s-setup skill, then run /reload-plugins or start a new session.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s %s set in this environment, but the %s plugin passes its own empty certificate fingerprint option in its place, so the %s server is not checking the controller certificate. Before using %s tools, tell the user and offer to save the pin as the plugin option: run the plugin scripts/set-env.sh --target claude with each variable set from the environment (for example UNIFI_%s_SSL_FINGERPRINT=\\"$UNIFI_%s_SSL_FINGERPRINT\\"), then the user runs /reload-plugins. Never print the fingerprint values."}}\n' \
-    "$label" "$masked" "$verb" "$label" "$plugin" "$masked" "$verb" "$plugin" "$label" "$label" "$upper" "$upper"
+  case "$masked" in *' and '*) verb=are; them=them ;; *) verb=is; them=it ;; esac
+  printf '{"systemMessage":"%s plugin: %s %s set in Claude Code'"'"'s environment, but the plugin passes its own certificate fingerprint option in its place, which is empty, so the %s server does not use %s. Unless a shared UNIFI_SSL_FINGERPRINT or Verify SSL applies, the certificate goes unchecked. Ask Claude to save the pin as the plugin option with the %s-setup skill, then run /reload-plugins or start a new session.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s %s set in this environment, but the %s plugin passes its own empty certificate fingerprint option in its place, so the %s server does not use %s; the certificate is unchecked unless a shared UNIFI_SSL_FINGERPRINT (controller port only) or the Verify SSL option applies. Before using %s tools, tell the user and offer to save the pin as the plugin option: run the plugin scripts/set-env.sh --target claude with each variable set from the environment (for example UNIFI_%s_SSL_FINGERPRINT=\\"$UNIFI_%s_SSL_FINGERPRINT\\"), then the user runs /reload-plugins. Never print the fingerprint values."}}\n' \
+    "$label" "$masked" "$verb" "$label" "$them" "$plugin" "$masked" "$verb" "$plugin" "$label" "$them" "$label" "$upper" "$upper"
   exit 0
 fi
 settings="${CLAUDE_PROJECT_DIR:-.}/.claude/settings.local.json"

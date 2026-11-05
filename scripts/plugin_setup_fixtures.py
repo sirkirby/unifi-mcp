@@ -867,6 +867,21 @@ class Fixtures:
                 and b"AB:CD" not in pin_notice.stdout,
                 "session notice names an inherited pin the empty option replaces, without its value",
             )
+            shared_pin = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(
+                    environment,
+                    CLAUDE_PROJECT_DIR=str(workspace),
+                    UNIFI_SSL_FINGERPRINT="AB:CD",
+                    **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"},
+                ),
+                capture_output=True,
+            )
+            self.check(
+                b"does not use it" in shared_pin.stdout
+                and b"Unless a shared UNIFI_SSL_FINGERPRINT" in shared_pin.stdout,
+                "pin notice says the inherited pin is unused, not that a shared pin leaves the console unchecked",
+            )
             pinned_option = subprocess.run(
                 ["sh", str(hook), product],
                 env=dict(
