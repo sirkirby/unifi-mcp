@@ -11,7 +11,9 @@ API endpoints:
   Device commands:  POST /cmd/devmgr                               (v1 cmd — power-cycle, locate, force-provision)
 """
 
+import asyncio
 import logging
+import weakref
 from typing import Any, Dict, List, Optional
 
 from aiounifi.errors import RequestError
@@ -33,11 +35,23 @@ _PORT_PROFILE_ABSENT_VALUE_DEFAULTS: Dict[str, Any] = {
 }
 
 
+# Device writes read port_overrides, change them and PUT the whole array back, so
+# two overlapping writes to one switch would each restore the other's old
+# entries. Locks are kept per connection, not per manager, because a server may
+# build managers per request over one shared connection.
+_DEVICE_WRITE_LOCKS: "weakref.WeakKeyDictionary[Any, Dict[str, asyncio.Lock]]" = weakref.WeakKeyDictionary()
+
+
 class SwitchManager:
     """Manages switch-related operations on the UniFi controller."""
 
     def __init__(self, connection_manager: ConnectionManager):
         self._connection = connection_manager
+
+    def _device_write_lock(self, device_mac: str) -> asyncio.Lock:
+        """The lock serializing read-modify-write updates of one switch's device record."""
+        locks = _DEVICE_WRITE_LOCKS.setdefault(self._connection, {})
+        return locks.setdefault(normalize_mac(device_mac) or device_mac, asyncio.Lock())
 
     # ---- Port Profiles ----
 
@@ -421,14 +435,15 @@ class SwitchManager:
             ValueError: Unknown device, or changes that are empty or ambiguous.
             Exception: On API error.
         """
-        device_id, current = await self._port_override_target(device_mac)
-        plan = self._merge_port_overrides(current, port_overrides, remove_port_idxs)
-        api_request = ApiRequest(
-            method="put",
-            path=f"/rest/device/{object_id(device_id, 'device')}",
-            data={"port_overrides": plan["merged"]},
-        )
-        await self._connection.request(api_request)
+        async with self._device_write_lock(device_mac):
+            device_id, current = await self._port_override_target(device_mac)
+            plan = self._merge_port_overrides(current, port_overrides, remove_port_idxs)
+            api_request = ApiRequest(
+                method="put",
+                path=f"/rest/device/{object_id(device_id, 'device')}",
+                data={"port_overrides": plan["merged"]},
+            )
+            await self._connection.request(api_request)
         return True
 
     async def update_device_config(self, device_mac: str, config_data: Dict[str, Any]) -> bool:
@@ -452,23 +467,24 @@ class SwitchManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
-        device_id = await self._get_device_id(device_mac)
-        if not device_id:
-            raise ValueError(f"Device '{device_mac}' not found")
+        async with self._device_write_lock(device_mac):
+            device_id = await self._get_device_id(device_mac)
+            if not device_id:
+                raise ValueError(f"Device '{device_mac}' not found")
 
-        # Fetch current port_overrides — the controller requires them in the PUT payload
-        device = await self._get_device_stat(device_mac)
-        port_overrides = device.get("port_overrides", []) if device else []
+            # Fetch current port_overrides — the controller requires them in the PUT payload
+            device = await self._get_device_stat(device_mac)
+            port_overrides = device.get("port_overrides", []) if device else []
 
-        payload = dict(config_data)
-        payload["port_overrides"] = port_overrides
+            payload = dict(config_data)
+            payload["port_overrides"] = port_overrides
 
-        api_request = ApiRequest(
-            method="put",
-            path=f"/rest/device/{object_id(device_id, 'device')}",
-            data=payload,
-        )
-        await self._connection.request(api_request)
+            api_request = ApiRequest(
+                method="put",
+                path=f"/rest/device/{object_id(device_id, 'device')}",
+                data=payload,
+            )
+            await self._connection.request(api_request)
         return True
 
     # ---- Device commands ----

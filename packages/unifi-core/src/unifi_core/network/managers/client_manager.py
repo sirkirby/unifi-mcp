@@ -437,31 +437,38 @@ class ClientManager:
             )
         return True
 
-    async def _is_known_client(self, path_mac: str) -> bool:
-        """Whether the controller has a user-table record for the MAC, read per MAC."""
+    async def _user_record(self, path_mac: str) -> Optional[dict]:
+        """The controller's user-table record for the MAC, or ``None`` when it has none.
+
+        Reads ``/stat/user/<mac>``; a controller that does not serve it (404) is
+        read through the user table itself, uncached. Raises
+        :class:`UniFiOperationError` when the answer cannot be established.
+        """
         try:
-            return await self._get_user_by_mac(path_mac) is not None
+            return await self._get_user_by_mac(path_mac)
         except Exception as e:
             if controller_error_code(e) == UNKNOWN_USER_CODE:
-                return False
+                return None
             if response_status(e) != 404:
                 raise
-        # The controller does not serve /stat/user: read the user table itself, uncached.
         users = await self._connection.request(ApiRequest(method="get", path="/rest/user"))
         if not isinstance(users, list) or not all(isinstance(user, dict) for user in users):
             raise UniFiOperationError(
                 f"/rest/user reply had unexpected shape {type(users).__name__}; "
                 "whether the client is known could not be determined"
             )
-        if any(mac_equal(user.get("mac"), path_mac) for user in users):
-            return True
-        if len(users) >= REST_USER_ROW_CAP:
+        record = next((user for user in users if mac_equal(user.get("mac"), path_mac)), None)
+        if record is None and len(users) >= REST_USER_ROW_CAP:
             # A full window can leave the record out although the controller keeps it.
             raise UniFiOperationError(
                 f"/rest/user returned its {REST_USER_ROW_CAP}-row cap without this client; "
                 "whether the client is known could not be determined"
             )
-        return False
+        return record
+
+    async def _is_known_client(self, path_mac: str) -> bool:
+        """Whether the controller has a user-table record for the MAC, read per MAC."""
+        return await self._user_record(path_mac) is not None
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
@@ -691,13 +698,19 @@ class ClientManager:
             if payload.get("use_fixedip") is True and payload.get("fixed_ip"):
                 network = await self.resolve_fixed_ip_network(payload["fixed_ip"], network_id)
                 payload["network_id"] = network["network_id"]
-            if payload.get("use_fixedip") is False and local_dns_record_enabled is None:
-                persisted = await self._get_user_by_mac(client_mac)
-                if (persisted or client_raw).get("local_dns_record_enabled"):
+            if payload.get("use_fixedip") is False:
+                # The controller rejects a release that leaves a local DNS record on
+                # (api.err.LocalDnsRecordRequiresFixedIp): check the state this change
+                # produces, reading the stored record only when the change leaves DNS alone.
+                dns_enabled = payload.get("local_dns_record_enabled")
+                if dns_enabled is None:
+                    record = await self._user_record(client_mac)
+                    dns_enabled = bool((record or {}).get("local_dns_record_enabled"))
+                if dns_enabled:
                     raise ValueError(
-                        "This client has a local DNS record enabled, and the controller refuses to release a "
-                        "fixed IP while it is on. Pass local_dns_record_enabled=false to turn the record off in "
-                        "the same change, or keep the fixed IP."
+                        "Releasing the fixed IP would leave a local DNS record enabled, which the controller "
+                        "refuses. Pass local_dns_record_enabled=false to turn the record off in the same change, "
+                        "or keep the fixed IP."
                     )
 
             # If client is not "noted" (known), mark it first to enable IP config

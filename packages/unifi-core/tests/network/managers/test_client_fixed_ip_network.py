@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiounifi.errors import ResponseError
 from unifi_core.network.managers.client_manager import ClientManager
 
 CLIENT_MAC = "aa:bb:cc:dd:ee:ff"
@@ -15,7 +16,7 @@ NETWORKS = [
 ]
 
 
-def _manager(user: dict | None = None, networks: list[dict] = NETWORKS):
+def _manager(user: dict | None = None, networks: list[dict] = NETWORKS, *, stat_user_404: bool = False):
     record = {"_id": "user-1", "mac": CLIENT_MAC, "noted": True, **(user or {})}
     conn = MagicMock()
     conn.ensure_connected = AsyncMock(return_value=True)
@@ -26,7 +27,11 @@ def _manager(user: dict | None = None, networks: list[dict] = NETWORKS):
         if api_request.method == "get" and api_request.path == "/rest/networkconf":
             return deepcopy(networks)
         if api_request.method == "get" and api_request.path.startswith("/stat/user/"):
+            if stat_user_404:
+                raise ResponseError("Call https://c/stat/user/x received 404 Not Found")
             return [deepcopy(record)]
+        if api_request.method == "get" and api_request.path == "/rest/user":
+            return [{"_id": "other", "mac": "00:11:22:33:44:55"}, deepcopy(record)]
         if api_request.method == "put":
             puts.append(deepcopy(api_request.data))
         return {}
@@ -111,6 +116,36 @@ async def test_releasing_without_a_dns_record_is_unchanged():
     await manager.set_client_ip_settings(CLIENT_MAC, use_fixedip=False)
 
     assert puts == [{"use_fixedip": False, "fixed_ip": ""}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dns_enabled", [True, False])
+async def test_a_release_reads_the_user_table_where_the_controller_has_no_stat_user(dns_enabled):
+    manager, puts = _manager(
+        {"use_fixedip": True, "fixed_ip": "192.168.1.20", "local_dns_record_enabled": dns_enabled}, stat_user_404=True
+    )
+
+    if dns_enabled:
+        with pytest.raises(ValueError, match="local DNS record"):
+            await manager.set_client_ip_settings(CLIENT_MAC, use_fixedip=False)
+        assert puts == []
+    else:
+        await manager.set_client_ip_settings(CLIENT_MAC, use_fixedip=False)
+        assert puts == [{"use_fixedip": False, "fixed_ip": ""}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "dns_change",
+    [{"local_dns_record_enabled": True, "local_dns_record": "host.lan"}, {"local_dns_record": "host.lan"}],
+    ids=["explicit-enable", "hostname-enables"],
+)
+async def test_a_release_that_would_enable_a_dns_record_is_refused_before_any_write(dns_change):
+    manager, puts = _manager({"noted": False, "use_fixedip": True, "fixed_ip": "192.168.1.20"})
+
+    with pytest.raises(ValueError, match="local DNS record"):
+        await manager.set_client_ip_settings(CLIENT_MAC, use_fixedip=False, **dns_change)
+    assert puts == []
 
 
 @pytest.mark.asyncio

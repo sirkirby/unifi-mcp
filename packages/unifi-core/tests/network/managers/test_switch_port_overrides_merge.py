@@ -111,3 +111,34 @@ async def test_the_plan_names_changed_added_and_removed_ports_without_writing():
     assert (plan["changed_ports"], plan["added_ports"], plan["removed_ports"]) == ([2], [4], [7])
     assert plan["kept_ports"] == [1]
     assert puts == []
+
+
+@pytest.mark.asyncio
+async def test_overlapping_writes_to_one_switch_keep_both_changes():
+    import asyncio
+
+    device = {"_id": "dev1", "mac": SWITCH_MAC, "port_overrides": deepcopy(CURRENT)}
+    conn = MagicMock()
+    conn.ensure_connected = AsyncMock(return_value=True)
+
+    async def request(api_request):
+        if api_request.method == "get":
+            snapshot = [deepcopy(device)]
+            await asyncio.sleep(0.01)  # let the other write read the same state if nothing serializes them
+            return snapshot
+        await asyncio.sleep(0.01)
+        device["port_overrides"] = deepcopy(api_request.data["port_overrides"])
+        return {}
+
+    conn.request = AsyncMock(side_effect=request)
+    manager = SwitchManager(conn)
+
+    await asyncio.gather(
+        manager.set_port_overrides(SWITCH_MAC, [{"port_idx": 1, "portconf_id": "a"}]),
+        manager.set_port_overrides(SWITCH_MAC, [{"port_idx": 2, "portconf_id": "b"}]),
+    )
+
+    ports = {entry["port_idx"]: entry for entry in device["port_overrides"]}
+    assert ports[1] == {"port_idx": 1, "portconf_id": "a"}
+    assert ports[2] == {"port_idx": 2, "portconf_id": "b"}
+    assert ports[7] == CURRENT[2]
