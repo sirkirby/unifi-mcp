@@ -898,6 +898,18 @@ class Fixtures:
             )
             message = json.loads(notice.stdout)
             self.check("--migrate" in message["systemMessage"], "session notice names the migration")
+            both = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(project), **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"}),
+                capture_output=True,
+            )
+            both_message = json.loads(both.stdout)["systemMessage"]
+            self.check(
+                "--migrate" in both_message
+                and f"UNIFI_{upper}_SSL_FINGERPRINT" in both_message
+                and b"AB:CD" not in both.stdout,
+                "an inherited pin notice is added to the legacy-settings notice, not instead of it",
+            )
             self.check(b"192.0.2.50" not in notice.stdout, "session notice omits values")
             self.check(
                 "starts unconfigured" in message["systemMessage"] and "shared UNIFI_" not in message["systemMessage"],

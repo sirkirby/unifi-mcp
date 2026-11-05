@@ -22,15 +22,28 @@ for pin in SSL_FINGERPRINT API_SSL_FINGERPRINT; do
     masked="${masked:+$masked and }UNIFI_${upper}_$pin"
   fi
 done
+# The pin text is appended to any other notice below, so a project whose legacy
+# settings name another controller still gets that warning first.
+pin_sys=
+pin_ctx=
 if [ -n "$masked" ]; then
   case "$masked" in *' and '*) verb=are; them=them ;; *) verb=is; them=it ;; esac
-  printf '{"systemMessage":"%s plugin: %s %s set in Claude Code'"'"'s environment, but the plugin passes its own certificate fingerprint option in its place, which is empty, so the %s server does not use %s. Unless a shared UNIFI_SSL_FINGERPRINT or Verify SSL applies, the certificate goes unchecked. Ask Claude to save the pin as the plugin option with the %s-setup skill, then run /reload-plugins or start a new session.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s %s set in this environment, but the %s plugin passes its own empty certificate fingerprint option in its place, so the %s server does not use %s; the certificate is unchecked unless a shared UNIFI_SSL_FINGERPRINT (controller port only) or the Verify SSL option applies. Before using %s tools, tell the user and offer to save the pin as the plugin option: run the plugin scripts/set-env.sh --target claude with each variable set from the environment (for example UNIFI_%s_SSL_FINGERPRINT=\\"$UNIFI_%s_SSL_FINGERPRINT\\"), then the user runs /reload-plugins. Never print the fingerprint values."}}\n' \
-    "$label" "$masked" "$verb" "$label" "$them" "$plugin" "$masked" "$verb" "$plugin" "$label" "$them" "$label" "$upper" "$upper"
-  exit 0
+  pin_sys=$(printf ' %s %s set in Claude Code'"'"'s environment, but the plugin passes its own certificate fingerprint option in its place, which is empty, so the %s server does not use %s. Unless a shared UNIFI_SSL_FINGERPRINT or Verify SSL applies, the certificate goes unchecked. Ask Claude to save the pin as the plugin option with the %s-setup skill, then run /reload-plugins or start a new session.' \
+    "$masked" "$verb" "$label" "$them" "$plugin")
+  pin_ctx=$(printf ' %s %s set in this environment, but the %s plugin passes its own empty certificate fingerprint option in its place, so the %s server does not use %s; the certificate is unchecked unless a shared UNIFI_SSL_FINGERPRINT (controller port only) or the Verify SSL option applies. Tell the user and offer to save the pin as the plugin option, but only for the controller the plugin options name, after any controller difference above is settled: run the plugin scripts/set-env.sh --target claude with each variable set from the environment (for example UNIFI_%s_SSL_FINGERPRINT=\\"$UNIFI_%s_SSL_FINGERPRINT\\"), then the user runs /reload-plugins. Never print the fingerprint values.' \
+    "$masked" "$verb" "$plugin" "$label" "$them" "$upper" "$upper")
 fi
+# Print the pin notice alone and stop, when there is nothing else to report.
+pin_only() {
+  if [ -n "$masked" ]; then
+    printf '{"systemMessage":"%s plugin:%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
+      "$label" "$pin_sys" "${pin_ctx# }"
+  fi
+  exit 0
+}
 settings="${CLAUDE_PROJECT_DIR:-.}/.claude/settings.local.json"
-[ -f "$settings" ] || exit 0
-grep -Eq "\"UNIFI_(POLICY_)?${upper}_[A-Z0-9_]*\"[[:space:]]*:" "$settings" 2>/dev/null || exit 0
+[ -f "$settings" ] || pin_only
+grep -Eq "\"UNIFI_(POLICY_)?${upper}_[A-Z0-9_]*\"[[:space:]]*:" "$settings" 2>/dev/null || pin_only
 # A session keeps the options it started with: /mcp reconnect alone restarts the
 # server with those, so new options need /reload-plugins or a new session.
 recover="run /reload-plugins or start a new session (use /mcp reconnect plugin:$plugin:$plugin only if /mcp shows the server as failed)"
@@ -98,13 +111,13 @@ differing_fields() {
 if [ -n "${CLAUDE_PLUGIN_OPTION_HOST:-}" ]; then
   differing=$(differing_fields "$1")
   if [ -z "$differing" ]; then
-    printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json still holds UNIFI_%s_* settings, which this plugin version no longer reads. They name the same controller as the saved plugin options, so nothing changes. Remove the leftover UNIFI_%s_* keys from that file, or ask Claude to run the %s-setup migration (set-env.sh --target claude --migrate) to tidy up; the migration also copies this project'"'"'s other %s settings, such as its credential source, into the options for every project.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"This project still holds legacy UNIFI_%s_* settings in .claude/settings.local.json, which the %s plugin no longer reads. Their host, username, port and site equal the saved plugin options, so the %s server already uses the same controller. If the user asks, offer to remove the leftover keys or to run the %s-setup skill migration (scripts/set-env.sh --target claude --migrate), which also copies this project'"'"'s other settings, such as its credential source, into the options for every project. Never print those settings or their values."}}\n' \
-      "$label" "$upper" "$upper" "$plugin" "$label" "$upper" "$plugin" "$label" "$plugin"
+    printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json still holds UNIFI_%s_* settings, which this plugin version no longer reads. They name the same controller as the saved plugin options, so nothing changes. Remove the leftover UNIFI_%s_* keys from that file, or ask Claude to run the %s-setup migration (set-env.sh --target claude --migrate) to tidy up; the migration also copies this project'"'"'s other %s settings, such as its credential source, into the options for every project.%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"This project still holds legacy UNIFI_%s_* settings in .claude/settings.local.json, which the %s plugin no longer reads. Their host, username, port and site equal the saved plugin options, so the %s server already uses the same controller. If the user asks, offer to remove the leftover keys or to run the %s-setup skill migration (scripts/set-env.sh --target claude --migrate), which also copies this project'"'"'s other settings, such as its credential source, into the options for every project. Never print those settings or their values.%s"}}\n' \
+      "$label" "$upper" "$upper" "$plugin" "$label" "$pin_sys" "$upper" "$plugin" "$label" "$plugin" "$pin_ctx"
     exit 0
   fi
   # Options apply in every project: this project's own settings are not in use.
-  printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json has its own UNIFI_%s_* settings, which this plugin version no longer reads, so the %s server uses the plugin options saved from another project, which may name a different controller. They differ from the saved options in %s. To make this project'"'"'s settings the options for every project, ask Claude to run the %s-setup migration with --replace (set-env.sh --target claude --migrate --replace), then %s. To keep the saved options, remove the leftover UNIFI_%s_* keys from that file.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The %s plugin options are set, but this project still holds its own legacy UNIFI_%s_* settings in .claude/settings.local.json, which the plugin no longer reads, so the %s server is using the options saved from another project, which may name a different controller. The connection variables that differ from the saved options are %s. Before using %s tools, tell the user and offer the choice: migrate this project'"'"'s settings with the %s-setup skill (scripts/set-env.sh --target claude --migrate --replace), which makes them the options for every project, or remove the leftover UNIFI_%s_* keys to keep the saved options. Never print those settings or their values."}}\n' \
-    "$label" "$upper" "$label" "$differing" "$plugin" "$recover" "$upper" "$plugin" "$upper" "$label" "$differing" "$label" "$plugin" "$upper"
+  printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json has its own UNIFI_%s_* settings, which this plugin version no longer reads, so the %s server uses the plugin options saved from another project, which may name a different controller. They differ from the saved options in %s. To make this project'"'"'s settings the options for every project, ask Claude to run the %s-setup migration with --replace (set-env.sh --target claude --migrate --replace), then %s. To keep the saved options, remove the leftover UNIFI_%s_* keys from that file.%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The %s plugin options are set, but this project still holds its own legacy UNIFI_%s_* settings in .claude/settings.local.json, which the plugin no longer reads, so the %s server is using the options saved from another project, which may name a different controller. The connection variables that differ from the saved options are %s. Before using %s tools, tell the user and offer the choice: migrate this project'"'"'s settings with the %s-setup skill (scripts/set-env.sh --target claude --migrate --replace), which makes them the options for every project, or remove the leftover UNIFI_%s_* keys to keep the saved options. Never print those settings or their values.%s"}}\n' \
+    "$label" "$upper" "$label" "$differing" "$plugin" "$recover" "$upper" "$pin_sys" "$plugin" "$upper" "$label" "$differing" "$label" "$plugin" "$upper" "$pin_ctx"
   exit 0
 fi
 # Shared UNIFI_HOST makes the server fall back to the shared UNIFI_* keys in this
@@ -116,6 +129,6 @@ else
   effect="so the $label server starts unconfigured"
   context="the server starts unconfigured"
 fi
-printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json still holds UNIFI_%s_* settings, which this plugin version no longer reads, %s. Ask Claude to run the %s-setup migration (set-env.sh --target claude --migrate), then %s.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The %s plugin has no Claude Code options set, but this project has legacy UNIFI_%s_* settings in .claude/settings.local.json that the plugin no longer reads, and %s. Before using %s tools, offer to run the %s-setup skill migration: the plugin scripts/set-env.sh with --target claude --migrate. Never print those settings or their values."}}\n' \
-  "$label" "$upper" "$effect" "$plugin" "$recover" "$plugin" "$upper" "$context" "$label" "$plugin"
+printf '{"systemMessage":"%s plugin: this project'"'"'s .claude/settings.local.json still holds UNIFI_%s_* settings, which this plugin version no longer reads, %s. Ask Claude to run the %s-setup migration (set-env.sh --target claude --migrate), then %s.%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The %s plugin has no Claude Code options set, but this project has legacy UNIFI_%s_* settings in .claude/settings.local.json that the plugin no longer reads, and %s. Before using %s tools, offer to run the %s-setup skill migration: the plugin scripts/set-env.sh with --target claude --migrate. Never print those settings or their values.%s"}}\n' \
+  "$label" "$upper" "$effect" "$plugin" "$recover" "$pin_sys" "$plugin" "$upper" "$context" "$label" "$plugin" "$pin_ctx"
 exit 0
