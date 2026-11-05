@@ -711,10 +711,15 @@ async def unauthorize_guest(
     description="""Set fixed IP address and/or local DNS record for a client device.
 
 Allows configuring:
-- Fixed IP: Assign a static IP address to a client (DHCP reservation)
+- Fixed IP: Assign a static IP address to a client (DHCP reservation). The reservation is saved on the
+  network whose subnet holds the address, or on network_id when given; an address in no configured
+  network, or in several, is refused. The preview shows that network and warns when it differs from
+  the network the client last connected to, where the reservation would not apply.
 - Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)
 
-Either setting can be enabled/disabled independently.""",
+Either setting can be enabled/disabled independently. Releasing a fixed IP while the client's local DNS
+record stays on is refused by the controller; turn the record off in the same call
+(local_dns_record_enabled=false).""",
     permission_category="clients",
     permission_action="update",
 )
@@ -741,6 +746,13 @@ async def set_client_ip_settings(
         Optional[str],
         Field(
             description="Local DNS hostname for this client (e.g., 'mydevice.local'). Only used when local_dns_record_enabled is true"
+        ),
+    ] = None,
+    network_id: Annotated[
+        Optional[str],
+        Field(
+            description="ID of the network the fixed IP belongs to (from unifi_list_networks). Omit to use the "
+            "configured network whose subnet holds fixed_ip"
         ),
     ] = None,
     confirm: Annotated[
@@ -800,12 +812,43 @@ async def set_client_ip_settings(
             if local_dns_record is not None:
                 updates["local_dns_record"] = local_dns_record
 
+            warnings = []
+            reserving = bool(fixed_ip) and use_fixedip is not False
+            if reserving:
+                try:
+                    network = await client_manager.resolve_fixed_ip_network(fixed_ip, network_id)
+                except ValueError as e:
+                    return {"success": False, "error": f"Failed to set IP settings for client {mac_address}: {e}"}
+                updates["network_id"] = network["network_id"]
+                updates["network"] = {"name": network["name"], "subnet": network["subnet"]}
+                client_network = client.get("network_id") or client.get("last_connection_network_id")
+                if client_network and client_network != network["network_id"]:
+                    current_name = (
+                        client.get("network") or client.get("last_connection_network_name") or "another network"
+                    )
+                    warnings.append(
+                        f"The fixed IP is in network '{network['name']}', but the client last connected to "
+                        f"'{current_name}'. The reservation applies only while the client is on '{network['name']}'."
+                    )
+            releasing = use_fixedip is False
+            dns_after = (
+                local_dns_record_enabled
+                if local_dns_record_enabled is not None
+                else (True if local_dns_record else current_state["local_dns_record_enabled"])
+            )
+            if releasing and dns_after:
+                warnings.append(
+                    "Releasing the fixed IP would leave a local DNS record enabled, which the controller refuses; "
+                    "this change will be refused unless local_dns_record_enabled=false is set in the same call."
+                )
+
             return update_preview(
                 resource_type="client",
                 resource_id=mac_address,
                 resource_name=client_name,
                 current_state=current_state,
                 updates=updates,
+                warnings=warnings or None,
             )
 
         success = await client_manager.set_client_ip_settings(
@@ -814,6 +857,7 @@ async def set_client_ip_settings(
             fixed_ip=fixed_ip,
             local_dns_record_enabled=local_dns_record_enabled,
             local_dns_record=local_dns_record,
+            network_id=network_id,
         )
         if success:
             return {

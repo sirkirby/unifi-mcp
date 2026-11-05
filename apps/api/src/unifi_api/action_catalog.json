@@ -2378,7 +2378,11 @@
             "type": "string"
           },
           "port_overrides": {
-            "description": "Complete port overrides array. The master port must have op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>. Remove member ports from the array \u2014 the controller claims them automatically",
+            "description": "Override entries for the ports to change. The master port must have op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>",
+            "type": "array"
+          },
+          "remove_port_idxs": {
+            "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
             "type": "array"
           }
         },
@@ -2406,7 +2410,11 @@
             "type": "string"
           },
           "port_overrides": {
-            "description": "Complete port overrides array. The source port must have op_mode='mirror' and mirror_port_idx='<destination_port_idx>'",
+            "description": "Override entries for the ports to change. The source port must have op_mode='mirror' and mirror_port_idx='<destination_port_idx>'",
+            "type": "array"
+          },
+          "remove_port_idxs": {
+            "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
             "type": "array"
           }
         },
@@ -6428,6 +6436,10 @@
             "description": "MAC address of the client to configure, in format AA:BB:CC:DD:EE:FF (from unifi_list_clients)",
             "type": "string"
           },
+          "network_id": {
+            "description": "ID of the network the fixed IP belongs to (from unifi_list_networks). Omit to use the configured network whose subnet holds fixed_ip",
+            "type": "string"
+          },
           "use_fixedip": {
             "description": "Enable (true) or disable (false) fixed IP / DHCP reservation for this client",
             "type": "boolean"
@@ -6572,7 +6584,11 @@
             "type": "string"
           },
           "port_overrides": {
-            "description": "Complete list of port overrides. Each entry needs at minimum: port_idx (int, 1-based), portconf_id (str, profile ID). Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')",
+            "description": "Override entries for the ports to change. Each needs port_idx (int, 1-based) and usually portconf_id (str, profile ID). Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')",
+            "type": "array"
+          },
+          "remove_port_idxs": {
+            "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
             "type": "array"
           }
         },
