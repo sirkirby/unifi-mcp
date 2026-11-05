@@ -11,14 +11,16 @@ API endpoints:
   Device commands:  POST /cmd/devmgr                               (v1 cmd — power-cycle, locate, force-provision)
 """
 
+import asyncio
 import logging
+import weakref
 from typing import Any, Dict, List, Optional
 
 from aiounifi.errors import RequestError
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.mac import normalize_mac
+from unifi_core.mac import canonical_mac, normalize_mac
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.request_paths import object_id
@@ -33,11 +35,25 @@ _PORT_PROFILE_ABSENT_VALUE_DEFAULTS: Dict[str, Any] = {
 }
 
 
+# Device writes read port_overrides, change them and PUT the whole array back, so
+# two overlapping writes to one switch would each restore the other's old
+# entries. Locks are kept per connection, not per manager, because a server may
+# build managers per request over one shared connection.
+_DEVICE_WRITE_LOCKS: "weakref.WeakKeyDictionary[Any, Dict[str, asyncio.Lock]]" = weakref.WeakKeyDictionary()
+
+
 class SwitchManager:
     """Manages switch-related operations on the UniFi controller."""
 
     def __init__(self, connection_manager: ConnectionManager):
         self._connection = connection_manager
+
+    def _device_write_lock(self, device_mac: str) -> asyncio.Lock:
+        """The lock serializing read-modify-write updates of one switch's device record."""
+        locks = _DEVICE_WRITE_LOCKS.setdefault(self._connection, {})
+        # One key per switch however its MAC is spelled; opaque identifiers keep their own key.
+        key = canonical_mac(device_mac) or normalize_mac(device_mac) or device_mac
+        return locks.setdefault(key, asyncio.Lock())
 
     # ---- Port Profiles ----
 
@@ -306,36 +322,130 @@ class SwitchManager:
 
     # ---- Switch port write operations ----
 
-    async def set_port_overrides(self, device_mac: str, port_overrides: List[Dict[str, Any]]) -> bool:
-        """Set port overrides for a switch.
+    @staticmethod
+    def _merge_port_overrides(
+        current: List[Dict[str, Any]],
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]],
+    ) -> Dict[str, Any]:
+        """Merge *port_overrides* into *current* by ``port_idx``.
 
-        CRITICAL: port_overrides is a full replacement — you must include
-        ALL existing overrides plus your changes. Missing ports revert to defaults.
+        The controller treats the PUT array as a full replacement, so a port
+        missing from it reverts to defaults. Each sent entry replaces the entry
+        for its port or is appended; every other current entry is kept as the
+        controller returned it. An entry is dropped only when its port is in
+        *remove_port_idxs*.
+        """
+
+        def port_of(entry: Any) -> int:
+            port = entry.get("port_idx") if isinstance(entry, dict) else None
+            if not isinstance(port, int) or isinstance(port, bool):
+                raise ValueError("Every port override needs an integer port_idx.")
+            return port
+
+        sent: Dict[int, Dict[str, Any]] = {}
+        for entry in port_overrides:
+            port = port_of(entry)
+            if port in sent:
+                raise ValueError(f"Port {port} appears more than once in port_overrides.")
+            sent[port] = entry
+        removed = list(dict.fromkeys(remove_port_idxs or []))
+        if any(not isinstance(port, int) or isinstance(port, bool) for port in removed):
+            raise ValueError("remove_port_idxs must hold integer port numbers.")
+        both = sorted(set(sent) & set(removed))
+        if both:
+            raise ValueError(f"Port {both[0]} is both updated and removed; choose one.")
+        existing = [port_of(entry) for entry in current if isinstance(entry, dict) and "port_idx" in entry]
+        missing = [port for port in removed if port not in existing]
+        if missing:
+            raise ValueError(f"Port {missing[0]} has no override to remove.")
+        if not sent and not removed:
+            raise ValueError("No port override changes were given.")
+
+        merged: List[Dict[str, Any]] = []
+        changed, kept = [], []
+        for entry in current:
+            port = entry.get("port_idx") if isinstance(entry, dict) else None
+            if port in removed:
+                continue
+            if port in sent:
+                merged.append(sent.pop(port))
+                changed.append(port)
+            else:
+                merged.append(entry)
+                if port is not None:
+                    kept.append(port)
+        added = sorted(sent)
+        merged.extend(sent[port] for port in added)
+        return {
+            "current": current,
+            "merged": merged,
+            "changed_ports": changed,
+            "added_ports": added,
+            "removed_ports": removed,
+            "kept_ports": kept,
+        }
+
+    async def _port_override_target(self, device_mac: str) -> tuple[str, List[Dict[str, Any]]]:
+        device_mac = normalize_mac(device_mac) or device_mac
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        device = await self._get_device_stat(device_mac)
+        device_id = device.get("_id") if device else None
+        if not device_id:
+            raise ValueError(f"Device '{device_mac}' not found")
+        current = device.get("port_overrides") or []
+        return device_id, current if isinstance(current, list) else []
+
+    async def plan_port_overrides(
+        self,
+        device_mac: str,
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """Show what :meth:`set_port_overrides` would write, without writing.
+
+        Returns the current and merged arrays plus the ports changed, added,
+        removed and kept, for a preview.
+        """
+        _, current = await self._port_override_target(device_mac)
+        return self._merge_port_overrides(current, port_overrides, remove_port_idxs)
+
+    async def set_port_overrides(
+        self,
+        device_mac: str,
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]] = None,
+    ) -> bool:
+        """Change port overrides for a switch, keeping every port not named.
+
+        The controller replaces the whole ``port_overrides`` array on write, so
+        this reads the switch's current overrides and merges into them: each
+        sent entry (matched by ``port_idx``) replaces that port's entry or is
+        added, and other ports keep theirs. Pass ``remove_port_idxs`` to drop a
+        port's override so it reverts to defaults.
 
         Args:
             device_mac: MAC address of the switch.
-            port_overrides: Complete list of port override dicts.
+            port_overrides: Override entries for the ports to change.
+            remove_port_idxs: Ports whose override to remove.
 
         Returns:
             True on success.
 
         Raises:
+            ValueError: Unknown device, or changes that are empty or ambiguous.
             Exception: On API error.
         """
-        device_mac = normalize_mac(device_mac) or device_mac
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
-
-        device_id = await self._get_device_id(device_mac)
-        if not device_id:
-            raise ValueError(f"Device '{device_mac}' not found")
-
-        api_request = ApiRequest(
-            method="put",
-            path=f"/rest/device/{object_id(device_id, 'device')}",
-            data={"port_overrides": port_overrides},
-        )
-        await self._connection.request(api_request)
+        async with self._device_write_lock(device_mac):
+            device_id, current = await self._port_override_target(device_mac)
+            plan = self._merge_port_overrides(current, port_overrides, remove_port_idxs)
+            api_request = ApiRequest(
+                method="put",
+                path=f"/rest/device/{object_id(device_id, 'device')}",
+                data={"port_overrides": plan["merged"]},
+            )
+            await self._connection.request(api_request)
         return True
 
     async def update_device_config(self, device_mac: str, config_data: Dict[str, Any]) -> bool:
@@ -359,23 +469,24 @@ class SwitchManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
-        device_id = await self._get_device_id(device_mac)
-        if not device_id:
-            raise ValueError(f"Device '{device_mac}' not found")
+        async with self._device_write_lock(device_mac):
+            device_id = await self._get_device_id(device_mac)
+            if not device_id:
+                raise ValueError(f"Device '{device_mac}' not found")
 
-        # Fetch current port_overrides — the controller requires them in the PUT payload
-        device = await self._get_device_stat(device_mac)
-        port_overrides = device.get("port_overrides", []) if device else []
+            # Fetch current port_overrides — the controller requires them in the PUT payload
+            device = await self._get_device_stat(device_mac)
+            port_overrides = device.get("port_overrides", []) if device else []
 
-        payload = dict(config_data)
-        payload["port_overrides"] = port_overrides
+            payload = dict(config_data)
+            payload["port_overrides"] = port_overrides
 
-        api_request = ApiRequest(
-            method="put",
-            path=f"/rest/device/{object_id(device_id, 'device')}",
-            data=payload,
-        )
-        await self._connection.request(api_request)
+            api_request = ApiRequest(
+                method="put",
+                path=f"/rest/device/{object_id(device_id, 'device')}",
+                data=payload,
+            )
+            await self._connection.request(api_request)
         return True
 
     # ---- Device commands ----

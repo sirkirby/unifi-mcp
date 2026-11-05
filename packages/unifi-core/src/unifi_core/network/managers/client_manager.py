@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 from types import SimpleNamespace
 from typing import Any, List, Optional
@@ -436,31 +437,38 @@ class ClientManager:
             )
         return True
 
-    async def _is_known_client(self, path_mac: str) -> bool:
-        """Whether the controller has a user-table record for the MAC, read per MAC."""
+    async def _user_record(self, path_mac: str) -> Optional[dict]:
+        """The controller's user-table record for the MAC, or ``None`` when it has none.
+
+        Reads ``/stat/user/<mac>``; a controller that does not serve it (404) is
+        read through the user table itself, uncached. Raises
+        :class:`UniFiOperationError` when the answer cannot be established.
+        """
         try:
-            return await self._get_user_by_mac(path_mac) is not None
+            return await self._get_user_by_mac(path_mac)
         except Exception as e:
             if controller_error_code(e) == UNKNOWN_USER_CODE:
-                return False
+                return None
             if response_status(e) != 404:
                 raise
-        # The controller does not serve /stat/user: read the user table itself, uncached.
         users = await self._connection.request(ApiRequest(method="get", path="/rest/user"))
         if not isinstance(users, list) or not all(isinstance(user, dict) for user in users):
             raise UniFiOperationError(
                 f"/rest/user reply had unexpected shape {type(users).__name__}; "
                 "whether the client is known could not be determined"
             )
-        if any(mac_equal(user.get("mac"), path_mac) for user in users):
-            return True
-        if len(users) >= REST_USER_ROW_CAP:
+        record = next((user for user in users if mac_equal(user.get("mac"), path_mac)), None)
+        if record is None and len(users) >= REST_USER_ROW_CAP:
             # A full window can leave the record out although the controller keeps it.
             raise UniFiOperationError(
                 f"/rest/user returned its {REST_USER_ROW_CAP}-row cap without this client; "
                 "whether the client is known could not be determined"
             )
-        return False
+        return record
+
+    async def _is_known_client(self, path_mac: str) -> bool:
+        """Whether the controller has a user-table record for the MAC, read per MAC."""
+        return await self._user_record(path_mac) is not None
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
@@ -552,6 +560,90 @@ class ClientManager:
         all_clients = await self.get_all_clients()
         return next((c for c in all_clients if c.ip == ip_address), None)
 
+    @staticmethod
+    def _ip_settings_payload(
+        use_fixedip: Optional[bool],
+        fixed_ip: Optional[str],
+        local_dns_record_enabled: Optional[bool],
+        local_dns_record: Optional[str],
+    ) -> dict:
+        """The PUT body for an IP settings change, holding only the fields given."""
+        payload: dict = {}
+        if use_fixedip is not None:
+            payload["use_fixedip"] = use_fixedip
+            if use_fixedip and fixed_ip:
+                payload["fixed_ip"] = fixed_ip
+            elif not use_fixedip:
+                payload["fixed_ip"] = ""
+        elif fixed_ip is not None:
+            # If only fixed_ip provided, assume enabling
+            payload["use_fixedip"] = True
+            payload["fixed_ip"] = fixed_ip
+
+        if local_dns_record_enabled is not None:
+            payload["local_dns_record_enabled"] = local_dns_record_enabled
+            if local_dns_record_enabled and local_dns_record:
+                payload["local_dns_record"] = local_dns_record
+            elif not local_dns_record_enabled:
+                payload["local_dns_record"] = ""
+        elif local_dns_record is not None:
+            # If only local_dns_record provided, assume enabling
+            payload["local_dns_record_enabled"] = True
+            payload["local_dns_record"] = local_dns_record
+        return payload
+
+    async def resolve_fixed_ip_network(self, fixed_ip: str, network_id: Optional[str] = None) -> dict[str, str]:
+        """Return the configured network a fixed IP reservation belongs to.
+
+        With *network_id*, that network must exist and its subnet must hold the
+        address. Without it, exactly one configured network's subnet must hold
+        it. A reservation outside its client's network is kept by the
+        controller but never applied, and some controllers refuse one without
+        a ``network_id`` (``api.err.InvalidNetworkId``).
+
+        Returns:
+            ``network_id``, ``name`` and ``subnet`` of the network.
+
+        Raises:
+            ValueError: An invalid address, an unknown network, or not exactly
+                one network holding the address.
+        """
+        try:
+            address = ipaddress.IPv4Address(str(fixed_ip).strip())
+        except ValueError:
+            raise ValueError("The fixed IP is not a valid IPv4 address.") from None
+        response = await self._connection.request(ApiRequest(method="get", path="/rest/networkconf"))
+        records = (
+            response if isinstance(response, list) else response.get("data", []) if isinstance(response, dict) else []
+        )
+        networks = []
+        for record in records:
+            if not isinstance(record, dict) or not record.get("_id"):
+                continue
+            try:
+                subnet = ipaddress.ip_interface(record["ip_subnet"]).network if record.get("ip_subnet") else None
+            except ValueError:
+                subnet = None
+            networks.append((record, subnet))
+
+        def described(record: dict, subnet: Any) -> dict[str, str]:
+            return {"network_id": str(record["_id"]), "name": str(record.get("name") or ""), "subnet": str(subnet)}
+
+        if network_id is not None:
+            match = next(((r, s) for r, s in networks if r["_id"] == network_id), None)
+            if match is None:
+                raise ValueError(f"No network with id {network_id} exists.")
+            record, subnet = match
+            if subnet is None or address not in subnet:
+                raise ValueError(f"The fixed IP is not in network {record.get('name') or network_id!r}'s subnet.")
+            return described(record, subnet)
+        holding = [(r, s) for r, s in networks if s is not None and address in s]
+        if not holding:
+            raise ValueError("No configured network contains the fixed IP; check the address or the network's subnet.")
+        if len(holding) > 1:
+            raise ValueError(f"The fixed IP is in {len(holding)} networks' subnets; pass network_id to choose one.")
+        return described(*holding[0])
+
     async def set_client_ip_settings(
         self,
         client_mac: str,
@@ -559,11 +651,18 @@ class ClientManager:
         fixed_ip: Optional[str] = None,
         local_dns_record_enabled: Optional[bool] = None,
         local_dns_record: Optional[str] = None,
+        network_id: Optional[str] = None,
     ) -> bool:
         """Set fixed IP and/or local DNS record for a client.
 
         Uses the UniFi REST API endpoint PUT /rest/user/{client_id}.
         Local DNS records require UniFi Network 7.2+.
+
+        A new fixed IP is sent with the ``network_id`` of the network that
+        holds it (see :meth:`resolve_fixed_ip_network`). Releasing a fixed IP
+        while the client's local DNS record is on is refused unless the same
+        call turns the record off, because the controller rejects that release
+        (``api.err.LocalDnsRecordRequiresFixedIp``).
 
         Args:
             client_mac: MAC address of the client to update.
@@ -571,9 +670,15 @@ class ClientManager:
             fixed_ip: The fixed IP address to assign (required if use_fixedip=True).
             local_dns_record_enabled: Enable (True) or disable (False) local DNS.
             local_dns_record: The DNS hostname to assign (e.g., "mydevice.local").
+            network_id: Network the fixed IP belongs to; resolved from the
+                address when omitted.
 
         Returns:
             True if the update was successful, False otherwise.
+
+        Raises:
+            ValueError: The fixed IP has no single network, or the release
+                would leave a local DNS record without a fixed IP.
         """
         client_mac = normalize_mac(client_mac) or client_mac
         try:
@@ -586,6 +691,27 @@ class ClientManager:
                 return False
 
             client_id = client_raw["_id"]
+            payload = self._ip_settings_payload(use_fixedip, fixed_ip, local_dns_record_enabled, local_dns_record)
+            if not payload:
+                logger.warning("No IP settings provided for [redacted]")
+                return False
+            if payload.get("use_fixedip") is True and payload.get("fixed_ip"):
+                network = await self.resolve_fixed_ip_network(payload["fixed_ip"], network_id)
+                payload["network_id"] = network["network_id"]
+            if payload.get("use_fixedip") is False:
+                # The controller rejects a release that leaves a local DNS record on
+                # (api.err.LocalDnsRecordRequiresFixedIp): check the state this change
+                # produces, reading the stored record only when the change leaves DNS alone.
+                dns_enabled = payload.get("local_dns_record_enabled")
+                if dns_enabled is None:
+                    record = await self._user_record(client_mac)
+                    dns_enabled = bool((record or {}).get("local_dns_record_enabled"))
+                if dns_enabled:
+                    raise ValueError(
+                        "Releasing the fixed IP would leave a local DNS record enabled, which the controller "
+                        "refuses. Pass local_dns_record_enabled=false to turn the record off in the same change, "
+                        "or keep the fixed IP."
+                    )
 
             # If client is not "noted" (known), mark it first to enable IP config
             if not client_raw.get("noted"):
@@ -602,35 +728,6 @@ class ClientManager:
                     await self._connection.request(note_request)
                 except Exception as note_err:
                     logger.warning("Could not mark client as noted: %s", type(note_err).__name__)
-
-            # Build payload with only explicitly provided fields
-            payload: dict = {}
-
-            if use_fixedip is not None:
-                payload["use_fixedip"] = use_fixedip
-                if use_fixedip and fixed_ip:
-                    payload["fixed_ip"] = fixed_ip
-                elif not use_fixedip:
-                    payload["fixed_ip"] = ""
-            elif fixed_ip is not None:
-                # If only fixed_ip provided, assume enabling
-                payload["use_fixedip"] = True
-                payload["fixed_ip"] = fixed_ip
-
-            if local_dns_record_enabled is not None:
-                payload["local_dns_record_enabled"] = local_dns_record_enabled
-                if local_dns_record_enabled and local_dns_record:
-                    payload["local_dns_record"] = local_dns_record
-                elif not local_dns_record_enabled:
-                    payload["local_dns_record"] = ""
-            elif local_dns_record is not None:
-                # If only local_dns_record provided, assume enabling
-                payload["local_dns_record_enabled"] = True
-                payload["local_dns_record"] = local_dns_record
-
-            if not payload:
-                logger.warning("No IP settings provided for [redacted]")
-                return False
 
             api_request = ApiRequest(
                 method="put",
@@ -711,7 +808,9 @@ class ClientManager:
                 if access_point is None or not self._is_access_point(access_point):
                     raise UniFiNotFoundError("access point", ap_mac)
 
-            # A not-yet-noted client must be made known first. Re-read before
+            # Mark a not-yet-noted client as known first, best effort: Network
+            # 10.6 keeps the record unnoted yet still honours the fixed AP, and
+            # the read-back below is what verifies the outcome. Re-read before
             # the final full-record PUT so that it cannot undo the note.
             if not persisted.get("noted"):
                 noted = dict(persisted)
@@ -720,8 +819,10 @@ class ClientManager:
                     ApiRequest(method="put", path=f"/rest/user/{object_id(client_id, 'client')}", data=noted)
                 )
                 persisted = await self._get_user_by_mac(client_mac)
-                if persisted is None or not persisted.get("noted"):
-                    raise FixedApOperationError("Controller did not persist the client note before fixed AP update")
+                if persisted is None:
+                    raise FixedApOperationError("Controller did not return the client before fixed AP update")
+                if not persisted.get("noted"):
+                    logger.info("Controller kept client [redacted] unnoted; continuing with the fixed AP update")
 
             update = dict(persisted)
             update["fixed_ap_enabled"] = fixed_ap_enabled
