@@ -16,7 +16,7 @@ CLIENT_MAC = "aa:bb:cc:dd:ee:ff"
 AP_MAC = "11:22:33:44:55:66"
 
 
-def _connection(record: dict, *, ap: dict | None = None):
+def _connection(record: dict, *, ap: dict | None = None, keeps_unnoted: bool = False):
     conn = MagicMock()
     conn.ensure_session_connected = AsyncMock(return_value=True)
     conn._invalidate_cache = MagicMock()
@@ -32,7 +32,11 @@ def _connection(record: dict, *, ap: dict | None = None):
         if request.path.startswith("/stat/user/"):
             return [deepcopy(state)]
         if request.method == "put":
+            noted = state.get("noted")
             state = deepcopy(request.data)
+            if keeps_unnoted:
+                # Network 10.6 on a UDR: a note PUT returns success but the record stays unnoted.
+                state["noted"] = noted
         return None
 
     conn.request = AsyncMock(side_effect=request)
@@ -101,6 +105,22 @@ async def test_fixed_ap_notes_before_full_update_and_refetches():
     assert writes[0]["noted"] is True
     assert writes[1]["noted"] is True
     assert writes[1]["fixed_ap_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_fixed_ap_is_set_when_the_controller_keeps_the_client_unnoted():
+    record = {"_id": "user-1", "mac": CLIENT_MAC, "noted": False, "is_wired": False, "hostname": "client"}
+    conn, state = _connection(record, keeps_unnoted=True)
+    manager = ClientManager(conn)
+    manager.get_client_details = AsyncMock(return_value=SimpleNamespace(raw=deepcopy(record)))
+
+    assert await manager.set_client_fixed_ap(CLIENT_MAC, True, AP_MAC) == {
+        "success": True,
+        "fixed_ap_enabled": True,
+        "fixed_ap_mac": AP_MAC,
+    }
+    assert state()["fixed_ap_enabled"] is True
+    assert state()["fixed_ap_mac"] == AP_MAC
 
 
 @pytest.mark.asyncio

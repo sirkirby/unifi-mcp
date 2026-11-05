@@ -711,7 +711,9 @@ class ClientManager:
                 if access_point is None or not self._is_access_point(access_point):
                     raise UniFiNotFoundError("access point", ap_mac)
 
-            # A not-yet-noted client must be made known first. Re-read before
+            # Mark a not-yet-noted client as known first, best effort: Network
+            # 10.6 keeps the record unnoted yet still honours the fixed AP, and
+            # the read-back below is what verifies the outcome. Re-read before
             # the final full-record PUT so that it cannot undo the note.
             if not persisted.get("noted"):
                 noted = dict(persisted)
@@ -720,8 +722,10 @@ class ClientManager:
                     ApiRequest(method="put", path=f"/rest/user/{object_id(client_id, 'client')}", data=noted)
                 )
                 persisted = await self._get_user_by_mac(client_mac)
-                if persisted is None or not persisted.get("noted"):
-                    raise FixedApOperationError("Controller did not persist the client note before fixed AP update")
+                if persisted is None:
+                    raise FixedApOperationError("Controller did not return the client before fixed AP update")
+                if not persisted.get("noted"):
+                    logger.info("Controller kept client [redacted] unnoted; continuing with the fixed AP update")
 
             update = dict(persisted)
             update["fixed_ap_enabled"] = fixed_ap_enabled
