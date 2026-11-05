@@ -1,6 +1,6 @@
 {
   "name": "unifi-protect",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "UniFi Protect MCP server \u2014 manage security cameras, NVR, recordings, and smart detections",
   "author": {
     "name": "sirkirby",
@@ -35,6 +35,7 @@
         "UNIFI_PROTECT_API_KEY": "${user_config.api_key}",
         "UNIFI_PROTECT_PORT": "${user_config.port}",
         "UNIFI_PROTECT_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_PROTECT_SSL_FINGERPRINT": "${user_config.ssl_fingerprint}",
         "UNIFI_POLICY_PROTECT_CREATE": "${user_config.policy_create}",
         "UNIFI_POLICY_PROTECT_UPDATE": "${user_config.policy_update}",
         "UNIFI_POLICY_PROTECT_DELETE": "${user_config.policy_delete}",
@@ -99,6 +100,11 @@
       "title": "Verify SSL",
       "description": "Verify the TLS certificate",
       "default": false
+    },
+    "ssl_fingerprint": {
+      "type": "string",
+      "title": "Certificate fingerprint",
+      "description": "SHA-256 fingerprint of the console's certificate, as openssl prints it. When set, only that certificate is accepted, whatever Verify SSL says"
     },
     "policy_create": {
       "type": "boolean",

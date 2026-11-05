@@ -142,8 +142,24 @@ command provider, never the raw key.
 Ask whether to use defaults or customize:
 - Defaults: port `443`, site `default`, SSL verification `false`, lazy tool loading
 - Customize: ask for port (`UNIFI_NETWORK_PORT`), site (`UNIFI_NETWORK_SITE`), SSL
-  verification (`UNIFI_NETWORK_VERIFY_SSL`), and tool registration mode (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy`, `eager` or
+  verification (`UNIFI_NETWORK_VERIFY_SSL`), certificate pin
+  (`UNIFI_NETWORK_SSL_FINGERPRINT`; the Claude Code option is `ssl_fingerprint`), and
+  tool registration mode (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy`, `eager` or
   `meta_only`; the Claude Code option is `registration_mode`)
+
+A certificate pin checks the console's identity even on its factory self-signed
+certificate, where SSL verification usually fails. To offer one, run this with the
+host from Step 1 and the port, and show the user the printed fingerprint to confirm:
+
+```bash
+openssl s_client -connect <host>:<port> </dev/null 2>/dev/null \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+Set the value as printed. Tell the user the pin takes precedence over SSL
+verification, and that the connection fails after the console's certificate changes
+(for example after a factory reset) until they update it. Details:
+https://github.com/sirkirby/unifi-mcp/blob/main/docs/tls-verification.md
 
 ## Step 4: Permission Configuration
 

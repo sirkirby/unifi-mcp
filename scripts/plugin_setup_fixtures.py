@@ -799,6 +799,15 @@ class Fixtures:
             options()["policy_create"] is False and options()["permission_mode"] == "confirm",
             "deleting a safety option restores its safe default",
         )
+        # Certificate pins are plain options; Access pins its API key port separately.
+        pins = {f"UNIFI_{upper}_SSL_FINGERPRINT": "ssl_fingerprint"}
+        if upper == "ACCESS":
+            pins["UNIFI_ACCESS_API_SSL_FINGERPRINT"] = "api_ssl_fingerprint"
+        pin = ":".join(["AB"] * 32)
+        invoke(dict.fromkeys(pins, pin))
+        self.check(all(options().get(option) == pin for option in pins.values()), "certificate pin options")
+        invoke(dict.fromkeys(pins))
+        self.check(all(options().get(option, "") == "" for option in pins.values()), "deleting a certificate pin")
         dry = run(
             wrapper(
                 "set-env",
@@ -847,11 +856,60 @@ class Fixtures:
         legacy_path.write_bytes(legacy_bytes)
         hook = scripts / "claude-session-check.sh"
         if os.name != "nt":
+            # A pin inherited from Claude Code's environment is replaced by the empty option.
+            pin_notice = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(workspace), **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"}),
+                capture_output=True,
+            )
+            self.check(
+                f"UNIFI_{upper}_SSL_FINGERPRINT is set".encode() in pin_notice.stdout
+                and b"AB:CD" not in pin_notice.stdout,
+                "session notice names an inherited pin the empty option replaces, without its value",
+            )
+            shared_pin = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(
+                    environment,
+                    CLAUDE_PROJECT_DIR=str(workspace),
+                    UNIFI_SSL_FINGERPRINT="AB:CD",
+                    **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"},
+                ),
+                capture_output=True,
+            )
+            self.check(
+                b"does not use it" in shared_pin.stdout
+                and b"Unless a shared UNIFI_SSL_FINGERPRINT" in shared_pin.stdout,
+                "pin notice says the inherited pin is unused, not that a shared pin leaves the console unchecked",
+            )
+            pinned_option = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(
+                    environment,
+                    CLAUDE_PROJECT_DIR=str(workspace),
+                    CLAUDE_PLUGIN_OPTION_SSL_FINGERPRINT="EF:01",
+                    **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"},
+                ),
+                capture_output=True,
+            )
+            self.check(b"SSL_FINGERPRINT" not in pinned_option.stdout, "no pin notice once the option is set")
             notice = subprocess.run(
                 ["sh", str(hook), product], env=dict(environment, CLAUDE_PROJECT_DIR=str(project)), capture_output=True
             )
             message = json.loads(notice.stdout)
             self.check("--migrate" in message["systemMessage"], "session notice names the migration")
+            both = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(project), **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"}),
+                capture_output=True,
+            )
+            both_message = json.loads(both.stdout)["systemMessage"]
+            self.check(
+                "--migrate" in both_message
+                and f"UNIFI_{upper}_SSL_FINGERPRINT" in both_message
+                and b"AB:CD" not in both.stdout,
+                "an inherited pin notice is added to the legacy-settings notice, not instead of it",
+            )
             self.check(b"192.0.2.50" not in notice.stdout, "session notice omits values")
             self.check(
                 "starts unconfigured" in message["systemMessage"] and "shared UNIFI_" not in message["systemMessage"],
