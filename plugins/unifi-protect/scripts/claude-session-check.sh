@@ -8,10 +8,28 @@ case "$1" in
   access) label='UniFi Access'; upper=ACCESS ;;
   *) exit 0 ;;
 esac
+plugin="unifi-$1"
+# A certificate pin set in Claude Code's environment no longer reaches the server:
+# the plugin passes its own, empty, option in its place, which leaves the
+# connection unchecked. Name the variable, never its value.
+masked=
+for pin in SSL_FINGERPRINT API_SSL_FINGERPRINT; do
+  [ "$pin" = API_SSL_FINGERPRINT ] && [ "$upper" != ACCESS ] && continue
+  eval "inherited=\${UNIFI_${upper}_$pin:-}"
+  eval "option=\${CLAUDE_PLUGIN_OPTION_$pin:-}"
+  if [ -n "$inherited" ] && [ -z "$option" ]; then
+    masked="${masked:+$masked and }UNIFI_${upper}_$pin"
+  fi
+done
+if [ -n "$masked" ]; then
+  case "$masked" in *' and '*) verb=are ;; *) verb=is ;; esac
+  printf '{"systemMessage":"%s plugin: %s %s set in Claude Code'"'"'s environment, but the plugin passes its own certificate fingerprint option, which is empty, so the %s server does not check the certificate. Ask Claude to save the pin as the plugin option with the %s-setup skill, then run /reload-plugins or start a new session.","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s %s set in this environment, but the %s plugin passes its own empty certificate fingerprint option in its place, so the %s server is not checking the controller certificate. Before using %s tools, tell the user and offer to save the pin as the plugin option: run the plugin scripts/set-env.sh --target claude with each variable set from the environment (for example UNIFI_%s_SSL_FINGERPRINT=\\"$UNIFI_%s_SSL_FINGERPRINT\\"), then the user runs /reload-plugins. Never print the fingerprint values."}}\n' \
+    "$label" "$masked" "$verb" "$label" "$plugin" "$masked" "$verb" "$plugin" "$label" "$label" "$upper" "$upper"
+  exit 0
+fi
 settings="${CLAUDE_PROJECT_DIR:-.}/.claude/settings.local.json"
 [ -f "$settings" ] || exit 0
 grep -Eq "\"UNIFI_(POLICY_)?${upper}_[A-Z0-9_]*\"[[:space:]]*:" "$settings" 2>/dev/null || exit 0
-plugin="unifi-$1"
 # A session keeps the options it started with: /mcp reconnect alone restarts the
 # server with those, so new options need /reload-plugins or a new session.
 recover="run /reload-plugins or start a new session (use /mcp reconnect plugin:$plugin:$plugin only if /mcp shows the server as failed)"

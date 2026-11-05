@@ -856,6 +856,28 @@ class Fixtures:
         legacy_path.write_bytes(legacy_bytes)
         hook = scripts / "claude-session-check.sh"
         if os.name != "nt":
+            # A pin inherited from Claude Code's environment is replaced by the empty option.
+            pin_notice = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(environment, CLAUDE_PROJECT_DIR=str(workspace), **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"}),
+                capture_output=True,
+            )
+            self.check(
+                f"UNIFI_{upper}_SSL_FINGERPRINT is set".encode() in pin_notice.stdout
+                and b"AB:CD" not in pin_notice.stdout,
+                "session notice names an inherited pin the empty option replaces, without its value",
+            )
+            pinned_option = subprocess.run(
+                ["sh", str(hook), product],
+                env=dict(
+                    environment,
+                    CLAUDE_PROJECT_DIR=str(workspace),
+                    CLAUDE_PLUGIN_OPTION_SSL_FINGERPRINT="EF:01",
+                    **{f"UNIFI_{upper}_SSL_FINGERPRINT": "AB:CD"},
+                ),
+                capture_output=True,
+            )
+            self.check(b"SSL_FINGERPRINT" not in pinned_option.stdout, "no pin notice once the option is set")
             notice = subprocess.run(
                 ["sh", str(hook), product], env=dict(environment, CLAUDE_PROJECT_DIR=str(project)), capture_output=True
             )
