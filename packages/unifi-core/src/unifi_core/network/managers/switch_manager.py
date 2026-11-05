@@ -306,34 +306,127 @@ class SwitchManager:
 
     # ---- Switch port write operations ----
 
-    async def set_port_overrides(self, device_mac: str, port_overrides: List[Dict[str, Any]]) -> bool:
-        """Set port overrides for a switch.
+    @staticmethod
+    def _merge_port_overrides(
+        current: List[Dict[str, Any]],
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]],
+    ) -> Dict[str, Any]:
+        """Merge *port_overrides* into *current* by ``port_idx``.
 
-        CRITICAL: port_overrides is a full replacement — you must include
-        ALL existing overrides plus your changes. Missing ports revert to defaults.
+        The controller treats the PUT array as a full replacement, so a port
+        missing from it reverts to defaults. Each sent entry replaces the entry
+        for its port or is appended; every other current entry is kept as the
+        controller returned it. An entry is dropped only when its port is in
+        *remove_port_idxs*.
+        """
+
+        def port_of(entry: Any) -> int:
+            port = entry.get("port_idx") if isinstance(entry, dict) else None
+            if not isinstance(port, int) or isinstance(port, bool):
+                raise ValueError("Every port override needs an integer port_idx.")
+            return port
+
+        sent: Dict[int, Dict[str, Any]] = {}
+        for entry in port_overrides:
+            port = port_of(entry)
+            if port in sent:
+                raise ValueError(f"Port {port} appears more than once in port_overrides.")
+            sent[port] = entry
+        removed = list(dict.fromkeys(remove_port_idxs or []))
+        if any(not isinstance(port, int) or isinstance(port, bool) for port in removed):
+            raise ValueError("remove_port_idxs must hold integer port numbers.")
+        both = sorted(set(sent) & set(removed))
+        if both:
+            raise ValueError(f"Port {both[0]} is both updated and removed; choose one.")
+        existing = [port_of(entry) for entry in current if isinstance(entry, dict) and "port_idx" in entry]
+        missing = [port for port in removed if port not in existing]
+        if missing:
+            raise ValueError(f"Port {missing[0]} has no override to remove.")
+        if not sent and not removed:
+            raise ValueError("No port override changes were given.")
+
+        merged: List[Dict[str, Any]] = []
+        changed, kept = [], []
+        for entry in current:
+            port = entry.get("port_idx") if isinstance(entry, dict) else None
+            if port in removed:
+                continue
+            if port in sent:
+                merged.append(sent.pop(port))
+                changed.append(port)
+            else:
+                merged.append(entry)
+                if port is not None:
+                    kept.append(port)
+        added = sorted(sent)
+        merged.extend(sent[port] for port in added)
+        return {
+            "current": current,
+            "merged": merged,
+            "changed_ports": changed,
+            "added_ports": added,
+            "removed_ports": removed,
+            "kept_ports": kept,
+        }
+
+    async def _port_override_target(self, device_mac: str) -> tuple[str, List[Dict[str, Any]]]:
+        device_mac = normalize_mac(device_mac) or device_mac
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        device = await self._get_device_stat(device_mac)
+        device_id = device.get("_id") if device else None
+        if not device_id:
+            raise ValueError(f"Device '{device_mac}' not found")
+        current = device.get("port_overrides") or []
+        return device_id, current if isinstance(current, list) else []
+
+    async def plan_port_overrides(
+        self,
+        device_mac: str,
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """Show what :meth:`set_port_overrides` would write, without writing.
+
+        Returns the current and merged arrays plus the ports changed, added,
+        removed and kept, for a preview.
+        """
+        _, current = await self._port_override_target(device_mac)
+        return self._merge_port_overrides(current, port_overrides, remove_port_idxs)
+
+    async def set_port_overrides(
+        self,
+        device_mac: str,
+        port_overrides: List[Dict[str, Any]],
+        remove_port_idxs: Optional[List[int]] = None,
+    ) -> bool:
+        """Change port overrides for a switch, keeping every port not named.
+
+        The controller replaces the whole ``port_overrides`` array on write, so
+        this reads the switch's current overrides and merges into them: each
+        sent entry (matched by ``port_idx``) replaces that port's entry or is
+        added, and other ports keep theirs. Pass ``remove_port_idxs`` to drop a
+        port's override so it reverts to defaults.
 
         Args:
             device_mac: MAC address of the switch.
-            port_overrides: Complete list of port override dicts.
+            port_overrides: Override entries for the ports to change.
+            remove_port_idxs: Ports whose override to remove.
 
         Returns:
             True on success.
 
         Raises:
+            ValueError: Unknown device, or changes that are empty or ambiguous.
             Exception: On API error.
         """
-        device_mac = normalize_mac(device_mac) or device_mac
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
-
-        device_id = await self._get_device_id(device_mac)
-        if not device_id:
-            raise ValueError(f"Device '{device_mac}' not found")
-
+        device_id, current = await self._port_override_target(device_mac)
+        plan = self._merge_port_overrides(current, port_overrides, remove_port_idxs)
         api_request = ApiRequest(
             method="put",
             path=f"/rest/device/{object_id(device_id, 'device')}",
-            data={"port_overrides": port_overrides},
+            data={"port_overrides": plan["merged"]},
         )
         await self._connection.request(api_request)
         return True
