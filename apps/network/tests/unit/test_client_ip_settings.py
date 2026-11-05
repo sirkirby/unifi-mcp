@@ -16,7 +16,18 @@ class TestClientIPSettings:
         """Create a mock ConnectionManager."""
         conn = MagicMock()
         conn.site = "default"
-        conn.request = AsyncMock()
+
+        # Fixed IPs resolve their network from /rest/networkconf; a release reads
+        # the persisted user record for its local DNS state.
+        async def _request(api_request):
+            path = getattr(api_request, "path", "")
+            if getattr(api_request, "method", "") == "get" and path == "/rest/networkconf":
+                return [{"_id": "lan", "name": "LAN", "ip_subnet": "192.168.1.1/24"}]
+            if getattr(api_request, "method", "") == "get" and path.startswith("/stat/user/"):
+                return []
+            return {}
+
+        conn.request = AsyncMock(side_effect=_request)
         conn.get_cached = MagicMock(return_value=None)
         conn._update_cache = MagicMock()
         conn._invalidate_cache = MagicMock()
@@ -64,12 +75,12 @@ class TestClientIPSettings:
         [
             pytest.param(
                 {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
-                {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
+                {"use_fixedip": True, "fixed_ip": "192.168.1.100", "network_id": "lan"},
                 id="fixed-ip",
             ),
             pytest.param(
                 {"fixed_ip": "192.168.1.100"},
-                {"use_fixedip": True, "fixed_ip": "192.168.1.100"},
+                {"use_fixedip": True, "fixed_ip": "192.168.1.100", "network_id": "lan"},
                 id="fixed-ip-only-ip-auto-enables",
             ),
             pytest.param({"use_fixedip": False}, {"use_fixedip": False, "fixed_ip": ""}, id="disable-fixed-ip"),
