@@ -141,9 +141,30 @@ At least one auth path is required.
 Ask whether to use defaults or customize:
 - Defaults: controller port `443`, Access API port `12445`, SSL verification `false`, lazy tool loading
 - Customize: ask for controller port (`UNIFI_ACCESS_PORT`), API port
-  (`UNIFI_ACCESS_API_PORT`), SSL verification (`UNIFI_ACCESS_VERIFY_SSL`), and
-  tool registration mode (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy`, `eager` or
-  `meta_only`; the Claude Code option is `registration_mode`)
+  (`UNIFI_ACCESS_API_PORT`), SSL verification (`UNIFI_ACCESS_VERIFY_SSL`),
+  certificate pins (`UNIFI_ACCESS_SSL_FINGERPRINT` and
+  `UNIFI_ACCESS_API_SSL_FINGERPRINT`; the Claude Code options are `ssl_fingerprint`
+  and `api_ssl_fingerprint`), and tool registration mode
+  (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy`, `eager` or `meta_only`; the Claude Code
+  option is `registration_mode`)
+
+A certificate pin checks the console's identity even on its factory self-signed
+certificate, where SSL verification usually fails. The console can present a
+different certificate on each port, so pin each port the user configured: the
+controller port for username and password, the API port for the API key. With one
+port pinned, the other is refused unless it has its own pin or SSL verification is
+on. Run this once per port with the host from Step 1, and show the user each printed
+fingerprint to confirm:
+
+```bash
+openssl s_client -connect <host>:<port> </dev/null 2>/dev/null \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+Set each value as printed. Tell the user a pin takes precedence over SSL
+verification, and that the connection fails after the console's certificate changes
+(for example after a factory reset) until they update it. Details:
+https://github.com/sirkirby/unifi-mcp/blob/main/docs/tls-verification.md
 
 ## Step 4: Permission Configuration
 

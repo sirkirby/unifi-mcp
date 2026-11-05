@@ -799,6 +799,15 @@ class Fixtures:
             options()["policy_create"] is False and options()["permission_mode"] == "confirm",
             "deleting a safety option restores its safe default",
         )
+        # Certificate pins are plain options; Access pins its API key port separately.
+        pins = {f"UNIFI_{upper}_SSL_FINGERPRINT": "ssl_fingerprint"}
+        if upper == "ACCESS":
+            pins["UNIFI_ACCESS_API_SSL_FINGERPRINT"] = "api_ssl_fingerprint"
+        pin = ":".join(["AB"] * 32)
+        invoke(dict.fromkeys(pins, pin))
+        self.check(all(options().get(option) == pin for option in pins.values()), "certificate pin options")
+        invoke(dict.fromkeys(pins))
+        self.check(all(options().get(option, "") == "" for option in pins.values()), "deleting a certificate pin")
         dry = run(
             wrapper(
                 "set-env",

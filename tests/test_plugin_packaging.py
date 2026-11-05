@@ -46,7 +46,7 @@ DIRECTORY_CHECKS = re.compile(
 USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
 # Variables the servers resolve with resolve_env, where an empty value counts as unset.
 EMPTY_IS_UNSET = re.compile(
-    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:HOST|USERNAME|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
 )
 RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:PASSWORD|API_KEY)$")
 # Claude option defaults must match today's closed, preview-first behaviour.
@@ -885,6 +885,7 @@ def test_claude_options_resolve_like_unset_variables(
         f"UNIFI_{product}_HOST": "192.0.2.50",
         f"UNIFI_{product}_PASSWORD_COMMAND": "/bin/false",
         "UNIFI_PASSWORD_FILE": str(shared),
+        "UNIFI_SSL_FINGERPRINT": "shared-pin",
     }
     for key in [k for k in os.environ if k.startswith("UNIFI_")]:
         monkeypatch.delenv(key)
@@ -915,6 +916,14 @@ def test_claude_options_resolve_like_unset_variables(
     # Unset options behave as unset variables: the shared level still applies.
     assert bootstrap.resolve_env("host", env_prefix=product, logger=logger) is None
     assert bootstrap.resolve_env("password", env_prefix=product, logger=logger) == "FAKE-shared-password"
+    assert bootstrap.resolve_env("ssl_fingerprint", env_prefix=product, logger=logger) == "shared-pin"
+
+    # A certificate pin option overrides the shared pin for this server only.
+    resolve({"ssl_fingerprint": "plugin-pin", "api_ssl_fingerprint": "api-pin"})
+    assert bootstrap.resolve_env("ssl_fingerprint", env_prefix=product, logger=logger) == "plugin-pin"
+    # Access pins its API key port on its own; the shared pin never reaches that port.
+    api_pin = "api-pin" if product == "ACCESS" else None
+    assert bootstrap.resolve_env("api_ssl_fingerprint", env_prefix=product, logger=logger) == api_pin
 
     resolve({"policy_update": True, "permission_mode": "bypass", "registration_mode": "eager"})
     assert checker.check("any_category", "update") and not checker.check("any_category", "delete")

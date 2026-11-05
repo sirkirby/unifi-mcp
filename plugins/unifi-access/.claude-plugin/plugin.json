@@ -1,6 +1,6 @@
 {
   "name": "unifi-access",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "UniFi Access MCP server \u2014 manage door locks, credentials, visitors, and access policies",
   "author": {
     "name": "sirkirby",
@@ -34,6 +34,8 @@
         "UNIFI_ACCESS_API_KEY": "${user_config.api_key}",
         "UNIFI_ACCESS_PORT": "${user_config.port}",
         "UNIFI_ACCESS_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_ACCESS_SSL_FINGERPRINT": "${user_config.ssl_fingerprint}",
+        "UNIFI_ACCESS_API_SSL_FINGERPRINT": "${user_config.api_ssl_fingerprint}",
         "UNIFI_POLICY_ACCESS_CREATE": "${user_config.policy_create}",
         "UNIFI_POLICY_ACCESS_UPDATE": "${user_config.policy_update}",
         "UNIFI_POLICY_ACCESS_DELETE": "${user_config.policy_delete}",
@@ -98,6 +100,16 @@
       "title": "Verify SSL",
       "description": "Verify the TLS certificate",
       "default": false
+    },
+    "ssl_fingerprint": {
+      "type": "string",
+      "title": "Certificate fingerprint",
+      "description": "SHA-256 fingerprint of the console's certificate on the HTTPS port, as openssl prints it. When set, only that certificate is accepted there, whatever Verify SSL says"
+    },
+    "api_ssl_fingerprint": {
+      "type": "string",
+      "title": "API port certificate fingerprint",
+      "description": "SHA-256 fingerprint of the certificate on the API key port, which differs from the HTTPS port's. With one port pinned, the other is refused unless it has its own pin or Verify SSL is on"
     },
     "policy_create": {
       "type": "boolean",

@@ -191,9 +191,25 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
 
 Optional values keep their defaults unless the user asks: port
 (`UNIFI_PROTECT_PORT`, default `443`), SSL verification
-(`UNIFI_PROTECT_VERIFY_SSL`, default `false`), and tool registration mode
+(`UNIFI_PROTECT_VERIFY_SSL`, default `false`), certificate pin
+(`UNIFI_PROTECT_SSL_FINGERPRINT`, unset by default; the Claude Code option is
+`ssl_fingerprint`), and tool registration mode
 (`UNIFI_TOOL_REGISTRATION_MODE`: `lazy` by default, `eager` or `meta_only`; the
 Claude Code option is `registration_mode`).
+
+A certificate pin checks the console's identity even on its factory self-signed
+certificate, where SSL verification usually fails. To offer one, run this with the
+host and port, and show the user the printed fingerprint to confirm:
+
+```bash
+openssl s_client -connect <host>:<port> </dev/null 2>/dev/null \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+Set the value as printed. Tell the user the pin takes precedence over SSL
+verification, and that the connection fails after the console's certificate changes
+(for example after a factory reset) until they update it. Details:
+https://github.com/sirkirby/unifi-mcp/blob/main/docs/tls-verification.md
 
 Add optional values and policy variables to the same command. Per-category
 overrides apply to Codex and OpenClaw only, for example:

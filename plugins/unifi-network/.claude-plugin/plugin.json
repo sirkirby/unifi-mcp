@@ -1,6 +1,6 @@
 {
   "name": "unifi-network",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "UniFi Network MCP server \u2014 manage network devices, clients, firewall, VPN, and more",
   "author": {
     "name": "sirkirby",
@@ -35,6 +35,7 @@
         "UNIFI_NETWORK_PORT": "${user_config.port}",
         "UNIFI_NETWORK_SITE": "${user_config.site}",
         "UNIFI_NETWORK_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_NETWORK_SSL_FINGERPRINT": "${user_config.ssl_fingerprint}",
         "UNIFI_POLICY_NETWORK_CREATE": "${user_config.policy_create}",
         "UNIFI_POLICY_NETWORK_UPDATE": "${user_config.policy_update}",
         "UNIFI_POLICY_NETWORK_DELETE": "${user_config.policy_delete}",
@@ -105,6 +106,11 @@
       "title": "Verify SSL",
       "description": "Verify the TLS certificate",
       "default": false
+    },
+    "ssl_fingerprint": {
+      "type": "string",
+      "title": "Certificate fingerprint",
+      "description": "SHA-256 fingerprint of the console's certificate, as openssl prints it. When set, only that certificate is accepted, whatever Verify SSL says"
     },
     "policy_create": {
       "type": "boolean",

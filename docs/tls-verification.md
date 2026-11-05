@@ -31,6 +31,8 @@ UNIFI_SSL_FINGERPRINT=AB:CD:...:EF
 
 If you can, compare it against the console itself, for example in a browser's certificate viewer on a direct connection. A fingerprint read through someone else's proxy pins their certificate, not the console's.
 
+In the Claude Code plugins, set the **Certificate fingerprint** option (`ssl_fingerprint`), and for Access the **API port certificate fingerprint** option (`api_ssl_fingerprint`) too. Each plugin's option pins only that server. With Codex or OpenClaw, the plugin's setup skill can set the per-server variables for you.
+
 A malformed value stops the server at startup, and the error doesn't repeat the value. A valid value that doesn't match the certificate fails the connection with an error saying what to do.
 
 ## Pin both Access ports
