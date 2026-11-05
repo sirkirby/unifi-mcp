@@ -28,13 +28,13 @@ DEVICE_TOOLS = (
 )
 CLIENT_TOOLS = ("unifi_get_client_dpi_traffic", "unifi_get_client_sessions", "unifi_get_client_wifi_details")
 EXTRAS = {
-    "unifi_configure_port_aggregation": {"port_overrides": []},
-    "unifi_configure_port_mirror": {"port_overrides": []},
+    "unifi_configure_port_aggregation": {"port_overrides": [], "remove_port_idxs": [3]},
+    "unifi_configure_port_mirror": {"port_overrides": [], "remove_port_idxs": [3]},
     "unifi_locate_device": {"enabled": True},
     "unifi_power_cycle_port": {"port_idx": 1},
     "unifi_set_device_led": {"led_state": "on"},
     "unifi_set_jumbo_frames": {"enabled": True},
-    "unifi_set_switch_port_profile": {"port_overrides": []},
+    "unifi_set_switch_port_profile": {"port_overrides": [], "remove_port_idxs": [3]},
     "unifi_toggle_device": {"disabled": True},
     "unifi_update_switch_stp": {"stp_priority": 32768},
     "unifi_get_client_dpi_traffic": {
@@ -155,3 +155,23 @@ async def test_optional_action_mac_filter_keeps_omitted_and_explicit_behavior(to
     assert method_mock.call_args.kwargs[manager_key] == MAC
     with pytest.raises(ValueError, match=f"unknown argument\\(s\\) {old}"):
         await dispatch_action(args={old: MAC}, **common)
+
+
+@pytest.mark.parametrize(
+    "tool", ["unifi_set_switch_port_profile", "unifi_configure_port_mirror", "unifi_configure_port_aggregation"]
+)
+def test_switch_override_actions_pass_port_removals_to_the_manager(tool: str) -> None:
+    _, keyword = DISPATCH_ARG_TRANSLATORS[tool]({"mac_address": MAC, "port_overrides": [], "remove_port_idxs": [3]})
+    assert keyword == {"device_mac": MAC, "port_overrides": [], "remove_port_idxs": [3]}
+
+
+def test_client_ip_settings_action_keeps_an_explicit_network() -> None:
+    translator = DISPATCH_ARG_TRANSLATORS["unifi_set_client_ip_settings"]
+    _, keyword = translator({"mac_address": MAC, "fixed_ip": "10.20.0.50", "network_id": "iot"})
+    assert keyword == {"client_mac": MAC, "fixed_ip": "10.20.0.50", "network_id": "iot"}
+    _, keyword = translator({"mac_address": MAC, "fixed_ip": "10.20.0.50"})
+    assert "network_id" not in keyword
+    with pytest.raises(ValueError, match="network_id"):
+        translator({"mac_address": MAC, "fixed_ip": "10.20.0.50", "network_id": "  "})
+    with pytest.raises(ValueError, match="At least one setting"):
+        translator({"mac_address": MAC, "network_id": "iot"})

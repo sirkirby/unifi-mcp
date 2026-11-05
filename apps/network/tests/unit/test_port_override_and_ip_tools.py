@@ -163,3 +163,25 @@ async def test_ip_write_passes_the_network_through():
 
     assert result["success"] is True
     assert manager.set_client_ip_settings.await_args.kwargs["network_id"] == "iot"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("record", "warned"),
+    [
+        # Offline record: network_id is the saved reservation's network, last_connection is where it connects.
+        ({"network_id": "iot", "last_connection_network_id": "lan", "last_connection_network_name": "LAN"}, True),
+        ({"network_id": "lan", "last_connection_network_id": "iot"}, False),
+        # A reservation's network_id alone says nothing about where the client connects.
+        ({"use_fixedip": True, "fixed_ip": "10.0.0.9", "network_id": "lan"}, False),
+    ],
+    ids=["reservation-iot-last-lan", "reservation-lan-last-iot", "reservation-only"],
+)
+async def test_ip_preview_compares_with_the_last_connected_network_not_the_reservation(record, warned):
+    clients = importlib.import_module("unifi_network_mcp.tools.clients")
+    manager = _client_manager({"_id": "u1", "mac": MAC, **record}, IOT)
+
+    with patch.object(clients, "client_manager", manager):
+        result = await clients.set_client_ip_settings(mac_address=MAC, use_fixedip=True, fixed_ip="10.20.0.50")
+
+    assert bool(result.get("warnings")) is warned

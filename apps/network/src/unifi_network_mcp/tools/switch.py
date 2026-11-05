@@ -487,31 +487,26 @@ _REMOVE_PORT_IDXS_FIELD = Field(
 )
 
 
-async def _port_override_preview(
-    resource_type: str,
+async def _port_override_plan(
     mac_address: str,
     port_overrides: List[Dict],
     remove_port_idxs: Optional[List[int]],
     warnings_for=None,
-) -> Dict[str, Any]:
-    """Preview the merged write: changed ports with current and proposed entries, added and removed ports."""
+) -> tuple[Dict[str, Any], Optional[List[str]]]:
+    """The preview data for a merged write: changed ports with current and proposed entries, added and removed ports."""
     plan = await switch_manager.plan_port_overrides(mac_address, port_overrides, remove_port_idxs)
     current = {e.get("port_idx"): e for e in plan["current"] if isinstance(e, dict)}
     merged = {e.get("port_idx"): e for e in plan["merged"] if isinstance(e, dict)}
-    return create_preview(
-        resource_type=resource_type,
-        resource_data={
-            "mac_address": mac_address,
-            "changed_ports": [
-                {"port_idx": port, "current": current[port], "proposed": merged[port]} for port in plan["changed_ports"]
-            ],
-            "added_ports": [merged[port] for port in plan["added_ports"]],
-            "removed_ports": [current[port] for port in plan["removed_ports"]],
-            "unchanged_port_count": len(plan["kept_ports"]),
-        },
-        resource_name=mac_address,
-        warnings=warnings_for(plan) if warnings_for else None,
-    )
+    data = {
+        "mac_address": mac_address,
+        "changed_ports": [
+            {"port_idx": port, "current": current[port], "proposed": merged[port]} for port in plan["changed_ports"]
+        ],
+        "added_ports": [merged[port] for port in plan["added_ports"]],
+        "removed_ports": [current[port] for port in plan["removed_ports"]],
+        "unchanged_port_count": len(plan["kept_ports"]),
+    }
+    return data, (warnings_for(plan) or None) if warnings_for else None
 
 
 def _override_outcome(action: str, mac_address: str, success: bool, done: str) -> Dict[str, Any]:
@@ -523,25 +518,8 @@ def _override_outcome(action: str, mac_address: str, success: bool, done: str) -
 def _override_failure(action: str, error: Exception) -> Dict[str, Any]:
     if isinstance(error, ValueError):
         return {"success": False, "error": f"Failed to {action}: {error}"}
-    logger.error("Error writing port overrides (%s): %s", action, type(error).__name__)
+    logger.error("Error with port overrides (%s): %s", action, type(error).__name__)
     return {"success": False, "error": f"Failed to {action}: {type(error).__name__}"}
-
-
-async def _preview_or_error(
-    resource_type: str,
-    mac_address: str,
-    port_overrides: List[Dict],
-    remove_port_idxs: Optional[List[int]],
-    action: str,
-    warnings_for=None,
-) -> Dict[str, Any]:
-    try:
-        return await _port_override_preview(resource_type, mac_address, port_overrides, remove_port_idxs, warnings_for)
-    except ValueError as e:
-        return {"success": False, "error": f"Failed to {action}: {e}"}
-    except Exception as e:
-        logger.error("Error previewing port overrides (%s): %s", action, type(e).__name__)
-        return {"success": False, "error": f"Failed to {action}: {type(e).__name__}"}
 
 
 def _aggregation_warnings(plan: Dict[str, Any]) -> List[str]:
@@ -600,8 +578,12 @@ async def set_switch_port_profile(
         except Exception as e:
             return _override_failure("set port overrides", e)
         return _override_outcome("set port overrides", mac_address, success, "Port overrides updated")
-    return await _preview_or_error(
-        "switch_port_assignment", mac_address, port_overrides, remove_port_idxs, "set port overrides"
+    try:
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs)
+    except Exception as e:
+        return _override_failure("set port overrides", e)
+    return create_preview(
+        resource_type="switch_port_assignment", resource_data=data, resource_name=mac_address, warnings=warnings
     )
 
 
@@ -683,9 +665,11 @@ async def configure_port_mirror(
         except Exception as e:
             return _override_failure("configure port mirror", e)
         return _override_outcome("configure port mirror", mac_address, success, "Port mirror configured")
-    return await _preview_or_error(
-        "port_mirror", mac_address, port_overrides, remove_port_idxs, "configure port mirror"
-    )
+    try:
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs)
+    except Exception as e:
+        return _override_failure("configure port mirror", e)
+    return create_preview(resource_type="port_mirror", resource_data=data, resource_name=mac_address, warnings=warnings)
 
 
 @server.tool(
@@ -730,13 +714,12 @@ async def configure_port_aggregation(
         except Exception as e:
             return _override_failure("configure port aggregation", e)
         return _override_outcome("configure port aggregation", mac_address, success, "Link aggregation configured")
-    return await _preview_or_error(
-        "port_aggregation",
-        mac_address,
-        port_overrides,
-        remove_port_idxs,
-        "configure port aggregation",
-        warnings_for=_aggregation_warnings,
+    try:
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs, _aggregation_warnings)
+    except Exception as e:
+        return _override_failure("configure port aggregation", e)
+    return create_preview(
+        resource_type="port_aggregation", resource_data=data, resource_name=mac_address, warnings=warnings
     )
 
 

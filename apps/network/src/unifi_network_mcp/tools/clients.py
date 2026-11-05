@@ -821,11 +821,19 @@ async def set_client_ip_settings(
                     return {"success": False, "error": f"Failed to set IP settings for client {mac_address}: {e}"}
                 updates["network_id"] = network["network_id"]
                 updates["network"] = {"name": network["name"], "subnet": network["subnet"]}
-                client_network = client.get("network_id") or client.get("last_connection_network_id")
+                # An offline user record's network_id is its saved reservation's network, not where
+                # the client connects: prefer the last-connection fields, and use network_id only
+                # from a record without a reservation.
+                if client.get("last_connection_network_id"):
+                    client_network = client["last_connection_network_id"]
+                    current_name = client.get("last_connection_network_name") or client.get("network")
+                elif not client.get("use_fixedip"):
+                    client_network = client.get("network_id")
+                    current_name = client.get("network")
+                else:
+                    client_network = current_name = None
                 if client_network and client_network != network["network_id"]:
-                    current_name = (
-                        client.get("network") or client.get("last_connection_network_name") or "another network"
-                    )
+                    current_name = current_name or "another network"
                     warnings.append(
                         f"The fixed IP is in network '{network['name']}', but the client last connected to "
                         f"'{current_name}'. The reservation applies only while the client is on '{network['name']}'."
