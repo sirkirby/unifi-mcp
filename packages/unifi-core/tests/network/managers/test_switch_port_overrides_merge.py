@@ -133,9 +133,10 @@ async def test_overlapping_writes_to_one_switch_keep_both_changes():
     conn.request = AsyncMock(side_effect=request)
     manager = SwitchManager(conn)
 
+    # The same switch spelled two ways must share one lock.
     await asyncio.gather(
         manager.set_port_overrides(SWITCH_MAC, [{"port_idx": 1, "portconf_id": "a"}]),
-        manager.set_port_overrides(SWITCH_MAC, [{"port_idx": 2, "portconf_id": "b"}]),
+        manager.set_port_overrides(SWITCH_MAC.replace(":", "").upper(), [{"port_idx": 2, "portconf_id": "b"}]),
     )
 
     ports = {entry["port_idx"]: entry for entry in device["port_overrides"]}

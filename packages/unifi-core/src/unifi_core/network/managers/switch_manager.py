@@ -20,7 +20,7 @@ from aiounifi.errors import RequestError
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.mac import normalize_mac
+from unifi_core.mac import canonical_mac, normalize_mac
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.request_paths import object_id
@@ -51,7 +51,9 @@ class SwitchManager:
     def _device_write_lock(self, device_mac: str) -> asyncio.Lock:
         """The lock serializing read-modify-write updates of one switch's device record."""
         locks = _DEVICE_WRITE_LOCKS.setdefault(self._connection, {})
-        return locks.setdefault(normalize_mac(device_mac) or device_mac, asyncio.Lock())
+        # One key per switch however its MAC is spelled; opaque identifiers keep their own key.
+        key = canonical_mac(device_mac) or normalize_mac(device_mac) or device_mac
+        return locks.setdefault(key, asyncio.Lock())
 
     # ---- Port Profiles ----
 
