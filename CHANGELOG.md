@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-05 — unifi-network 1.8.1
+
+- Pins `unifi-network-mcp` [0.44.1](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.44.1).
+
+
 ## 2026-11-05 — unifi-network 1.8.0, unifi-protect 1.5.0, unifi-access 1.4.0
 
 - Claude Code: a new **Certificate fingerprint** option pins the console's certificate, so the server checks the console's identity even on its factory self-signed certificate. Access adds **API port certificate fingerprint** for the API key port, which presents a different certificate. A pin also stops the startup warning about unchecked connections. See [TLS verification](docs/tls-verification.md).
