@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,9 +24,10 @@ def _switch_manager(plan: dict | None = None, error: Exception | None = None) ->
 
 
 def _plan(merged: list[dict], changed=(), added=(), removed=(), kept=()) -> dict:
+    # Independent copies: expected values in the tests must not share objects with the mocked plan.
     return {
-        "current": CURRENT,
-        "merged": merged,
+        "current": deepcopy(CURRENT),
+        "merged": deepcopy(merged),
         "changed_ports": list(changed),
         "added_ports": list(added),
         "removed_ports": list(removed),
