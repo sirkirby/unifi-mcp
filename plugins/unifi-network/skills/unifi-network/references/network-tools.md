@@ -67,6 +67,7 @@ Always available, regardless of registration mode.
 - `unifi_lookup_by_ip` is the fastest way to find a specific client when you know its IP
 - `unifi_list_clients` returns all currently connected clients — for historical, use events
 - MAC addresses are the primary identifier for client operations (format: `AA:BB:CC:DD:EE:FF`)
+- `unifi_set_client_ip_settings` saves a fixed IP on the network whose subnet holds it (or `network_id`); the preview warns when that isn't the client's last network. To release a fixed IP while its local DNS record is on, set `local_dns_record_enabled=false` in the same call
 
 ---
 
@@ -412,7 +413,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 **Tips:**
 - Use `unifi_list_devices` to find switch MAC addresses (required for most switch tools)
-- Port overrides are a FULL REPLACEMENT — always fetch existing with `unifi_get_switch_ports` before modifying
+- Port override tools merge by `port_idx`: send only the ports to change, each with every field it should keep (read them with `unifi_get_switch_ports`); other ports keep their overrides. Clear a port's override with `remove_port_idxs`, and check the preview's current and proposed entries before confirming
 - System profiles (`attr_no_delete=true`) cannot be deleted
 - Port mirroring is limited by `switch_caps.max_mirror_sessions` (typically 1)
 - Link aggregation requires consecutive ports at the same speed

@@ -11,6 +11,12 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-05 — unifi-network 1.9.1
+
+- The Network skill now says port override tools merge by port: send only the ports to change, and clear a port's override with `remove_port_idxs`. It no longer tells agents to send the full array.
+- It also explains that fixed IP reservations land on the network that holds the address (or `network_id`), and how to release a fixed IP while a local DNS record is on.
+
+
 ## 2026-11-06 — unifi-network 1.9.0
 
 - Pins `unifi-network-mcp` [0.45.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.45.0).
