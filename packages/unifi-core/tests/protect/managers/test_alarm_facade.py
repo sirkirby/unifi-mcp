@@ -551,3 +551,22 @@ async def test_status_does_not_hide_v2_outage():
     with pytest.raises(NvrError):
         await facade.get_arm_state()
     facade._legacy.get_arm_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_catalog_reads_the_v2_manifest():
+    catalog = {"triggers": [{"trigger_id": "protect:incoming.webhook"}], "actions": [], "scope": {}}
+    service = MagicMock()
+    service.get_catalog = AsyncMock(return_value=catalog)
+    facade = AlarmRulesFacade(service, MagicMock())
+    assert await facade.list_catalog(search="webhook", include_schemas=True) == catalog
+    service.get_catalog.assert_awaited_once_with(search="webhook", include_schemas=True)
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_goes_to_the_service():
+    service = MagicMock()
+    service.fire_webhook = AsyncMock(return_value={"fired": True, "trigger_id": "door-test"})
+    result = await AlarmRulesFacade(service, MagicMock()).fire_webhook("door-test")
+    service.fire_webhook.assert_awaited_once_with("door-test")
+    assert result == {"fired": True, "trigger_id": "door-test"}

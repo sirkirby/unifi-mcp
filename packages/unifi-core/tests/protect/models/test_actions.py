@@ -7,6 +7,7 @@ from unifi_core.protect.models._actions import (
     AlarmArmInput,
     AlarmCreateRuleInput,
     AlarmDisarmInput,
+    AlarmFireWebhookInput,
     AlarmUpdateRuleInput,
     DeleteLiveviewInput,
     DeleteRecordingInput,
@@ -17,6 +18,7 @@ from unifi_core.protect.models._actions import (
     RebootCameraInput,
     ToggleRecordingInput,
     TriggerChimeInput,
+    require_alarm_webhook_id,
 )
 
 _ACTION_INPUT_MODELS = (
@@ -376,3 +378,45 @@ class TestAcknowledgeEventInput:
     def test_valid(self):
         m = AcknowledgeEventInput(event_id="evt-uuid-123")
         assert m.event_id == "evt-uuid-123"
+
+
+# ---------------------------------------------------------------------------
+# AlarmFireWebhookInput / require_alarm_webhook_id
+# ---------------------------------------------------------------------------
+
+# Each carries a marker so a test can tell an echoed id from the rule text,
+# which itself names ".", ".." and the refused characters.
+_BAD_WEBHOOK_IDS = ["", "   ", ".", ".."] + [
+    f"hook7f3a{bad}x" for bad in ("/", "\\", "?", "#", "%2F", "\x00", "\n", "\x7f")
+]
+
+
+class TestAlarmWebhookId:
+    @pytest.mark.parametrize(
+        "webhook_id", ["door-test", "abc_123", "a.b", "...", "019e473a-0000-7000-8000-000000000002"]
+    )
+    def test_accepts_an_ordinary_id(self, webhook_id):
+        assert require_alarm_webhook_id(webhook_id) == webhook_id
+        assert AlarmFireWebhookInput(trigger_id=webhook_id).trigger_id == webhook_id
+
+    @pytest.mark.parametrize("webhook_id", _BAD_WEBHOOK_IDS)
+    def test_refuses_an_id_that_is_not_one_path_segment(self, webhook_id):
+        with pytest.raises(ValueError) as exc:
+            require_alarm_webhook_id(webhook_id)
+        assert "hook7f3a" not in str(exc.value)
+
+    @pytest.mark.parametrize("webhook_id", _BAD_WEBHOOK_IDS)
+    def test_model_refuses_it_too_without_echoing_it(self, webhook_id):
+        with pytest.raises(ValidationError) as exc:
+            AlarmFireWebhookInput(trigger_id=webhook_id)
+        assert "hook7f3a" not in str(exc.value)
+
+    @pytest.mark.parametrize("webhook_id", [None, 5])
+    def test_refuses_a_non_string(self, webhook_id):
+        with pytest.raises(ValueError, match="trigger_id is required"):
+            require_alarm_webhook_id(webhook_id)
+
+    def test_field_description_names_the_rules_webhook_id(self):
+        description = AlarmFireWebhookInput.model_fields["trigger_id"].description
+        assert "data.webhook" in description
+        assert "not" in description and "protect_alarm_get_catalog" in description
