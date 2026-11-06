@@ -405,7 +405,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_delete_port_profile` | Mutate | Delete a port profile. |
 | `unifi_power_cycle_port` | Mutate | Power cycle PoE on a specific switch port. |
 | `unifi_set_jumbo_frames` | Mutate | Enable or disable jumbo frames on a switch. |
-| `unifi_set_switch_port_profile` | Mutate | Assign a port profile to a specific switch port. |
+| `unifi_set_switch_port_profile` | Mutate | Assign port profiles and other per-port overrides on a switch. |
 | `unifi_update_port_profile` | Mutate | Update an existing port profile. |
 | `unifi_update_switch_stp` | Mutate | Update STP (Spanning Tree Protocol) configuration for a switch. |
 <!-- /AUTO:tools:switch -->
