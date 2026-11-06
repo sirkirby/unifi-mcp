@@ -906,10 +906,13 @@ def _translate_list_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
 
 
 def _translate_client_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Rename the MAC and remove the wrapper-only network lookup hint."""
+    """Rename the MAC and keep the reservation's network, which the shared input model does not carry."""
     from unifi_core.network.models._actions import SetClientIpSettingsInput
 
-    model = SetClientIpSettingsInput(**args)
+    network_id = args.get("network_id")
+    if network_id is not None and (not isinstance(network_id, str) or not network_id.strip()):
+        raise ValueError("network_id must be a non-empty network ID.")
+    model = SetClientIpSettingsInput(**{key: value for key, value in args.items() if key != "network_id"})
     public = model.model_dump(exclude_none=True)
     client_mac = public.pop("mac_address")
     if not public:
@@ -917,6 +920,8 @@ def _translate_client_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...]
             "At least one setting must be provided "
             "(use_fixedip, fixed_ip, local_dns_record_enabled, or local_dns_record)."
         )
+    if network_id is not None:
+        public["network_id"] = network_id
     return (), {"client_mac": client_mac, **public}
 
 
@@ -1854,6 +1859,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "fixed_ip",
         "local_dns_record_enabled",
         "local_dns_record",
+        "network_id",
     ),
     "unifi_set_client_fixed_ap": _spec(
         _translate_client_fixed_ap,
@@ -2043,14 +2049,14 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_lldp_neighbors": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
     "unifi_get_switch_capabilities": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
     "unifi_set_switch_port_profile": _spec(
-        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides", "remove_port_idxs"
     ),
     "unifi_power_cycle_port": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_idx"),
     "unifi_configure_port_mirror": _spec(
-        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides", "remove_port_idxs"
     ),
     "unifi_configure_port_aggregation": _spec(
-        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides", "remove_port_idxs"
     ),
     "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
     "unifi_set_outlet_state": _spec(

@@ -924,7 +924,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports for increased bandwidth. Most switches support up to 8 aggregate sessions. Ports must be sequential and same speed. The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], and lag_idx=<group number starting at 1>. Member ports (all except the master) must be REMOVED from the overrides array \u2014 the controller auto-manages them. Requires confirmation.",
+      "description": "Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports for increased bandwidth. Most switches support up to 8 aggregate sessions. Ports must be sequential and same speed. The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], and lag_idx=<group number starting at 1>. The controller manages member ports (all except the master) while aggregated; a member port that already has its own override keeps it unless listed in remove_port_idxs, and the preview warns about any that do. Send only the ports to change: each entry, matched by port_idx, replaces that port's whole override (include every field the port should keep; read them with unifi_get_switch_ports), and every other port keeps its override. To clear a port's override so it reverts to defaults, list it in remove_port_idxs. The preview lists each changed port's current and proposed override. Requires confirmation.",
       "name": "unifi_configure_port_aggregation",
       "permission_action": "update",
       "permission_category": "switch",
@@ -940,7 +940,11 @@
               "type": "string"
             },
             "port_overrides": {
-              "description": "Complete port overrides array. The master port must have op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>. Remove member ports from the array \u2014 the controller claims them automatically",
+              "description": "Override entries for the ports to change. The master port must have op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>",
+              "type": "array"
+            },
+            "remove_port_idxs": {
+              "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
               "type": "array"
             }
           },
@@ -1043,7 +1047,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Configure port mirroring on a switch. Mirrors traffic from one port to a destination port for packet capture/analysis. Most switches support only 1 mirror session. Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx on the source port, then send all overrides. Requires confirmation.",
+      "description": "Configure port mirroring on a switch. Mirrors traffic from one port to a destination port for packet capture/analysis. Most switches support only 1 mirror session. Set op_mode='mirror' and mirror_port_idx on the source port's override. Send only the ports to change: each entry, matched by port_idx, replaces that port's whole override (include every field the port should keep; read them with unifi_get_switch_ports), and every other port keeps its override. To clear a port's override so it reverts to defaults, list it in remove_port_idxs. The preview lists each changed port's current and proposed override. Requires confirmation.",
       "name": "unifi_configure_port_mirror",
       "permission_action": "update",
       "permission_category": "switch",
@@ -1059,7 +1063,11 @@
               "type": "string"
             },
             "port_overrides": {
-              "description": "Complete port overrides array. The source port must have op_mode='mirror' and mirror_port_idx='<destination_port_idx>'",
+              "description": "Override entries for the ports to change. The source port must have op_mode='mirror' and mirror_port_idx='<destination_port_idx>'",
+              "type": "array"
+            },
+            "remove_port_idxs": {
+              "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
               "type": "array"
             }
           },
@@ -18105,7 +18113,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Set fixed IP address and/or local DNS record for a client device.\n\nAllows configuring:\n- Fixed IP: Assign a static IP address to a client (DHCP reservation)\n- Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)\n\nEither setting can be enabled/disabled independently.",
+      "description": "Set fixed IP address and/or local DNS record for a client device.\n\nAllows configuring:\n- Fixed IP: Assign a static IP address to a client (DHCP reservation). The reservation is saved on the\n  network whose subnet holds the address, or on network_id when given; an address in no configured\n  network, or in several, is refused. The preview shows that network and warns when it differs from\n  the network the client last connected to, where the reservation would not apply.\n- Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)\n\nEither setting can be enabled/disabled independently. Releasing a fixed IP while the client's local DNS\nrecord stays on is refused by the controller; turn the record off in the same call\n(local_dns_record_enabled=false).",
       "name": "unifi_set_client_ip_settings",
       "permission_action": "update",
       "permission_category": "clients",
@@ -18130,6 +18138,10 @@
             },
             "mac_address": {
               "description": "MAC address of the client to configure, in format AA:BB:CC:DD:EE:FF (from unifi_list_clients)",
+              "type": "string"
+            },
+            "network_id": {
+              "description": "ID of the network the fixed IP belongs to (from unifi_list_networks). Omit to use the configured network whose subnet holds fixed_ip",
               "type": "string"
             },
             "use_fixedip": {
@@ -18715,7 +18727,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Assign a port profile to a specific switch port. IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides with unifi_get_switch_ports first, modify the target port, and send the complete array. Missing ports revert to defaults. Requires confirmation.",
+      "description": "Assign port profiles and other per-port overrides on a switch. Send only the ports to change: each entry, matched by port_idx, replaces that port's whole override (include every field the port should keep; read them with unifi_get_switch_ports), and every other port keeps its override. To clear a port's override so it reverts to defaults, list it in remove_port_idxs. The preview lists each changed port's current and proposed override. Requires confirmation.",
       "name": "unifi_set_switch_port_profile",
       "permission_action": "update",
       "permission_category": "switch",
@@ -18731,7 +18743,11 @@
               "type": "string"
             },
             "port_overrides": {
-              "description": "Complete list of port overrides. Each entry needs at minimum: port_idx (int, 1-based), portconf_id (str, profile ID). Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')",
+              "description": "Override entries for the ports to change. Each needs port_idx (int, 1-based) and usually portconf_id (str, profile ID). Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')",
+              "type": "array"
+            },
+            "remove_port_idxs": {
+              "description": "Ports whose override to remove, reverting them to defaults (1-based port_idx values)",
               "type": "array"
             }
           },

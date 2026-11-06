@@ -476,13 +476,75 @@ async def get_switch_capabilities(
 
 # ---- Switch Port Write Operations ----
 
+_OVERRIDES_MERGE = (
+    "Send only the ports to change: each entry, matched by port_idx, replaces that port's whole override "
+    "(include every field the port should keep; read them with unifi_get_switch_ports), and every other "
+    "port keeps its override. To clear a port's override so it reverts to defaults, list it in "
+    "remove_port_idxs. The preview lists each changed port's current and proposed override. "
+)
+_REMOVE_PORT_IDXS_FIELD = Field(
+    description="Ports whose override to remove, reverting them to defaults (1-based port_idx values)"
+)
+
+
+async def _port_override_plan(
+    mac_address: str,
+    port_overrides: List[Dict],
+    remove_port_idxs: Optional[List[int]],
+    warnings_for=None,
+) -> tuple[Dict[str, Any], Optional[List[str]]]:
+    """The preview data for a merged write: changed ports with current and proposed entries, added and removed ports."""
+    plan = await switch_manager.plan_port_overrides(mac_address, port_overrides, remove_port_idxs)
+    current = {e.get("port_idx"): e for e in plan["current"] if isinstance(e, dict)}
+    merged = {e.get("port_idx"): e for e in plan["merged"] if isinstance(e, dict)}
+    data = {
+        "mac_address": mac_address,
+        "changed_ports": [
+            {"port_idx": port, "current": current[port], "proposed": merged[port]} for port in plan["changed_ports"]
+        ],
+        "added_ports": [merged[port] for port in plan["added_ports"]],
+        "removed_ports": [current[port] for port in plan["removed_ports"]],
+        "unchanged_port_count": len(plan["kept_ports"]),
+    }
+    return data, (warnings_for(plan) or None) if warnings_for else None
+
+
+def _override_outcome(action: str, mac_address: str, success: bool, done: str) -> Dict[str, Any]:
+    if success:
+        return {"success": True, "message": f"{done} on switch '{mac_address}'."}
+    return {"success": False, "error": f"Failed to {action} on '{mac_address}'."}
+
+
+def _override_failure(action: str, error: Exception) -> Dict[str, Any]:
+    if isinstance(error, ValueError):
+        return {"success": False, "error": f"Failed to {action}: {error}"}
+    logger.error("Error with port overrides (%s): %s", action, type(error).__name__)
+    return {"success": False, "error": f"Failed to {action}: {type(error).__name__}"}
+
+
+def _aggregation_warnings(plan: Dict[str, Any]) -> List[str]:
+    """Name member ports that keep their own override while aggregated."""
+    merged = {e.get("port_idx"): e for e in plan["merged"] if isinstance(e, dict)}
+    warnings = []
+    for port, entry in merged.items():
+        if entry.get("op_mode") != "aggregate":
+            continue
+        members = entry.get("aggregate_members") or []
+        kept = [m for m in members if m != port and m in merged]
+        if kept:
+            warnings.append(
+                f"Member port(s) {', '.join(map(str, kept))} of the LAG on port {port} keep their own override. "
+                "Controllers differ on whether member entries stay while aggregated; list them in "
+                "remove_port_idxs to clear them."
+            )
+    return warnings
+
 
 @server.tool(
     name="unifi_set_switch_port_profile",
-    description="Assign a port profile to a specific switch port. "
-    "IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides "
-    "with unifi_get_switch_ports first, modify the target port, and send the complete array. "
-    "Missing ports revert to defaults. Requires confirmation.",
+    description="Assign port profiles and other per-port overrides on a switch. "
+    + _OVERRIDES_MERGE
+    + "Requires confirmation.",
     permission_category="switch",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -492,37 +554,37 @@ async def set_switch_port_profile(
     port_overrides: Annotated[
         List[Dict],
         Field(
-            description="Complete list of port overrides. Each entry needs at minimum: "
-            "port_idx (int, 1-based), portconf_id (str, profile ID). "
-            "Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')"
+            description="Override entries for the ports to change. Each needs port_idx (int, 1-based) and "
+            "usually portconf_id (str, profile ID). Optional: name, poe_mode, op_mode ('switch'/'mirror'/'aggregate')"
         ),
     ],
+    remove_port_idxs: Annotated[Optional[List[int]], _REMOVE_PORT_IDXS_FIELD] = None,
     confirm: Annotated[
         bool,
         Field(description="When true, applies the changes. When false (default), returns a preview"),
     ] = False,
 ) -> Dict[str, Any]:
-    """Sets port overrides for a switch."""
+    """Changes port overrides for a switch, keeping the ports not named."""
     try:
         SetSwitchPortProfileInput(device_mac=mac_address, port_overrides=port_overrides)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
-    if not confirm:
-        return create_preview(
-            resource_type="switch_port_assignment",
-            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
-            resource_name=mac_address,
-        )
-
+    if confirm:
+        try:
+            success = await switch_manager.set_port_overrides(
+                mac_address, port_overrides, remove_port_idxs=remove_port_idxs
+            )
+        except Exception as e:
+            return _override_failure("set port overrides", e)
+        return _override_outcome("set port overrides", mac_address, success, "Port overrides updated")
     try:
-        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
-        if success:
-            return {"success": True, "message": f"Port overrides updated for switch '{mac_address}'."}
-        return {"success": False, "error": f"Failed to set port overrides for '{mac_address}'."}
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs)
     except Exception as e:
-        logger.error("Error setting port overrides: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to set port overrides: {type(e).__name__}"}
+        return _override_failure("set port overrides", e)
+    return create_preview(
+        resource_type="switch_port_assignment", resource_data=data, resource_name=mac_address, warnings=warnings
+    )
 
 
 @server.tool(
@@ -567,8 +629,9 @@ async def power_cycle_port(
     name="unifi_configure_port_mirror",
     description="Configure port mirroring on a switch. Mirrors traffic from one port to a "
     "destination port for packet capture/analysis. Most switches support only 1 mirror session. "
-    "Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx "
-    "on the source port, then send all overrides. Requires confirmation.",
+    "Set op_mode='mirror' and mirror_port_idx on the source port's override. "
+    + _OVERRIDES_MERGE
+    + "Requires confirmation.",
     permission_category="switch",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -578,10 +641,11 @@ async def configure_port_mirror(
     port_overrides: Annotated[
         List[Dict],
         Field(
-            description="Complete port overrides array. The source port must have "
+            description="Override entries for the ports to change. The source port must have "
             "op_mode='mirror' and mirror_port_idx='<destination_port_idx>'"
         ),
     ],
+    remove_port_idxs: Annotated[Optional[List[int]], _REMOVE_PORT_IDXS_FIELD] = None,
     confirm: Annotated[
         bool,
         Field(description="When true, applies the mirror config. When false (default), returns a preview"),
@@ -593,21 +657,19 @@ async def configure_port_mirror(
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
-    if not confirm:
-        return create_preview(
-            resource_type="port_mirror",
-            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
-            resource_name=mac_address,
-        )
-
+    if confirm:
+        try:
+            success = await switch_manager.set_port_overrides(
+                mac_address, port_overrides, remove_port_idxs=remove_port_idxs
+            )
+        except Exception as e:
+            return _override_failure("configure port mirror", e)
+        return _override_outcome("configure port mirror", mac_address, success, "Port mirror configured")
     try:
-        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
-        if success:
-            return {"success": True, "message": f"Port mirror configured on switch '{mac_address}'."}
-        return {"success": False, "error": f"Failed to configure port mirror on '{mac_address}'."}
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs)
     except Exception as e:
-        logger.error("Error configuring port mirror: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to configure port mirror: {type(e).__name__}"}
+        return _override_failure("configure port mirror", e)
+    return create_preview(resource_type="port_mirror", resource_data=data, resource_name=mac_address, warnings=warnings)
 
 
 @server.tool(
@@ -616,8 +678,9 @@ async def configure_port_mirror(
     "for increased bandwidth. Most switches support up to 8 aggregate sessions. "
     "Ports must be sequential and same speed. "
     "The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], "
-    "and lag_idx=<group number starting at 1>. Member ports (all except the master) must be REMOVED "
-    "from the overrides array — the controller auto-manages them. Requires confirmation.",
+    "and lag_idx=<group number starting at 1>. The controller manages member ports (all except the master) "
+    "while aggregated; a member port that already has its own override keeps it unless listed in "
+    "remove_port_idxs, and the preview warns about any that do. " + _OVERRIDES_MERGE + "Requires confirmation.",
     permission_category="switch",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -627,11 +690,11 @@ async def configure_port_aggregation(
     port_overrides: Annotated[
         List[Dict],
         Field(
-            description="Complete port overrides array. The master port must have "
-            "op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>. "
-            "Remove member ports from the array — the controller claims them automatically"
+            description="Override entries for the ports to change. The master port must have "
+            "op_mode='aggregate', aggregate_members=[port_idx, port_idx+1, ...], and lag_idx=<int>"
         ),
     ],
+    remove_port_idxs: Annotated[Optional[List[int]], _REMOVE_PORT_IDXS_FIELD] = None,
     confirm: Annotated[
         bool,
         Field(description="When true, applies the LAG config. When false (default), returns a preview"),
@@ -643,21 +706,21 @@ async def configure_port_aggregation(
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
-    if not confirm:
-        return create_preview(
-            resource_type="port_aggregation",
-            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
-            resource_name=mac_address,
-        )
-
+    if confirm:
+        try:
+            success = await switch_manager.set_port_overrides(
+                mac_address, port_overrides, remove_port_idxs=remove_port_idxs
+            )
+        except Exception as e:
+            return _override_failure("configure port aggregation", e)
+        return _override_outcome("configure port aggregation", mac_address, success, "Link aggregation configured")
     try:
-        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
-        if success:
-            return {"success": True, "message": f"Link aggregation configured on switch '{mac_address}'."}
-        return {"success": False, "error": f"Failed to configure aggregation on '{mac_address}'."}
+        data, warnings = await _port_override_plan(mac_address, port_overrides, remove_port_idxs, _aggregation_warnings)
     except Exception as e:
-        logger.error("Error configuring port aggregation: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to configure port aggregation: {type(e).__name__}"}
+        return _override_failure("configure port aggregation", e)
+    return create_preview(
+        resource_type="port_aggregation", resource_data=data, resource_name=mac_address, warnings=warnings
+    )
 
 
 @server.tool(
