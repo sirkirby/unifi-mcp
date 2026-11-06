@@ -799,6 +799,8 @@ async def set_client_ip_settings(
                 "fixed_ip": client.get("fixed_ip"),
                 "local_dns_record_enabled": client.get("local_dns_record_enabled", False),
                 "local_dns_record": client.get("local_dns_record"),
+                # On a record with a reservation, network_id is the reservation's network.
+                "network_id": client.get("network_id") if client.get("use_fixedip") else None,
             }
 
             # Build updates dict with only provided values
@@ -842,7 +844,8 @@ async def set_client_ip_settings(
             dns_after = (
                 local_dns_record_enabled
                 if local_dns_record_enabled is not None
-                else (True if local_dns_record else current_state["local_dns_record_enabled"])
+                # Like core, any hostname (even an empty one) turns the record on.
+                else (True if local_dns_record is not None else current_state["local_dns_record_enabled"])
             )
             if releasing and dns_after:
                 warnings.append(

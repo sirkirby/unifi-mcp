@@ -185,3 +185,27 @@ async def test_ip_preview_compares_with_the_last_connected_network_not_the_reser
         result = await clients.set_client_ip_settings(mac_address=MAC, use_fixedip=True, fixed_ip="10.20.0.50")
 
     assert bool(result.get("warnings")) is warned
+
+
+@pytest.mark.asyncio
+async def test_ip_preview_treats_an_empty_dns_hostname_as_enabling_dns_like_core():
+    clients = importlib.import_module("unifi_network_mcp.tools.clients")
+    client = {"_id": "u1", "mac": MAC, "use_fixedip": True, "fixed_ip": "10.0.0.5", "local_dns_record_enabled": False}
+    manager = _client_manager(client)
+
+    with patch.object(clients, "client_manager", manager):
+        result = await clients.set_client_ip_settings(mac_address=MAC, use_fixedip=False, local_dns_record="")
+
+    assert any("local DNS record" in w for w in result.get("warnings", []))
+
+
+@pytest.mark.asyncio
+async def test_ip_preview_shows_the_current_reservation_network():
+    clients = importlib.import_module("unifi_network_mcp.tools.clients")
+    client = {"_id": "u1", "mac": MAC, "use_fixedip": True, "fixed_ip": "192.168.1.9", "network_id": "lan"}
+    manager = _client_manager(client, IOT)
+
+    with patch.object(clients, "client_manager", manager):
+        result = await clients.set_client_ip_settings(mac_address=MAC, fixed_ip="10.20.0.50")
+
+    assert "'network_id': 'lan'" in str(result["preview"]) and "'network_id': 'iot'" in str(result["preview"])
