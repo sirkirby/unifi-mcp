@@ -12,16 +12,20 @@ Use Network session credentials. Read `unifi_list_networks` for the gateway LAN
 network ID and `unifi_list_nat_rules` for the original inventory and rule order.
 NAT IDs belong to these tools; firewall policy and port-forward IDs are different.
 
-Choose three distinct addresses: `CLIENT_IP`, `RESOLVER_IP`, and `GATEWAY_IP` on
-that LAN. Keep the client's usual default route and DNS settings. Direct only
-`198.51.100.53/32` through the test gateway if the client has another default path.
+Choose four distinct addresses: `CLIENT_IP`, `RESOLVER_IP`, and `GATEWAY_IP` on
+that LAN, plus `UNUSED_IP`, an address no host answers, such as one from an
+RFC 5737 documentation range. Keep the client's usual default route and DNS
+settings. The DNAT rule redirects queries for `UNUSED_IP`; without the rule they
+go unanswered. Direct only `UNUSED_IP/32` through the test gateway if the client
+has another default path.
 The resolver should answer a unique `.test` name with a known synthetic A record,
-such as `192.0.2.123`, over both UDP and TCP on port 53053.
+such as `SYNTHETIC_A_RECORD` — also taken from a documentation range, so the
+answer cannot collide with a real host — over both UDP and TCP on port 53053.
 
 Before creating rules, require:
 
 - Direct queries from the client to `RESOLVER_IP:53053` return that answer.
-- Queries from the client to `198.51.100.53:53` do not return it.
+- Queries from the client to `UNUSED_IP:53` do not return it.
 - The resolver host's route to that synthetic destination uses this gateway.
 - The existing firewall permits the intended client-to-resolver forwarding path.
   LAN-ingress DNAT does not receive the automatic firewall allowance used for WAN DNAT.
@@ -46,7 +50,7 @@ Destination translation:
   "protocol": "tcp_udp",
   "in_interface": "LAN_NETWORK_ID",
   "source_filter": {"filter_type": "ADDRESS_AND_PORT", "address": "CLIENT_IP"},
-  "destination_filter": {"filter_type": "ADDRESS_AND_PORT", "address": "198.51.100.53", "port": "53"},
+  "destination_filter": {"filter_type": "ADDRESS_AND_PORT", "address": "UNUSED_IP", "port": "53"},
   "ip_address": "RESOLVER_IP",
   "port": "53053"
 }
@@ -86,8 +90,8 @@ window and clean up if the expected answers never arrive.
 From the test client, run both protocols, substituting the actual name and IP:
 
 ```sh
-dig @198.51.100.53 UNIQUE.test A +time=3 +tries=1
-dig @198.51.100.53 UNIQUE.test A +tcp +time=3 +tries=1
+dig @UNUSED_IP UNIQUE.test A +time=3 +tries=1
+dig @UNUSED_IP UNIQUE.test A +tcp +time=3 +tries=1
 dig @RESOLVER_IP -p 53053 UNIQUE.test A +time=3 +tries=1
 dig @RESOLVER_IP -p 53053 UNIQUE.test A +tcp +time=3 +tries=1
 ```
