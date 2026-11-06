@@ -8,9 +8,12 @@
 # tool: protect_alarm_list_profiles
 # tool: protect_alarm_list_rules
 # tool: protect_alarm_get_rule
+# tool: protect_alarm_get_catalog
 """
 
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -407,3 +410,73 @@ async def test_protect_alarm_get_rule(tmp_path, monkeypatch):
     assert result["id"] == "rule1"
     assert result["title"] == "Test Camera Vehicle Arrival"
     assert result["enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_get_catalog(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "alarm_facade", "list_catalog"): {
+                "triggers": [{"trigger_id": "protect:incoming.webhook", "title": "Webhook"}],
+                "actions": [{"action_id": "protect:notify", "title": "Notify"}],
+                "scope": {"mode": "include"},
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ alarmCatalog(controller: "{cid}") {{
+            triggers
+            actions
+            scope
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    result = body["data"]["protect"]["alarmCatalog"]
+    assert result["triggers"] == [{"trigger_id": "protect:incoming.webhook", "title": "Webhook"}]
+    assert result["actions"] == [{"action_id": "protect:notify", "title": "Notify"}]
+    assert result["scope"] == {"mode": "include"}
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_get_catalog_none_is_null(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(monkeypatch, {("protect", "alarm_facade", "list_catalog"): None})
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{ protect {{ alarmCatalog(controller: "{cid}") {{ triggers }} }} }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["protect"]["alarmCatalog"] is None
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_get_catalog_passes_filters(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(monkeypatch, {})
+    facade = MagicMock()
+    facade.list_catalog = AsyncMock(return_value={"triggers": [], "actions": [], "scope": {}})
+
+    async def _get_domain_manager(self, session, controller_id, product, attr_name, *, site=None):
+        return facade
+
+    monkeypatch.setattr("unifi_api.services.managers.ManagerFactory.get_domain_manager", _get_domain_manager)
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{ protect {{ alarmCatalog(controller: "{cid}", search: "webhook", includeSchemas: true) {{
+            triggers
+        }} }} }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["protect"]["alarmCatalog"]["triggers"] == []
+    facade.list_catalog.assert_awaited_once_with(search="webhook", include_schemas=True)

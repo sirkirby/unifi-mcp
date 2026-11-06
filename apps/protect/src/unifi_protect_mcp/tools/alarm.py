@@ -3,6 +3,7 @@
 Provides tools to:
 * arm/disarm the UniFi Protect Alarm Manager and list configured arm profiles
 * CRUD alarm rules (automations) — list, get, update, create, delete
+* read the trigger/action catalog and fire webhook-triggered alarms
 
 Requires UniFi Protect 6.1+ with Alarm Manager configured in the Protect
 web UI. The rule CRUD endpoints are private REST under
@@ -23,6 +24,7 @@ from unifi_core.protect.models._actions import (
     AlarmCreateRuleInput,
     AlarmDeleteRuleInput,
     AlarmDisarmInput,
+    AlarmFireWebhookInput,
     AlarmGetRuleInput,
     AlarmUpdateRuleInput,
 )
@@ -254,6 +256,101 @@ async def protect_alarm_disarm(
 
 
 @server.tool(
+    name="protect_alarm_get_catalog",
+    description=(
+        "Returns the triggers and actions a UniFi OS Alarm Manager (Global-mode) "
+        "console accepts in alarm rules, read from the Alarm Manager manifest. Each "
+        "trigger has trigger_id, title, category_id, category_title and options_schema "
+        "(the JSON schema of the data the trigger takes); each action has action_id, "
+        "title, category_id, category_title, options_schema and target_ids. scope is "
+        "the schema for a rule's scope. Use these ids with protect_alarm_create_rule "
+        "and protect_alarm_update_rule. options_schema and scope are left out unless "
+        "include_schemas is true; the full catalog is large, so filter with search and "
+        "ask for schemas only for the entries you will write."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def protect_alarm_get_catalog(
+    search: Annotated[
+        Optional[str],
+        Field(description="Keep only triggers/actions whose id, title or category contains this (case-insensitive)."),
+    ] = None,
+    include_schemas: Annotated[
+        bool,
+        Field(description="Include each entry's options_schema and the scope schema (large). Default false."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Get the alarm trigger/action catalog."""
+    logger.info("protect_alarm_get_catalog tool called (search=%s, include_schemas=%s)", search, include_schemas)
+    try:
+        return {
+            "success": True,
+            "data": await alarm_facade.list_catalog(search=search, include_schemas=include_schemas),
+        }
+    except AlarmManagerPermissionError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error getting alarm catalog: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to get alarm catalog: {e}"}
+
+
+@server.tool(
+    name="protect_alarm_fire_webhook",
+    auth="both",
+    description=(
+        "Fires every alarm rule whose Webhook trigger has the given trigger_id, as "
+        "if the webhook had been called; the rules' actions run for real. Here trigger_id "
+        "is the rule's own webhook id, the data.webhook value set on its Webhook trigger, "
+        "not a catalog trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook. Uses the "
+        "Protect Integration API, so a Protect public API key must be configured on the "
+        "server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Requires confirm=True to apply — otherwise returns a preview."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    permission_category="alarm",
+    permission_action="update",
+)
+async def protect_alarm_fire_webhook(
+    trigger_id: Annotated[
+        str,
+        Field(
+            description=(
+                "The alarm rule's own webhook id: the data.webhook value set on its Webhook trigger. "
+                "This is not a trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, fires the webhook. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Fire a webhook-triggered alarm."""
+    try:
+        try:
+            AlarmFireWebhookInput(trigger_id=trigger_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        logger.info("protect_alarm_fire_webhook tool called (trigger_id=%s, confirm=%s)", trigger_id, confirm)
+        if not confirm:
+            return preview_response(
+                action="update",
+                resource_type="alarm_webhook",
+                resource_id=trigger_id,
+                current_state={},
+                proposed_changes={"fire": True},
+                resource_name=trigger_id,
+            )
+
+        return {"success": True, "data": await alarm_facade.fire_webhook(trigger_id)}
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error firing alarm webhook %s: %s", trigger_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to fire alarm webhook: {e}"}
+
+
+@server.tool(
     name="protect_alarm_list_rules",
     description=(
         "Lists every UniFi Protect alarm rule, including AI-powered alarms "
@@ -369,7 +466,10 @@ async def protect_alarm_update_rule(
     description=(
         "Creates a new alarm rule via POST. Body uses the canonical alarm rule "
         "shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, "
-        "enabled, triggers, actions, and scope. The server assigns the rule id and "
+        "enabled, triggers, actions, and scope. Take trigger_id and action_id values "
+        "from protect_alarm_get_catalog. On Global-mode consoles scope must be "
+        '{mode, data} (e.g. {"mode": "include", "data": {...}}); an empty scope '
+        "is rejected. The server assigns the rule id and "
         "returns the created rule. ``actions`` must be a non-empty list — the "
         "controller will accept an empty actions list but the resulting rule cannot "
         "be opened in the Protect UI. "
@@ -463,6 +563,6 @@ async def protect_alarm_delete_rule(
 logger.info(
     "Alarm tools registered: "
     "protect_alarm_list_profiles, protect_alarm_get_status, protect_alarm_arm, protect_alarm_disarm, "
-    "protect_alarm_list_rules, protect_alarm_get_rule, protect_alarm_update_rule, "
+    "protect_alarm_get_catalog, protect_alarm_fire_webhook, protect_alarm_list_rules, protect_alarm_get_rule, protect_alarm_update_rule, "
     "protect_alarm_create_rule, protect_alarm_delete_rule"
 )

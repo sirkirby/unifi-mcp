@@ -1,5 +1,5 @@
 {
-  "count": 63,
+  "count": 65,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -7,6 +7,8 @@
     "protect_alarm_create_rule": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_delete_rule": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_disarm": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_fire_webhook": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_get_catalog": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_get_rule": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_get_status": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_list_profiles": "unifi_protect_mcp.tools.alarm",
@@ -294,7 +296,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Creates a new alarm rule via POST. Body uses the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. The server assigns the rule id and returns the created rule. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Creates a new alarm rule via POST. Body uses the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. Take trigger_id and action_id values from protect_alarm_get_catalog. On Global-mode consoles scope must be {mode, data} (e.g. {\"mode\": \"include\", \"data\": {...}}); an empty scope is rejected. The server assigns the rule id and returns the created rule. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_create_rule",
       "permission_action": "create",
       "permission_category": "alarm",
@@ -624,6 +626,227 @@
         }
       },
       "title": "Alarm Disarm"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "both",
+      "description": "Fires every alarm rule whose Webhook trigger has the given trigger_id, as if the webhook had been called; the rules' actions run for real. Here trigger_id is the rule's own webhook id, the data.webhook value set on its Webhook trigger, not a catalog trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook. Uses the Protect Integration API, so a Protect public API key must be configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "name": "protect_alarm_fire_webhook",
+      "permission_action": "update",
+      "permission_category": "alarm",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, fires the webhook. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "trigger_id": {
+              "description": "The alarm rule's own webhook id: the data.webhook value set on its Webhook trigger. This is not a trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "trigger_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Fire Webhook"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns the triggers and actions a UniFi OS Alarm Manager (Global-mode) console accepts in alarm rules, read from the Alarm Manager manifest. Each trigger has trigger_id, title, category_id, category_title and options_schema (the JSON schema of the data the trigger takes); each action has action_id, title, category_id, category_title, options_schema and target_ids. scope is the schema for a rule's scope. Use these ids with protect_alarm_create_rule and protect_alarm_update_rule. options_schema and scope are left out unless include_schemas is true; the full catalog is large, so filter with search and ask for schemas only for the entries you will write.",
+      "name": "protect_alarm_get_catalog",
+      "schema": {
+        "input": {
+          "properties": {
+            "include_schemas": {
+              "description": "Include each entry's options_schema and the scope schema (large). Default false.",
+              "type": "boolean"
+            },
+            "search": {
+              "description": "Keep only triggers/actions whose id, title or category contains this (case-insensitive).",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Get Catalog"
     },
     {
       "annotations": {

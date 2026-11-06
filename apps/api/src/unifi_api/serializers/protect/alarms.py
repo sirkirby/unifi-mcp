@@ -24,10 +24,11 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "protect_alarm_update_rule": {"kind": RenderKind.DETAIL},
         "protect_alarm_create_rule": {"kind": RenderKind.DETAIL},
         "protect_alarm_delete_rule": {"kind": RenderKind.DETAIL},
+        "protect_alarm_fire_webhook": {"kind": RenderKind.DETAIL},
     },
 )
 class AlarmMutationAckSerializer(Serializer):
-    """Pass-through for alarm mutation acks (arm/disarm + rule CRUD).
+    """Pass-through for alarm mutation acks (arm/disarm, rule CRUD, webhook fire).
 
     Coerces bare bools into ``{armed: bool}`` for backwards compatibility
     with the historical arm/disarm shapes. Rule-CRUD tools always return

@@ -833,6 +833,53 @@
       }
     },
     {
+      "name": "protect_alarm_fire_webhook",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "both",
+      "manager_attr": "alarm_facade",
+      "manager_method": "fire_webhook",
+      "input_schema": {
+        "properties": {
+          "trigger_id": {
+            "description": "The alarm rule's own webhook id: the data.webhook value set on its Webhook trigger. This is not a trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "protect_alarm_get_catalog",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "alarm_facade",
+      "manager_method": "list_catalog",
+      "input_schema": {
+        "properties": {
+          "include_schemas": {
+            "description": "Include each entry's options_schema and the scope schema (large). Default false.",
+            "type": "boolean"
+          },
+          "search": {
+            "description": "Keep only triggers/actions whose id, title or category contains this (case-insensitive).",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "protect_alarm_get_rule",
       "product": "protect",
       "category": "alarm",

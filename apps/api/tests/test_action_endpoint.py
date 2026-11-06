@@ -230,6 +230,58 @@ async def test_action_endpoint_unwraps_alarm_profile_facade_tuple(tmp_path, monk
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_alarm_catalog_and_webhook_fire(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    catalog = {
+        "triggers": [{"trigger_id": "protect:incoming.webhook", "title": "Webhook"}],
+        "actions": [{"action_id": "protect:notify", "title": "Notify"}],
+        "scope": {"mode": "include"},
+    }
+    manager = MagicMock()
+    manager.list_catalog = AsyncMock(return_value=catalog)
+    manager.fire_webhook = AsyncMock(return_value={"fired": True, "trigger_id": "door-test"})
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        catalog_response = await client.post(
+            "/v1/actions/protect_alarm_get_catalog",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"search": "webhook", "include_schemas": True},
+                "confirm": False,
+            },
+        )
+        preview_response = await client.post(
+            "/v1/actions/protect_alarm_fire_webhook",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"trigger_id": "door-test"}, "confirm": False},
+        )
+        manager.fire_webhook.assert_not_awaited()
+        fire_response = await client.post(
+            "/v1/actions/protect_alarm_fire_webhook",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"trigger_id": "door-test"}, "confirm": True},
+        )
+
+    assert catalog_response.status_code == 200
+    assert catalog_response.json()["data"] == catalog
+    manager.list_catalog.assert_awaited_once_with(search="webhook", include_schemas=True)
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["requires_confirmation"] is True
+    assert preview["resource_id"] == "door-test"
+    assert fire_response.status_code == 200
+    assert fire_response.json()["data"] == {"fired": True, "trigger_id": "door-test"}
+    manager.fire_webhook.assert_awaited_once_with(trigger_id="door-test")
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_preserves_incomplete_alarm_profile_coverage(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
@@ -385,6 +437,47 @@ async def test_action_endpoint_read_only_mode_forbids_mutations_and_serves_reads
         rows = (await session.execute(select(AuditLog))).scalars().all()
     denied = [(row.outcome, row.error_kind) for row in rows if row.target == "access_unlock_door"]
     assert denied == [("denied", "read_only_mode")] * 2
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("read_only_var", ["UNIFI_READ_ONLY", "UNIFI_PROTECT_READ_ONLY"])
+async def test_action_endpoint_read_only_mode_refuses_webhook_fire_and_serves_the_catalog(
+    tmp_path, monkeypatch, read_only_var
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    for var in ("UNIFI_READ_ONLY", "UNIFI_PROTECT_READ_ONLY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv(read_only_var, "true")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    manager = MagicMock()
+    manager.list_catalog = AsyncMock(return_value={"triggers": [], "actions": []})
+    manager.fire_webhook = AsyncMock(return_value={"fired": True, "trigger_id": "door-test"})
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        statuses = []
+        for confirm in (False, True):
+            response = await client.post(
+                "/v1/actions/protect_alarm_fire_webhook",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"site": "default", "controller": cid, "args": {"trigger_id": "door-test"}, "confirm": confirm},
+            )
+            statuses.append(response.status_code)
+        catalog_response = await client.post(
+            "/v1/actions/protect_alarm_get_catalog",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+
+    assert statuses == [403, 403]
+    manager.fire_webhook.assert_not_awaited()
+    assert catalog_response.status_code == 200
+    assert catalog_response.json()["data"] == {"triggers": [], "actions": []}
+    manager.list_catalog.assert_awaited_once_with()
     await app.state.engine.dispose()
 
 

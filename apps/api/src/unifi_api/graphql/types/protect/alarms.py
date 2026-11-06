@@ -18,6 +18,9 @@ Two read serializers move here from
   record_everything, activation_delay_ms, schedule_count,
   automation_count``) flows through as-is.
 
+- ``AlarmCatalog`` — protect_alarm_get_catalog (DETAIL pass-through of
+  ``{triggers, actions, scope}`` from the Alarm Manager manifest).
+
 Mutation acks (``protect_alarm_arm`` / ``protect_alarm_disarm``) stay in
 the serializer module — those tools dispatch via the manager's
 preview-and-confirm path.
@@ -373,6 +376,44 @@ class AlarmProfileList:
             inst._raw = dict(dumped)
             return inst
         inst = cls(profiles=None, count=None, complete=None, coverage_notice=None)
+        inst._fallback = str(obj)
+        return inst
+
+    def to_dict(self) -> dict:
+        if self._raw is not None:
+            return self._raw
+        if self._fallback is not None:
+            return {"result": self._fallback}
+        return {}
+
+
+@strawberry.type(description="Triggers, actions and scope schema the Alarm Manager accepts in rules.")
+class AlarmCatalog:
+    """DETAIL pass-through for ``{triggers, actions, scope}``.
+
+    Kept as JSON for the same reason as :class:`AlarmRule`: each trigger's and
+    action's ``options_schema`` varies by type.
+    """
+
+    triggers: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    actions: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    scope: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+
+    _raw: strawberry.Private[dict[str, Any] | None] = None
+    _fallback: strawberry.Private[str | None] = None
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "AlarmCatalog":
+        source = obj.model_dump() if not isinstance(obj, dict) and hasattr(obj, "model_dump") else obj
+        if isinstance(source, dict):
+            inst = cls(triggers=source.get("triggers"), actions=source.get("actions"), scope=source.get("scope"))
+            inst._raw = dict(source)
+            return inst
+        inst = cls(triggers=None, actions=None, scope=None)
         inst._fallback = str(obj)
         return inst
 
