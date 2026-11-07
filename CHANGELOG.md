@@ -11,6 +11,12 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-06 — unifi-network 1.9.2
+
+- `firewall-auditor` can be installed by agents that scan skills before installing. The audit-history step no longer pipes JSON into an interpreter, and the DNS-redirect test uses named placeholders (`UNUSED_IP` for a documentation-range address nothing answers, `SYNTHETIC_A_RECORD` for the synthetic answer) instead of literal addresses.
+- The same step no longer interpolates the score JSON into an inline Python program. That removes a quoting hazard the scanner classifies as obfuscation; a history file that exists but cannot be parsed still fails loudly instead of being silently replaced.
+
+
 ## 2026-11-05 — unifi-network 1.9.1
 
 - The Network skill now says port override tools merge by port: send only the ports to change, and clear a port's override with `remove_port_idxs`. It no longer tells agents to send the full array.
