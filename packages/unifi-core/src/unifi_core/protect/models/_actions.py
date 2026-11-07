@@ -12,9 +12,10 @@ validate kwargs via ``ToolInput(**kwargs)`` at the top of the body.
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal, Optional
+import re
+from typing import Any, ClassVar, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class PtzMoveInput(BaseModel):
@@ -156,6 +157,40 @@ class AlarmDeleteRuleInput(BaseModel):
     __action_input__: ClassVar[bool] = True
 
     rule_id: str = Field(description="Alarm rule (automation) id to delete")
+
+
+# The id becomes one segment of the Integration API path. uiprotect quotes it,
+# but "." and ".." stay whole segments and move the request to another path.
+_NOT_ONE_SEGMENT = re.compile(r"[/\\?#%\x00-\x1f\x7f]")
+_WEBHOOK_ID_RULE = "must not be '.' or '..' or contain / \\ ? # % or control characters"
+
+
+def require_alarm_webhook_id(value: Any) -> str:
+    """Return ``value`` if it is a usable alarm webhook id, else raise ``ValueError`` without echoing it."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("trigger_id is required")
+    if value in (".", "..") or _NOT_ONE_SEGMENT.search(value):
+        raise ValueError(f"trigger_id {_WEBHOOK_ID_RULE}")
+    return value
+
+
+class AlarmFireWebhookInput(BaseModel):
+    """Input for ``protect_alarm_fire_webhook``."""
+
+    __action_input__: ClassVar[bool] = True
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    trigger_id: str = Field(
+        description=(
+            "The alarm rule's own webhook id: the data.webhook value set on its Webhook trigger. "
+            "This is not a trigger_id from protect_alarm_get_catalog such as protect:webhook.webhook."
+        )
+    )
+
+    @field_validator("trigger_id", mode="before")
+    @classmethod
+    def _validate_trigger_id(cls, value: Any) -> str:
+        return require_alarm_webhook_id(value)
 
 
 class TriggerChimeInput(BaseModel):

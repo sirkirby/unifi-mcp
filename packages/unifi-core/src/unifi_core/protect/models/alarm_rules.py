@@ -142,6 +142,83 @@ def alarm_rule_from_controller(raw: Any) -> AlarmRule:
     )
 
 
+class AlarmCatalogTrigger(AlarmTrigger):
+    """A trigger the console offers for new rules (from the Alarm Manager manifest)."""
+
+    options_schema: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="JSON schema of the trigger's data (what a rule passes as the trigger's data)",
+        json_schema_extra={"mutable": False},
+    )
+    required_scope_types: Optional[list[str]] = Field(
+        default=None, description="Scope types the trigger needs", json_schema_extra={"mutable": False}
+    )
+
+
+class AlarmCatalogAction(AlarmAction):
+    """An action the console offers for new rules (from the Alarm Manager manifest)."""
+
+    options_schema: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="JSON schema of the action's data (what a rule passes as the action's data)",
+        json_schema_extra={"mutable": False},
+    )
+    target_ids: Optional[list[str]] = Field(
+        default=None, description="Targets the action can deliver to", json_schema_extra={"mutable": False}
+    )
+
+
+class AlarmCatalog(BaseModel):
+    """Triggers, actions and scope schema a console accepts in alarm rules."""
+
+    triggers: list[AlarmCatalogTrigger] = Field(
+        default_factory=list, description="Available triggers", json_schema_extra={"mutable": False}
+    )
+    actions: list[AlarmCatalogAction] = Field(
+        default_factory=list, description="Available actions", json_schema_extra={"mutable": False}
+    )
+    scope: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Scope schema; a rule's scope is {mode, data}",
+        json_schema_extra={"mutable": False},
+    )
+
+
+def alarm_catalog_from_manifest(raw: Any) -> AlarmCatalog:
+    """Normalize ``/api/v2/alarms/protect/manifest`` into an AlarmCatalog.
+
+    The manifest groups triggers and actions in the same categories a rule does;
+    the ids here are the ``trigger_id``/``action_id`` values a rule write takes.
+    """
+    triggers = [
+        AlarmCatalogTrigger(
+            category_id=_get(category, "id"),
+            category_title=_get(category, "title"),
+            trigger_id=_get(trigger, "id"),
+            title=_get(trigger, "title"),
+            data=_get(trigger, "data", {}) or {},
+            options_schema=_get(trigger, "options_schema"),
+            required_scope_types=_get(trigger, "required_scope_types"),
+        )
+        for category in _get(raw, "trigger_categories", []) or []
+        for trigger in _get(category, "triggers", []) or []
+    ]
+    actions = [
+        AlarmCatalogAction(
+            category_id=_get(category, "id"),
+            category_title=_get(category, "title"),
+            action_id=_get(action, "id"),
+            title=_get(action, "title"),
+            data=_get(action, "data", {}) or {},
+            options_schema=_get(action, "options_schema"),
+            target_ids=_get(action, "target_ids"),
+        )
+        for category in _get(raw, "action_categories", []) or []
+        for action in _get(category, "actions", []) or []
+    ]
+    return AlarmCatalog(triggers=triggers, actions=actions, scope=_get(raw, "scope", {}) or {})
+
+
 def alarm_rule_from_legacy(raw: Any) -> AlarmRule:
     """Normalize a legacy ``/automations`` rule into the canonical AlarmRule shape.
 

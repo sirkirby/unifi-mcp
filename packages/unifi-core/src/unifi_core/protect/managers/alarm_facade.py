@@ -402,6 +402,17 @@ class AlarmRulesFacade:
                 return {**p, "name": p.get("name") or p.get("title")}
         raise UniFiNotFoundError("alarm profile", profile_id)
 
+    async def list_catalog(self, search: str | None = None, include_schemas: bool = False) -> dict[str, Any]:
+        """Return the triggers, actions and scope schema the v2 Alarm Manager accepts.
+
+        v2 only: legacy automations have no catalogue, so errors propagate.
+        """
+        return await self._service.get_catalog(search=search, include_schemas=include_schemas)
+
+    async def fire_webhook(self, trigger_id: str | None) -> dict[str, Any]:
+        """Fire the alarms whose webhook trigger has ``trigger_id`` (needs a Protect API key)."""
+        return await self._service.fire_webhook(trigger_id)
+
     async def get_rule(self, rule_id: str) -> tuple[dict[str, Any], bool]:
         """Return ``(rule, complete)`` for one rule by id.
 

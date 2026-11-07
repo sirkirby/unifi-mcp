@@ -22,11 +22,12 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from uiprotect.exceptions import BadRequest, NotAuthorized, PublicOnlyModeError
+from uiprotect.exceptions import BadRequest, NotAuthorized, NvrError, PublicOnlyModeError
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
-from unifi_core.protect.models.alarm_rules import alarm_rule_from_controller
+from unifi_core.protect.models._actions import require_alarm_webhook_id
+from unifi_core.protect.models.alarm_rules import alarm_catalog_from_manifest, alarm_rule_from_controller
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ def _is_ip_literal(word: str) -> bool:
     return False
 
 
-def _refusal_reason(error: BadRequest, host: str | None) -> str:
+def _refusal_reason(error: Exception, host: str | None) -> str:
     """The controller's reason from a uiprotect request error, or fixed text when it names an address.
 
     uiprotect formats "Request failed: <url> - Status: <n> - Reason: <reason>", so the reason starts
@@ -174,6 +175,70 @@ class AlarmManagerService:
                 f"{_refusal_reason(exc, self._console_host())}"
             ) from None
         return data if isinstance(data, dict) else {}
+
+    async def get_catalog(self, search: str | None = None, include_schemas: bool = False) -> Dict[str, Any]:
+        """Return the triggers, actions and scope schema new rules may use.
+
+        Reads ``GET /api/v2/alarms/protect/manifest``, the catalogue the Alarm
+        Manager page builds its rule editor from. ``search`` keeps only entries
+        whose id, title or category contains it (case-insensitive). Each entry's
+        ``options_schema`` and the ``scope`` schema are large, so they are left
+        out unless ``include_schemas``.
+        """
+        try:
+            data = await self._api_get("protect/manifest")
+        except BadRequest as exc:
+            raise ValueError(
+                f"The controller refused the alarm catalog request: {_refusal_reason(exc, self._console_host())}"
+            ) from None
+        if not isinstance(data, dict):
+            logger.warning("Unexpected /api/v2/alarms/protect/manifest shape: %r", type(data))
+            data = {}
+        catalog = alarm_catalog_from_manifest(data).model_dump(exclude_none=True)
+        needle = search.strip().lower() if search and search.strip() else None
+        for kind, id_key in (("triggers", "trigger_id"), ("actions", "action_id")):
+            entries = catalog[kind]
+            if needle:
+                entries = [
+                    e
+                    for e in entries
+                    if any(
+                        needle in str(e.get(key) or "").lower()
+                        for key in (id_key, "title", "category_id", "category_title")
+                    )
+                ]
+            if not include_schemas:
+                entries = [{k: v for k, v in e.items() if k != "options_schema"} for e in entries]
+            catalog[kind] = entries
+        if not include_schemas:
+            catalog.pop("scope", None)
+        return catalog
+
+    async def fire_webhook(self, trigger_id: str | None) -> Dict[str, Any]:
+        """Fire the alarms whose webhook trigger has ``trigger_id``.
+
+        Uses the public Integration API (``POST /v1/alarm-manager/webhook/{id}``),
+        which needs a Protect API key.
+        """
+        require_alarm_webhook_id(trigger_id)
+        self._cm.require_public_api_key("fire an alarm webhook")
+        try:
+            await self._cm.client.send_alarm_webhook_public(trigger_id)
+        except NotAuthorized:
+            raise ValueError(
+                "The controller rejected the Protect API key. Check UNIFI_PROTECT_API_KEY or UNIFI_API_KEY."
+            ) from None
+        except BadRequest as exc:
+            raise ValueError(
+                f"The controller refused to fire alarm webhook {trigger_id}: "
+                f"{_refusal_reason(exc, self._console_host())}"
+            ) from None
+        except NvrError as exc:
+            raise ValueError(
+                f"The controller failed while firing alarm webhook {trigger_id}; the alarms may still have fired: "
+                f"{_refusal_reason(exc, self._console_host())}"
+            ) from None
+        return {"fired": True, "trigger_id": trigger_id}
 
     async def create_rule(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Create an alarm rule via ``POST /api/v2/alarms/protect``."""
