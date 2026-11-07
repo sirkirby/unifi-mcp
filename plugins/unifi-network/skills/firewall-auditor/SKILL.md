@@ -151,25 +151,31 @@ Maintain a single audit history file at `${UNIFI_SKILLS_STATE_DIR:-${XDG_STATE_H
 STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/unifi-mcp/skills}"
 mkdir -p "$STATE_DIR"
 HIST="$STATE_DIR/audit-history.json"
-[ -f "$HIST" ] || echo "[]" > "$HIST"
+[ -f "$HIST" ] || printf '%s\n' '[]' > "$HIST"
 
-# Compose the new entry from the score CLI output ($SCORE_JSON) and append.
-ENTRY=$(echo "$SCORE_JSON" | python3 -c "
-import json, sys, datetime
-s = json.load(sys.stdin)
-print(json.dumps({
-    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    'overall_score': s['overall_score'],
-    'overall_status': s['overall_status'],
-    'rubric_version': s['rubric_version'],
-}))
-")
-python3 -c "
-import json, sys
-hist = json.load(open('$HIST'))
-hist.append(json.loads('''$ENTRY'''))
-json.dump(hist[-50:], open('$HIST', 'w'), indent=2)
-"
+# Append the score CLI output ($SCORE_JSON) to the history file. The path and
+# the JSON travel as arguments, so no data is interpolated into the code and a
+# message field containing quotes cannot break the script.
+python3 - "$HIST" "$SCORE_JSON" <<'PY'
+import datetime, json, sys
+
+hist_path, score_json = sys.argv[1], sys.argv[2]
+score = json.loads(score_json)
+entry = {
+    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "overall_score": score["overall_score"],
+    "overall_status": score["overall_status"],
+    "rubric_version": score["rubric_version"],
+}
+try:
+    with open(hist_path) as handle:
+        hist = json.load(handle)
+except FileNotFoundError:
+    hist = []
+hist.append(entry)
+with open(hist_path, "w") as handle:
+    json.dump(hist[-50:], handle, indent=2)
+PY
 ```
 
 Keep the last 50 entries (enough for ~a year of weekly audits).
