@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 import worker from "../src/index";
+import { RelayObject } from "../src/relay-object";
 import type { Env } from "../src/types";
 
 function fakeEnv(doResponse: Response, allowed?: string): { env: Env; doFetch: ReturnType<typeof vi.fn> } {
@@ -22,6 +23,35 @@ function mcp(headers: Record<string, string>, body = '{"jsonrpc":"2.0","id":1,"m
 }
 
 describe("POST /mcp", () => {
+  it("acknowledges the initialized notification without a JSON-RPC response", async () => {
+    const { env, doFetch } = fakeEnv(Response.json({}));
+    const relay = Object.create(RelayObject.prototype) as RelayObject;
+    Object.assign(relay, {
+      env,
+      stateRebuilt: true,
+      ctx: { storage: { sql: { exec: () => ({ toArray: () => [] }) } } },
+    });
+    doFetch.mockImplementation((request: Request) => relay.fetch(request));
+    const headers = {
+      Authorization: "Bearer static-agent-token-fixture",
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    };
+    const initialize = await worker.fetch(mcp(headers, JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test-client", version: "1.0" } },
+    })), env);
+    expect(initialize.status).toBe(200);
+    const notification = '{"jsonrpc":"2.0","method":"notifications/initialized"}';
+    const rejected = await worker.fetch(mcp({ ...headers, Authorization: "Bearer wrong-token" }, notification), env);
+    expect(rejected.status).toBe(401);
+    const accepted = await worker.fetch(mcp(headers, notification), env);
+    expect(accepted.status).toBe(202);
+    expect(await accepted.text()).toBe("");
+  });
+
   it("rejects a request without a bearer before reaching the relay", async () => {
     const { env, doFetch } = fakeEnv(Response.json({}));
 
