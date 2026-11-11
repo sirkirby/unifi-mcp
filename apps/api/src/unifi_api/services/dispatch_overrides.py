@@ -172,6 +172,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "protect_reboot_camera": ("camera_manager", "apply_reboot_camera"),
     "protect_toggle_recording": ("camera_manager", "apply_toggle_recording"),
     "protect_toggle_rtsp": ("camera_manager", "apply_toggle_rtsp"),
+    "protect_rename_camera_detection_area": ("camera_manager", "apply_rename_camera_detection_area"),
     "protect_update_camera_settings": ("camera_manager", "apply_camera_settings"),
     "protect_update_sensor_settings": ("sensor_manager", "apply_sensor_settings"),
     "protect_update_chime": ("chime_manager", "apply_chime_settings"),

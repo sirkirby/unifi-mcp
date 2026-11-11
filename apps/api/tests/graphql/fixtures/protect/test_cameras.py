@@ -4,6 +4,7 @@
 # tool: protect_get_camera
 # tool: protect_get_camera_analytics
 # tool: protect_get_camera_streams
+# tool: protect_list_camera_detection_areas
 # tool: protect_get_snapshot
 """
 
@@ -183,3 +184,40 @@ async def test_protect_camera_streams_policy_disabled_returns_raw_urls(tmp_path,
     assert streams["channels"]["high"]["rtsps_url"] == "rtsps://nvr.local/abc123"
     assert streams["channels"]["high"]["rtsp_url"] == "rtsp://nvr.local/abc123"
     assert streams["rtspsStreams"]["high"] == "rtsps://nvr.local/abc123"
+
+
+@pytest.mark.asyncio
+async def test_protect_camera_detection_areas(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "camera_manager", "list_camera_detection_areas"): {
+                "camera_id": "cam1",
+                "camera_name": "Front Door",
+                "areas": [
+                    {"id": "1", "name": "Driveway", "kind": "line", "object_types": ["person"], "direction": "AB"},
+                    {"id": "1", "name": "Porch", "kind": "zone", "object_types": ["animal"]},
+                ],
+                "count": 2,
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ cameraDetectionAreas(controller: "{cid}", id: "cam1") {{
+            cameraId cameraName count areas {{ id name kind objectTypes direction }}
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    areas = body["data"]["protect"]["cameraDetectionAreas"]
+    assert areas["cameraId"] == "cam1"
+    assert areas["count"] == 2
+    assert areas["areas"] == [
+        {"id": "1", "name": "Driveway", "kind": "line", "objectTypes": ["person"], "direction": "AB"},
+        {"id": "1", "name": "Porch", "kind": "zone", "objectTypes": ["animal"], "direction": None},
+    ]

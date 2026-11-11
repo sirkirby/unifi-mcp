@@ -1,5 +1,5 @@
 {
-  "count": 65,
+  "count": 67,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -32,6 +32,7 @@
     "protect_get_recording_status": "unifi_protect_mcp.tools.recordings",
     "protect_get_snapshot": "unifi_protect_mcp.tools.cameras",
     "protect_get_system_info": "unifi_protect_mcp.tools.system",
+    "protect_list_camera_detection_areas": "unifi_protect_mcp.tools.cameras",
     "protect_list_cameras": "unifi_protect_mcp.tools.cameras",
     "protect_list_chimes": "unifi_protect_mcp.tools.devices",
     "protect_list_events": "unifi_protect_mcp.tools.events",
@@ -49,6 +50,7 @@
     "protect_ptz_zoom": "unifi_protect_mcp.tools.cameras",
     "protect_reboot_camera": "unifi_protect_mcp.tools.cameras",
     "protect_recent_events": "unifi_protect_mcp.tools.events",
+    "protect_rename_camera_detection_area": "unifi_protect_mcp.tools.cameras",
     "protect_search_detections": "unifi_protect_mcp.tools.events",
     "protect_subscribe_events": "unifi_protect_mcp.tools.events",
     "protect_toggle_recording": "unifi_protect_mcp.tools.cameras",
@@ -3625,6 +3627,113 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Lists a camera's crossing lines, smart-detect zones and loiter zones, read fresh from the NVR. Each area has its id, name, kind (line, zone or loiter_zone), object_types and, for a line, its direction. Motion zones are not included. Use the ids with protect_rename_camera_detection_area.",
+      "name": "protect_list_camera_detection_areas",
+      "schema": {
+        "input": {
+          "properties": {
+            "camera_id": {
+              "description": "Camera UUID (from protect_list_cameras)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "camera_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Camera Detection Areas"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Lists all cameras adopted by the Protect NVR with their name, model, connection state, recording mode, and whether they are currently recording. Use to get an overview of all cameras in the system.",
       "name": "protect_list_cameras",
       "schema": {
@@ -5625,6 +5734,135 @@
         }
       },
       "title": "Recent Events"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Renames one crossing line, smart-detect zone or loiter zone on a camera, chosen by kind and id (from protect_list_camera_detection_areas). Only the name changes. Protect replaces the whole list on write, so the list is read fresh, sent back with just that name changed, then read again and checked against what was read before; any difference is reported as an error. The new name is trimmed, and a name already used by another area of the same kind on the camera is refused, ignoring case. If someone edits the same list in the Protect app between the read and the write, that edit is overwritten and the read-back reports it. Requires confirm=True to apply.",
+      "name": "protect_rename_camera_detection_area",
+      "permission_action": "update",
+      "permission_category": "camera",
+      "schema": {
+        "input": {
+          "properties": {
+            "area_id": {
+              "description": "Area id (from protect_list_camera_detection_areas)",
+              "type": "string"
+            },
+            "camera_id": {
+              "description": "Camera UUID (from protect_list_cameras)",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, executes the mutation. When false (default), returns a preview of the changes.",
+              "type": "boolean"
+            },
+            "kind": {
+              "description": "Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone.",
+              "type": "string"
+            },
+            "new_name": {
+              "description": "New name for the area. Leading and trailing spaces are removed; it must differ, ignoring case, from every other area of that kind on the camera.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "camera_id",
+            "kind",
+            "area_id",
+            "new_name"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Rename Camera Detection Area"
     },
     {
       "annotations": {

@@ -15588,6 +15588,77 @@
         ]
       }
     },
+    "/v1/sites/{site_id}/cameras/{camera_id}/detection-areas": {
+      "get": {
+        "operationId": "list_camera_detection_areas_v1_sites__site_id__cameras__camera_id__detection_areas_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Camera Detection Areas V1 Sites  Site Id  Cameras  Camera Id  Detection Areas Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Camera Detection Areas",
+        "tags": [
+          "protect/cameras"
+        ]
+      }
+    },
     "/v1/sites/{site_id}/cameras/{camera_id}/snapshot": {
       "get": {
         "description": "Return snapshot metadata (size_bytes / content_type / captured_at).\n\nThe manager returns raw JPEG bytes; the SnapshotSerializer surfaces\nmetadata only. A future ``/snapshot/raw`` endpoint that returns the\nbinary body is deferred to Phase 5B if a UI consumer needs it.",

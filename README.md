@@ -21,7 +21,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
 | [Network](apps/network/) | Stable | 214 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Stable | 65 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Protect](apps/protect/) | Stable | 67 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 | [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
 
@@ -389,7 +389,7 @@ This is a monorepo with shared packages:
 ```
 apps/
   network/          # UniFi Network MCP server (stable, 214 tools)
-  protect/          # UniFi Protect MCP server (stable, 65 tools)
+  protect/          # UniFi Protect MCP server (stable, 67 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
   sitemanager/      # UniFi Site Manager MCP server (beta, cloud, read-only, 9 tools)
   api/              # Independent REST + GraphQL API server (beta)

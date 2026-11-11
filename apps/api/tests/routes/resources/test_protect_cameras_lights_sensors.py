@@ -252,6 +252,62 @@ async def test_get_camera_analytics_404_via_unifi_not_found(tmp_path, monkeypatc
     assert r.status_code == 404, r.text
 
 
+@pytest.mark.asyncio
+async def test_get_camera_detection_areas_happy_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    payload = {
+        "camera_id": "cam-1",
+        "camera_name": "Door",
+        "areas": [
+            {"id": "1", "name": "Driveway", "kind": "line", "object_types": ["person"], "direction": "AB"},
+            {"id": "1", "name": "Porch", "kind": "zone", "object_types": ["person"]},
+        ],
+        "count": 2,
+    }
+
+    async def fake(self, camera_id):
+        assert camera_id == "cam-1"
+        return payload
+
+    from unifi_core.protect.managers.camera_manager import CameraManager
+
+    monkeypatch.setattr(CameraManager, "list_camera_detection_areas", fake)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/cameras/cam-1/detection-areas?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["data"] == payload
+    assert body["render_hint"]["kind"] == "detail"
+
+
+@pytest.mark.asyncio
+async def test_get_camera_detection_areas_404_via_unifi_not_found(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    async def fake(self, camera_id):
+        raise UniFiNotFoundError("camera", camera_id)
+
+    from unifi_core.protect.managers.camera_manager import CameraManager
+
+    monkeypatch.setattr(CameraManager, "list_camera_detection_areas", fake)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/cameras/missing/detection-areas?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 404, r.text
+
+
 # ---------------------------------------------------------------------------
 # Lights — LIST + DETAIL (filter-from-list)
 # ---------------------------------------------------------------------------

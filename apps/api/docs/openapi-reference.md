@@ -1722,6 +1722,18 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 
 **Returns:** `object`
 
+### `GET /v1/sites/{site_id}/cameras/{camera_id}/detection-areas` — List Camera Detection Areas
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `camera_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
 ### `GET /v1/sites/{site_id}/cameras/{camera_id}/snapshot` — Get Camera Snapshot
 
 

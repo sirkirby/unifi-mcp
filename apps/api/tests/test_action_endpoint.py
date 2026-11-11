@@ -282,6 +282,94 @@ async def test_action_endpoint_alarm_catalog_and_webhook_fire(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_lists_and_renames_camera_detection_areas(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    listing = {
+        "camera_id": "cam-1",
+        "camera_name": "Front Door",
+        "areas": [{"id": "1", "name": "Driveway", "kind": "line", "object_types": ["person"], "direction": "AB"}],
+        "count": 1,
+    }
+    renamed = {"camera_id": "cam-1", "area_id": "1", "kind": "line", "name": "Street", "changed": True}
+    manager = MagicMock()
+    manager.list_camera_detection_areas = AsyncMock(return_value=listing)
+    manager.apply_rename_camera_detection_area = AsyncMock(return_value=renamed)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+    args = {"camera_id": "cam-1", "kind": "line", "area_id": "1", "new_name": "Street"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        list_response = await client.post(
+            "/v1/actions/protect_list_camera_detection_areas",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"camera_id": "cam-1"}, "confirm": False},
+        )
+        preview_response = await client.post(
+            "/v1/actions/protect_rename_camera_detection_area",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": args, "confirm": False},
+        )
+        manager.apply_rename_camera_detection_area.assert_not_awaited()
+        rename_response = await client.post(
+            "/v1/actions/protect_rename_camera_detection_area",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": args, "confirm": True},
+        )
+
+    assert list_response.status_code == 200
+    assert list_response.json()["data"] == listing
+    manager.list_camera_detection_areas.assert_awaited_once_with(camera_id="cam-1")
+    assert preview_response.status_code == 200
+    assert preview_response.json()["requires_confirmation"] is True
+    assert rename_response.status_code == 200
+    assert rename_response.json()["data"] == renamed
+    manager.apply_rename_camera_detection_area.assert_awaited_once_with(**args)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("read_only_var", ["UNIFI_READ_ONLY", "UNIFI_PROTECT_READ_ONLY"])
+async def test_action_endpoint_read_only_mode_refuses_area_rename_and_serves_the_list(
+    tmp_path, monkeypatch, read_only_var
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    for var in ("UNIFI_READ_ONLY", "UNIFI_PROTECT_READ_ONLY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv(read_only_var, "true")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    manager = MagicMock()
+    manager.list_camera_detection_areas = AsyncMock(return_value={"camera_id": "cam-1", "areas": [], "count": 0})
+    manager.apply_rename_camera_detection_area = AsyncMock(return_value={"changed": True})
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+    args = {"camera_id": "cam-1", "kind": "line", "area_id": "1", "new_name": "Street"}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        statuses = []
+        for confirm in (False, True):
+            response = await client.post(
+                "/v1/actions/protect_rename_camera_detection_area",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"site": "default", "controller": cid, "args": args, "confirm": confirm},
+            )
+            statuses.append(response.status_code)
+        list_response = await client.post(
+            "/v1/actions/protect_list_camera_detection_areas",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"camera_id": "cam-1"}, "confirm": False},
+        )
+
+    assert statuses == [403, 403]
+    manager.apply_rename_camera_detection_area.assert_not_awaited()
+    assert list_response.status_code == 200
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_preserves_incomplete_alarm_profile_coverage(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")

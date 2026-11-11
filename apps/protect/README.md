@@ -173,7 +173,7 @@ Add to `claude_desktop_config.json`:
 
 ## Features
 
-- **Cameras** -- list, inspect, snapshot, RTSP streams, PTZ control, settings, recording toggle, reboot
+- **Cameras** -- list, inspect, snapshot, RTSP streams, PTZ control, settings, recording toggle, reboot, crossing line and smart-detect zone names
 - **Events** -- query historical events, smart detections (person/vehicle/animal/package), Find Anything detection search, thumbnails
 - **Real-time streaming** -- websocket event buffer with MCP resource subscriptions and polling
 - **Recordings** -- status, availability, clip export with timelapse support
@@ -244,7 +244,7 @@ Compact mode is the recommended default when building summaries or feeding event
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Protect-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 65 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 67 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
 - [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, connection issues, SSL, missing tools
 

@@ -5,6 +5,7 @@ to live in ``unifi_api.serializers.protect.cameras``:
 
 - ``Camera``           — protect_list_cameras + protect_get_camera
 - ``CameraAnalytics``  — protect_get_camera_analytics
+- ``CameraDetectionAreas`` — protect_list_camera_detection_areas
 - ``CameraStreams``    — protect_get_camera_streams (wrapper-dict; channels +
                           rtsps_streams are passthrough JSON sub-maps keyed by
                           channel name, so we keep them as JSON scalars rather
@@ -195,6 +196,54 @@ class CameraAnalytics:
 
     def to_dict(self) -> dict:
         out = asdict(self)
+        return {k: v for k, v in out.items() if not k.startswith("_") and not callable(v)}
+
+
+@strawberry.type(description="A crossing line, smart-detect zone or loiter zone on a Protect camera.")
+class DetectionArea:
+    id: strawberry.ID
+    name: str | None
+    kind: str
+    object_types: list[str]
+    direction: str | None = None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "DetectionArea":
+        return cls(
+            id=_get(obj, "id"),
+            name=_get(obj, "name"),
+            kind=_get(obj, "kind"),
+            object_types=list(_get(obj, "object_types") or []),
+            direction=_get(obj, "direction"),
+        )
+
+
+@strawberry.type(description="Crossing lines, smart-detect zones and loiter zones of a Protect camera.")
+class CameraDetectionAreas:
+    camera_id: strawberry.ID | None
+    camera_name: str | None
+    areas: list[DetectionArea]
+    count: int
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "CameraDetectionAreas":
+        areas = [DetectionArea.from_manager_output(a) for a in _get(obj, "areas") or []]
+        return cls(
+            camera_id=_get(obj, "camera_id"),
+            camera_name=_get(obj, "camera_name"),
+            areas=areas,
+            count=_get(obj, "count", len(areas)),
+        )
+
+    def to_dict(self) -> dict:
+        out = asdict(self)
+        for area in out["areas"]:
+            if area["direction"] is None:
+                del area["direction"]
         return {k: v for k, v in out.items() if not k.startswith("_") and not callable(v)}
 
 
