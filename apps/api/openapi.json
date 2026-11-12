@@ -1005,6 +1005,11 @@
           },
           "product_kinds": {
             "items": {
+              "enum": [
+                "network",
+                "protect",
+                "access"
+              ],
               "type": "string"
             },
             "title": "Product Kinds",
@@ -1141,6 +1146,11 @@
             "anyOf": [
               {
                 "items": {
+                  "enum": [
+                    "network",
+                    "protect",
+                    "access"
+                  ],
                   "type": "string"
                 },
                 "type": "array"
@@ -8081,6 +8091,128 @@
         "title": "SettingsBody",
         "type": "object"
       },
+      "SiteManagerConnectionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "site_manager_api_key": {
+            "format": "password",
+            "title": "Site Manager Api Key",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "name",
+          "site_manager_api_key"
+        ],
+        "title": "SiteManagerConnectionCreate",
+        "type": "object"
+      },
+      "SiteManagerConnectionOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key_configured": {
+            "title": "Key Configured",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key_configured",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SiteManagerConnectionOut",
+        "type": "object"
+      },
+      "SiteManagerConnectionPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "site_manager_api_key": {
+            "format": "password",
+            "title": "Site Manager Api Key",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "title": "SiteManagerConnectionPatch",
+        "type": "object"
+      },
+      "SiteManagerProbeOut": {
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "latency_ms",
+          "error_kind",
+          "checked_at"
+        ],
+        "title": "SiteManagerProbeOut",
+        "type": "object"
+      },
       "SmartDetectionModel": {
         "additionalProperties": true,
         "properties": {
@@ -10118,6 +10250,22 @@
           },
           {
             "in": "query",
+            "name": "sitemanager_connection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sitemanager Connection"
+            }
+          },
+          {
+            "in": "query",
             "name": "outcome",
             "required": false,
             "schema": {
@@ -10848,6 +10996,138 @@
           }
         },
         "summary": "Put Settings"
+      }
+    },
+    "/v1/sitemanager/connection": {
+      "delete": {
+        "operationId": "delete_v1_sitemanager_connection_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_sitemanager_connection_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_v1_sitemanager_connection_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerConnectionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "post": {
+        "operationId": "create_v1_sitemanager_connection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerConnectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "Site Manager connection"
+        ]
+      }
+    },
+    "/v1/sitemanager/connection/probe": {
+      "post": {
+        "operationId": "probe_v1_sitemanager_connection_probe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerProbeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe",
+        "tags": [
+          "Site Manager connection"
+        ]
       }
     },
     "/v1/sites/{site_id}/access-devices": {

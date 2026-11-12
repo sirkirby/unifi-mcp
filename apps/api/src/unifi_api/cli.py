@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 import uvicorn
 
+from unifi_api.cli_sitemanager import app as sitemanager_app
 from unifi_api.config import ensure_db_encryption_key, load_config
 from unifi_api.logging import configure_logging
 from unifi_api.server import create_app
@@ -17,6 +18,7 @@ db_app = typer.Typer(no_args_is_help=True, help="Database operations.")
 graphql_typer = typer.Typer(no_args_is_help=True, help="GraphQL schema utilities.")
 app.add_typer(keys_app, name="keys")
 app.add_typer(db_app, name="db")
+app.add_typer(sitemanager_app, name="sitemanager")
 app.add_typer(graphql_typer, name="graphql")
 
 

@@ -23,6 +23,13 @@ from unifi_api.services.audit import write_audit
 
 async def _audit_denial(app, *, key_id_prefix: str, target: str, error_kind: str) -> None:
     """Best-effort denial audit. Uses a fresh session so middleware doesn't depend on caller transaction state."""
+    # An unverified bearer on cloud management may be a misplaced cloud key.
+    # Never persist even a prefix of that caller-supplied credential.
+    path = target.partition(" ")[2]
+    if error_kind in ("malformed_token", "unknown_token", "invalid_token") and path.startswith(
+        ("/v1/sitemanager/connection", "/admin/sitemanager")
+    ):
+        key_id_prefix = "(unverified)"
     sm = app.state.sessionmaker
     async with sm() as session:
         await write_audit(

@@ -74,6 +74,12 @@ rows = _common.render(request, "logs/_rows.html", {
 })
 assert b"&lt;packaged&gt;" in rows.body
 assert b"<packaged>" not in rows.body
+cloud = _common.render(request, "sitemanager/page.html")
+assert b"/admin/sitemanager/_connection" in cloud.body
+form = _common.render(request, "sitemanager/_form.html", {"mode": "edit", "connection": {"name": "Account"}})
+assert b'name="site_manager_api_key" value=""' in form.body
+assert b'type="password"' in form.body
+assert b"api_key_blob" not in form.body
 """
         subprocess.run(
             [sys.executable, "-I", "-c", probe, str(unpacked)],

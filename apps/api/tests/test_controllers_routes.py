@@ -221,3 +221,32 @@ async def test_no_auth_401(tmp_path: Path, monkeypatch) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/v1/controllers")
         assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"product_kinds": ["sitemanager"]},
+        {"product_kinds": ["unknown"]},
+    ],
+)
+async def test_console_rejects_cloud_products(tmp_path, monkeypatch, change):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    payload = {
+        "name": "Console",
+        "base_url": "https://192.0.2.1",
+        "product_kinds": ["network"],
+        "api_token": "synthetic-console",
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        rejected = await client.post("/v1/controllers", headers=headers, json={**payload, **change})
+        assert rejected.status_code == 422
+        assert "synthetic-cloud-key-DO-NOT-DISCLOSE-42" not in rejected.text
+        created = await client.post("/v1/controllers", headers=headers, json=payload)
+        url = "/v1/controllers/" + created.json()["id"]
+        rejected = await client.patch(url, headers=headers, json=change)
+        assert rejected.status_code == 422
+        assert (await client.get(url, headers=headers)).json()["product_kinds"] == ["network"]
