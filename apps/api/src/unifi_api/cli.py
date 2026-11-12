@@ -283,7 +283,7 @@ def db_rekey(new_key: str = typer.Argument(..., help="New passphrase")) -> None:
 
 @graphql_typer.command("scaffold-resource")
 def graphql_scaffold_resource(
-    product: str = typer.Argument(..., help="Product: network/protect/access"),
+    product: str = typer.Argument(..., help="Projection family: network/protect/access/sitemanager"),
     resource: str = typer.Argument(..., help="Resource name (singular preferred): client, camera, door"),
     out_root: Path = typer.Option(
         Path("."),
@@ -300,7 +300,7 @@ def graphql_scaffold_resource(
     coercion logic by inspecting the existing serializer at
     apps/api/src/unifi_api/serializers/<product>/<resource>.py.
     """
-    if product not in ("network", "protect", "access"):
+    if product not in ("network", "protect", "access", "sitemanager"):
         typer.echo(f"unknown product: {product}", err=True)
         raise typer.Exit(2)
 

@@ -27,7 +27,7 @@ async def _audit_denial(app, *, key_id_prefix: str, target: str, error_kind: str
     # Never persist even a prefix of that caller-supplied credential.
     path = target.partition(" ")[2]
     if error_kind in ("malformed_token", "unknown_token", "invalid_token") and path.startswith(
-        ("/v1/sitemanager/connection", "/admin/sitemanager")
+        ("/v1/sitemanager", "/admin/sitemanager")
     ):
         key_id_prefix = "(unverified)"
     sm = app.state.sessionmaker
@@ -43,8 +43,16 @@ async def _audit_denial(app, *, key_id_prefix: str, target: str, error_kind: str
         await session.commit()
 
 
+def _audit_target(request: Request) -> str:
+    path = request.url.path
+    if path.startswith("/v1/sitemanager/") and not path.startswith("/v1/sitemanager/connection"):
+        # New account data/action paths carry caller IDs; denial records do not.
+        path = "/v1/sitemanager"
+    return f"{request.method} {path}"
+
+
 async def _authenticate(request: Request) -> ApiKey:
-    target = f"{request.method} {request.url.path}"
+    target = _audit_target(request)
     auth_header = request.headers.get("authorization", "")
     if not auth_header.lower().startswith("bearer "):
         await _audit_denial(request.app, key_id_prefix="(none)", target=target, error_kind="missing_bearer")
@@ -103,7 +111,7 @@ def require_scope(required: Scope) -> Callable:
             await _audit_denial(
                 request.app,
                 key_id_prefix=api_key.prefix,
-                target=f"{request.method} {request.url.path}",
+                target=_audit_target(request),
                 error_kind="insufficient_scope",
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")

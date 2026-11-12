@@ -77,13 +77,17 @@ async def list_widgets():
     for product, package in (
         ("protect", "unifi_protect_mcp"),
         ("access", "unifi_access_mcp"),
+        ("sitemanager", "unifi_sitemanager_mcp"),
     ):
         empty_manifest = root / f"apps/{product}/src/{package}/tools_manifest.json"
         empty_manifest.parent.mkdir(parents=True)
         empty_manifest.write_text(json.dumps({"count": 0, "module_map": {}, "tools": []}))
 
+    account_path = root / "apps/api/src/unifi_api/services/sitemanager_managers.py"
+    account_path.parent.mkdir(parents=True, exist_ok=True)
+    account_path.write_text("def _build_sitemanager_managers(connection):\n    return {}\n")
     managers_path = root / "apps/api/src/unifi_api/services/managers.py"
-    managers_path.parent.mkdir(parents=True)
+    managers_path.parent.mkdir(parents=True, exist_ok=True)
     managers_path.write_text(
         """
 def _build_network_managers():
@@ -387,7 +391,7 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 288
+    assert len(payload["actions"]) == 297
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_get_incident_evidence",
@@ -441,6 +445,12 @@ def test_repository_catalog_bindings_resolve_to_core_manager_methods() -> None:
             )
             manager_types[(product, manager_attr)] = closure[target_name].cell_contents
 
+    from unifi_api.services.sitemanager_managers import _build_sitemanager_managers
+
+    manager_types.update(
+        {("sitemanager", attr): type(manager) for attr, manager in _build_sitemanager_managers(object()).items()}
+    )
+
     missing = [
         f"{action['name']} -> {action['product']}.{action['manager_attr']}.{action['manager_method']}"
         for action in payload["actions"]
@@ -465,6 +475,7 @@ def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -
         "make -C apps/network manifest",
         "make -C apps/protect manifest",
         "make -C apps/access manifest",
+        "make -C apps/sitemanager manifest",
         "scripts/generate_api_action_catalog.py",
         "make skill-references",
         "make server-manifests",
@@ -498,3 +509,107 @@ def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -
     ]
     stage_positions = [pre_commit.index(stage) for stage in stages]
     assert stage_positions == sorted(stage_positions)
+
+
+def _write_cloud_tool(root, **changes):
+    package = root / "apps/sitemanager/src/unifi_sitemanager_mcp"
+    tool = {
+        "name": "sitemanager_get_isp_metrics",
+        "annotations": {"readOnlyHint": True},
+        "permission_action": "read",
+        "auth_method": "api_key_only",
+        "permission_category": "isp_metrics",
+        "schema": {
+            "input": {
+                "type": "object",
+                "properties": {"metric_type": {"type": "string"}, "period_limit": {"type": "integer"}},
+            }
+        },
+    }
+    tool.update(changes)
+    (package / "tools_manifest.json").write_text(
+        json.dumps({"tools": [tool], "module_map": {tool["name"]: "unifi_sitemanager_mcp.tools.metrics"}})
+    )
+    source = package / "tools/metrics.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "from unifi_sitemanager_mcp.runtime import server, isp_metrics_manager\n"
+        '@server.tool(name="sitemanager_get_isp_metrics")\n'
+        'async def metrics():\n    return await isp_metrics_manager.get_metrics("1h")\n'
+    )
+    (root / "apps/api/src/unifi_api/services/sitemanager_managers.py").write_text(
+        'def _build_sitemanager_managers(connection):\n    return {"isp_metrics_manager": object()}\n'
+    )
+
+
+def test_synthetic_account_catalog_is_additive_and_deterministic(tmp_path):
+    generator = _load_generator()
+    _write_synthetic_repo(tmp_path)
+    before = json.loads(generator.render_catalog(tmp_path, binding_overrides={}, exclusions={}))
+    _write_cloud_tool(tmp_path)
+    rendered = generator.render_catalog(tmp_path, binding_overrides={}, exclusions={})
+    assert rendered == generator.render_catalog(tmp_path, binding_overrides={}, exclusions={})
+    payload = json.loads(rendered)
+    assert len(payload["actions"]) == 3
+    assert [item for item in payload["actions"] if item["product"] != "sitemanager"] == before["actions"]
+    cloud = next(item for item in payload["actions"] if item["product"] == "sitemanager")
+    assert cloud["connection_kind"] == "sitemanager_account"
+    assert (cloud["manager_attr"], cloud["manager_method"]) == ("isp_metrics_manager", "get_metrics")
+    assert cloud["permission_action"] == "read" and cloud["read_only_hint"] is True
+    assert cloud["auth_method"] == "api_key_only"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"auth_method": "either"},
+        {"auth_method": None},
+        {"connection_kind": "controller"},
+        {"permission_action": "update", "annotations": {"readOnlyHint": False}},
+    ],
+)
+def test_synthetic_account_rejects_unsafe_metadata(tmp_path, change):
+    generator = _load_generator()
+    _write_synthetic_repo(tmp_path)
+    _write_cloud_tool(tmp_path, **change)
+    with pytest.raises(generator.CatalogGenerationError):
+        generator.render_catalog(tmp_path, binding_overrides={}, exclusions={})
+
+
+def test_account_optional_metric_interval_needs_explicit_default_translator(tmp_path, monkeypatch):
+    from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+
+    generator = _load_generator()
+    _write_synthetic_repo(tmp_path)
+    for product in ("network", "protect", "access"):
+        path, _ = _manifest(tmp_path, product)
+        path.write_text(json.dumps({"tools": [], "module_map": {}}))
+    _write_cloud_tool(tmp_path)
+    monkeypatch.setattr(generator, "_load_api_configuration", lambda _: ({}, {}, {}))
+    with pytest.raises(generator.CatalogGenerationError, match="missing=.*metric_type"):
+        generator.render_catalog(tmp_path)
+    spec = DISPATCH_ARG_TRANSLATORS["sitemanager_get_isp_metrics"]
+    monkeypatch.setattr(generator, "_load_api_configuration", lambda _: ({}, {}, {"sitemanager_get_isp_metrics": spec}))
+    payload = json.loads(generator.render_catalog(tmp_path))
+    assert len(payload["actions"]) == 1
+    assert spec({}) == ((), {"metric_type": "1h", "period_limit": 12})
+
+
+def test_all_nine_cloud_methods_are_generated():
+    payload = json.loads(_load_generator().render_catalog(REPO_ROOT))
+    cloud = {
+        item["name"]: (item["manager_attr"], item["manager_method"])
+        for item in payload["actions"]
+        if item["product"] == "sitemanager"
+    }
+    assert cloud == {
+        "sitemanager_list_hosts": ("inventory_manager", "list_hosts"),
+        "sitemanager_get_host": ("inventory_manager", "get_host"),
+        "sitemanager_list_sites": ("inventory_manager", "list_sites"),
+        "sitemanager_list_devices": ("inventory_manager", "list_devices"),
+        "sitemanager_get_isp_metrics": ("isp_metrics_manager", "get_metrics"),
+        "sitemanager_query_isp_metrics": ("isp_metrics_manager", "query_metrics"),
+        "sitemanager_list_sdwan_configs": ("sdwan_manager", "list_configs"),
+        "sitemanager_get_sdwan_config": ("sdwan_manager", "get_config"),
+        "sitemanager_get_sdwan_config_status": ("sdwan_manager", "get_config_status"),
+    }

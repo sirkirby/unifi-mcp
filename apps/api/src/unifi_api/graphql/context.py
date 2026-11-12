@@ -73,6 +73,9 @@ class GraphQLContext(BaseContext):
         cache: RequestCache | None = None,
         sessionmaker: "async_sessionmaker[AsyncSession] | None" = None,
         manager_factory: "ManagerFactory | None" = None,
+        sitemanager_factory: Any = None,
+        manifest_registry: Any = None,
+        type_registry: Any = None,
         api_key_id: str | None = None,
         api_key_scopes: str | None = None,
         api_key_prefix: str | None = None,
@@ -82,6 +85,9 @@ class GraphQLContext(BaseContext):
         self.cache = cache if cache is not None else RequestCache()
         self.sessionmaker = sessionmaker
         self.manager_factory = manager_factory
+        self.sitemanager_factory = sitemanager_factory
+        self.manifest_registry = manifest_registry
+        self.type_registry = type_registry
         self.api_key_id = api_key_id
         self.api_key_scopes = api_key_scopes
         self.api_key_prefix = api_key_prefix

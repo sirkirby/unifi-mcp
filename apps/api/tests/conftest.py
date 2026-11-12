@@ -143,9 +143,9 @@ def cloud_secrecy_guard(monkeypatch, caplog):
 
     keys = {KEY}
 
-    def check(value, *, key=KEY):
+    def check(value, *, key=KEY, allow_redacted=False):
         keys.add(key)
-        assert_no_cloud_secret(value, key=key, ciphertexts=ciphertexts)
+        assert_no_cloud_secret(value, key=key, ciphertexts=ciphertexts, allow_redacted=allow_redacted)
 
     yield check
     for key in keys:

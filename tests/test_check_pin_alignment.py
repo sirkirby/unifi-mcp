@@ -591,3 +591,48 @@ def test_workflow_push_and_pull_request_paths_match() -> None:
     paths = _workflow_paths()
 
     assert paths["push"] == paths["pull_request"]
+
+
+@pytest.mark.parametrize("fault", [None, "manager", "method", "default"])
+def test_api_floor_contract_executes_account_bindings(monkeypatch, fault):
+    from unifi_api.services import sitemanager_managers
+    from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+    from unifi_core.sitemanager.managers.isp_metrics_manager import IspMetricsManager
+
+    module = _module()
+    if fault == "manager":
+        original = sitemanager_managers._build_sitemanager_managers
+
+        def missing(connection):
+            values = original(connection)
+            values.pop("inventory_manager")
+            return values
+
+        monkeypatch.setattr(sitemanager_managers, "_build_sitemanager_managers", missing)
+    elif fault == "method":
+        monkeypatch.setattr(IspMetricsManager, "get_metrics", None)
+    elif fault == "default":
+        monkeypatch.delitem(DISPATCH_ARG_TRANSLATORS, "sitemanager_get_isp_metrics")
+    if fault:
+        with pytest.raises(SystemExit, match="missing|incomplete"):
+            exec(module._API_CATALOG_FLOOR_CONTRACT, {})
+    else:
+        exec(module._API_CATALOG_FLOOR_CONTRACT, {})
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "SiteManagerConfigInput",
+        "SiteManagerDevicesInput",
+        "SiteManagerEmptyInput",
+        "SiteManagerHostInput",
+        "SiteManagerPageInput",
+    ],
+)
+def test_api_floor_contract_requires_every_inventory_input(monkeypatch, model):
+    from unifi_core.sitemanager.models import reads
+
+    monkeypatch.delattr(reads, model)
+    with pytest.raises(ImportError, match=model):
+        exec(_module()._API_CATALOG_FLOOR_CONTRACT, {})

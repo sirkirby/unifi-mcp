@@ -36,7 +36,7 @@ from unifi_api.routes import admin_data as admin_data_routes
 from unifi_api.routes import audit as audit_routes
 from unifi_api.routes import catalog as catalog_routes
 from unifi_api.routes import controllers as controllers_routes
-from unifi_api.routes import health, sitemanager_connections
+from unifi_api.routes import health, sitemanager_actions, sitemanager_connections
 from unifi_api.routes.admin import audit as admin_audit_routes
 from unifi_api.routes.admin import auth as admin_auth_routes
 from unifi_api.routes.admin import controllers as admin_controllers_routes
@@ -217,6 +217,9 @@ from unifi_api.routes.resources.protect import (
 from unifi_api.routes.resources.protect import (
     system as protect_system_routes,
 )
+from unifi_api.routes.resources.sitemanager import inventory as sm_inventory
+from unifi_api.routes.resources.sitemanager import isp_metrics as sm_metrics
+from unifi_api.routes.resources.sitemanager import sdwan as sm_sdwan
 from unifi_api.routes.streams import (
     access as access_streams_routes,
 )
@@ -274,13 +277,17 @@ async def _request_validation_error(request: Request, exc: RequestValidationErro
     Keeps each error's type, location and message, the parts that say what
     to fix, and drops ``input``, ``ctx`` and ``url``.
     """
-    if request.url.path.startswith(("/v1/sitemanager/connection", "/admin/sitemanager")):
+    if request.url.path.startswith(("/v1/sitemanager/", "/admin/sitemanager")):
         return JSONResponse(
             status_code=422,
             content={
                 "detail": {
                     "kind": "invalid_sitemanager_request",
-                    "message": "Invalid Site Manager connection fields or types.",
+                    "message": (
+                        "Invalid Site Manager connection fields or types."
+                        if request.url.path.startswith(("/v1/sitemanager/connection", "/admin/sitemanager"))
+                        else "Failed to validate Site Manager request: check fields and types."
+                    ),
                 }
             },
         )
@@ -526,6 +533,8 @@ def create_app(config: ApiConfig) -> FastAPI:
     app.include_router(health.router, prefix="/v1")
     app.include_router(controllers_routes.router, prefix="/v1")
     app.include_router(sitemanager_connections.router, prefix="/v1")
+    for cloud_router in (sm_inventory, sm_metrics, sm_sdwan, sitemanager_actions):
+        app.include_router(cloud_router.router, prefix="/v1")
     app.include_router(admin_sitemanager_routes.router)
     app.include_router(actions_routes.router, prefix="/v1")
     app.include_router(catalog_routes.router, prefix="/v1")
@@ -658,6 +667,9 @@ def create_app(config: ApiConfig) -> FastAPI:
             cache=RequestCache(),
             sessionmaker=app.state.sessionmaker,
             manager_factory=app.state.manager_factory,
+            sitemanager_factory=app.state.sitemanager_factory,
+            manifest_registry=app.state.manifest_registry,
+            type_registry=app.state.type_registry,
             api_key_id=api_key_id,
             api_key_scopes=api_key_scopes,
             api_key_prefix=api_key_prefix,

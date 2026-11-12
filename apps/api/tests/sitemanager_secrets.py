@@ -3,10 +3,10 @@
 import base64
 import hashlib
 
-KEY = "synthetic-cloud-key-DO-NOT-DISCLOSE-42"
+KEY = "CLOUD7xQ9-synthetic-key-DO-NOT-DISCLOSE-xV42pZ8R"
 
 
-def assert_no_cloud_secret(value, *, key=KEY, ciphertexts=()):
+def assert_no_cloud_secret(value, *, key=KEY, ciphertexts=(), allow_redacted=False):
     text = str(value)
     sentinels = [
         key,
@@ -15,9 +15,9 @@ def assert_no_cloud_secret(value, *, key=KEY, ciphertexts=()):
         key.encode().hex(),
         base64.b64encode(key.encode()).decode(),
         hashlib.sha256(key.encode()).hexdigest(),
-        "**********",
-        "***REDACTED***",
     ]
+    if not allow_redacted:
+        sentinels.extend(("**********", "***REDACTED***"))
     for blob in ciphertexts:
         sentinels.extend(
             (blob.hex(), base64.b64encode(blob).decode(), base64.urlsafe_b64encode(blob).decode(), repr(blob))

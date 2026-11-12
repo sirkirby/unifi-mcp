@@ -26,3 +26,25 @@ def test_every_tool_has_a_serializer() -> None:
     # Will raise SerializerRegistryError if any tool lacks both a serializer
     # and a type.
     discover_serializers(set(manifest.all_tools()), type_registry=type_registry)
+
+
+def test_nine_cloud_tools_are_covered_only_by_read_types():
+    import pytest
+    from unifi_api.serializers._registry import SerializerRegistryError
+
+    from tests.sitemanager_data import CASES
+
+    names = {case[0] for case in CASES}
+    assert len(names) == 9
+    registry = build_type_registry()
+    assert names <= set(registry.all_tools())
+    _reset_registry_for_tests()
+    serializers = discover_serializers(set(ManifestRegistry.load().all_tools()), type_registry=registry)
+    assert names.isdisjoint(set(serializers.all_tools()))
+    for missing in names:
+        _reset_registry_for_tests()
+        incomplete = build_type_registry()
+        incomplete._tool_types.pop(missing)
+        with pytest.raises(SerializerRegistryError, match=missing):
+            discover_serializers(set(ManifestRegistry.load().all_tools()), type_registry=incomplete)
+    _reset_registry_for_tests()

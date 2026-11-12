@@ -39,6 +39,19 @@ def tool_to_field_path(tool_name: str, *, product: str, sibling_list_stems: set[
     Returns the field path, or an empty string for tools out of scope
     (e.g., write/action tools that don't map to GraphQL Query fields).
     """
+    if product == "sitemanager":
+        fields = {
+            "sitemanager_list_hosts": "hosts",
+            "sitemanager_get_host": "host",
+            "sitemanager_list_sites": "sites",
+            "sitemanager_list_devices": "devices",
+            "sitemanager_get_isp_metrics": "ispMetrics",
+            "sitemanager_query_isp_metrics": "queryIspMetrics",
+            "sitemanager_list_sdwan_configs": "sdwanConfigs",
+            "sitemanager_get_sdwan_config": "sdwanConfig",
+            "sitemanager_get_sdwan_config_status": "sdwanConfigStatus",
+        }
+        return f"query.sitemanager.{fields[tool_name]}" if tool_name in fields else ""
     if tool_name.startswith("unifi_list_"):
         stem = tool_name[len("unifi_list_") :]
         return f"query.{product}.{_to_camel(stem)}"

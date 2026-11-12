@@ -17,10 +17,12 @@ from unifi_api.services.access_event_key import InvalidAccessEventCursor, Invali
 from unifi_api.services.controllers import ControllerNotFound
 from unifi_api.services.incident_evidence import ControllerCapabilityError, IncidentRequestError
 from unifi_api.services.pagination import InvalidCursor
+from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 
 # Client errors a resolver raises on purpose; their messages are fixed or
 # already sanitized, so they are logged without traceback or query source.
 EXPECTED_ERRORS = (
+    SiteManagerAPIError,
     ControllerNotFound,
     ControllerCapabilityError,
     IncidentRequestError,
@@ -47,6 +49,8 @@ def is_request_error(error: GraphQLError) -> bool:
 
 def safe_message(error: GraphQLError) -> str:
     """The error's message, without the rejected value an argument-coercion error quotes."""
+    if is_request_error(error) and "SiteManager" in error.message:
+        return "Invalid Site Manager request fields or types."
     if not is_request_error(error) or not _VALUE_ECHO.search(error.message):
         return error.message
     variable = _VARIABLE.match(error.message)
@@ -63,6 +67,8 @@ def is_expected_error(error: GraphQLError) -> bool:
 def _classify(error: GraphQLError) -> str:
     # By exception type only: messages can carry rejected input.
     orig = error.original_error
+    if isinstance(orig, SiteManagerAPIError):
+        return orig.graphql_code
     if isinstance(orig, ControllerNotFound):
         return "NOT_FOUND"
     if isinstance(orig, ControllerCapabilityError):

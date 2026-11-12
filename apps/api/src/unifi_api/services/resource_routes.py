@@ -17,7 +17,7 @@ class ResourceRoute:
 
 
 def collect_resource_routes(app: FastAPI) -> list[ResourceRoute]:
-    """Walk the FastAPI app and return all GET routes under /v1/sites/."""
+    """Collect console GET resources and explicitly marked account read routes."""
     return _collect_routes(app.routes)
 
 
@@ -35,17 +35,25 @@ def _collect_routes(raw_routes: Iterable[Any], prefix: str = "") -> list[Resourc
 
         methods = getattr(route, "methods", None)
         path = getattr(route, "path", None)
-        if not methods or "GET" not in methods or path is None:
+        if not methods or path is None:
             continue
         full_path = f"{prefix}{path}"
-        if not full_path.startswith("/v1/sites/"):
-            continue
-        routes.append(ResourceRoute(method="GET", path=full_path, name=route.name))
+        if full_path.startswith("/v1/sitemanager/"):
+            if full_path.startswith(("/v1/sitemanager/connection", "/v1/sitemanager/actions/")):
+                continue
+            if not (getattr(route, "openapi_extra", None) or {}).get("x-sitemanager-read"):
+                continue
+            for method in sorted(methods & {"GET", "POST"}):
+                routes.append(ResourceRoute(method=method, path=full_path, name=route.name))
+        elif full_path.startswith("/v1/sites/") and "GET" in methods:
+            routes.append(ResourceRoute(method="GET", path=full_path, name=route.name))
     return routes
 
 
-def is_read_tool(name: str) -> bool:
-    """True if the tool name follows the read-tool convention (list_/get_/recent_)."""
+def is_read_tool(name: str, entry=None) -> bool:
+    """Use account safety metadata or the existing console read-name convention."""
+    if entry is not None and entry.connection_kind == "sitemanager_account":
+        return entry.permission_action == "read" and entry.read_only_hint is True
     parts = name.split("_", 1)
     if len(parts) != 2:
         return False

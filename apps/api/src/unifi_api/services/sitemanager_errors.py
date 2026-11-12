@@ -31,6 +31,21 @@ class SiteManagerAPIError(Exception):
         self.kind = kind
         self.message = message
 
+    @property
+    def graphql_code(self):
+        return {
+            "sitemanager_not_configured": "NOT_CONFIGURED",
+            "sitemanager_configuration_error": "NOT_CONFIGURED",
+            "sitemanager_auth_failed": "UPSTREAM_AUTH_FAILED",
+            "sitemanager_permission_denied": "UPSTREAM_FORBIDDEN",
+            "sitemanager_resource_not_found": "NOT_FOUND",
+            "sitemanager_tool_not_found": "NOT_FOUND",
+            "invalid_sitemanager_request": "BAD_REQUEST",
+            "sitemanager_target_mismatch": "BAD_REQUEST",
+            "sitemanager_rate_limited": "RATE_LIMITED",
+            "sitemanager_upstream_error": "UPSTREAM_ERROR",
+        }.get(self.kind, "INTERNAL")
+
 
 def map_error(exc: Exception, operation: str, *, management: bool = False) -> SiteManagerAPIError:
     """Operation is a fixed adapter label, never a caller-supplied value."""
@@ -66,6 +81,12 @@ def map_error(exc: Exception, operation: str, *, management: bool = False) -> Si
             "sitemanager_upstream_error",
             "Check network connectivity and Site Manager API access.",
         )
+        if (
+            isinstance(exc, SiteManagerHttpError)
+            and exc.status == 502
+            and operation == "query isp metrics from Site Manager"
+        ):
+            guidance += " Check access to the requested sites."
     else:
         status, kind, guidance = 500, "sitemanager_internal_error", "Ask an administrator to check the API service."
         _log.error("Site Manager %s failed (%s)", operation, type(exc).__name__)

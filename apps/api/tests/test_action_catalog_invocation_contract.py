@@ -20,6 +20,7 @@ PRODUCT_PACKAGES = {
     "network": "unifi_network_mcp",
     "protect": "unifi_protect_mcp",
     "access": "unifi_access_mcp",
+    "sitemanager": "unifi_sitemanager_mcp",
 }
 
 
@@ -34,6 +35,11 @@ def _manager_types() -> dict[tuple[str, str], type]:
                 if instruction.opname == "LOAD_DEREF" and instruction.argval in closure
             )
             manager_types[(product, manager_attr)] = closure[target_name].cell_contents
+    from unifi_api.services.sitemanager_managers import _build_sitemanager_managers
+
+    manager_types.update(
+        {("sitemanager", attr): type(manager) for attr, manager in _build_sitemanager_managers(object()).items()}
+    )
     return manager_types
 
 
