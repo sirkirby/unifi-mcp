@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-12 — unifi-protect 1.6.0
+
+- Pins `unifi-protect-mcp` [0.13.0](https://github.com/sirkirby/unifi-mcp/releases/tag/protect/v0.13.0).
+
+
 ## 2026-11-06 — unifi-network 1.9.2
 
 - `firewall-auditor` can be installed by agents that scan skills before installing. The audit-history step no longer pipes JSON into an interpreter, and the DNS-redirect test uses named placeholders (`UNUSED_IP` for a documentation-range address nothing answers, `SYNTHETIC_A_RECORD` for the synthetic answer) instead of literal addresses.
