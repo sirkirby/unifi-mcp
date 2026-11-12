@@ -226,6 +226,13 @@ type Alarm {
   time: Int
 }
 
+"""Triggers, actions and scope schema the Alarm Manager accepts in rules."""
+type AlarmCatalog {
+  triggers: JSON
+  actions: JSON
+  scope: JSON
+}
+
 """Paginated page of controller alarms."""
 type AlarmPage {
   items: [Alarm!]!
@@ -1882,6 +1889,11 @@ type ProtectQuery {
   """Fetch a single alarm rule (automation) by id."""
   alarmRule(controller: ID!, id: ID!): AlarmRule
 
+  """
+  Triggers and actions the Alarm Manager accepts in rules ({triggers, actions, scope}); their ids are the trigger_id/action_id values a rule takes. search filters by id, title or category; includeSchemas adds each entry's options_schema and the scope schema.
+  """
+  alarmCatalog(controller: ID!, search: String = null, includeSchemas: Boolean! = false): AlarmCatalog
+
   """List Protect events (paginated, most recent first)."""
   events(controller: ID!, limit: Int! = 50, cursor: String = null, eventType: String = null, cameraId: String = null): EventPage!
 
@@ -2766,6 +2778,7 @@ Read-only access to UniFi Protect resources.
 
 **Fields:**
 
+- `alarmCatalog: AlarmCatalog`  — Triggers and actions the Alarm Manager accepts in rules ({triggers, actions, scope}); their ids are the trigger_id/action_id values a rule takes. search filters by id, title or category; includeSchemas adds each entry's options_schema and the scope schema.
 - `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Use arm_compatible to determine whether a profile id can be passed to the arm and disarm actions.
 - `alarmRule: AlarmRule`  — Fetch a single alarm rule (automation) by id.
 - `alarmRules: AlarmRuleList`  — List configured alarm rules / Alarm Manager automations ({rules, count}).

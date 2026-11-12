@@ -43,6 +43,7 @@ from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.protect.alarms import (
+    AlarmCatalog,
     AlarmProfileList,
     AlarmRule,
     AlarmRuleList,
@@ -522,6 +523,27 @@ async def _fetch_alarm_rule(ctx: GraphQLContext, controller: str, rule_id: str) 
             )
             rule, _complete = await mgr.get_rule(rule_id)
             return rule
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_alarm_catalog(ctx: GraphQLContext, controller: str, search: str | None, include_schemas: bool) -> Any:
+    key = f"protect/alarm-catalog/{controller}/{search or ''}/{include_schemas}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "alarm_facade",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            return await mgr.list_catalog(search=search, include_schemas=include_schemas)
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1362,6 +1384,27 @@ class ProtectQuery:
         if raw is None:
             return None
         return AlarmRule.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Triggers and actions the Alarm Manager accepts in rules ({triggers, actions, scope}); "
+            "their ids are the trigger_id/action_id values a rule takes. search filters by id, "
+            "title or category; includeSchemas adds each entry's options_schema and the scope schema."
+        ),
+    )
+    async def alarm_catalog(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        search: str | None = None,
+        include_schemas: bool = False,
+    ) -> AlarmCatalog | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_alarm_catalog(ctx, controller, search, include_schemas)
+        if raw is None:
+            return None
+        return AlarmCatalog.from_manager_output(raw)
 
     # ---- Events ----------------------------------------------------------
 

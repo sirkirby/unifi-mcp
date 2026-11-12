@@ -240,6 +240,9 @@ from unifi_api.graphql.types.network.wlan import (
     Wlan as NetworkWlanType,
 )
 from unifi_api.graphql.types.protect.alarms import (
+    AlarmCatalog as ProtectAlarmCatalogType,
+)
+from unifi_api.graphql.types.protect.alarms import (
     AlarmProfileList as ProtectAlarmProfileListType,
 )
 from unifi_api.graphql.types.protect.alarms import (
@@ -688,6 +691,11 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "protect_alarm_get_rule",
         ProtectAlarmRuleType,
+        "detail",
+    )
+    reg.register_tool_type(
+        "protect_alarm_get_catalog",
+        ProtectAlarmCatalogType,
         "detail",
     )
 

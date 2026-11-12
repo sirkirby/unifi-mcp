@@ -276,3 +276,204 @@ async def test_disarm_without_profile_id_still_targets_every_active_profile():
 
     facade.disarm.assert_awaited_once_with(None)
     assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_catalog_returns_facade_catalog():
+    from unifi_protect_mcp.tools import alarm
+
+    catalog = {
+        "triggers": [{"trigger_id": "protect:incoming.webhook", "title": "Webhook"}],
+        "actions": [{"action_id": "protect:notify", "title": "Notify"}],
+        "scope": {"mode": "include"},
+    }
+    facade = MagicMock()
+    facade.list_catalog = AsyncMock(return_value=catalog)
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_get_catalog(search="webhook", include_schemas=True)
+
+    assert result == {"success": True, "data": catalog}
+    facade.list_catalog.assert_awaited_once_with(search="webhook", include_schemas=True)
+
+
+@pytest.mark.asyncio
+async def test_get_catalog_defaults_to_no_filter_and_no_schemas():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.list_catalog = AsyncMock(return_value={"triggers": [], "actions": [], "scope": {}})
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        await alarm.protect_alarm_get_catalog()
+
+    facade.list_catalog.assert_awaited_once_with(search=None, include_schemas=False)
+
+
+@pytest.mark.asyncio
+async def test_get_catalog_reports_failure():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.list_catalog = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_get_catalog()
+
+    assert result == {"success": False, "error": "Failed to get alarm catalog: boom"}
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_without_confirm_previews_and_does_not_fire():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock()
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id="door-test")
+
+    assert result["requires_confirmation"] is True
+    assert result["resource_id"] == "door-test"
+    assert result["preview"]["proposed"] == {"fire": True}
+    facade.fire_webhook.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_confirm_fires_through_facade():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock(return_value={"fired": True, "trigger_id": "door-test"})
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id="door-test", confirm=True)
+
+    facade.fire_webhook.assert_awaited_once_with("door-test")
+    assert result == {"success": True, "data": {"fired": True, "trigger_id": "door-test"}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+@pytest.mark.parametrize("trigger_id", ["", "  "])
+async def test_fire_webhook_rejects_blank_trigger_id(trigger_id, confirm):
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock()
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id=trigger_id, confirm=confirm)
+
+    assert result == {"success": False, "error": "Invalid input: Value error, trigger_id is required"}
+    facade.fire_webhook.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+@pytest.mark.parametrize("trigger_id", [".", "..", "hook7f3a/x", "hook7f3a?x", "hook7f3a%2F", "hook7f3a\nx"])
+async def test_fire_webhook_refuses_an_id_that_is_not_one_path_segment(trigger_id, confirm):
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock()
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id=trigger_id, confirm=confirm)
+
+    assert result["success"] is False
+    assert "must not be" in result["error"]
+    assert "hook7f3a" not in result["error"]
+    facade.fire_webhook.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_surfaces_refusal():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock(side_effect=ValueError("requires an API key"))
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id="door-test", confirm=True)
+
+    assert result == {"success": False, "error": "requires an API key"}
+
+
+@pytest.mark.asyncio
+async def test_get_catalog_permission_error_is_returned_as_is():
+    from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.list_catalog = AsyncMock(side_effect=AlarmManagerPermissionError("requires SuperAdmin"))
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_get_catalog()
+
+    assert result == {"success": False, "error": "requires SuperAdmin"}
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_unexpected_error_is_reported():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id="door-test", confirm=True)
+
+    assert result == {"success": False, "error": "Failed to fire alarm webhook: boom"}
+
+
+@pytest.mark.asyncio
+async def test_fire_webhook_rejects_non_string_trigger_id():
+    from unifi_protect_mcp.tools import alarm
+
+    facade = MagicMock()
+    facade.fire_webhook = AsyncMock()
+
+    with patch("unifi_protect_mcp.tools.alarm.alarm_facade", facade):
+        result = await alarm.protect_alarm_fire_webhook(trigger_id=None, confirm=True)
+
+    assert result["success"] is False
+    assert result["error"].startswith("Invalid input:")
+    facade.fire_webhook.assert_not_called()
+
+
+def test_create_rule_description_says_scope_needs_mode():
+    import json
+    from pathlib import Path
+
+    import unifi_protect_mcp
+
+    manifest = json.loads((Path(unifi_protect_mcp.__file__).parent / "tools_manifest.json").read_text())
+    tool = next(t for t in manifest["tools"] if t["name"] == "protect_alarm_create_rule")
+    assert "scope" in tool["description"] and "{mode, data}" in tool["description"]
+    assert "protect_alarm_get_catalog" in tool["description"]
+
+
+def test_get_catalog_description_says_schemas_are_opt_in():
+    import json
+    from pathlib import Path
+
+    import unifi_protect_mcp
+
+    manifest = json.loads((Path(unifi_protect_mcp.__file__).parent / "tools_manifest.json").read_text())
+    tool = next(t for t in manifest["tools"] if t["name"] == "protect_alarm_get_catalog")
+    assert "options_schema and scope are left out unless include_schemas" in tool["description"]
+
+
+def test_fire_webhook_description_tells_its_id_from_a_catalog_trigger_id():
+    import json
+    from pathlib import Path
+
+    import unifi_protect_mcp
+
+    manifest = json.loads((Path(unifi_protect_mcp.__file__).parent / "tools_manifest.json").read_text())
+    tool = next(t for t in manifest["tools"] if t["name"] == "protect_alarm_fire_webhook")
+    field = tool["schema"]["input"]["properties"]["trigger_id"]["description"]
+    assert "data.webhook" in field
+    assert "protect_alarm_get_catalog" in field
+    assert "not a catalog trigger_id" in tool["description"]

@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 63 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 65 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -78,7 +78,7 @@ In lazy mode, an additional meta-tool is available:
 - `protect_create_liveview` -- Validate liveview creation (not supported by uiprotect API)
 - `protect_delete_liveview` -- Validate liveview deletion (not supported by uiprotect API)
 
-## Alarm Manager (9 tools)
+## Alarm Manager (11 tools)
 
 Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles to be configured in the Protect web UI first.
 
@@ -90,9 +90,11 @@ The alarm-rule tools are version-agnostic. `protect_alarm_list_rules` / `protect
 - `protect_alarm_disarm` -- Disarm every active profile, or one `profile_id` (confirm required; a blank value is rejected). Global-mode consoles accept the id or name and use `POST /api/v2/alarms/profiles/{id}/actions/disarm`; legacy consoles disarm system-wide with `POST arm/disable`
 - `protect_alarm_list_rules` -- List alarm rules (normalized: id, title, enabled, triggers, actions, scope, stats), including AI alarms
 - `protect_alarm_get_rule` -- Fetch a single alarm rule by id (normalized)
-- `protect_alarm_create_rule` -- Create an alarm rule using the canonical shape returned by list/get (confirm required)
+- `protect_alarm_get_catalog` -- List the triggers and actions a Global-mode console accepts in rules (trigger_id/action_id, title, category), read from the Alarm Manager manifest. `search` filters by id, title or category; `include_schemas` adds each entry's options_schema and the scope schema
+- `protect_alarm_create_rule` -- Create an alarm rule using the canonical shape returned by list/get (confirm required). Take trigger and action ids from `protect_alarm_get_catalog`; on Global-mode consoles `scope` must be `{mode, data}`
 - `protect_alarm_update_rule` -- Update an alarm rule; pass only changed canonical fields (confirm required)
 - `protect_alarm_delete_rule` -- Delete an alarm rule by v2 UUID or legacy ObjectID (confirm required)
+- `protect_alarm_fire_webhook` -- Fire every alarm whose Webhook trigger has the given id (the rule's own `data.webhook` value, not a catalog `trigger_id`), through the Integration API (confirm required; needs a Protect API key)
 
 ## Known Faces & License Plates (7 tools)
 
