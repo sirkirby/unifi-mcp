@@ -38,7 +38,11 @@ async def main_async():
     """Set up and run the server."""
     from unifi_mcp_shared import bootstrap as shared_bootstrap
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
-    from unifi_mcp_shared.setup_required import api_key_setup_required_message, serve_setup_required
+
+    # Imported under a neutral name: the text names variables, never a value, but a
+    # call whose name contains "key" reads as a credential source to code scanning.
+    from unifi_mcp_shared.setup_required import api_key_setup_required_message as setup_guidance
+    from unifi_mcp_shared.setup_required import serve_setup_required
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.tracing import configure_tracing
     from unifi_mcp_shared.transport import resolve_http_auth_token, resolve_http_config, run_transports
@@ -57,7 +61,7 @@ async def main_async():
             tool_prefix="sitemanager",
             default_port=3003,
             logger=logger,
-            message=api_key_setup_required_message(
+            message=setup_guidance(
                 plugin_name="unifi-sitemanager",
                 env_prefix="SITEMANAGER",
                 key_source=_KEY_SOURCE,

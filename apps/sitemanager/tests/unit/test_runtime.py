@@ -33,7 +33,7 @@ def test_bundled_config_carries_no_credential_or_destination():
     settings = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
 
     assert not any("API_KEY" in line or "api_key" in line for line in settings)
-    assert not any("ui.com" in line or "base_url" in line for line in settings)
+    assert not any("://" in line or "base_url" in line for line in settings)
     assert dict(runtime.config.unifi) == {}
 
 
