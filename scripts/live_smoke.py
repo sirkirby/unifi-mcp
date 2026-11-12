@@ -904,7 +904,7 @@ class LiveSmokeRunner:
             )
             if not routes:
                 return None, "could not discover required argument route_id"
-            # INTERNET routes must target exactly one explicit CLIENT, so the
+            # INTERNET routes may target only explicit CLIENTs, so the
             # ALL_CLIENTS proposal below is only valid for the other route kinds.
             route_id = next(
                 (

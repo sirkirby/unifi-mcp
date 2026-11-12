@@ -8062,7 +8062,7 @@
             "type": "boolean"
           },
           "network_id": {
-            "description": "Replace the target network or VPN. INTERNET routes require a verified WAN network.",
+            "description": "Replace the target network or VPN. INTERNET routes require a verified WAN or VPN client network.",
             "type": "string"
           },
           "next_hop": {

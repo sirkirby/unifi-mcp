@@ -55,8 +55,8 @@ async def _validate_internet_route_target(target_devices: Any, network_id: Any) 
     description="""Create a narrowly scoped Traffic Route (policy-based route). Requires confirmation.
 
 An explicit matching_target and target network/VPN are required. DOMAIN routes
-require at least one domain. INTERNET routes are allowed only for one explicit
-CLIENT with a valid unicast MAC address when the target is a verified WAN network.""",
+require at least one domain. INTERNET routes must target one or more explicit
+CLIENTs with valid unicast MAC addresses, through a verified WAN or VPN client network.""",
     permission_category="traffic_routes",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
@@ -215,19 +215,19 @@ Toggle fields:
 
 Routing-match fields (each REPLACES the whole existing list/value — read the route
 first with unifi_get_traffic_route_details, then send the full desired value):
-- target_devices: Which clients/networks the route applies to. For INTERNET routes, this must remain one explicit CLIENT target.
+- target_devices: Which clients/networks the route applies to. For INTERNET routes, this must stay a list of explicit CLIENT targets.
   [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}],
   [{"type": "NETWORK", "network_id": "<id>"}], or [{"type": "ALL_CLIENTS"}].
 - domains: List of domain objects, e.g. [{"domain": "example.com", "ports": [], "port_ranges": []}].
 - ip_addresses: List of IP/subnet objects (for matching_target=IP routes).
 - ip_ranges: List of IP-range objects.
 - regions: List of ISO country/region codes, e.g. ["US", "CA"].
-- network_id: Replace the target network/VPN. INTERNET routes require a verified WAN target.
+- network_id: Replace the target network/VPN. INTERNET routes require a verified WAN or VPN client network.
 - next_hop: Next-hop IP address (string) for static next-hop routes.
 
-For INTERNET routes, a target update is allowed only when the resulting route still
-has exactly one explicit CLIENT target with a valid unicast MAC address and a freshly
-verified WAN target. Broad targets and non-WAN targets are rejected.
+For INTERNET routes, the resulting route must still target only explicit CLIENTs with
+valid unicast MAC addresses, through a freshly verified WAN or VPN client network.
+ALL_CLIENTS, NETWORK targets and other network types are rejected.
 
 At least one field must be provided.""",
     permission_category="traffic_routes",
@@ -279,7 +279,9 @@ async def update_traffic_route(
     ] = None,
     network_id: Annotated[
         Optional[str],
-        Field(description="Replace the target network or VPN. INTERNET routes require a verified WAN network."),
+        Field(
+            description="Replace the target network or VPN. INTERNET routes require a verified WAN or VPN client network."
+        ),
     ] = None,
     next_hop: Annotated[
         Optional[str],
@@ -377,8 +379,8 @@ async def update_traffic_route(
     name="unifi_toggle_traffic_route",
     description="""Toggle a traffic route on/off by ID.
 
-Enabling an INTERNET route requires one explicit CLIENT target with a valid unicast MAC
-address and a verified WAN network.""",
+Enabling an INTERNET route requires explicit CLIENT targets with valid unicast MAC
+addresses and a verified WAN or VPN client network.""",
     permission_category="traffic_routes",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),

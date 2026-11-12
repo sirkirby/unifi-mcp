@@ -348,7 +348,7 @@ class TestCreateTrafficRoute:
     @pytest.mark.asyncio
     async def test_internet_route_rejects_non_wan_target(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes can target only a verified WAN network")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes can target only a verified WAN or VPN client network")
         with patch("unifi_network_mcp.tools.traffic_routes.traffic_route_manager", mgr):
             from unifi_network_mcp.tools.traffic_routes import create_traffic_route
 
@@ -360,13 +360,13 @@ class TestCreateTrafficRoute:
             )
 
         assert result["success"] is False
-        assert "WAN network" in result["error"]
+        assert "WAN or VPN client network" in result["error"]
         mgr.create_traffic_route.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_internet_route_rejects_all_clients_target(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes require exactly one explicit CLIENT target")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes require one or more explicit CLIENT targets")
         with patch("unifi_network_mcp.tools.traffic_routes.traffic_route_manager", mgr):
             from unifi_network_mcp.tools.traffic_routes import create_traffic_route
 
@@ -488,7 +488,7 @@ class TestUpdateTrafficRouteTargets:
     @pytest.mark.asyncio
     async def test_internet_route_target_network_update_rejects_non_wan(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes can target only a verified WAN network")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes can target only a verified WAN or VPN client network")
         current = copy.deepcopy(SAMPLE_ROUTE)
         current["matching_target"] = "INTERNET"
         current["target_devices"] = [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}]
@@ -499,13 +499,13 @@ class TestUpdateTrafficRouteTargets:
             result = await update_traffic_route("route-001", network_id="vpn-route", confirm=True)
 
         assert result["success"] is False
-        assert "WAN network" in result["error"]
+        assert "WAN or VPN client network" in result["error"]
         mgr.update_traffic_route.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_internet_route_target_device_update_rejects_all_clients(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes require exactly one explicit CLIENT target")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes require one or more explicit CLIENT targets")
         current = copy.deepcopy(SAMPLE_ROUTE)
         current["matching_target"] = "INTERNET"
         current["network_id"] = "wan-sonic"
@@ -527,7 +527,7 @@ class TestUpdateTrafficRouteTargets:
     @pytest.mark.asyncio
     async def test_enabling_unsafe_internet_route_is_rejected(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes require exactly one explicit CLIENT target")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes require one or more explicit CLIENT targets")
         current = copy.deepcopy(SAMPLE_ROUTE)
         current.update(
             {
@@ -759,7 +759,7 @@ class TestToggleInternetRouteSafety:
     @pytest.mark.asyncio
     async def test_enabling_unsafe_internet_route_is_rejected(self):
         mgr = _mock_manager()
-        _reject_internet_target(mgr, "INTERNET Traffic Routes require exactly one explicit CLIENT target")
+        _reject_internet_target(mgr, "INTERNET Traffic Routes require one or more explicit CLIENT targets")
         current = copy.deepcopy(SAMPLE_ROUTE)
         current.update(
             {

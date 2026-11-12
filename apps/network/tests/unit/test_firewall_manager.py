@@ -107,7 +107,7 @@ class TestLegacyTrafficRouteSafety:
         }
         mock_connection.request = AsyncMock(return_value={"data": [unsafe_route]})
 
-        with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+        with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
             await firewall_manager.update_traffic_route("route-unsafe", {"enabled": True})
 
         assert mock_connection.request.await_count == 1
@@ -196,7 +196,7 @@ class TestLegacyTrafficRouteSafety:
         )
 
         assert result["success"] is False
-        assert "exactly one explicit CLIENT" in result["error"]
+        assert "one or more explicit CLIENT targets" in result["error"]
         assert "may have been created" not in result["error"]
         mock_connection.request.assert_not_awaited()
 
@@ -216,7 +216,7 @@ class TestLegacyTrafficRouteSafety:
         )
 
         assert result["success"] is False
-        assert "Could not verify the target WAN network" in result["error"]
+        assert "Could not verify the target network" in result["error"]
         assert "may have been created" not in result["error"]
         assert "sensitive text" not in result["error"]
         mock_connection.request.assert_not_awaited()
