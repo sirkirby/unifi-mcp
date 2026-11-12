@@ -1,6 +1,6 @@
 {
   "name": "unifi-network",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "UniFi Network MCP server \u2014 manage network devices, clients, firewall, VPN, and more",
   "author": {
     "name": "sirkirby",
@@ -21,7 +21,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-network-mcp==0.45.0"
+        "unifi-network-mcp==0.45.1"
       ],
       "env": {
         "UNIFI_NETWORK_HOST": "${user_config.host}",
