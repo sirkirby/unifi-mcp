@@ -33,7 +33,7 @@ def connections(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_one_connection_for_concurrent_first_reads(store, connections):
+async def test_one_connection_for_concurrent_first_reads(store, connections, cloud_secrecy_guard):
     await seed(store)
     factory = module.SiteManagerFactory(*store)
     ready = asyncio.Event()
@@ -57,7 +57,7 @@ async def test_one_connection_for_concurrent_first_reads(store, connections):
 
 
 @pytest.mark.asyncio
-async def test_rotation_and_two_factories_observe_revision(store, connections):
+async def test_rotation_and_two_factories_observe_revision(store, connections, cloud_secrecy_guard):
     await seed(store)
     sm, cipher = store
     first, second = module.SiteManagerFactory(*store), module.SiteManagerFactory(*store)
@@ -85,7 +85,9 @@ async def test_rotation_and_two_factories_observe_revision(store, connections):
 
 
 @pytest.mark.asyncio
-async def test_delete_does_not_close_inflight_lease_and_recreate_changes_identity(store, connections):
+async def test_delete_does_not_close_inflight_lease_and_recreate_changes_identity(
+    store, connections, cloud_secrecy_guard
+):
     old_row = await seed(store)
     sm, _ = store
     factory = module.SiteManagerFactory(*store)
@@ -105,7 +107,7 @@ async def test_delete_does_not_close_inflight_lease_and_recreate_changes_identit
 
 
 @pytest.mark.asyncio
-async def test_cancellation_releases_retired_lease_and_shutdown_waits(store, connections):
+async def test_cancellation_releases_retired_lease_and_shutdown_waits(store, connections, cloud_secrecy_guard):
     await seed(store)
     factory = module.SiteManagerFactory(*store)
     entered = asyncio.Event()
@@ -132,15 +134,56 @@ async def test_cancellation_releases_retired_lease_and_shutdown_waits(store, con
 
 
 @pytest.mark.asyncio
-async def test_no_cloud_env_or_console_fallback(store, monkeypatch, connections):
-    for var in ("UNIFI_API_KEY", "UNIFI_SITEMANAGER_API_KEY", "SITEMANAGER_API_KEY", "CONFIG_PATH"):
-        monkeypatch.setenv(var, "synthetic-wrong-source")
+async def test_no_cloud_env_or_console_fallback(store, monkeypatch, tmp_path, cloud_secrecy_guard):
+    from unifi_api.services.controllers import CreateControllerPayload, create_controller
+    from unifi_core.sitemanager.managers.connection_manager import SiteManagerConnectionManager
+
+    sm, cipher = store
+    alternatives = {
+        "UNIFI_API_KEY": "synthetic-shared-env-key",
+        "UNIFI_NETWORK_API_KEY": "synthetic-network-env-key",
+        "UNIFI_PROTECT_API_KEY": "synthetic-protect-env-key",
+        "UNIFI_ACCESS_API_KEY": "synthetic-access-env-key",
+        "UNIFI_SITEMANAGER_API_KEY": "synthetic-cloud-env-key",
+        "SITEMANAGER_API_KEY": "synthetic-unprefixed-cloud-env-key",
+    }
+    config = tmp_path / "alternate-config.yaml"
+    config.write_text("api_key: synthetic-file-key\nsitemanager:\n  api_key: synthetic-nested-file-key\n")
+    monkeypatch.setenv("CONFIG_PATH", str(config))
+    for var, value in alternatives.items():
+        monkeypatch.setenv(var, value)
+    async with sm() as session:
+        await create_controller(
+            session,
+            cipher,
+            CreateControllerPayload(
+                name="Console",
+                base_url="https://192.0.2.1",
+                product_kinds=["network"],
+                username="synthetic-console-user",
+                password="synthetic-console-password",
+                api_token="synthetic-console-api-token",
+                verify_tls=True,
+                is_default=True,
+            ),
+        )
+        await session.commit()
+
+    constructed = []
+
+    def tracked_connection(*args, **kwargs):
+        # Keep the real Core constructor so any fallback there stays observable.
+        connection = SiteManagerConnectionManager(*args, **kwargs)
+        constructed.append(connection)
+        return connection
+
+    monkeypatch.setattr(module, "SiteManagerConnectionManager", tracked_connection)
     factory = module.SiteManagerFactory(*store)
     with pytest.raises(SiteManagerConnectionNotFound):
         async with factory.acquire():
-            pytest.fail("Environment fallback used")
+            pytest.fail("Environment, file or console fallback used")
+    assert constructed == []
     row = await seed(store)
-    sm, _ = store
     async with sm() as session:
         from unifi_api.db.models import SiteManagerConnection
 
@@ -149,15 +192,35 @@ async def test_no_cloud_env_or_console_fallback(store, monkeypatch, connections)
         await session.commit()
     with pytest.raises(SiteManagerConfigurationError) as error:
         async with factory.acquire():
-            pytest.fail("Broken ciphertext acquired")
+            pytest.fail("Broken ciphertext used an alternate key")
     assert error.value.__suppress_context__
-    assert connections == []
+    assert constructed == []
+    # A positive control uses the actual constructor, with only the stored key.
+    from unifi_api.services.sitemanager_connections import associated_data
+
+    async with sm() as session:
+        stored = await session.get(SiteManagerConnection, row.id)
+        stored.api_key_blob = cipher.encrypt(KEY.encode(), associated_data=associated_data(row.id))
+        await session.commit()
+    async with factory.acquire() as bundle:
+        assert len(constructed) == 1
+        assert bundle.connection._api_key == KEY
+        assert bundle.connection._session is None
+        assert bundle.connection._api_key not in set(alternatives.values()) | {
+            "synthetic-file-key",
+            "synthetic-nested-file-key",
+            "synthetic-console-api-token",
+            "synthetic-console-password",
+            "synthetic-console-user",
+        }
     await factory.close()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel", [False, True])
-async def test_failed_or_cancelled_construction_not_cached(store, connections, monkeypatch, cancel):
+async def test_failed_or_cancelled_construction_not_cached(
+    store, connections, monkeypatch, cancel, cloud_secrecy_guard
+):
     await seed(store)
     factory = module.SiteManagerFactory(*store)
     original = module._build_sitemanager_managers
@@ -182,7 +245,7 @@ async def test_failed_or_cancelled_construction_not_cached(store, connections, m
 
 
 @pytest.mark.asyncio
-async def test_probe_connection_is_isolated_and_shutdown_tracks_it(store, connections):
+async def test_probe_connection_is_isolated_and_shutdown_tracks_it(store, connections, cloud_secrecy_guard):
     await seed(store)
     factory = module.SiteManagerFactory(*store)
     async with factory.acquire() as active:
@@ -198,7 +261,9 @@ async def test_probe_connection_is_isolated_and_shutdown_tracks_it(store, connec
 
 
 @pytest.mark.asyncio
-async def test_running_factory_observes_real_cli_rotation(store, connections, tmp_path, monkeypatch):
+async def test_running_factory_observes_real_cli_rotation(
+    store, connections, tmp_path, monkeypatch, cloud_secrecy_guard
+):
     from typer.testing import CliRunner
     from unifi_api.cli import app
 
@@ -215,7 +280,7 @@ async def test_running_factory_observes_real_cli_rotation(store, connections, tm
             input="synthetic-cli-rotated-key\n",
         )
         assert result.exit_code == 0, result.output
-        assert "synthetic-cli-rotated-key" not in result.output
+        cloud_secrecy_guard(result.output, key="synthetic-cli-rotated-key")
         async with factory.acquire() as new:
             assert new.revision == 2
             assert new.connection.key == "synthetic-cli-rotated-key"
@@ -224,7 +289,7 @@ async def test_running_factory_observes_real_cli_rotation(store, connections, tm
 
 
 @pytest.mark.asyncio
-async def test_shutdown_close_failure_is_safe_and_retires_generation(store, connections, caplog):
+async def test_shutdown_close_failure_is_safe_and_retires_generation(store, connections, caplog, cloud_secrecy_guard):
     from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 
     await seed(store)
@@ -235,7 +300,7 @@ async def test_shutdown_close_failure_is_safe_and_retires_generation(store, conn
     with pytest.raises(SiteManagerAPIError) as error:
         await factory.close()
     assert error.value.kind == "sitemanager_internal_error"
-    assert KEY not in str(error.value)
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(str(error.value))
+    cloud_secrecy_guard(caplog.text)
     assert all(record.exc_info is None for record in caplog.records)
     assert factory._bundles == set()

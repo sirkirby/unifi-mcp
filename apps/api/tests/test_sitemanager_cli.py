@@ -29,14 +29,14 @@ def call(config, verb, *args, input=None):
 
 
 @pytest.mark.parametrize("stdin", [False, True])
-def test_cli_never_echoes_cloud_key(cli_config, monkeypatch, caplog, stdin):
+def test_cli_never_echoes_cloud_key(cli_config, monkeypatch, caplog, stdin, cloud_secrecy_guard):
     config, db = cli_config
     upstream = AsyncMock(side_effect=AssertionError("implicit upstream request"))
     monkeypatch.setattr(InventoryManager, "list_hosts", upstream)
     flags = ["--key-stdin"] if stdin else []
     created = call(config, "add", "--name", "Account", *flags, input=KEY + "\n")
     assert created.exit_code == 0, created.output
-    assert KEY not in created.output
+    cloud_secrecy_guard(created.output)
     assert json.loads(created.output.splitlines()[-1])["revision"] == 1
     listed = call(config, "list")
     assert listed.exit_code == 0
@@ -46,7 +46,7 @@ def test_cli_never_echoes_cloud_key(cli_config, monkeypatch, caplog, stdin):
     assert json.loads(renamed.output)["revision"] == 2
     rotated = call(config, "update", "--rotate-key", input="synthetic-rotated-cloud-key\n")
     assert rotated.exit_code == 0
-    assert "synthetic-rotated-cloud-key" not in rotated.output
+    cloud_secrecy_guard(rotated.output, key="synthetic-rotated-cloud-key")
     assert json.loads(rotated.output.splitlines()[-1])["revision"] == 3
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT COUNT(*) FROM controllers").fetchone() == (0,)
@@ -56,12 +56,18 @@ def test_cli_never_echoes_cloud_key(cli_config, monkeypatch, caplog, stdin):
         assert rows == [("(cli)", None, None)] * 3
     deleted = call(config, "delete")
     assert deleted.exit_code == 0
-    assert call(config, "list").output.strip() == "(no Site Manager connection)"
-    assert KEY not in caplog.text
+    empty = call(config, "list")
+    assert empty.output.strip() == "(no Site Manager connection)"
+    outputs = [created.output, listed.output, renamed.output, rotated.output, deleted.output, empty.output]
+    assert len(outputs) == 6
+    for output in outputs:
+        cloud_secrecy_guard(output)
+        cloud_secrecy_guard(output, key="synthetic-rotated-cloud-key")
+    cloud_secrecy_guard(caplog.text)
     upstream.assert_not_called()
 
 
-def test_cli_probe_and_invalid_inputs_are_safe(cli_config, monkeypatch, caplog):
+def test_cli_probe_and_invalid_inputs_are_safe(cli_config, monkeypatch, caplog, cloud_secrecy_guard):
     config, _ = cli_config
     assert call(config, "add", "--name", "Account", "--key-stdin", input=KEY + "\n").exit_code == 0
     from unifi_api.services import sitemanager_managers
@@ -79,16 +85,16 @@ def test_cli_probe_and_invalid_inputs_are_safe(cli_config, monkeypatch, caplog):
     result = call(config, "probe")
     assert result.exit_code == 0
     assert json.loads(result.output)["ok"] is True
-    assert KEY not in result.output
+    cloud_secrecy_guard(result.output)
     probe.assert_awaited_once_with(page_size=1)
     closed.assert_awaited_once()
     blank = call(config, "update", "--key-stdin", input="\n")
     assert blank.exit_code == 1
     assert "Check the Site Manager request fields" in blank.output
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(caplog.text)
 
 
-def test_cli_has_no_key_value_option():
+def test_cli_has_no_key_value_option(cloud_secrecy_guard):
     runner = CliRunner()
     help_result = runner.invoke(app, ["sitemanager", "--help"])
     assert help_result.exit_code == 0

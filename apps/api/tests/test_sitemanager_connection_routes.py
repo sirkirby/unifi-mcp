@@ -17,7 +17,7 @@ URL = "/v1/sitemanager/connection"
 
 
 @pytest.mark.asyncio
-async def test_crud_metadata_no_upstream_and_rotation(tmp_path, monkeypatch, caplog):
+async def test_crud_metadata_no_upstream_and_rotation(tmp_path, monkeypatch, caplog, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     calls = AsyncMock(side_effect=AssertionError("Unexpected upstream request"))
     monkeypatch.setattr(InventoryManager, "list_hosts", calls)
@@ -47,7 +47,7 @@ async def test_crud_metadata_no_upstream_and_rotation(tmp_path, monkeypatch, cap
         assert len(responses) == 6
         for response in responses:
             assert response.headers["cache-control"] == "no-store"
-            assert KEY not in response.text
+            cloud_secrecy_guard(response.text)
     calls.assert_not_awaited()
     assert factory.invalidate.await_count == 3
     async with app.state.sessionmaker() as session:
@@ -55,8 +55,8 @@ async def test_crud_metadata_no_upstream_and_rotation(tmp_path, monkeypatch, cap
         assert len(rows) == 5
         assert [row.outcome for row in rows] == ["success", "error", "success", "success", "success"]
         assert all(row.controller is None and row.detail is None for row in rows)
-        assert KEY not in str([row.__dict__ for row in rows])
-    assert KEY not in caplog.text
+        cloud_secrecy_guard(str([row.__dict__ for row in rows]))
+    cloud_secrecy_guard(caplog.text)
     await factory.close()
     await app.state.engine.dispose()
 
@@ -64,7 +64,7 @@ async def test_crud_metadata_no_upstream_and_rotation(tmp_path, monkeypatch, cap
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["GET", "POST", "PATCH", "DELETE", "PROBE"])
 @pytest.mark.parametrize("scope", [None, "read", "write", "revoked"])
-async def test_admin_required_before_factory(tmp_path, monkeypatch, method, scope):
+async def test_admin_required_before_factory(tmp_path, monkeypatch, method, scope, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path, scopes="admin" if scope in (None, "revoked") else scope)
     if scope == "revoked":
@@ -87,15 +87,17 @@ async def test_admin_required_before_factory(tmp_path, monkeypatch, method, scop
         )
         assert response.status_code == (401 if scope in (None, "revoked") else 403)
         assert response.headers["cache-control"] == "no-store"
-        assert KEY not in response.text
+        cloud_secrecy_guard(response.text)
     factory.acquire.assert_not_called()
     factory.isolated.assert_not_called()
     await app.state.engine.dispose()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad", [None, "", " ", 42])
-async def test_rejected_key_is_not_echoed_and_cannot_change_row(tmp_path, monkeypatch, caplog, bad):
+@pytest.mark.parametrize("bad", [None, "", " ", 42, {"rejected-secret-marker": KEY}, [KEY]])
+async def test_rejected_key_is_not_echoed_and_cannot_change_row(
+    tmp_path, monkeypatch, caplog, bad, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -106,15 +108,17 @@ async def test_rejected_key_is_not_echoed_and_cannot_change_row(tmp_path, monkey
             response = await client.patch(URL, headers=headers, json=patch)
             assert response.status_code == 422
             assert response.json()["detail"]["kind"] == "invalid_sitemanager_request"
-            assert KEY not in response.text
+            cloud_secrecy_guard(response.text)
+            assert "rejected-secret-marker" not in response.text
         assert (await client.get(URL, headers=headers)).json() == before
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(caplog.text)
+    assert "rejected-secret-marker" not in caplog.text
     await app.state.engine.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fails", [False, True])
-async def test_explicit_probe_closes_isolated_connection(tmp_path, monkeypatch, caplog, fails):
+async def test_explicit_probe_closes_isolated_connection(tmp_path, monkeypatch, caplog, fails, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     from unifi_api.services import sitemanager_managers as managers
 
@@ -142,18 +146,18 @@ async def test_explicit_probe_closes_isolated_connection(tmp_path, monkeypatch, 
             assert response.status_code == (502 if fails else 200)
             assert response.json()["ok"] is not fails
             assert response.json()["error_kind"] == ("sitemanager_auth_failed" if fails else None)
-            assert KEY not in response.text
+            cloud_secrecy_guard(response.text)
             active.connection.close.assert_not_awaited()
             assert len(connections) == 2
             connections[1].close.assert_awaited_once()
     probe.assert_awaited_once_with(page_size=1)
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(caplog.text)
     await app.state.sitemanager_factory.close()
     await app.state.engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_audit_failure_rolls_back_connection_creation(tmp_path, monkeypatch):
+async def test_audit_failure_rolls_back_connection_creation(tmp_path, monkeypatch, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     actual = management.write_audit
@@ -169,7 +173,7 @@ async def test_audit_failure_rolls_back_connection_creation(tmp_path, monkeypatc
             URL, headers={"Authorization": f"Bearer {key}"}, json={"name": "Account", "site_manager_api_key": KEY}
         )
     assert response.status_code == 500
-    assert KEY not in response.text
+    cloud_secrecy_guard(response.text)
     async with app.state.sessionmaker() as session:
         assert (await session.scalars(select(SiteManagerConnection))).all() == []
         audits = (await session.scalars(select(AuditLog))).all()
@@ -179,7 +183,7 @@ async def test_audit_failure_rolls_back_connection_creation(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_cloud_audit_json_admin_csv_and_subscriber_identity(tmp_path, monkeypatch):
+async def test_cloud_audit_json_admin_csv_and_subscriber_identity(tmp_path, monkeypatch, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     from unifi_api.services.audit import add_audit_subscriber
 
@@ -203,7 +207,7 @@ async def test_cloud_audit_json_admin_csv_and_subscriber_identity(tmp_path, monk
                 rendered = await client.get(path, headers=headers, params={"sitemanager_connection": cid})
                 assert rendered.status_code == 200
                 assert cid in rendered.text
-                assert KEY not in rendered.text
+                cloud_secrecy_guard(rendered.text)
                 excluded = await client.get(path, headers=headers, params={"sitemanager_connection": "other-local-id"})
                 assert cid not in excluded.text
             from unifi_api.routes.admin.audit import _make_filter_fn
@@ -213,30 +217,32 @@ async def test_cloud_audit_json_admin_csv_and_subscriber_identity(tmp_path, monk
             assert events[0]["sitemanager_connection"] == cid
             assert filtered(events[0]) is True
             assert filtered({"sitemanager_connection": "other-local-id"}) is False
-            assert KEY not in str(events)
+            cloud_secrecy_guard(str(events))
     finally:
         unsubscribe()
         await app.state.engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_cloud_key_misplaced_in_bearer_is_never_prefixed_in_audit(tmp_path, monkeypatch, caplog):
+async def test_cloud_key_misplaced_in_bearer_is_never_prefixed_in_audit(
+    tmp_path, monkeypatch, caplog, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, _ = await _bootstrap_app(tmp_path)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(URL, headers={"Authorization": f"Bearer {KEY}"})
         assert response.status_code == 401
-        assert KEY not in response.text
+        cloud_secrecy_guard(response.text)
     async with app.state.sessionmaker() as session:
         rows = (await session.scalars(select(AuditLog))).all()
         assert len(rows) == 1
         assert rows[0].key_id_prefix == "(unverified)"
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(caplog.text)
     await app.state.engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_total_audit_failure_is_safe_and_fail_visible(tmp_path, monkeypatch, caplog):
+async def test_total_audit_failure_is_safe_and_fail_visible(tmp_path, monkeypatch, caplog, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     monkeypatch.setattr(management, "write_audit", AsyncMock(side_effect=RuntimeError(KEY)))
@@ -246,8 +252,8 @@ async def test_total_audit_failure_is_safe_and_fail_visible(tmp_path, monkeypatc
         )
         assert response.status_code == 500
         assert response.headers["cache-control"] == "no-store"
-        assert KEY not in response.text
-    assert KEY not in caplog.text
+        cloud_secrecy_guard(response.text)
+    cloud_secrecy_guard(caplog.text)
     assert all(record.exc_info is None for record in caplog.records)
     async with app.state.sessionmaker() as session:
         assert (await session.scalars(select(SiteManagerConnection))).all() == []

@@ -24,7 +24,7 @@ from unifi_api.services.sitemanager_connections import (
 )
 from unifi_core.sitemanager.models.connections import SiteManagerConnectionCreate, SiteManagerConnectionPatch
 
-KEY = "synthetic-cloud-key-DO-NOT-DISCLOSE-42"
+from tests.sitemanager_secrets import KEY
 
 
 @pytest_asyncio.fixture
@@ -47,7 +47,7 @@ async def seed(store):
 
 
 @pytest.mark.asyncio
-async def test_storage_crud_and_isolation(store):
+async def test_storage_crud_and_isolation(store, cloud_secrecy_guard):
     sm, cipher = store
     row = await seed(store)
     assert KEY.encode() not in row.api_key_blob
@@ -56,7 +56,7 @@ async def test_storage_crud_and_isolation(store):
         with pytest.raises(InvalidTag):
             cipher.decrypt(row.api_key_blob, associated_data=aad)
     assert set(metadata(row)) == {"id", "name", "key_configured", "revision", "created_at", "updated_at"}
-    assert KEY not in str(metadata(row))
+    cloud_secrecy_guard(str(metadata(row)))
     async with sm() as session:
         assert (await session.scalars(select(Controller))).all() == []
         before = metadata(await get_connection(session))
@@ -82,7 +82,7 @@ async def test_storage_crud_and_isolation(store):
 
 
 @pytest.mark.asyncio
-async def test_singleton_conflict_and_database_checks(store):
+async def test_singleton_conflict_and_database_checks(store, cloud_secrecy_guard):
     sm, cipher = store
     await seed(store)
     async with sm() as session:
@@ -112,7 +112,7 @@ async def test_singleton_conflict_and_database_checks(store):
 
 
 @pytest.mark.asyncio
-async def test_audit_identity_survives_deletion_and_rejects_mixed_target(store):
+async def test_audit_identity_survives_deletion_and_rejects_mixed_target(store, cloud_secrecy_guard):
     sm, _ = store
     row = await seed(store)
     async with sm() as session:
@@ -144,7 +144,7 @@ async def test_audit_identity_survives_deletion_and_rejects_mixed_target(store):
 
 
 @pytest.mark.parametrize("products", [["sitemanager"], ["unknown"], ["network", "sitemanager"]])
-def test_shared_console_validator_rejects_cloud(products):
+def test_shared_console_validator_rejects_cloud(products, cloud_secrecy_guard):
     from fastapi import HTTPException
     from unifi_api.routes.admin.controllers import _parse_product_kinds
     from unifi_api.services.controllers import InvalidControllerCredentials, validate_controller_credentials
@@ -157,7 +157,7 @@ def test_shared_console_validator_rejects_cloud(products):
 
 
 @pytest.mark.asyncio
-async def test_singleton_constraint_rejects_concurrent_create(store):
+async def test_singleton_constraint_rejects_concurrent_create(store, cloud_secrecy_guard):
     import asyncio
 
     sm, cipher = store
@@ -182,7 +182,7 @@ async def test_singleton_constraint_rejects_concurrent_create(store):
 
 
 @pytest.mark.asyncio
-async def test_revisions_use_database_arithmetic_across_sessions(store):
+async def test_revisions_use_database_arithmetic_across_sessions(store, cloud_secrecy_guard):
     import asyncio
 
     sm, cipher = store
@@ -198,3 +198,50 @@ async def test_revisions_use_database_arithmetic_across_sessions(store):
     await asyncio.gather(*(rotate() for _ in range(5)))
     async with sm() as session:
         assert (await get_connection(session)).revision == 6
+
+
+@pytest.mark.asyncio
+async def test_console_and_cloud_ciphertext_cannot_cross_credential_paths(store, cloud_secrecy_guard):
+    from unifi_api.services.controllers import CreateControllerPayload, create_controller, update_controller
+    from unifi_api.services.sitemanager_connections import SiteManagerConfigurationError
+    from unifi_api.services.sitemanager_managers import SiteManagerFactory
+
+    sm, cipher = store
+    cloud = await seed(store)
+    async with sm() as session:
+        console = await create_controller(
+            session,
+            cipher,
+            CreateControllerPayload(
+                name="Console",
+                base_url="https://192.0.2.1",
+                product_kinds=["network"],
+                username="synthetic-console-user",
+                password="synthetic-console-password",
+                api_token="synthetic-console-token",
+                verify_tls=True,
+                is_default=True,
+            ),
+        )
+        await session.commit()
+    with pytest.raises(InvalidTag):
+        cipher.decrypt(console.credentials_blob, associated_data=associated_data(cloud.id))
+    with pytest.raises(InvalidTag):
+        cipher.decrypt(cloud.api_key_blob)
+    # Exercise each actual consumer with ciphertext transplanted from the other path.
+    async with sm() as session:
+        stored = await session.get(SiteManagerConnection, cloud.id)
+        stored.api_key_blob = console.credentials_blob
+        stored_console = await session.get(Controller, console.id)
+        stored_console.credentials_blob = cloud.api_key_blob
+        await session.commit()
+    factory = SiteManagerFactory(sm, cipher)
+    try:
+        with pytest.raises(SiteManagerConfigurationError):
+            async with factory.acquire():
+                pytest.fail("Cloud factory accepted console ciphertext")
+        async with sm() as session:
+            with pytest.raises(InvalidTag):
+                await update_controller(session, cipher, console.id, api_token="synthetic-replacement")
+    finally:
+        await factory.close()

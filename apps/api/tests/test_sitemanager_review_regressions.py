@@ -47,7 +47,7 @@ async def legacy_controller(app):
 
 
 @pytest.mark.asyncio
-async def test_empty_product_controller_accepts_credential_only_patch(tmp_path, monkeypatch):
+async def test_empty_product_controller_accepts_credential_only_patch(tmp_path, monkeypatch, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -67,7 +67,9 @@ async def test_empty_product_controller_accepts_credential_only_patch(tmp_path, 
 
 
 @pytest.mark.asyncio
-async def test_stored_legacy_kinds_accept_credential_update_without_revalidation(tmp_path, monkeypatch):
+async def test_stored_legacy_kinds_accept_credential_update_without_revalidation(
+    tmp_path, monkeypatch, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     row = await legacy_controller(app)
@@ -97,7 +99,7 @@ async def test_stored_legacy_kinds_accept_credential_update_without_revalidation
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("listing", [True, False])
-async def test_stored_legacy_kinds_remain_readable(tmp_path, monkeypatch, listing):
+async def test_stored_legacy_kinds_remain_readable(tmp_path, monkeypatch, listing, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     row = await legacy_controller(app)
@@ -119,7 +121,7 @@ async def test_stored_legacy_kinds_remain_readable(tmp_path, monkeypatch, listin
 
 
 @pytest.mark.asyncio
-async def test_console_unknown_fields_still_ignored_on_create_and_patch(tmp_path, monkeypatch):
+async def test_console_unknown_fields_still_ignored_on_create_and_patch(tmp_path, monkeypatch, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -137,7 +139,7 @@ async def test_console_unknown_fields_still_ignored_on_create_and_patch(tmp_path
             )
             assert response.status_code == 200
             assert response.json()["name"] == "Renamed"
-            assert KEY not in response.text
+            cloud_secrecy_guard(response.text)
         async with app.state.sessionmaker() as session:
             row = await session.get(Controller, created["id"])
             assert json.loads(app.state.cipher.decrypt(row.credentials_blob)) == {
@@ -152,7 +154,9 @@ async def test_console_unknown_fields_still_ignored_on_create_and_patch(tmp_path
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["rotation", "delete"])
-async def test_postcommit_close_failure_cannot_change_success_or_audit(tmp_path, monkeypatch, caplog, operation):
+async def test_postcommit_close_failure_cannot_change_success_or_audit(
+    tmp_path, monkeypatch, caplog, operation, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -161,7 +165,8 @@ async def test_postcommit_close_failure_cannot_change_success_or_audit(tmp_path,
             assert (
                 await client.post(URL, headers=headers, json={"name": "Account", "site_manager_api_key": KEY})
             ).status_code == 201
-            app.state.sitemanager_factory.invalidate = AsyncMock(side_effect=RuntimeError(KEY))
+            async with app.state.sitemanager_factory.acquire() as cached:
+                cached.connection.close = AsyncMock(side_effect=RuntimeError(KEY))
             if operation == "rotation":
                 response = await client.patch(
                     URL, headers=headers, json={"site_manager_api_key": "synthetic-rotated-cloud-key"}
@@ -186,7 +191,12 @@ async def test_postcommit_close_failure_cannot_change_success_or_audit(tmp_path,
             assert len(audit) == 2
             assert [row.outcome for row in audit] == ["success", "success"]
             assert audit[1].target == "sitemanager.connection." + ("update" if operation == "rotation" else "delete")
-        assert KEY not in caplog.text and KEY not in response.text
+        cached.connection.close.assert_awaited_once()
+        cloud_secrecy_guard(caplog.text)
+        cloud_secrecy_guard(response.text)
+        if operation == "rotation":
+            cloud_secrecy_guard(response.text, key="synthetic-rotated-cloud-key")
+            cloud_secrecy_guard(caplog.text, key="synthetic-rotated-cloud-key")
         assert "RuntimeError" in caplog.text
         assert all(record.exc_info is None for record in caplog.records)
     finally:
@@ -195,7 +205,9 @@ async def test_postcommit_close_failure_cannot_change_success_or_audit(tmp_path,
 
 
 @pytest.mark.asyncio
-async def test_delete_between_account_read_and_update_returns_not_configured(tmp_path, monkeypatch):
+async def test_delete_between_account_read_and_update_returns_not_configured(
+    tmp_path, monkeypatch, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -233,7 +245,9 @@ async def test_delete_between_account_read_and_update_returns_not_configured(tmp
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scope", [None, "read", "write"])
 @pytest.mark.parametrize("method", ["POST", "PATCH"])
-async def test_cloud_authorization_precedes_malformed_body_parsing(tmp_path, monkeypatch, scope, method):
+async def test_cloud_authorization_precedes_malformed_body_parsing(
+    tmp_path, monkeypatch, scope, method, cloud_secrecy_guard
+):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path, scopes=scope or "admin")
     headers = {"content-type": "application/json"}

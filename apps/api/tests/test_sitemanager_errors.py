@@ -40,7 +40,7 @@ CASES = [
 @pytest.mark.asyncio
 @pytest.mark.parametrize("error,status,kind", CASES, ids=[case[2] + str(i) for i, case in enumerate(CASES)])
 async def test_probe_error_mapping_never_returns_or_logs_upstream_text(
-    tmp_path, monkeypatch, caplog, error, status, kind
+    tmp_path, monkeypatch, caplog, error, status, kind, cloud_secrecy_guard
 ):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     monkeypatch.setattr(InventoryManager, "list_hosts", AsyncMock(side_effect=error))
@@ -57,15 +57,15 @@ async def test_probe_error_mapping_never_returns_or_logs_upstream_text(
         body = response.json()
         assert body["ok"] is False and body["error_kind"] == kind
         assert "Failed to probe Site Manager connection" in body["message"]
-        assert KEY not in response.text
+        cloud_secrecy_guard(response.text)
         assert "retry-after" not in response.headers
         assert response.headers["cache-control"] == "no-store"
-    assert KEY not in caplog.text
+    cloud_secrecy_guard(caplog.text)
     assert all(record.exc_info is None for record in caplog.records)
     await app.state.engine.dispose()
 
 
-def test_opaque_exception_renderer_is_not_invoked(caplog):
+def test_opaque_exception_renderer_is_not_invoked(caplog, cloud_secrecy_guard):
     class OpaqueError(Exception):
         def __str__(self):
             raise AssertionError("Exception text rendered")

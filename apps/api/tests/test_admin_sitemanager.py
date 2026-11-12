@@ -11,7 +11,7 @@ from tests.test_sitemanager_connections import KEY
 
 
 @pytest.mark.asyncio
-async def test_admin_shell_and_empty_forms_then_crud(tmp_path, monkeypatch, caplog):
+async def test_admin_shell_and_empty_forms_then_crud(tmp_path, monkeypatch, caplog, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
@@ -19,7 +19,8 @@ async def test_admin_shell_and_empty_forms_then_crud(tmp_path, monkeypatch, capl
         shell = await client.get("/admin/sitemanager")
         assert shell.status_code == 200
         assert 'hx-get="/admin/sitemanager/_connection"' in shell.text
-        assert "Account label" not in shell.text and KEY not in shell.text
+        assert "Account label" not in shell.text
+        cloud_secrecy_guard(shell.text)
         empty = await client.get("/admin/sitemanager/_connection", headers=headers)
         assert "No Site Manager" in empty.text
         new = await client.get("/admin/sitemanager/_new_form", headers=headers)
@@ -43,14 +44,14 @@ async def test_admin_shell_and_empty_forms_then_crud(tmp_path, monkeypatch, capl
         for bad in ({"base_url": KEY}, {"site_manager_api_key": KEY, "api_token": KEY}):
             rejected = await client.post("/admin/sitemanager/update", headers=headers, data=bad)
             assert rejected.status_code == 422
-            assert KEY not in rejected.text
+            cloud_secrecy_guard(rejected.text)
         assert (await client.post("/admin/sitemanager/delete", headers=headers)).status_code == 200
         responses = [shell, empty, new, created, edited, update]
         assert len(responses) == 6
         for response in responses:
             assert response.headers["cache-control"] == "no-store"
-            assert KEY not in response.text
-    assert KEY not in caplog.text
+            cloud_secrecy_guard(response.text)
+    cloud_secrecy_guard(caplog.text)
     await app.state.engine.dispose()
 
 
@@ -68,7 +69,7 @@ async def test_admin_shell_and_empty_forms_then_crud(tmp_path, monkeypatch, capl
         ("POST", "probe"),
     ],
 )
-async def test_all_fragments_and_actions_require_admin(tmp_path, monkeypatch, scope, method, path):
+async def test_all_fragments_and_actions_require_admin(tmp_path, monkeypatch, scope, method, path, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path, scopes=scope or "admin")
     headers = {} if scope is None else {"Authorization": f"Bearer {key}"}
@@ -80,7 +81,7 @@ async def test_all_fragments_and_actions_require_admin(tmp_path, monkeypatch, sc
 
 
 @pytest.mark.asyncio
-async def test_admin_probe_discards_account_data(tmp_path, monkeypatch):
+async def test_admin_probe_discards_account_data(tmp_path, monkeypatch, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     probe = AsyncMock(return_value=([{"name": KEY}], "secret-cursor"))
     monkeypatch.setattr(InventoryManager, "list_hosts", probe)
@@ -93,7 +94,8 @@ async def test_admin_probe_discards_account_data(tmp_path, monkeypatch):
         response = await client.post("/admin/sitemanager/probe", headers=headers)
         assert response.status_code == 200
         assert "Connected" in response.text
-        assert KEY not in response.text and "secret-cursor" not in response.text
+        cloud_secrecy_guard(response.text)
+        assert "secret-cursor" not in response.text
     probe.assert_awaited_once_with(page_size=1)
     await app.state.sitemanager_factory.close()
     await app.state.engine.dispose()

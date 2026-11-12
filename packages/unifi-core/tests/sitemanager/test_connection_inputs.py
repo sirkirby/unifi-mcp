@@ -12,6 +12,7 @@ def test_create_and_omitted_patch():
     assert value.name == "Test account"
     assert isinstance(value.site_manager_api_key, SecretStr)
     assert KEY not in repr(value)
+    assert KEY[:8] not in repr(value) and KEY[-8:] not in repr(value)
     assert SiteManagerConnectionPatch().model_fields_set == set()
 
 
@@ -22,6 +23,8 @@ def test_create_and_omitted_patch():
         ("site_manager_api_key", None),
         ("site_manager_api_key", " "),
         ("site_manager_api_key", 12),
+        ("site_manager_api_key", {"rejected-secret-marker": KEY}),
+        ("site_manager_api_key", [KEY]),
         ("name", None),
         ("name", " "),
         ("name", "a" * 129),
@@ -37,3 +40,4 @@ def test_invalid_inputs_are_value_free(model, field, value):
     with pytest.raises(ValidationError) as error:
         model.model_validate(data)
     assert KEY not in str(error.value)
+    assert KEY[:8] not in str(error.value) and KEY[-8:] not in str(error.value)
