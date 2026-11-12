@@ -140,6 +140,18 @@ async def test_bad_request_reason_never_carries_the_api_key(connection, api):
     assert "unexpected header value [redacted] in request" in str(raised.value)
 
 
+@pytest.mark.parametrize("status", [400, 401, 403, 500])
+async def test_an_echoed_api_key_never_reaches_an_error_through_the_trace_or_code(connection, api, status):
+    api.reply("GET", "/v1/hosts", {"traceId": f"tr-{KEY}", "code": KEY, "message": "nope"}, status=status)
+
+    with pytest.raises(Exception) as raised:
+        await connection.get("/v1/hosts")
+
+    error = raised.value
+    assert KEY not in str(error) and "tr-[redacted]" in str(error)
+    assert KEY not in repr(vars(error))
+
+
 @pytest.mark.parametrize("payload", [["not", "an", "envelope"], {"httpStatusCode": 200}])
 async def test_unreadable_success_body_is_malformed(connection, api, payload):
     api.reply("GET", "/v1/hosts", payload)

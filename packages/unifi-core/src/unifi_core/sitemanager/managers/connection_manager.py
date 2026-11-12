@@ -247,9 +247,15 @@ def _upstream_text(payload: Any, key: str) -> str | None:
     return None
 
 
+def _scrub(text: str | None, secret: str) -> str | None:
+    return text.replace(secret, "[redacted]") if text and secret else text
+
+
 def _interpret(status: int, payload: Any, resource: tuple[str, str] | None, *, secret: str = "") -> SiteManagerResponse:
-    trace_id = _upstream_text(payload, "traceId")
-    code = _upstream_text(payload, "code")
+    # Upstream text reaches the caller in error messages, so a key echoed back
+    # in any of it is removed first.
+    trace_id = _scrub(_upstream_text(payload, "traceId"), secret)
+    code = _scrub(_upstream_text(payload, "code"), secret)
     suffix = f" (trace {trace_id})" if trace_id else ""
     if status == 200:
         if not isinstance(payload, dict) or "data" not in payload:
@@ -272,11 +278,7 @@ def _interpret(status: int, payload: Any, resource: tuple[str, str] | None, *, s
     if status == 404 and resource is not None:
         raise UniFiNotFoundError(resource[0], resource[1])
     if status == 400:
-        message = _upstream_text(payload, "message")
-        # The reason is upstream text that reaches the caller, so a key echoed
-        # back in it is removed before the text is cut to length.
-        if message and secret:
-            message = message.replace(secret, "[redacted]")
+        message = _scrub(_upstream_text(payload, "message"), secret)
         detail = f": {message[:_UPSTREAM_MESSAGE_LIMIT]}" if message else ""
         raise UniFiValidationError(f"Site Manager API rejected the request (400){detail}{suffix}")
     raise SiteManagerHttpError(

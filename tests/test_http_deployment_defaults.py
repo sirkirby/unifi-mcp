@@ -61,7 +61,12 @@ def test_compose_sitemanager_is_opt_in_loopback_and_outside_the_relay():
         "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE",
         "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET",
         "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
+        "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN",
+        "UNIFI_MCP_HTTP_AUTH_TOKEN",
     }
+    # Passed through bare, so an unset token stays unset instead of empty.
+    assert "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_MCP_HTTP_AUTH_TOKEN" in service["environment"]
     assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
     assert "UNIFI_MCP_PORT=3003" in service["environment"]
 

@@ -71,6 +71,11 @@ services:
       - UNIFI_SITEMANAGER_API_KEY=${UNIFI_SITEMANAGER_API_KEY:-}
       - UNIFI_SITEMANAGER_API_KEY_FILE=${UNIFI_SITEMANAGER_API_KEY_FILE:-}
       - UNIFI_SITEMANAGER_API_KEY_COMMAND=${UNIFI_SITEMANAGER_API_KEY_COMMAND:-}
+      # Bearer token for the HTTP endpoint, passed through only when set in
+      # the shell. Other containers on the Compose network can reach this
+      # service, so set one before exposing account-wide inventory.
+      - UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN
+      - UNIFI_MCP_HTTP_AUTH_TOKEN
       - UNIFI_MCP_HTTP_ENABLED=true
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0
