@@ -649,6 +649,37 @@ class TestUpdateTrafficRouteValidation:
         connection.request.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_kill_switch_update_on_multi_client_vpn_route_passes_the_real_guard(self):
+        connection = MagicMock()
+        connection.site = "default"
+        connection.request = AsyncMock(return_value={})
+        network_manager = MagicMock()
+        network_manager.get_network_details = AsyncMock(return_value={"_id": "vpn-tunnel", "purpose": "vpn-client"})
+        manager = TrafficRouteManager(connection, network_manager)
+        current = copy.deepcopy(SAMPLE_ROUTE)
+        current.update(
+            {
+                "matching_target": "INTERNET",
+                "network_id": "vpn-tunnel",
+                "domains": [],
+                "target_devices": [
+                    {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"},
+                    {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:02"},
+                ],
+            }
+        )
+        manager.get_traffic_route_details = AsyncMock(return_value=current)
+        with patch("unifi_network_mcp.tools.traffic_routes.traffic_route_manager", manager):
+            from unifi_network_mcp.tools.traffic_routes import update_traffic_route
+
+            result = await update_traffic_route("route-001", kill_switch_enabled=True)
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        network_manager.get_network_details.assert_awaited_once_with("vpn-tunnel", force_refresh=True)
+        connection.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_disabling_with_equivalent_mac_skips_preview_wan_lookup(self):
         mgr = _mock_manager()
         current = copy.deepcopy(SAMPLE_ROUTE)

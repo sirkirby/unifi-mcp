@@ -825,7 +825,9 @@ async def test_internet_route_accepts_several_clients_through_wan_or_vpn_client(
     ]
 
 
-@pytest.mark.parametrize("purpose", ["corporate", "guest", "remote-user-vpn", "site-vpn", "wan_magic", ""])
+@pytest.mark.parametrize(
+    "purpose", ["corporate", "guest", "remote-user-vpn", "vpn-server", "site-vpn", "vlan-only", "wan_magic", ""]
+)
 @pytest.mark.asyncio
 async def test_internet_route_refuses_networks_that_are_not_egress(purpose: str) -> None:
     manager, connection, _ = _manager(purpose=purpose)
@@ -914,6 +916,11 @@ async def test_update_of_enabled_multi_client_vpn_route_succeeds_unchanged_scope
             True,
         ),
         (MULTI_CLIENT_TARGET, MULTI_CLIENT_TARGET[:2], False),
+        (
+            MULTI_CLIENT_TARGET,
+            [*MULTI_CLIENT_TARGET[:2], {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:04"}],
+            False,
+        ),
         (MULTI_CLIENT_TARGET, [*MULTI_CLIENT_TARGET, {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:04"}], False),
         (MULTI_CLIENT_TARGET, [{"type": "ALL_CLIENTS"}], False),
     ],

@@ -242,7 +242,7 @@ class TrafficRouteManager:
             raise TrafficRoutePreflightError(str(exc)) from None
         except Exception:
             raise TrafficRoutePreflightError(
-                "Could not verify the target WAN network before creating the route. "
+                "Could not verify the target network before creating the route. "
                 "Check controller connectivity and session authentication."
             ) from None
         api_request = ApiRequestV2(method="post", path="/trafficroutes", data=payload)
