@@ -130,6 +130,16 @@ async def test_bad_request_includes_bounded_upstream_reason(connection, api):
     assert "x" * 200 in str(raised.value) and "x" * 201 not in str(raised.value)
 
 
+async def test_bad_request_reason_never_carries_the_api_key(connection, api):
+    api.reply("GET", "/v1/hosts", {"message": f"unexpected header value {KEY} in request"}, status=400)
+
+    with pytest.raises(UniFiValidationError) as raised:
+        await connection.get("/v1/hosts")
+
+    assert KEY not in str(raised.value)
+    assert "unexpected header value [redacted] in request" in str(raised.value)
+
+
 @pytest.mark.parametrize("payload", [["not", "an", "envelope"], {"httpStatusCode": 200}])
 async def test_unreadable_success_body_is_malformed(connection, api, payload):
     api.reply("GET", "/v1/hosts", payload)

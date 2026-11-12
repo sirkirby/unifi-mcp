@@ -174,7 +174,7 @@ class SiteManagerConnectionManager:
             attempt += 1
             status, retry_after, payload = await self._send(method, path, url, headers, json_body)
             if status != 429:
-                return _interpret(status, payload, resource)
+                return _interpret(status, payload, resource, secret=self._api_key)
             wait = _retry_after_seconds(retry_after)
             can_retry = (
                 method == "GET"
@@ -247,7 +247,7 @@ def _upstream_text(payload: Any, key: str) -> str | None:
     return None
 
 
-def _interpret(status: int, payload: Any, resource: tuple[str, str] | None) -> SiteManagerResponse:
+def _interpret(status: int, payload: Any, resource: tuple[str, str] | None, *, secret: str = "") -> SiteManagerResponse:
     trace_id = _upstream_text(payload, "traceId")
     code = _upstream_text(payload, "code")
     suffix = f" (trace {trace_id})" if trace_id else ""
@@ -273,6 +273,10 @@ def _interpret(status: int, payload: Any, resource: tuple[str, str] | None) -> S
         raise UniFiNotFoundError(resource[0], resource[1])
     if status == 400:
         message = _upstream_text(payload, "message")
+        # The reason is upstream text that reaches the caller, so a key echoed
+        # back in it is removed before the text is cut to length.
+        if message and secret:
+            message = message.replace(secret, "[redacted]")
         detail = f": {message[:_UPSTREAM_MESSAGE_LIMIT]}" if message else ""
         raise UniFiValidationError(f"Site Manager API rejected the request (400){detail}{suffix}")
     raise SiteManagerHttpError(
