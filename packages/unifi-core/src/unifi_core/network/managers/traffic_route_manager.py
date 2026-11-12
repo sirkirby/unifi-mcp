@@ -30,6 +30,9 @@ CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 # but invalidate them together after every traffic-route mutation.
 CACHE_PREFIX_LEGACY_TRAFFIC_ROUTES = "legacy_traffic_routes"
 _CLIENT_MAC_PATTERN = re.compile(r"^[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}$")
+# Network purposes an INTERNET route may egress through: a WAN uplink, or a
+# VPN client tunnel configured on the gateway. VPN servers and LANs are not egress.
+_INTERNET_ROUTE_TARGET_PURPOSES = frozenset({"wan", "vpn-client"})
 
 
 def is_unicast_client_mac(value: Any) -> bool:
@@ -50,24 +53,32 @@ class TrafficRoutePreflightError(ValueError):
     """A route write was rejected before a controller mutation was attempted."""
 
 
+def _client_scope_macs(value: Any) -> Optional[List[str]]:
+    """Return the sorted canonical MACs of an all-``CLIENT`` target list, else ``None``."""
+    if not isinstance(value, list) or not value:
+        return None
+    macs = []
+    for target in value:
+        if not isinstance(target, dict) or set(target) != {"type", "client_mac"} or target["type"] != "CLIENT":
+            return None
+        mac = canonical_mac(target["client_mac"])
+        if mac is None:
+            return None
+        macs.append(mac)
+    return sorted(macs)
+
+
 def _same_client_scope(left: Any, right: Any) -> bool:
     if left == right:
         return True
-    if not all(isinstance(value, list) and len(value) == 1 for value in (left, right)):
-        return False
-    first, second = left[0], right[0]
-    if not all(isinstance(value, dict) and set(value) == {"type", "client_mac"} for value in (first, second)):
-        return False
-    if first["type"] != "CLIENT" or second["type"] != "CLIENT":
-        return False
-    first_mac, second_mac = canonical_mac(first["client_mac"]), canonical_mac(second["client_mac"])
-    return first_mac is not None and first_mac == second_mac
+    left_macs, right_macs = _client_scope_macs(left), _client_scope_macs(right)
+    return left_macs is not None and left_macs == right_macs
 
 
 def internet_route_requires_target_validation(
     payload: Dict[str, Any], existing_payload: Optional[Dict[str, Any]]
 ) -> bool:
-    """Return whether a new or changed INTERNET scope needs fresh WAN verification."""
+    """Return whether a new or changed INTERNET scope needs fresh target verification."""
     target = payload.get("matching_target")
     if type(target) is not str or target.strip().upper() != "INTERNET":
         return False
@@ -106,20 +117,24 @@ class TrafficRouteManager:
         self._network_manager = network_manager or NetworkManager(connection_manager)
 
     async def validate_internet_route_target(self, target_devices: Any, network_id: Any) -> None:
-        """Require an Internet route to target one explicit client via a WAN."""
-        if not isinstance(target_devices, list) or len(target_devices) != 1:
-            raise TrafficRouteValidationError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
+        """Require an Internet route to target explicit clients via a WAN or VPN client network."""
+        if not isinstance(target_devices, list) or not target_devices:
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require one or more explicit CLIENT targets")
 
-        target = target_devices[0]
-        if not isinstance(target, dict) or target.get("type") != "CLIENT":
-            raise TrafficRouteValidationError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
-
-        client_mac = target.get("client_mac")
-        if not is_unicast_client_mac(client_mac):
-            raise TrafficRouteValidationError("INTERNET Traffic Routes require a valid unicast client MAC address")
+        seen_macs = set()
+        for target in target_devices:
+            if not isinstance(target, dict) or target.get("type") != "CLIENT":
+                raise TrafficRouteValidationError("INTERNET Traffic Routes require one or more explicit CLIENT targets")
+            client_mac = target.get("client_mac")
+            if not is_unicast_client_mac(client_mac):
+                raise TrafficRouteValidationError("INTERNET Traffic Routes require a valid unicast client MAC address")
+            canonical = canonical_mac(client_mac)
+            if canonical in seen_macs:
+                raise TrafficRouteValidationError("INTERNET Traffic Routes must not list the same client twice")
+            seen_macs.add(canonical)
 
         if not isinstance(network_id, str) or not network_id:
-            raise TrafficRouteValidationError("INTERNET Traffic Routes require a target WAN network")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require a target WAN or VPN client network")
 
         auth_status = getattr(self._connection, "authentication_status", None)
         if isinstance(auth_status, AuthenticationStatus) and not auth_status.session_available:
@@ -135,11 +150,14 @@ class TrafficRouteManager:
             raise
         except Exception:
             raise TrafficRoutePreflightError(
-                "Could not verify the target WAN network before writing the route. "
+                "Could not verify the target network before writing the route. "
                 "Check controller connectivity and session authentication."
             ) from None
-        if not isinstance(target_network, dict) or str(target_network.get("purpose", "")).lower() != "wan":
-            raise TrafficRouteValidationError("INTERNET Traffic Routes can target only a verified WAN network")
+        purpose = str(target_network.get("purpose", "")).lower() if isinstance(target_network, dict) else ""
+        if purpose not in _INTERNET_ROUTE_TARGET_PURPOSES:
+            raise TrafficRouteValidationError(
+                "INTERNET Traffic Routes can target only a verified WAN or VPN client network"
+            )
 
     async def _validate_internet_route_payload(
         self,
@@ -224,7 +242,7 @@ class TrafficRouteManager:
             raise TrafficRoutePreflightError(str(exc)) from None
         except Exception:
             raise TrafficRoutePreflightError(
-                "Could not verify the target WAN network before creating the route. "
+                "Could not verify the target network before creating the route. "
                 "Check controller connectivity and session authentication."
             ) from None
         api_request = ApiRequestV2(method="post", path="/trafficroutes", data=payload)

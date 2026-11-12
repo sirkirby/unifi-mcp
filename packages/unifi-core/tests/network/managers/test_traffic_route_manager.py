@@ -1,12 +1,17 @@
 """Safety validation for TrafficRouteManager mutations."""
 
+import copy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager, TrafficRoutePreflightError
+from unifi_core.network.managers.traffic_route_manager import (
+    TrafficRouteManager,
+    TrafficRoutePreflightError,
+    internet_route_requires_target_validation,
+)
 
 VALID_TARGET = [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}]
 VALID_DOMAIN_ROUTE = {
@@ -336,7 +341,7 @@ async def test_internet_wan_validation_requires_session_before_public_inventory_
 async def test_create_rejects_internet_route_with_non_wan_target() -> None:
     manager, connection, network_manager = _manager(purpose="remote-user-vpn")
 
-    with pytest.raises(ValueError, match="WAN network"):
+    with pytest.raises(ValueError, match="WAN or VPN client network"):
         await manager.create_traffic_route(
             {
                 "description": "Desktop route",
@@ -375,7 +380,7 @@ async def test_create_rejects_non_unicast_internet_route_client_mac(client_mac: 
 async def test_create_rejects_disabled_internet_route_with_non_wan_target() -> None:
     manager, connection, _ = _manager(purpose="remote-user-vpn")
 
-    with pytest.raises(ValueError, match="WAN network"):
+    with pytest.raises(ValueError, match="WAN or VPN client network"):
         await manager.create_traffic_route(
             {
                 "description": "Disabled unsafe route",
@@ -403,7 +408,7 @@ async def test_update_cannot_enable_unsafe_legacy_internet_route() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
         await manager.update_traffic_route("route-unsafe", enabled=True)
 
     connection.request.assert_not_awaited()
@@ -444,7 +449,7 @@ async def test_toggle_cannot_enable_unsafe_legacy_internet_route() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
         await manager.toggle_traffic_route("route-unsafe")
 
     connection.request.assert_not_awaited()
@@ -468,7 +473,7 @@ async def test_toggle_revalidates_the_route_refetched_for_mutation() -> None:
     }
     manager.get_traffic_route_details = AsyncMock(side_effect=[safe_disabled_route, unsafe_disabled_route])
 
-    with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
         await manager.toggle_traffic_route("route-race")
 
     connection.request.assert_not_awaited()
@@ -523,7 +528,7 @@ async def test_update_cannot_make_disabled_internet_route_unsafe() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="WAN network"):
+    with pytest.raises(ValueError, match="WAN or VPN client network"):
         await manager.update_traffic_route("route-disabled", network_id="vpn-target")
 
     connection.request.assert_not_awaited()
@@ -559,7 +564,7 @@ async def test_update_can_retarget_valid_internet_route_without_expanding_scope(
 
 
 @pytest.mark.asyncio
-async def test_update_cannot_expand_enabled_internet_route() -> None:
+async def test_update_adding_clients_to_enabled_internet_route_reverifies_target() -> None:
     manager, connection, network_manager = _manager()
     manager.get_traffic_route_details = AsyncMock(
         return_value={
@@ -567,12 +572,12 @@ async def test_update_cannot_expand_enabled_internet_route() -> None:
             "description": "Safe route",
             "matching_target": "INTERNET",
             "network_id": "wan-target",
-            "target_devices": VALID_TARGET,
+            "target_devices": copy.deepcopy(VALID_TARGET),
             "enabled": True,
         }
     )
 
-    with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+    assert (
         await manager.update_traffic_route(
             "route-safe",
             target_devices=[
@@ -580,6 +585,32 @@ async def test_update_cannot_expand_enabled_internet_route() -> None:
                 {"type": "CLIENT", "client_mac": "22:33:44:55:66:77"},
             ],
         )
+        is True
+    )
+
+    network_manager.get_network_details.assert_awaited_once_with("wan-target", force_refresh=True)
+    assert connection.request.await_args.args[0].data["target_devices"] == [
+        {"type": "CLIENT", "client_mac": "12:22:33:44:55:66"},
+        {"type": "CLIENT", "client_mac": "22:33:44:55:66:77"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_update_cannot_widen_enabled_internet_route_to_all_clients() -> None:
+    manager, connection, network_manager = _manager()
+    manager.get_traffic_route_details = AsyncMock(
+        return_value={
+            "_id": "route-safe",
+            "description": "Safe route",
+            "matching_target": "INTERNET",
+            "network_id": "wan-target",
+            "target_devices": copy.deepcopy(VALID_TARGET),
+            "enabled": True,
+        }
+    )
+
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
+        await manager.update_traffic_route("route-safe", target_devices=[{"type": "ALL_CLIENTS"}])
 
     network_manager.get_network_details.assert_not_awaited()
     connection.request.assert_not_awaited()
@@ -620,7 +651,7 @@ async def test_update_kill_switch_rejects_unsafe_enabled_internet_route() -> Non
         }
     )
 
-    with pytest.raises(ValueError, match="exactly one explicit CLIENT"):
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
         await manager.update_kill_switch("route-unsafe", enabled=True)
 
     connection.request.assert_not_awaited()
@@ -761,3 +792,141 @@ class TestTrafficRouteCacheCoherence:
             await manager.update_kill_switch("route-kill-switch", enabled=True)
 
         assert cache == {}
+
+
+MULTI_CLIENT_TARGET = [
+    {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"},
+    {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:02"},
+    {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:03"},
+]
+
+
+@pytest.mark.parametrize("purpose", ["wan", "vpn-client", "VPN-Client"])
+@pytest.mark.asyncio
+async def test_internet_route_accepts_several_clients_through_wan_or_vpn_client(purpose: str) -> None:
+    manager, connection, network_manager = _manager(purpose=purpose)
+
+    await manager.create_traffic_route(
+        {
+            "description": "Several clients",
+            "matching_target": "INTERNET",
+            "network_id": "egress-target",
+            "target_devices": copy.deepcopy(MULTI_CLIENT_TARGET),
+            "enabled": True,
+        }
+    )
+
+    network_manager.get_network_details.assert_awaited_once_with("egress-target", force_refresh=True)
+    connection.request.assert_awaited_once()
+    assert connection.request.await_args.args[0].data["target_devices"] == [
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"},
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:02"},
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:03"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "purpose", ["corporate", "guest", "remote-user-vpn", "vpn-server", "site-vpn", "vlan-only", "wan_magic", ""]
+)
+@pytest.mark.asyncio
+async def test_internet_route_refuses_networks_that_are_not_egress(purpose: str) -> None:
+    manager, connection, _ = _manager(purpose=purpose)
+
+    with pytest.raises(ValueError, match="WAN or VPN client network"):
+        await manager.validate_internet_route_target(copy.deepcopy(MULTI_CLIENT_TARGET), "lan-target")
+
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        [],
+        [{"type": "ALL_CLIENTS"}],
+        [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"}, {"type": "ALL_CLIENTS"}],
+        [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"}, {"type": "NETWORK", "network_id": "lan"}],
+        [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"}, "aa:bb:cc:dd:ee:02"],
+    ],
+)
+@pytest.mark.asyncio
+async def test_internet_route_refuses_any_non_client_target_in_the_list(targets: list) -> None:
+    manager, _, network_manager = _manager()
+
+    with pytest.raises(ValueError, match="one or more explicit CLIENT targets"):
+        await manager.validate_internet_route_target(targets, "wan-target")
+
+    network_manager.get_network_details.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_internet_route_refuses_a_multicast_mac_anywhere_in_the_list() -> None:
+    manager, _, network_manager = _manager()
+    targets = [
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"},
+        {"type": "CLIENT", "client_mac": "01:00:5e:00:00:01"},
+    ]
+
+    with pytest.raises(ValueError, match="valid unicast client MAC address"):
+        await manager.validate_internet_route_target(targets, "wan-target")
+
+    network_manager.get_network_details.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_internet_route_refuses_the_same_client_twice_in_any_case() -> None:
+    manager, _, network_manager = _manager()
+    targets = [
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:01"},
+        {"type": "CLIENT", "client_mac": "AA:BB:CC:DD:EE:01"},
+    ]
+
+    with pytest.raises(ValueError, match="same client twice"):
+        await manager.validate_internet_route_target(targets, "wan-target")
+
+    network_manager.get_network_details.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_of_enabled_multi_client_vpn_route_succeeds_unchanged_scope() -> None:
+    manager, connection, network_manager = _manager(purpose="vpn-client")
+    current = {
+        "_id": "route-vpn",
+        "description": "Clients over VPN",
+        "matching_target": "INTERNET",
+        "network_id": "vpn-client-target",
+        "target_devices": copy.deepcopy(MULTI_CLIENT_TARGET),
+        "enabled": True,
+        "kill_switch_enabled": False,
+    }
+    manager.get_traffic_route_details = AsyncMock(return_value=copy.deepcopy(current))
+
+    assert await manager.update_traffic_route("route-vpn", kill_switch_enabled=True) is True
+
+    network_manager.get_network_details.assert_awaited_once_with("vpn-client-target", force_refresh=True)
+    assert connection.request.await_args.args[0].data == {**current, "kill_switch_enabled": True}
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "same"),
+    [
+        (MULTI_CLIENT_TARGET, list(reversed(MULTI_CLIENT_TARGET)), True),
+        (
+            MULTI_CLIENT_TARGET,
+            [{**MULTI_CLIENT_TARGET[0], "client_mac": "AA:BB:CC:DD:EE:01"}, *MULTI_CLIENT_TARGET[1:]],
+            True,
+        ),
+        (MULTI_CLIENT_TARGET, MULTI_CLIENT_TARGET[:2], False),
+        (
+            MULTI_CLIENT_TARGET,
+            [*MULTI_CLIENT_TARGET[:2], {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:04"}],
+            False,
+        ),
+        (MULTI_CLIENT_TARGET, [*MULTI_CLIENT_TARGET, {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:04"}], False),
+        (MULTI_CLIENT_TARGET, [{"type": "ALL_CLIENTS"}], False),
+    ],
+)
+def test_disabled_route_scope_comparison_ignores_order_and_mac_case(old: list, new: list, same: bool) -> None:
+    existing = {"matching_target": "INTERNET", "network_id": "wan-target", "target_devices": copy.deepcopy(old)}
+    payload = {**existing, "enabled": False, "target_devices": copy.deepcopy(new)}
+
+    assert internet_route_requires_target_validation(payload, existing) is (not same)
