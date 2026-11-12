@@ -353,7 +353,11 @@ def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[
         )
     # Site Manager serves setup mode without its key. The smoke lists tools and
     # reads the index; it calls no Site Manager tool, so the dummy is never sent.
-    env.setdefault("UNIFI_SITEMANAGER_API_KEY", "metadata-smoke")
+    # A key the operator supplies in any spelling is left alone: two sources at
+    # once are refused at startup.
+    spellings = ("UNIFI_SITEMANAGER_API_KEY", "UNIFI_SITEMANAGER_API_KEY_FILE", "UNIFI_SITEMANAGER_API_KEY_COMMAND")
+    if not any(env.get(name) for name in spellings):
+        env["UNIFI_SITEMANAGER_API_KEY"] = "metadata-smoke"
     env["UNIFI_MCP_HTTP_ENABLED"] = "false"
     env["UNIFI_TOOL_REGISTRATION_MODE"] = registration_mode
     return env

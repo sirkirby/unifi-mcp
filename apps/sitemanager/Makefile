@@ -132,8 +132,11 @@ docker:
 		SHA=$$(git -C ../.. rev-parse --short HEAD); \
 		VERSION="$${BASE}.dev$${COMMITS}+g$${SHA}"; \
 	fi; \
-	echo "Building Docker image with version: $$VERSION"; \
-	docker build --build-arg VERSION=$$VERSION -t unifi-sitemanager-mcp:latest -f Dockerfile ../..
+	CORE_VERSION=$$(python3 ../../scripts/package_versions.py | sed -n 's/^core=//p'); \
+	SHARED_VERSION=$$(python3 ../../scripts/package_versions.py | sed -n 's/^shared=//p'); \
+	echo "Building Docker image with version: $$VERSION (core $$CORE_VERSION, shared $$SHARED_VERSION)"; \
+	docker build --build-arg VERSION=$$VERSION --build-arg CORE_VERSION=$$CORE_VERSION \
+		--build-arg SHARED_VERSION=$$SHARED_VERSION -t unifi-sitemanager-mcp:latest -f Dockerfile ../..
 
 docker-run:
 	docker run --rm --env-file ../../.env unifi-sitemanager-mcp:latest

@@ -217,6 +217,17 @@ def test_smoke_env_keeps_a_site_manager_key_from_the_current_env(monkeypatch) ->
     assert smoke_env(registration_mode="lazy", use_current_env=False)["UNIFI_SITEMANAGER_API_KEY"] == "metadata-smoke"
 
 
+@pytest.mark.parametrize("name", ["UNIFI_SITEMANAGER_API_KEY_FILE", "UNIFI_SITEMANAGER_API_KEY_COMMAND"])
+def test_smoke_env_adds_no_dummy_key_beside_an_indirect_one(monkeypatch, name) -> None:
+    monkeypatch.delenv("UNIFI_SITEMANAGER_API_KEY", raising=False)
+    monkeypatch.setenv(name, "operator-source")
+
+    env = smoke_env(registration_mode="lazy", use_current_env=True)
+
+    assert env[name] == "operator-source"
+    assert "UNIFI_SITEMANAGER_API_KEY" not in env
+
+
 def test_run_smoke_matrix_runs_cases_concurrently_and_preserves_order(monkeypatch) -> None:
     async def exercise() -> tuple[int, list[str]]:
         started = 0
