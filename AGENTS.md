@@ -66,7 +66,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Mutating: `readOnlyHint=False, destructiveHint=<bool>, idempotentHint=<bool>, openWorldHint=False`
 - `destructiveHint=True` for delete, block, reboot, revoke operations
 - `idempotentHint=True` for update/rename (same args = same result)
-- All tools: `openWorldHint=False` (closed UniFi controller domain)
+- All tools: `openWorldHint=False` (closed UniFi domain: the configured controllers, or Ubiquiti's Site Manager API for the Site Manager server)
 
 ### Async
 
@@ -92,6 +92,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 ### Hard Bans
 
 - Hardcoding host, port, credentials, or feature flags in Python source is **banned** — use `config.yaml` with `${oc.env:VAR,default}` or `UNIFI_`-prefixed env vars
+  - Exception: the Site Manager API origin is a constant in `unifi_core/sitemanager/managers/connection_manager.py` and MUST NOT be configurable (see Site Manager credential isolation)
 - Permission category strings MUST be defined in `<app>/categories.py` (`NETWORK_CATEGORY_MAP`, etc.)
 - Tool-to-module mappings MUST be in `TOOL_MODULE_MAP` in `<app>/categories.py`
 - Product-specific validation models MUST be pydantic BaseModel classes in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` — never inline JSON schema dicts in tool functions or app-local schemas modules
@@ -109,6 +110,19 @@ Authentication credentials and API surfaces are separate concepts. Network 10.6.
 also accepts API keys on verified legacy inventory GET endpoints, preserving legacy
 IDs and fields. Detect that capability at runtime; do not assume it on every
 controller or infer write/websocket support from successful reads.
+
+### Site Manager credential isolation
+
+Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authenticated by a Site Manager API key, with its own ID family. Its key and a console's local key are different credentials for different destinations.
+
+- The Site Manager key MUST be read only with `resolve_env("api_key", env_prefix="SITEMANAGER", shared_fallback=False)`. Reading it from `config.yaml`, `CONFIG_PATH`, `UNIFI_API_KEY`, or any shared `UNIFI_*` variable is **banned**.
+- The destination MUST stay the fixed constant. Making it configurable from env or config is **banned**; tests pass `base_url` to the constructor.
+- The HTTP session MUST NOT follow redirects or honor proxy environment variables.
+- Transport exceptions MUST NOT be re-raised, wrapped, chained, or logged: they carry request headers. Raise typed errors built from fixed text, the HTTP status, and the upstream trace id.
+- Caller-supplied IDs placed in a Site Manager path MUST pass through `path_segment`.
+- Site Manager host, site, and device IDs are scoped to the Site Manager tool family. Do not pass them to Network, Protect, or Access tools, and do not translate between them.
+- Setup tooling MUST NOT offer to reuse or migrate `UNIFI_API_KEY` as a Site Manager key.
+- **Anchor:** `packages/unifi-core/src/unifi_core/sitemanager/managers/connection_manager.py`
 
 ### Authentication routing golden path
 

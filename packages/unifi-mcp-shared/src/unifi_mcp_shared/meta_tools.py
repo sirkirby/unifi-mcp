@@ -50,6 +50,7 @@ _DEFAULT_DOMAIN_HINTS = {
     "unifi": "WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics",
     "protect": "security cameras, recordings, snapshots, motion events, live views, and NVR management",
     "access": "door locks, access readers, credentials, visitors, access policies, and entry events",
+    "sitemanager": "hosts, sites and devices across consoles, ISP metrics, and SD-WAN status from UniFi Site Manager",
 }
 
 

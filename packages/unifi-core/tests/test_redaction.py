@@ -19,6 +19,8 @@ from tests.secret_assertions import ESCAPED_SECRET, assert_unrecoverable
     [
         "x_authkey",
         "x_auth_key",
+        "X-API-Key",
+        "x_api_key",
         "x_inform_authkey",
         "x_vwirekey",
         "syslog_key",

@@ -578,7 +578,7 @@ def _listed(names: list[str]) -> str:
     return f"{joined} are both" if len(names) == 2 else f"{joined} are all"
 
 
-def resolve_env(key: str, *, env_prefix: str, logger: logging.Logger) -> str | None:
+def resolve_env(key: str, *, env_prefix: str, logger: logging.Logger, shared_fallback: bool = True) -> str | None:
     """Resolve one config key from the environment.
 
     Checks the server-specific level (``UNIFI_<PREFIX>_<KEY>``) and then the shared
@@ -596,12 +596,18 @@ def resolve_env(key: str, *, env_prefix: str, logger: logging.Logger) -> str | N
     Setting more than one spelling at one level, or an indirection that cannot be
     resolved, refuses startup with :data:`EXIT_SECRET_UNRESOLVED`.
 
+    Pass ``shared_fallback=False`` for a value that must not be shared between
+    servers. A credential for one destination (a console's local API key in
+    ``UNIFI_API_KEY``) must never be picked up by a server that sends its
+    credential somewhere else.
+
     Returns:
-        The resolved value, or ``None`` when nothing is set at either level.
+        The resolved value, or ``None`` when nothing is set at the levels consulted.
     """
     upper = key.upper()
     secret = is_sensitive_key(key)
-    for base in (f"UNIFI_{env_prefix}_{upper}", f"UNIFI_{upper}"):
+    bases = (f"UNIFI_{env_prefix}_{upper}", f"UNIFI_{upper}") if shared_fallback else (f"UNIFI_{env_prefix}_{upper}",)
+    for base in bases:
         plain = os.getenv(base)
         indirect: list[tuple[str, str, _SecretReader]] = []
         if secret:
