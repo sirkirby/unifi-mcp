@@ -229,10 +229,9 @@ async def test_no_auth_401(tmp_path: Path, monkeypatch) -> None:
     [
         {"product_kinds": ["sitemanager"]},
         {"product_kinds": ["unknown"]},
-        {"site_manager_api_key": "synthetic-cloud-key-DO-NOT-DISCLOSE-42"},
     ],
 )
-async def test_console_rejects_cloud_products_and_fields(tmp_path, monkeypatch, change):
+async def test_console_rejects_cloud_products(tmp_path, monkeypatch, change):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}

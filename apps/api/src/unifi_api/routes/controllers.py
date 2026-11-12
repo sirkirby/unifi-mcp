@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, model_validator
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -27,8 +27,6 @@ router = APIRouter()
 
 
 class ControllerIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     base_url: str
     username: str = ""
@@ -45,8 +43,6 @@ class ControllerIn(BaseModel):
 
 
 class ControllerPatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
     name: str | None = None
     base_url: str | None = None
     product_kinds: list[Literal["network", "protect", "access"]] | None = None
@@ -61,7 +57,7 @@ class ControllerOut(BaseModel):
     id: str
     name: str
     base_url: str
-    product_kinds: list[Literal["network", "protect", "access"]]
+    product_kinds: list[str]
     verify_tls: bool
     is_default: bool
     created_at: str

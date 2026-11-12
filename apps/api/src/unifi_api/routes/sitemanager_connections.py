@@ -1,7 +1,8 @@
 """ADMIN-only account connection management; never implicitly probe the cloud."""
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 from unifi_core.sitemanager.models.connections import SiteManagerConnectionCreate, SiteManagerConnectionPatch
 
@@ -9,10 +10,26 @@ from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.services.sitemanager_management import manage_connection
 
+_require_admin = require_scope(Scope.ADMIN)
+
+
+class _AdminBeforeBodyRoute(APIRoute):
+    """Authenticate before FastAPI reads or decodes management request bodies."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def authorized_handler(request: Request):
+            await _require_admin(request)
+            return await handler(request)
+
+        return authorized_handler
+
+
 router = APIRouter(
     prefix="/sitemanager/connection",
     tags=["Site Manager connection"],
-    dependencies=[Depends(require_scope(Scope.ADMIN))],
+    route_class=_AdminBeforeBodyRoute,
 )
 
 

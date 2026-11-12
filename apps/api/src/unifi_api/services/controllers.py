@@ -30,9 +30,14 @@ class InvalidControllerCredentials(ValueError):
 
 
 def validate_controller_credentials(
-    product_kinds: list[str], username: str, password: str, api_token: str | None
+    product_kinds: list[str],
+    username: str,
+    password: str,
+    api_token: str | None,
+    *,
+    validate_product_kinds: bool = True,
 ) -> None:
-    if any(p not in ("network", "protect", "access") for p in product_kinds):
+    if validate_product_kinds and any(p not in ("network", "protect", "access") for p in product_kinds):
         raise InvalidControllerCredentials("Controller products must be network, protect, or access.")
     if bool(username) != bool(password):
         raise InvalidControllerCredentials(
@@ -139,6 +144,7 @@ async def update_controller(
             existing.get("username") or "",
             existing.get("password") or "",
             existing.get("api_token"),
+            validate_product_kinds=product_kinds is not None,
         )
     if name is not None:
         row.name = name

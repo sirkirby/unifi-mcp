@@ -1,5 +1,6 @@
 """Transactional connection management shared by REST, admin and CLI."""
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +14,8 @@ from unifi_api.services.sitemanager_connections import (
     update_connection,
 )
 from unifi_api.services.sitemanager_errors import map_error
+
+_log = logging.getLogger("unifi-api.sitemanager")
 
 
 @dataclass
@@ -66,11 +69,16 @@ async def manage_connection(sessionmaker, cipher, factory, operation, *, payload
                     outcome="success",
                 )
                 await session.commit()
-        if operation in ("update", "delete"):
-            await factory.invalidate()
-        return ManagementResult(None if operation == "delete" else data, 201 if operation == "create" else 200)
     except Exception as exc:
         error = map_error(exc, label, management=operation != "probe")
+    else:
+        # The mutation and success audit are durable; cleanup cannot undo them.
+        if operation in ("update", "delete"):
+            try:
+                await factory.invalidate()
+            except Exception as exc:
+                _log.warning("Site Manager %s cleanup failed (%s)", operation, type(exc).__name__)
+        return ManagementResult(None if operation == "delete" else data, 201 if operation == "create" else 200)
     # Never carry the original exception or its traceback into API errors.
     try:
         if operation != "get":

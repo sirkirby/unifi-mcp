@@ -973,7 +973,6 @@
         "type": "object"
       },
       "ControllerIn": {
-        "additionalProperties": false,
         "properties": {
           "api_token": {
             "anyOf": [
@@ -1059,11 +1058,6 @@
           },
           "product_kinds": {
             "items": {
-              "enum": [
-                "network",
-                "protect",
-                "access"
-              ],
               "type": "string"
             },
             "title": "Product Kinds",
@@ -1092,7 +1086,6 @@
         "type": "object"
       },
       "ControllerPatch": {
-        "additionalProperties": false,
         "properties": {
           "api_token": {
             "anyOf": [

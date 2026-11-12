@@ -88,8 +88,16 @@ async def update_connection(
         )
     if changes:
         changes.update(revision=SiteManagerConnection.revision + 1, updated_at=datetime.now(timezone.utc))
-        await session.execute(update(SiteManagerConnection).where(SiteManagerConnection.id == row.id).values(**changes))
-        await session.refresh(row)
+        result = await session.execute(
+            update(SiteManagerConnection)
+            .where(SiteManagerConnection.id == row.id)
+            .values(**changes)
+            .returning(SiteManagerConnection)
+            .execution_options(populate_existing=True)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise SiteManagerConnectionNotFound("Site Manager connection is not configured")
     return row
 
 
