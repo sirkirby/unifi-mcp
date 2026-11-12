@@ -170,11 +170,21 @@ def test_smoke_env_can_preserve_current_controller_env(monkeypatch) -> None:
 
 
 def test_selected_server_names_includes_access_in_default_offline_smoke() -> None:
-    assert selected_server_names(server="all", use_current_env=False) == ["network", "protect", "access"]
+    assert selected_server_names(server="all", use_current_env=False) == [
+        "network",
+        "protect",
+        "access",
+        "sitemanager",
+    ]
 
 
 def test_selected_server_names_includes_access_with_current_env() -> None:
-    assert selected_server_names(server="all", use_current_env=True) == ["network", "protect", "access"]
+    assert selected_server_names(server="all", use_current_env=True) == [
+        "network",
+        "protect",
+        "access",
+        "sitemanager",
+    ]
 
 
 def test_selected_server_names_runs_access_alone_offline() -> None:
@@ -197,6 +207,14 @@ def test_offline_smoke_env_drops_inherited_controller_settings(monkeypatch) -> N
     ):
         assert name not in env
     assert env["UNIFI_ACCESS_HOST"] == "127.0.0.1"
+    assert env["UNIFI_SITEMANAGER_API_KEY"] == "metadata-smoke"
+
+
+def test_smoke_env_keeps_a_site_manager_key_from_the_current_env(monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_SITEMANAGER_API_KEY", "operator-key")
+
+    assert smoke_env(registration_mode="lazy", use_current_env=True)["UNIFI_SITEMANAGER_API_KEY"] == "operator-key"
+    assert smoke_env(registration_mode="lazy", use_current_env=False)["UNIFI_SITEMANAGER_API_KEY"] == "metadata-smoke"
 
 
 def test_run_smoke_matrix_runs_cases_concurrently_and_preserves_order(monkeypatch) -> None:

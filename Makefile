@@ -1,7 +1,7 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate api-action-catalog \
        check-api-action-catalog server-manifests skill-references check-skill-references check-generated \
        support-skills check-support-skills pre-commit ci core-test shared-test catalog-test protocol-smoke \
-       protocol-smoke-no-sync docs-test relay-test network-test protect-test access-test test-parallel \
+       protocol-smoke-no-sync docs-test relay-test network-test protect-test access-test sitemanager-test test-parallel \
        worker-install worker-test worker-typecheck worker-build worker-check docker-relay docker-build \
        docker-up docker-down docker-logs check-plugin-versions check-plugin-tool-refs
 
@@ -67,7 +67,7 @@ test:
 	$(MAKE) -C apps/api test
 
 test-parallel: core-test shared-test catalog-test docs-test relay-test protocol-smoke-no-sync worker-test \
-               network-test protect-test access-test
+               network-test protect-test access-test sitemanager-test
 
 network-test:
 	$(MAKE) -C apps/network test
@@ -77,6 +77,9 @@ protect-test:
 
 access-test:
 	$(MAKE) -C apps/access test
+
+sitemanager-test:
+	$(MAKE) -C apps/sitemanager test
 
 lint:
 	uv run ruff check .
@@ -97,6 +100,7 @@ manifest:
 	$(MAKE) -C apps/network manifest
 	$(MAKE) -C apps/protect manifest
 	$(MAKE) -C apps/access manifest
+	$(MAKE) -C apps/sitemanager manifest
 	$(MAKE) api-action-catalog
 	$(MAKE) skill-references
 	$(MAKE) server-manifests
@@ -111,6 +115,7 @@ server-manifests:
 	$(MAKE) -C apps/network server-manifest
 	$(MAKE) -C apps/protect server-manifest
 	$(MAKE) -C apps/access server-manifest
+	$(MAKE) -C apps/sitemanager server-manifest
 
 skill-references:
 	python3 scripts/generate_skill_references.py

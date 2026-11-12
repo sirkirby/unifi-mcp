@@ -207,6 +207,16 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 6. **Add Makefile** targets (test, lint, format, manifest)
 7. **Add to root Makefile** delegation targets
 8. **Add Dockerfile** following the protect/network/access server pattern
+9. **Register the app with the repo's release and check tooling.** Each of these enumerates the servers and is enforced by a test or CI:
+   - Workflows `test-<appname>.yml`, `release-<appname>.yml`, `docker-<appname>.yml` (pass `CORE_VERSION`/`SHARED_VERSION` when the Dockerfile declares them)
+   - `scripts/generate_server_manifest.py` (`APP_CONFIGS`), `scripts/smoke_mcp_metadata.py` (`SERVER_SPECS`, `OFFLINE_SERVER_NAMES`), `scripts/check_pin_alignment.py` (`SECURITY_FLOORS`, `DOWNSTREAM_PACKAGES`, `FLOOR_ONLY_CORE_EXTRAS`), `scripts/generate_release_notes.py` (`APP_CONFIGS`, `PRODUCT_KEYS`, the tag regex)
+   - The icon family and tool prefix in `unifi_mcp_shared/metadata.py`: an unknown icon family fails at startup
+   - Root tests that list servers: `tests/test_server_manifest.py`, `tests/test_smoke_mcp_metadata.py`, `tests/test_package_versions.py`, `tests/test_manifest_permission_coverage.py`, `tests/test_app_tool_index_lookup.py`, `tests/test_http_deployment_defaults.py`
+   - `.github/dependabot.yml` Docker directories, `.myco/myco.yaml` release tags, `uv.lock`
+10. **Use one lowercase token for the app name** (as in `sitemanager`). Scripts derive the directory, Python module, env prefix and plugin name from it, and a hyphen or underscore breaks several of them.
+11. **Commit a placeholder `tools_manifest.json` before the first `make manifest`:** the wheel force-includes it, so the package cannot be installed to generate it otherwise.
+
+`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle.
 
 ## Shared Patterns
 

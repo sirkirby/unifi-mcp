@@ -42,6 +42,8 @@ class ServerSpec:
     index_tool: str
     expected_index_title: str
     representative_tool: str
+    # Whether lazy mode lists the representative tool directly at startup.
+    representative_direct: bool = False
 
 
 SERVER_SPECS = {
@@ -72,10 +74,20 @@ SERVER_SPECS = {
         expected_index_title="UniFi Access Tool Index",
         representative_tool="access_list_doors",
     ),
+    "sitemanager": ServerSpec(
+        package="unifi-sitemanager-mcp",
+        command="unifi-sitemanager-mcp",
+        expected_name="unifi-sitemanager-mcp",
+        prefix="sitemanager",
+        index_tool="sitemanager_tool_index",
+        expected_index_title="UniFi Site Manager Tool Index",
+        representative_tool="sitemanager_list_hosts",
+        representative_direct=True,
+    ),
 }
 
 EXPECTED_ICON_SIZES = [["48x48"], ["96x96"], ["192x192"]]
-OFFLINE_SERVER_NAMES = ("network", "protect", "access")
+OFFLINE_SERVER_NAMES = ("network", "protect", "access", "sitemanager")
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -214,7 +226,16 @@ def validate_mode_tools(spec: ServerSpec, tools: list[Any], *, registration_mode
             )
         if "notifications/tools/list_changed" not in (_field(load_tool, "description") or ""):
             raise MetadataSmokeError(f"{spec.expected_name}: {load_tool_name} does not document list_changed refresh")
-        if representative is not None:
+        if spec.representative_direct:
+            if representative is None:
+                raise MetadataSmokeError(
+                    f"{spec.expected_name}: lazy mode should list {spec.representative_tool} directly"
+                )
+            if _field(_field(representative, "annotations"), "readOnlyHint") is not True:
+                raise MetadataSmokeError(
+                    f"{spec.expected_name}: directly listed {spec.representative_tool} is not read-only"
+                )
+        elif representative is not None:
             raise MetadataSmokeError(
                 f"{spec.expected_name}: lazy mode should not expose {spec.representative_tool} before loading"
             )
@@ -330,6 +351,9 @@ def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[
                 "UNIFI_ACCESS_PASSWORD": "metadata-smoke",
             }
         )
+    # Site Manager serves setup mode without its key. The smoke lists tools and
+    # reads the index; it calls no Site Manager tool, so the dummy is never sent.
+    env.setdefault("UNIFI_SITEMANAGER_API_KEY", "metadata-smoke")
     env["UNIFI_MCP_HTTP_ENABLED"] = "false"
     env["UNIFI_TOOL_REGISTRATION_MODE"] = registration_mode
     return env

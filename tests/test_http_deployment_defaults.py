@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("server", ["network", "protect", "access"])
+@pytest.mark.parametrize("server", ["network", "protect", "access", "sitemanager"])
 def test_packaged_http_is_opt_in_and_loopback(server, monkeypatch):
     monkeypatch.delenv("UNIFI_MCP_HOST", raising=False)
     monkeypatch.delenv("UNIFI_MCP_HTTP_ENABLED", raising=False)
