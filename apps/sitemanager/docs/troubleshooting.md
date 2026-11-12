@@ -24,9 +24,9 @@ List tools return one page. Pass `next_cursor` back as `cursor` until it is abse
 
 Not every site reports ISP metrics. The query tool returns no series for such a site and does not set `partial`. `5m` metrics are kept for 24 hours and `1h` metrics for 30 days.
 
-## "cannot read ISP metrics for any of the requested sites"
+## The ISP metrics query returns `partial` with no series
 
-The account has no access to any site in the query. Check the `host_id` and `site_id` values against `sitemanager_list_sites`.
+The account cannot read some or all of the sites in the query, or their ids are wrong. Check the `host_id` and `site_id` values against `sitemanager_list_sites`.
 
 ## Rate limited (429)
 
