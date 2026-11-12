@@ -973,6 +973,7 @@
         "type": "object"
       },
       "ControllerIn": {
+        "additionalProperties": false,
         "properties": {
           "api_token": {
             "anyOf": [
@@ -1005,6 +1006,11 @@
           },
           "product_kinds": {
             "items": {
+              "enum": [
+                "network",
+                "protect",
+                "access"
+              ],
               "type": "string"
             },
             "title": "Product Kinds",
@@ -1053,6 +1059,11 @@
           },
           "product_kinds": {
             "items": {
+              "enum": [
+                "network",
+                "protect",
+                "access"
+              ],
               "type": "string"
             },
             "title": "Product Kinds",
@@ -1081,6 +1092,7 @@
         "type": "object"
       },
       "ControllerPatch": {
+        "additionalProperties": false,
         "properties": {
           "api_token": {
             "anyOf": [
@@ -1141,6 +1153,11 @@
             "anyOf": [
               {
                 "items": {
+                  "enum": [
+                    "network",
+                    "protect",
+                    "access"
+                  ],
                   "type": "string"
                 },
                 "type": "array"
@@ -10114,6 +10131,22 @@
                 }
               ],
               "title": "Controller"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sitemanager_connection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sitemanager Connection"
             }
           },
           {

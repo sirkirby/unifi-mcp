@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -47,6 +47,23 @@ class Controller(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class SiteManagerConnection(Base):
+    """One account-level cloud connection, separate from local consoles."""
+
+    __tablename__ = "sitemanager_connections"
+    __table_args__ = (
+        CheckConstraint("singleton_slot = 1", name="ck_sitemanager_singleton"),
+        CheckConstraint("revision >= 1", name="ck_sitemanager_revision"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    singleton_slot: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, default=1, server_default="1")
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    api_key_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class Session(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -61,6 +78,7 @@ class AuditLog(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     key_id_prefix: Mapped[str] = mapped_column(String(64), nullable=False)
     controller: Mapped[Optional[str]] = mapped_column(String(36))
+    sitemanager_connection: Mapped[Optional[str]] = mapped_column(String(36))
     target: Mapped[str] = mapped_column(String(128), nullable=False)
     outcome: Mapped[str] = mapped_column(String(32), nullable=False)
     error_kind: Mapped[Optional[str]] = mapped_column(String(64))

@@ -2153,6 +2153,7 @@ Read actions execute immediately. Mutations with `confirm=false` validate the re
 **Parameters:**
 
 - `controller` (query)
+- `sitemanager_connection` (query)
 - `outcome` (query)
 - `since` (query)
 - `until` (query)

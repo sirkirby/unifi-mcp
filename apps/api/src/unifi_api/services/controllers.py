@@ -32,6 +32,8 @@ class InvalidControllerCredentials(ValueError):
 def validate_controller_credentials(
     product_kinds: list[str], username: str, password: str, api_token: str | None
 ) -> None:
+    if any(p not in ("network", "protect", "access") for p in product_kinds):
+        raise InvalidControllerCredentials("Controller products must be network, protect, or access.")
     if bool(username) != bool(password):
         raise InvalidControllerCredentials(
             "Provide both username and password, or omit both for API-key authentication."

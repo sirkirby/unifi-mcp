@@ -26,6 +26,7 @@ def _row_to_dict(r: AuditLog) -> dict:
         "ts": r.ts.isoformat(),
         "key_id_prefix": r.key_id_prefix,
         "controller": r.controller,
+        "sitemanager_connection": r.sitemanager_connection,
         "target": r.target,
         "outcome": r.outcome,
         "error_kind": r.error_kind,
@@ -44,6 +45,7 @@ def _audit_key(r: AuditLog) -> tuple:
 async def list_audit(
     request: Request,
     controller: str | None = Query(None),
+    sitemanager_connection: str | None = Query(None),
     outcome: str | None = Query(None),
     since: str | None = Query(None),
     until: str | None = Query(None),
@@ -56,6 +58,8 @@ async def list_audit(
     stmt = select(AuditLog)
     if controller is not None:
         stmt = stmt.where(AuditLog.controller == controller)
+    if sitemanager_connection is not None:
+        stmt = stmt.where(AuditLog.sitemanager_connection == sitemanager_connection)
     if outcome is not None:
         stmt = stmt.where(AuditLog.outcome == outcome)
     if since is not None:

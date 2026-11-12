@@ -3,6 +3,7 @@
       style="margin-bottom: 1rem;">
   <div class="grid">
     <label>Controller <input type="text" name="controller" placeholder="(any)" /></label>
+    <label>Cloud connection <input type="text" name="sitemanager_connection" placeholder="(any)" /></label>
     <label>Outcome
       <select name="outcome">
         <option value="">(any)</option>
@@ -34,6 +35,8 @@
     if (!cb.checked) return;
     const params = new URLSearchParams();
     const form = document.getElementById('audit-filters');
+    const cloud = form.querySelector('[name=sitemanager_connection]').value;
+    if (cloud) params.set('sitemanager_connection', cloud);
     const outcome = form.querySelector('[name=outcome]').value;
     const q = form.querySelector('[name=q]').value;
     if (outcome) params.set('outcome', outcome);

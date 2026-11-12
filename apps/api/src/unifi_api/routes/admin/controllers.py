@@ -76,7 +76,9 @@ def _blank_to_none(value: str) -> str | None:
 
 def _parse_product_kinds(form_data: list[str]) -> list[str]:
     """FastAPI Form() with the same name multi-yields a list[str]."""
-    return [p for p in form_data if p in ("network", "protect", "access")]
+    if any(p not in ("network", "protect", "access") for p in form_data):
+        raise HTTPException(status_code=422, detail="Controller products must be network, protect, or access.")
+    return form_data
 
 
 def _coerce_checkbox(value: str) -> bool:
