@@ -114,6 +114,16 @@ async def test_query_isp_metrics_reports_partial_results(metrics, message, has_m
     assert ("message" in result["data"]) is has_message
 
 
+async def test_query_isp_metrics_refuses_a_misspelled_site_field(metrics):
+    requested = [{"host_id": "host-1", "site_id": "site-1", "beginTimestamp": "2026-01-01T00:00:00Z"}]
+
+    result = await isp_metrics.sitemanager_query_isp_metrics(requested)
+
+    assert result["success"] is False
+    assert "beginTimestamp" in result["error"] and "begin_timestamp" in result["error"]
+    metrics.query_metrics.assert_not_awaited()
+
+
 async def test_sdwan_tools_return_models(sdwan_manager):
     sdwan_manager.list_configs.return_value = [sdwan_summary_from_api({"id": "cfg-1", "name": "fixture"})]
     sdwan_manager.get_config.return_value = sdwan_config_from_api({"id": "cfg-1", "hubs": [{"id": "hub-1"}]})

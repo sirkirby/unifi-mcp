@@ -6,8 +6,8 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_sitemanager_mcp.paging import Cursor, PageSize
 from unifi_sitemanager_mcp.runtime import inventory_manager, server, tool_failure, tool_success
-from unifi_sitemanager_mcp.tools.hosts import Cursor, PageSize
 
 logger = logging.getLogger(__name__)
 

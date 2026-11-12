@@ -6,9 +6,12 @@ from typing import Annotated, Any, Dict, Literal
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_core.exceptions import UniFiValidationError
 from unifi_sitemanager_mcp.runtime import isp_metrics_manager, server, tool_failure, tool_success
 
 logger = logging.getLogger(__name__)
+
+_SITE_FIELDS = frozenset({"host_id", "site_id", "begin_timestamp", "end_timestamp"})
 
 MetricType = Annotated[
     Literal["5m", "1h"],
@@ -96,6 +99,15 @@ async def sitemanager_query_isp_metrics(
     """Get ISP metrics for named sites."""
     logger.info("sitemanager_query_isp_metrics tool called")
     try:
+        # The manager reads only the fields it knows, so a misspelled range
+        # would silently query the default window.
+        for site in sites:
+            unknown = sorted(set(site) - _SITE_FIELDS) if isinstance(site, dict) else []
+            if unknown:
+                raise UniFiValidationError(
+                    f"Unknown field in a site entry: {', '.join(map(str, unknown))}. "
+                    f"Allowed: {', '.join(sorted(_SITE_FIELDS))}."
+                )
         result = await isp_metrics_manager.query_metrics(metric_type, sites, period_limit=period_limit)
         data: Dict[str, Any] = {
             "sites": [entry.model_dump(exclude_none=True) for entry in result.series],

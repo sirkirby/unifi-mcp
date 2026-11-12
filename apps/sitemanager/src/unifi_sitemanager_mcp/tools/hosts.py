@@ -6,23 +6,10 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_sitemanager_mcp.paging import Cursor, PageSize
 from unifi_sitemanager_mcp.runtime import inventory_manager, server, tool_failure, tool_success
 
 logger = logging.getLogger(__name__)
-
-PageSize = Annotated[
-    int | None,
-    Field(description="Maximum entries in this page (1-500). Omit for the API default."),
-]
-Cursor = Annotated[
-    str | None,
-    Field(
-        description=(
-            "The next_cursor from a previous page. Omit for the first page. A page can hold fewer entries than "
-            "page_size, even none: keep paging until next_cursor is absent."
-        )
-    ),
-]
 
 
 @server.tool(

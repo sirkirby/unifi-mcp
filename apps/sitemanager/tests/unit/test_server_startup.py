@@ -93,6 +93,28 @@ def test_configured_server_registers_tools_without_network_access(tmp_path, mode
         assert annotations["readOnlyHint"] is True and annotations["openWorldHint"] is False, name
 
 
+@pytest.mark.parametrize(
+    ("category", "expected"),
+    [
+        ("sites", {"sitemanager_list_sites"}),
+        ("devices", {"sitemanager_list_devices"}),
+        ("hosts", {"sitemanager_list_hosts", "sitemanager_get_host"}),
+    ],
+)
+def test_eager_category_filter_registers_only_that_category(tmp_path, category, expected):
+    run = run_server(
+        tmp_path,
+        {
+            "UNIFI_SITEMANAGER_API_KEY": KEY,
+            "UNIFI_TOOL_REGISTRATION_MODE": "eager",
+            "UNIFI_ENABLED_CATEGORIES": category,
+        },
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert run.tool_names & DOMAIN_TOOLS == expected
+
+
 def test_read_only_client_reaches_every_tool_in_the_default_mode(tmp_path):
     """sitemanager_execute is not read-only, so lazy mode lists the tools directly."""
     run = run_server(tmp_path, {"UNIFI_SITEMANAGER_API_KEY": KEY})
