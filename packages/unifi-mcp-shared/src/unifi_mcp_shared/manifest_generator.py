@@ -77,6 +77,7 @@ def _generate_manifest(
     server_label: str,
     fallback_label: str,
     logger: logging.Logger,
+    support_bundle: bool = True,
 ) -> dict[str, Any]:
     logger.info("Generating tool manifest with full schemas...")
 
@@ -101,7 +102,7 @@ def _generate_manifest(
         start_async_tool=jobs_mod.start_async_tool,
         get_job_status=jobs_mod.get_job_status,
         register_tool=tool_index_mod.register_tool,
-        support_bundle_handler=_manifest_support_bundle_handler,
+        support_bundle_handler=_manifest_support_bundle_handler if support_bundle else None,
         prefix=meta_prefix,
         server_label=server_label,
     )
@@ -201,6 +202,7 @@ def generate_and_write(
     meta_prefix: str,
     server_label: str,
     fallback_label: str | None = None,
+    support_bundle: bool = True,
 ) -> int:
     """Generate a tool manifest for the given app package and write it to disk.
 
@@ -213,6 +215,9 @@ def generate_and_write(
         server_label: Human-readable server label (e.g. ``"UniFi Network"``).
         fallback_label: Label used in the minimal fallback manifest descriptor.
             Defaults to ``server_label`` if not supplied.
+        support_bundle: Whether the server registers the support-bundle
+            meta-tool. Pass ``False`` for a server that has none, so the
+            manifest lists only tools the server serves.
 
     Returns:
         Process exit code: 0 on success, 1 on unhandled failure.
@@ -232,6 +237,7 @@ def generate_and_write(
             server_label=server_label,
             fallback_label=fallback_label or server_label,
             logger=logger,
+            support_bundle=support_bundle,
         )
 
         output_path = project_root / "src" / package / "tools_manifest.json"
