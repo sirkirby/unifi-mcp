@@ -40,7 +40,7 @@ _ROW = re.compile(r"^\| `(?P<category>[a-z_]+)` \| (?P<create>[^|]+) \| (?P<upda
 
 def _documented_gates() -> set[tuple[str, str]]:
     gates = set()
-    for line in _PERMISSIONS_DOC.read_text().splitlines():
+    for line in _PERMISSIONS_DOC.read_text(encoding="utf-8").splitlines():
         row = _ROW.match(line.strip())
         if not row:
             continue
