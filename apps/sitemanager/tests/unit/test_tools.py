@@ -210,16 +210,16 @@ async def test_an_unexpected_error_is_reported_by_class_only(inventory, caplog):
     assert "RuntimeError" in caplog.text
 
 
-async def test_responses_are_redacted_unless_the_policy_turns_it_off(inventory, monkeypatch):
-    from unifi_sitemanager_mcp import runtime
-
+async def test_responses_are_redacted_unless_the_operator_turns_it_off(inventory, monkeypatch):
+    monkeypatch.delenv("UNIFI_REDACT_SENSITIVE_FIELDS", raising=False)
+    monkeypatch.delenv("UNIFI_SITEMANAGER_REDACT_SENSITIVE_FIELDS", raising=False)
     state = {"hostname": "fixture-console", "password": "fixture-secret"}
     inventory.get_host.return_value = host_from_api(
         {"id": "host-1", "reportedState": state}, include_reported_state=True
     )
 
     redacted = await hosts.sitemanager_get_host("host-1", include_reported_state=True)
-    monkeypatch.setattr(runtime, "should_redact_sensitive_fields", lambda: False)
+    monkeypatch.setenv("UNIFI_SITEMANAGER_REDACT_SENSITIVE_FIELDS", "false")
     plain = await hosts.sitemanager_get_host("host-1", include_reported_state=True)
 
     assert "fixture-secret" not in json.dumps(redacted)
