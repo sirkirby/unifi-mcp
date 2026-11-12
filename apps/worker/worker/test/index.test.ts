@@ -23,7 +23,7 @@ function mcp(headers: Record<string, string>, body = '{"jsonrpc":"2.0","id":1,"m
 }
 
 describe("POST /mcp", () => {
-  it("acknowledges the initialized notification without a JSON-RPC response", async () => {
+  it.each(["notifications/initialized", "notifications/cancelled", "notifications/roots/list_changed", "notifications/unknown"])("acknowledges %s without a JSON-RPC response", async (method) => {
     const { env, doFetch } = fakeEnv(Response.json({}));
     const relay = Object.create(RelayObject.prototype) as RelayObject;
     Object.assign(relay, {
@@ -44,7 +44,7 @@ describe("POST /mcp", () => {
       params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test-client", version: "1.0" } },
     })), env);
     expect(initialize.status).toBe(200);
-    const notification = '{"jsonrpc":"2.0","method":"notifications/initialized"}';
+    const notification = JSON.stringify({ jsonrpc: "2.0", method, params: { requestId: 42, reason: "User cancelled" } });
     const rejected = await worker.fetch(mcp({ ...headers, Authorization: "Bearer wrong-token" }, notification), env);
     expect(rejected.status).toBe(401);
     const accepted = await worker.fetch(mcp(headers, notification), env);
