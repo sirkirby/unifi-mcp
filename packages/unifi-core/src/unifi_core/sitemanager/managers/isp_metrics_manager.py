@@ -5,12 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from unifi_core.exceptions import UniFiMalformedResponseError, UniFiPermissionError, UniFiValidationError
-from unifi_core.sitemanager.managers.connection_manager import (
-    SiteManagerConnectionManager,
-    SiteManagerHttpError,
-    path_segment,
-)
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiValidationError
+from unifi_core.sitemanager.managers.connection_manager import SiteManagerConnectionManager, path_segment
 from unifi_core.sitemanager.managers.inventory_manager import rfc3339
 from unifi_core.sitemanager.models._coerce import as_dict, text
 from unifi_core.sitemanager.models.isp_metrics import (
@@ -119,20 +115,14 @@ class IspMetricsManager:
                 if entry.get(field) is not None:
                     item[api_field] = rfc3339(entry[field], field)
             body_sites.append(item)
-        try:
-            response = await self._connection.post(
-                f"/v1/isp-metrics/{path_segment(interval, 'metric type')}/query", json_body={"sites": body_sites}
-            )
-        except SiteManagerHttpError as exc:
-            if exc.status == 502:
-                raise UniFiPermissionError(
-                    "The account behind this API key cannot read ISP metrics for any of the requested sites. "
-                    "Check the host and site ids against the list of sites."
-                ) from None
-            raise
-        data = as_dict(response.data)
+        response = await self._connection.post(
+            f"/v1/isp-metrics/{path_segment(interval, 'metric type')}/query", json_body={"sites": body_sites}
+        )
+        data = response.data
+        if not isinstance(data, dict) or not isinstance(data.get("metrics"), list):
+            raise UniFiMalformedResponseError("Site Manager API returned unreadable ISP metrics.")
         return IspMetricsQueryResult(
-            series=_series(data.get("metrics", []), limit),
+            series=_series(data["metrics"], limit),
             partial=text(data.get("status")) == "partialSuccess",
             message=text(data.get("message")),
         )

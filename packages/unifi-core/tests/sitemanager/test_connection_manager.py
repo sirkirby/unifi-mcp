@@ -59,6 +59,26 @@ async def test_redirect_is_reported_not_followed(connection, api):
     assert [request.path for request in api.requests] == ["/v1/hosts"]
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "@other.example/v1/hosts",
+        ".other.example/v1/hosts",
+        ":8443/v1/hosts",
+        "v1/hosts",
+        "/\\other.example/v1/hosts",
+        "",
+    ],
+)
+async def test_path_that_could_change_the_destination_makes_no_request(connection, api, path):
+    with pytest.raises(UniFiValidationError, match="root-relative"):
+        await connection.get(path)
+    with pytest.raises(UniFiValidationError, match="root-relative"):
+        await connection.post(path, json_body={})
+
+    assert not api.requests
+
+
 async def test_unconfigured_client_makes_no_request(api):
     manager = SiteManagerConnectionManager("   ", base_url=api.base_url)
 

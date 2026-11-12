@@ -4,9 +4,9 @@ import pytest
 from unifi_core.exceptions import (
     UniFiMalformedResponseError,
     UniFiNotFoundError,
-    UniFiPermissionError,
     UniFiValidationError,
 )
+from unifi_core.sitemanager.managers.connection_manager import SiteManagerHttpError
 from unifi_core.sitemanager.managers.inventory_manager import InventoryManager
 from unifi_core.sitemanager.managers.isp_metrics_manager import IspMetricsManager
 from unifi_core.sitemanager.managers.sdwan_manager import SdwanManager
@@ -247,6 +247,20 @@ async def test_metrics_default_window_summary_and_truncation(metrics, api):
     assert (summary.total_downtime, summary.periods_with_downtime) == (5, 1)
 
 
+async def test_metrics_series_shorter_than_the_limit_is_returned_whole(metrics, api):
+    periods = [_period(f"2026-01-01T{hour:02d}:00:00Z", latency=10) for hour in range(3)]
+    api.reply("GET", "/v1/isp-metrics/1h", {"data": [{"periods": periods}]})
+
+    (series,) = await metrics.get_metrics("1h", period_limit=5)
+
+    assert [period.time for period in series.periods] == [
+        "2026-01-01T00:00:00Z",
+        "2026-01-01T01:00:00Z",
+        "2026-01-01T02:00:00Z",
+    ]
+    assert series.periods_truncated is False
+
+
 async def test_metrics_period_limit_zero_returns_summary_only(metrics, api):
     api.reply("GET", "/v1/isp-metrics/1h", {"data": [{"periods": [_period("2026-01-01T00:00:00Z", 10)]}]})
 
@@ -331,11 +345,29 @@ async def test_metrics_query_sends_per_site_ranges_and_reports_partial_results(m
     assert result.series[0].site_id == "s1"
 
 
-async def test_metrics_query_explains_a_gateway_error_as_missing_access(metrics, api):
+async def test_metrics_query_reports_a_gateway_error_as_an_upstream_failure(metrics, api):
     api.reply("POST", "/v1/isp-metrics/1h/query", {"code": "BAD_GATEWAY"}, status=502)
 
-    with pytest.raises(UniFiPermissionError, match="cannot read ISP metrics"):
+    with pytest.raises(SiteManagerHttpError) as raised:
         await metrics.query_metrics("1h", [{"host_id": "h", "site_id": "s"}])
+
+    assert raised.value.status == 502
+
+
+@pytest.mark.parametrize("data", [None, [], {}, {"metrics": None}, {"status": "partialSuccess"}])
+async def test_metrics_query_unreadable_result_is_not_an_empty_one(metrics, api, data):
+    api.reply("POST", "/v1/isp-metrics/1h/query", {"data": data})
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await metrics.query_metrics("1h", [{"host_id": "h", "site_id": "s"}])
+
+
+async def test_metrics_query_with_no_metrics_for_a_site_is_empty_and_complete(metrics, api):
+    api.reply("POST", "/v1/isp-metrics/1h/query", {"data": {"metrics": []}})
+
+    result = await metrics.query_metrics("1h", [{"host_id": "h", "site_id": "s"}])
+
+    assert (result.series, result.partial, result.message) == ([], False, None)
 
 
 @pytest.mark.parametrize(

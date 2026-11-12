@@ -164,7 +164,7 @@ class SiteManagerConnectionManager:
                 f"No Site Manager API key is configured. Set {API_KEY_ENV_VAR} to a key created at "
                 "unifi.ui.com > Settings > API Keys."
             )
-        url = URL(self._base_url + path, encoded=True)
+        url = self._url(path)
         if params:
             url = url.with_query(params)
         headers = {"X-API-Key": self._api_key, "Accept": "application/json"}
@@ -187,6 +187,20 @@ class SiteManagerConnectionManager:
                 raise UniFiRateLimitError(f"Site Manager API rate limit reached.{hint}")
             logger.info("Site Manager rate limit on %s %s; retrying in %.1fs", method, path, wait)
             await asyncio.sleep(wait)
+
+    def _url(self, path: str) -> URL:
+        """Join ``path`` to the base URL, refusing any path that would change the destination.
+
+        A path that does not start with ``/`` can turn the host into userinfo
+        (``https://api.ui.com@other.example/``), which would send the key
+        elsewhere without a redirect.
+        """
+        if not isinstance(path, str) or not path.startswith("/") or "\\" in path:
+            raise UniFiValidationError("Site Manager request path must be root-relative")
+        url = URL(self._base_url + path, encoded=True)
+        if url.origin() != URL(self._base_url).origin():
+            raise UniFiValidationError("Site Manager request path must be root-relative")
+        return url
 
     async def _send(
         self,

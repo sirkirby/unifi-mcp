@@ -111,7 +111,7 @@ def series_from_api(raw: Any, *, period_limit: int = DEFAULT_PERIOD_LIMIT) -> Is
     entry = as_dict(raw)
     periods = [_period(period) for period in as_list(entry.get("periods"))]
     limit = max(0, min(period_limit, MAX_PERIODS))
-    kept = periods[len(periods) - limit :] if limit else []
+    kept = periods[-limit:] if limit else []
     return IspMetricSeries(
         host_id=text(entry.get("hostId")),
         site_id=text(entry.get("siteId")),
