@@ -7,9 +7,9 @@ summary of the whole window and only the most recent periods by default.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from unifi_core.sitemanager.models._coerce import as_dict, as_list, number, text, timestamp
 
@@ -120,3 +120,68 @@ def series_from_api(raw: Any, *, period_limit: int = DEFAULT_PERIOD_LIMIT) -> Is
         periods=kept,
         periods_truncated=len(kept) < len(periods),
     )
+
+
+class SiteManagerMetricsSiteInput(BaseModel):
+    """Closed per-site query input; either timestamp may be supplied independently."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    host_id: str
+    site_id: str
+    begin_timestamp: str | None = None
+    end_timestamp: str | None = None
+
+    @field_validator("host_id", "site_id")
+    @classmethod
+    def nonblank_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Provide a nonempty Site Manager identifier")
+        return value
+
+    @field_validator("begin_timestamp", "end_timestamp")
+    @classmethod
+    def timestamp_input(cls, value):
+        if value is not None:
+            from unifi_core.exceptions import UniFiValidationError
+            from unifi_core.sitemanager.managers.inventory_manager import rfc3339
+
+            try:
+                return rfc3339(value, "timestamp")
+            except UniFiValidationError:
+                raise ValueError("Provide a valid RFC 3339 timestamp") from None
+        return value
+
+
+class SiteManagerMetricsGetInput(BaseModel):
+    """Bounded metric window input shared by account data surfaces."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    metric_type: Literal["5m", "1h"] = "1h"
+    duration: Literal["24h", "7d", "30d"] | None = None
+    begin_timestamp: str | None = None
+    end_timestamp: str | None = None
+    period_limit: int = Field(default=DEFAULT_PERIOD_LIMIT, ge=0, le=MAX_PERIODS)
+
+    @model_validator(mode="after")
+    def window(self):
+        from unifi_core.sitemanager.managers.inventory_manager import rfc3339
+        from unifi_core.sitemanager.managers.isp_metrics_manager import DURATIONS
+
+        has_range = self.begin_timestamp is not None or self.end_timestamp is not None
+        if has_range:
+            if self.duration is not None or self.begin_timestamp is None or self.end_timestamp is None:
+                raise ValueError("Provide either duration or both timestamp endpoints")
+            rfc3339(self.begin_timestamp, "begin_timestamp")
+            rfc3339(self.end_timestamp, "end_timestamp")
+        elif self.duration is not None and self.duration not in DURATIONS[self.metric_type]:
+            raise ValueError("Duration is incompatible with the metric interval")
+        return self
+
+
+class SiteManagerMetricsQueryInput(BaseModel):
+    """Strict body for the read-only ISP metrics query."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    sites: list[SiteManagerMetricsSiteInput] = Field(min_length=1, max_length=50)
+    metric_type: Literal["5m", "1h"] = "1h"
+    period_limit: int = Field(default=DEFAULT_PERIOD_LIMIT, ge=0, le=MAX_PERIODS)
