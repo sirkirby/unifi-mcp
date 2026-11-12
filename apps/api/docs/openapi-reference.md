@@ -4,6 +4,28 @@
 > Regenerate with `python -m unifi_api.graphql.docgen`.
 
 
+## Site Manager connection
+
+### `DELETE /v1/sitemanager/connection` — Delete
+
+### `GET /v1/sitemanager/connection` — Get
+
+
+**Returns:** `SiteManagerConnectionOut`
+
+### `PATCH /v1/sitemanager/connection` — Patch
+
+
+**Returns:** `SiteManagerConnectionOut`
+
+### `POST /v1/sitemanager/connection` — Create
+
+### `POST /v1/sitemanager/connection/probe` — Probe
+
+
+**Returns:** `SiteManagerProbeOut`
+
+
 ## access/credentials
 
 ### `GET /v1/sites/{site_id}/credentials` — List Credentials

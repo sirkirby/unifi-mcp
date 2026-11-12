@@ -34,8 +34,8 @@ def metadata(row: SiteManagerConnection) -> dict:
         "name": row.name,
         "key_configured": True,
         "revision": row.revision,
-        "created_at": row.created_at.isoformat(),
-        "updated_at": row.updated_at.isoformat(),
+        "created_at": row.created_at.replace(tzinfo=timezone.utc).isoformat(),
+        "updated_at": row.updated_at.replace(tzinfo=timezone.utc).isoformat(),
     }
 
 
@@ -65,11 +65,9 @@ async def create_connection(
         created_at=now,
         updated_at=now,
     )
-    # A savepoint keeps the caller transaction usable after a singleton conflict.
     try:
-        async with session.begin_nested():
-            session.add(row)
-            await session.flush()
+        session.add(row)
+        await session.flush()
     except IntegrityError as exc:
         if "UNIQUE constraint failed: sitemanager_connections.singleton_slot" in str(exc.orig):
             raise SiteManagerConnectionConflict("Site Manager connection is already configured") from None

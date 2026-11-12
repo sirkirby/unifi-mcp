@@ -24,11 +24,35 @@
   <fieldset>
     <label><input type="checkbox" id="live-tail-toggle"
       hx-on::click="toggleAuditLive(this);" /> Live-tail</label>
-    <a href="/admin/audit/export.csv" class="secondary outline" role="button">Export CSV</a>
+    <a href="/admin/audit/export.csv" onclick="downloadAuditCsv(event)" class="secondary outline" role="button">Export CSV</a>
   </fieldset>
 </form>
 
 <script>
+  async function downloadAuditCsv(event) {
+    event.preventDefault();
+    const params = new URLSearchParams(new FormData(document.getElementById('audit-filters')));
+    const key = localStorage.getItem('admin_bearer_key');
+    const response = await fetch('/admin/audit/export.csv?' + params.toString(), {
+      headers: key ? {Authorization: 'Bearer ' + key} : {},
+      redirect: 'error'
+    });
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('admin_bearer_key');
+      window.location.href = '/admin/login';
+      return;
+    }
+    if (!response.ok) throw new Error('Audit export failed');
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'audit.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function toggleAuditLive(cb) {
     const slot = document.getElementById('audit-live');
     while (slot.firstChild) slot.removeChild(slot.firstChild);

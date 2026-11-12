@@ -36,7 +36,7 @@ from unifi_api.routes import admin_data as admin_data_routes
 from unifi_api.routes import audit as audit_routes
 from unifi_api.routes import catalog as catalog_routes
 from unifi_api.routes import controllers as controllers_routes
-from unifi_api.routes import health
+from unifi_api.routes import health, sitemanager_connections
 from unifi_api.routes.admin import audit as admin_audit_routes
 from unifi_api.routes.admin import auth as admin_auth_routes
 from unifi_api.routes.admin import controllers as admin_controllers_routes
@@ -44,6 +44,7 @@ from unifi_api.routes.admin import dashboard as admin_dashboard_routes
 from unifi_api.routes.admin import keys as admin_keys_routes
 from unifi_api.routes.admin import logs as admin_logs_routes
 from unifi_api.routes.admin import settings as admin_settings_routes
+from unifi_api.routes.admin import sitemanager as admin_sitemanager_routes
 from unifi_api.routes.resources.access import (
     credentials as access_credentials_routes,
 )
@@ -242,6 +243,8 @@ from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
 from unifi_api.services.settings import SettingsService
+from unifi_api.services.sitemanager_errors import SiteManagerAPIError
+from unifi_api.services.sitemanager_managers import SiteManagerFactory
 from unifi_api.services.streams import SubscriberPool
 
 _streams_log = logging.getLogger("unifi-api.streams")
@@ -271,6 +274,16 @@ async def _request_validation_error(request: Request, exc: RequestValidationErro
     Keeps each error's type, location and message, the parts that say what
     to fix, and drops ``input``, ``ctx`` and ``url``.
     """
+    if request.url.path.startswith(("/v1/sitemanager/connection", "/admin/sitemanager")):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "kind": "invalid_sitemanager_request",
+                    "message": "Invalid Site Manager connection fields or types.",
+                }
+            },
+        )
     detail = [{key: error[key] for key in ("type", "loc", "msg") if key in error} for error in exc.errors()]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
 
@@ -375,22 +388,29 @@ def create_app(config: ApiConfig) -> FastAPI:
 
         app.state._audit_pruner_task = asyncio.create_task(_prune_loop())
 
-        yield
-        # Cancel background pruner task
-        task = getattr(app.state, "_audit_pruner_task", None)
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+        try:
+            yield
+        finally:
+            # Cancel background pruner task
+            task = getattr(app.state, "_audit_pruner_task", None)
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
-        # Shutdown — drop manager caches first, then engine
-        factory = app.state.manager_factory
-        cached_ids = list({k[0] for k in factory._connection_cache.keys()})
-        for cid in cached_ids:
-            await factory.invalidate_controller(cid)
-        await app.state.engine.dispose()
+            # Shutdown — drop manager caches first, then engine
+            try:
+                factory = app.state.manager_factory
+                cached_ids = list({k[0] for k in factory._connection_cache.keys()})
+                for cid in cached_ids:
+                    await factory.invalidate_controller(cid)
+            finally:
+                try:
+                    await app.state.sitemanager_factory.close()
+                finally:
+                    await app.state.engine.dispose()
 
     app = FastAPI(
         title="unifi-api",
@@ -400,6 +420,17 @@ def create_app(config: ApiConfig) -> FastAPI:
         lifespan=lifespan,
     )
     app.add_exception_handler(RequestValidationError, _request_validation_error)
+
+    @app.exception_handler(SiteManagerAPIError)
+    async def _sitemanager_error(request: Request, exc: SiteManagerAPIError):
+        return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
+
+    @app.middleware("http")
+    async def _sitemanager_no_store(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(("/v1/sitemanager/connection", "/admin/sitemanager")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     # Auth doesn't use FastAPI's HTTPBearer dependency (the middleware reads
     # the header directly to keep the audit-on-failure path simple), so the
@@ -459,6 +490,7 @@ def create_app(config: ApiConfig) -> FastAPI:
     app.state.sessionmaker = get_sessionmaker(engine)
 
     cipher = ColumnCipher(derive_key(db_key))
+    app.state.sitemanager_factory = SiteManagerFactory(app.state.sessionmaker, cipher)
     app.state.cipher = cipher
     app.state.subscriber_pool = SubscriberPool()
     app.state.manager_factory = ManagerFactory(
@@ -493,6 +525,8 @@ def create_app(config: ApiConfig) -> FastAPI:
 
     app.include_router(health.router, prefix="/v1")
     app.include_router(controllers_routes.router, prefix="/v1")
+    app.include_router(sitemanager_connections.router, prefix="/v1")
+    app.include_router(admin_sitemanager_routes.router)
     app.include_router(actions_routes.router, prefix="/v1")
     app.include_router(catalog_routes.router, prefix="/v1")
     app.include_router(audit_routes.router, prefix="/v1")

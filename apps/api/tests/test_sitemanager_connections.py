@@ -90,6 +90,7 @@ async def test_singleton_conflict_and_database_checks(store):
             await create_connection(
                 session, cipher, SiteManagerConnectionCreate(name="Other", site_manager_api_key=KEY)
             )
+        await session.rollback()
         assert (await get_connection(session)).name == "Account"
     # Even bypassing the service cannot insert a second row or another slot.
     for slot, revision in [(1, 1), (2, 1), (1, 0)]:
@@ -153,3 +154,47 @@ def test_shared_console_validator_rejects_cloud(products):
     with pytest.raises(HTTPException) as error:
         _parse_product_kinds(products)
     assert error.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_singleton_constraint_rejects_concurrent_create(store):
+    import asyncio
+
+    sm, cipher = store
+
+    async def create():
+        async with sm() as session:
+            try:
+                row = await create_connection(
+                    session, cipher, SiteManagerConnectionCreate(name="Account", site_manager_api_key=KEY)
+                )
+                await session.commit()
+                return row.id
+            except SiteManagerConnectionConflict:
+                await session.rollback()
+                return None
+
+    results = await asyncio.gather(create(), create())
+    assert len([result for result in results if result]) == 1
+    async with sm() as session:
+        rows = (await session.scalars(select(SiteManagerConnection))).all()
+        assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_revisions_use_database_arithmetic_across_sessions(store):
+    import asyncio
+
+    sm, cipher = store
+    await seed(store)
+
+    async def rotate():
+        async with sm() as session:
+            await update_connection(
+                session, cipher, SiteManagerConnectionPatch(site_manager_api_key="rotated-synthetic")
+            )
+            await session.commit()
+
+    await asyncio.gather(*(rotate() for _ in range(5)))
+    async with sm() as session:
+        assert (await get_connection(session)).revision == 6

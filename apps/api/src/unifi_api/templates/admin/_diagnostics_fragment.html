@@ -20,7 +20,11 @@
     <p>{{ d.capability_cache.size }} entries · {{ "%.0f"|format(d.capability_cache.hit_rate * 100) }}% hit rate · TTL {{ d.capability_cache.ttl_seconds }}s</p>
   </article>
   <article>
+    <h3>Site Manager</h3>
+    <p>Configured: {{ d.sitemanager.configured }}</p>
+  </article>
+  <article>
     <h3>Counts</h3>
-    <p>{{ d.counts.api_keys }} keys · {{ d.counts.controllers }} controllers · {{ d.counts.audit_rows }} audit rows</p>
+    <p>{{ d.counts.api_keys }} keys · {{ d.counts.controllers }} controllers · {{ d.counts.audit_rows }} audit rows · {{ d.counts.sitemanager_connections }} cloud connections</p>
   </article>
 </div>
