@@ -38,11 +38,47 @@ def test_compose_publishes_only_loopback_and_keeps_relay_reachable():
         assert any(f"http://unifi-{server}-mcp:{port}" in value for value in relay_env)
 
 
+SITEMANAGER_KEY_VARS = {
+    "UNIFI_SITEMANAGER_API_KEY",
+    "UNIFI_SITEMANAGER_API_KEY_FILE",
+    "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+}
+
+
+def test_compose_sitemanager_is_opt_in_loopback_and_outside_the_relay():
+    compose = yaml.safe_load((ROOT / "docker/docker-compose.yml").read_text())
+    service = compose["services"]["unifi-sitemanager-mcp"]
+    assert service["profiles"] == ["sitemanager"]
+    assert service["build"] == {"context": "..", "dockerfile": "apps/sitemanager/Dockerfile"}
+    assert service["ports"] == ["127.0.0.1:3003:3003"]
+    assert "env_file" not in service
+    names = {entry.split("=", 1)[0] for entry in service["environment"]}
+    assert names == SITEMANAGER_KEY_VARS | {
+        "UNIFI_MCP_HTTP_ENABLED",
+        "UNIFI_MCP_HTTP_TRANSPORT",
+        "UNIFI_MCP_HOST",
+        "UNIFI_MCP_PORT",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET",
+        "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
+    }
+    assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
+    assert "UNIFI_MCP_PORT=3003" in service["environment"]
+
+    relay = compose["services"]["unifi-mcp-relay"]
+    assert "unifi-sitemanager-mcp" not in relay["depends_on"]
+    assert not any("sitemanager" in value or ":3003" in value for value in relay["environment"])
+    for name, other in compose["services"].items():
+        if name != "unifi-sitemanager-mcp":
+            assert "sitemanager" not in other.get("profiles", [])
+
+
 def _resolved_compose_environments(
     tmp_path: Path,
     *,
     env_file_allowed_hosts: str | None,
     shell_allowed_hosts: str | None,
+    profiles: tuple[str, ...] = (),
 ) -> dict[str, dict[str, str]]:
     docker = shutil.which("docker")
     if docker is None:
@@ -50,12 +86,12 @@ def _resolved_compose_environments(
 
     docker_dir = tmp_path / "docker"
     run_dir = tmp_path / "run"
-    docker_dir.mkdir()
+    docker_dir.mkdir(parents=True)
     run_dir.mkdir()
     compose_path = docker_dir / "docker-compose.yml"
     shutil.copy2(ROOT / "docker/docker-compose.yml", compose_path)
 
-    env_lines = ["UNIFI_HOST=controller.example.com"]
+    env_lines = ["UNIFI_HOST=controller.example.com", "UNIFI_API_KEY=console-local-synthetic"]
     if env_file_allowed_hosts is not None:
         env_lines.append(f"UNIFI_MCP_ALLOWED_HOSTS={env_file_allowed_hosts}")
     (tmp_path / ".env").write_text("\n".join(env_lines) + "\n")
@@ -66,7 +102,16 @@ def _resolved_compose_environments(
         command_env["UNIFI_MCP_ALLOWED_HOSTS"] = shell_allowed_hosts
 
     result = subprocess.run(
-        [docker, "compose", "-f", str(compose_path), "config", "--format", "json"],
+        [
+            docker,
+            "compose",
+            "-f",
+            str(compose_path),
+            *(arg for profile in profiles for arg in ("--profile", profile)),
+            "config",
+            "--format",
+            "json",
+        ],
         cwd=run_dir,
         env=command_env,
         check=True,
@@ -77,7 +122,7 @@ def _resolved_compose_environments(
     return {
         service_name: service["environment"]
         for service_name, service in services.items()
-        if service_name in {"unifi-network-mcp", "unifi-protect-mcp", "unifi-access-mcp"}
+        if service_name in {"unifi-network-mcp", "unifi-protect-mcp", "unifi-access-mcp", "unifi-sitemanager-mcp"}
     }
 
 
@@ -123,3 +168,39 @@ def test_compose_preserves_operator_allowed_hosts_and_required_internal_hosts(
             f"unifi-{server}-mcp",
             f"unifi-{server}-mcp:{port}",
         }
+
+
+@pytest.mark.parametrize("shell_allowed_hosts", [None, "shell.example.com", ""])
+def test_compose_sitemanager_profile_resolves_with_only_its_own_variables(tmp_path: Path, shell_allowed_hosts):
+    default = _resolved_compose_environments(
+        tmp_path / "default", env_file_allowed_hosts=None, shell_allowed_hosts=None
+    )
+    assert len(default) == 3
+    assert "unifi-sitemanager-mcp" not in default
+
+    environments = _resolved_compose_environments(
+        tmp_path / "profile",
+        env_file_allowed_hosts="env-file.example.com",
+        shell_allowed_hosts=shell_allowed_hosts,
+        profiles=("sitemanager",),
+    )
+    assert len(environments) == 4
+    environment = environments["unifi-sitemanager-mcp"]
+    # The shared env file is not loaded: no console settings, no env-file hosts.
+    for name in ("UNIFI_HOST", "UNIFI_API_KEY", "UNIFI_MCP_ALLOWED_HOSTS"):
+        assert name not in environment
+    assert environments["unifi-network-mcp"]["UNIFI_HOST"] == "controller.example.com"
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE"] == (shell_allowed_hosts or "")
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET"] == (
+        "true" if shell_allowed_hosts is not None else ""
+    )
+    assert set(environment["UNIFI_MCP_INTERNAL_ALLOWED_HOSTS"].split(",")) == {
+        "localhost",
+        "localhost:3003",
+        "127.0.0.1",
+        "127.0.0.1:3003",
+        "host.docker.internal",
+        "host.docker.internal:3003",
+        "unifi-sitemanager-mcp",
+        "unifi-sitemanager-mcp:3003",
+    }
