@@ -1,6 +1,6 @@
 """Expired cache entries are evicted, so query-keyed caches stay bounded."""
 
-from types import SimpleNamespace
+import time
 
 import pytest
 from unifi_core.network.managers import connection_manager as connection_module
@@ -18,7 +18,7 @@ class _Clock:
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> _Clock:
     fake = _Clock()
-    monkeypatch.setattr(connection_module, "time", SimpleNamespace(time=fake.time))
+    monkeypatch.setattr(connection_module, "_cache_clock", fake.time)
     return fake
 
 
@@ -104,3 +104,20 @@ def test_invalidation_drops_retention_with_the_entry(clock: _Clock) -> None:
 
     assert "dns_records_default" not in manager._cache
     assert "dns_records_default" not in manager._cache_retention
+
+
+def test_a_rewrite_keeps_the_longer_ttl_a_reader_already_used(clock: _Clock) -> None:
+    manager = _manager()
+    manager._update_cache("catalog_default", {"apps": 1})
+    assert manager.get_cached("catalog_default", timeout=900) == {"apps": 1}
+
+    manager._update_cache("catalog_default", {"apps": 2})
+    clock.now += 100
+    manager._update_cache("trigger_sweep_default", True)
+
+    assert manager.get_cached("catalog_default", timeout=900) == {"apps": 2}
+
+
+def test_cache_ages_use_a_monotonic_clock() -> None:
+    """A wall-clock step (NTP, a restored VM) must not stall eviction or refresh entries."""
+    assert connection_module._cache_clock is time.monotonic

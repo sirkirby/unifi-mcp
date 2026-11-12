@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import re
-import time
 import time as _time
 from collections.abc import Iterable, Mapping
 from typing import Any, Dict, Optional
@@ -58,6 +57,10 @@ from unifi_core.tls import (
     ssl_setting,
     tls_mode,
 )
+
+# Cache ages use a monotonic clock so a wall-clock step (NTP, a restored VM)
+# can neither stall eviction nor make an entry look fresh.
+_cache_clock = _time.monotonic
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -520,7 +523,7 @@ class ConnectionManager:
         self._last_cache_update: Dict[str, float] = {}
         # Seconds each entry stays useful: the longest TTL its writer or any reader used.
         self._cache_retention: Dict[str, float] = {}
-        self._last_cache_sweep = time.time()
+        self._last_cache_sweep = _cache_clock()
         self._cache_generations: Dict[str, int] = {}
         self._last_connection_error: Optional[str] = None
         # The category of the failure behind _last_connection_error, with fixed text only.
@@ -1833,9 +1836,10 @@ class ConnectionManager:
         """Update the cache with new data, then drop entries no reader can still use.
 
         Keys that embed a query (a time window, a page) are rarely read again, so an
-        entry is kept only for the longest TTL its writer or a reader asked for.
+        entry is kept only for the longest TTL its writer asked for or a reader has
+        already read it with, and never less than cache_timeout.
         """
-        now = time.time()
+        now = _cache_clock()
         ttl = timeout if timeout is not None else self.cache_timeout
         self._cache[key] = data
         self._last_cache_update[key] = now
@@ -1886,7 +1890,7 @@ class ConnectionManager:
         effective_timeout = timeout if timeout is not None else self.cache_timeout
         if effective_timeout > self._cache_retention.get(key, 0):
             self._cache_retention[key] = effective_timeout
-        current_time = time.time()
+        current_time = _cache_clock()
         last_update = self._last_cache_update[key]
 
         is_valid = (current_time - last_update) < effective_timeout

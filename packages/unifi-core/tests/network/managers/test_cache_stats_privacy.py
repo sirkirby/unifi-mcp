@@ -22,7 +22,7 @@ def test_cache_logs_do_not_disclose_keys_or_prefixes(caplog: pytest.LogCaptureFi
         generation = connection._get_cache_generation(key)
         connection._update_cache(key, {"value": 1})
         assert connection.get_cached(key) == {"value": 1}
-        connection._last_cache_update[key] = 0
+        connection._last_cache_update[key] -= 3600
         assert connection.get_cached(key) is None
         connection._invalidate_cache(key)
         assert not connection._update_cache_if_current(key, {}, generation)
