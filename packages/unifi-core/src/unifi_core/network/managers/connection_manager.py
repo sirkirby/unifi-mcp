@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import re
-import time
 import time as _time
 from collections.abc import Iterable, Mapping
 from typing import Any, Dict, Optional
@@ -58,6 +57,10 @@ from unifi_core.tls import (
     ssl_setting,
     tls_mode,
 )
+
+# Cache ages use a monotonic clock so a wall-clock step (NTP, a restored VM)
+# can neither stall eviction nor make an entry look fresh.
+_cache_clock = _time.monotonic
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -518,6 +521,9 @@ class ConnectionManager:
         self._collection_refresh_locks: Dict[str, asyncio.Lock] = {}
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
+        # Seconds each entry stays useful: the longest TTL its writer or any reader used.
+        self._cache_retention: Dict[str, float] = {}
+        self._last_cache_sweep = _cache_clock()
         self._cache_generations: Dict[str, int] = {}
         self._last_connection_error: Optional[str] = None
         # The category of the failure behind _last_connection_error, with fixed text only.
@@ -1827,10 +1833,36 @@ class ConnectionManager:
     # --- Cache Management ---
 
     def _update_cache(self, key: str, data: Any, timeout: Optional[int] = None):
-        """Update the cache with new data."""
+        """Update the cache with new data, then drop entries no reader can still use.
+
+        Keys that embed a query (a time window, a page) are rarely read again, so an
+        entry is kept only for the longest TTL its writer asked for or a reader has
+        already read it with, and never less than cache_timeout.
+        """
+        now = _cache_clock()
+        ttl = timeout if timeout is not None else self.cache_timeout
         self._cache[key] = data
-        self._last_cache_update[key] = time.time()
-        logger.debug("Cache entry updated with timeout %ss", timeout or self.cache_timeout)
+        self._last_cache_update[key] = now
+        self._cache_retention[key] = max(ttl, self.cache_timeout, self._cache_retention.get(key, 0))
+        logger.debug("Cache entry updated with timeout %ss", ttl)
+        self._sweep_expired_cache(now)
+
+    def _sweep_expired_cache(self, now: float) -> None:
+        """Drop expired entries, at most once per cache_timeout so writes stay cheap."""
+        if now - self._last_cache_sweep < self.cache_timeout:
+            return
+        self._last_cache_sweep = now
+        expired = [
+            key
+            for key, written in self._last_cache_update.items()
+            if now - written >= self._cache_retention.get(key, self.cache_timeout)
+        ]
+        for key in expired:
+            self._cache.pop(key, None)
+            self._last_cache_update.pop(key, None)
+            self._cache_retention.pop(key, None)
+        if expired:
+            logger.debug("Evicted %s expired cache entries", len(expired))
 
     def _get_cache_generation(self, key: str) -> int:
         """Return the generation that identifies the current contents of a cache key."""
@@ -1856,7 +1888,9 @@ class ConnectionManager:
             return False
 
         effective_timeout = timeout if timeout is not None else self.cache_timeout
-        current_time = time.time()
+        if effective_timeout > self._cache_retention.get(key, 0):
+            self._cache_retention[key] = effective_timeout
+        current_time = _cache_clock()
         last_update = self._last_cache_update[key]
 
         is_valid = (current_time - last_update) < effective_timeout
@@ -1885,6 +1919,7 @@ class ConnectionManager:
         for key in keys_to_remove:
             self._cache.pop(key, None)
             self._last_cache_update.pop(key, None)
+            self._cache_retention.pop(key, None)
         for key in generation_keys:
             self._cache_generations[key] = self._cache_generations[key] + 1
 
