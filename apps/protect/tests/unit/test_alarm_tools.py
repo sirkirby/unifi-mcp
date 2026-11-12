@@ -474,6 +474,6 @@ def test_fire_webhook_description_tells_its_id_from_a_catalog_trigger_id():
     manifest = json.loads((Path(unifi_protect_mcp.__file__).parent / "tools_manifest.json").read_text())
     tool = next(t for t in manifest["tools"] if t["name"] == "protect_alarm_fire_webhook")
     field = tool["schema"]["input"]["properties"]["trigger_id"]["description"]
-    for text in (tool["description"], field):
-        assert "data.webhook" in text
-        assert "protect_alarm_get_catalog" in text
+    assert "data.webhook" in field
+    assert "protect_alarm_get_catalog" in field
+    assert "not a catalog trigger_id" in tool["description"]
