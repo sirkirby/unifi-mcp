@@ -66,6 +66,45 @@ def setup_required_message(*, plugin_name: str, env_prefix: str, report: Setting
     return "\n".join(lines)
 
 
+def api_key_setup_required_message(
+    *, plugin_name: str, env_prefix: str, key_source: str, report: SettingsFileReport | None
+) -> str:
+    """Setup guidance for a server whose only credential is an API key.
+
+    ``key_source`` says where the user creates the key. Like
+    :func:`setup_required_message`, this names variables and the settings
+    file's state, never a value or path.
+    """
+    product = env_prefix.lower()
+    var = f"UNIFI_{env_prefix}_API_KEY"
+    lines = [
+        f"The {plugin_name} MCP server is not configured: no API key is set. It is running in setup mode "
+        "with no tools and makes no outbound requests.",
+        "",
+        "To configure it:",
+        f"- Create an API key: {key_source}",
+        f"- Claude Code: run /{plugin_name}:{plugin_name}-setup.",
+        f"- Codex or OpenClaw: run the {plugin_name}-setup skill. It writes ~/.config/unifi-mcp/{product}.env, "
+        f"which this server reads through {SETTINGS_FILE_VAR}.",
+        f"- Any other launcher: set {var} in the server's environment, or put it in a file named by "
+        f"{SETTINGS_FILE_VAR}.",
+        f"This server reads only {var}. It does not use UNIFI_API_KEY, which holds a console's local key.",
+    ]
+    if report is not None and report.state == "missing":
+        lines.append(f"The file named by {SETTINGS_FILE_VAR} does not exist yet; setup creates it.")
+    elif report is not None and report.state == "ignored":
+        lines.append(f"The file named by {SETTINGS_FILE_VAR} was ignored; the server log says why.")
+    lines += [
+        "",
+        "Then load the new settings:",
+        "- Claude Code: run /reload-plugins or start a new session. /mcp reconnect does not load new plugin options.",
+        "- Codex: restart Codex or start a new session.",
+        "- OpenClaw: start a new session or run openclaw gateway restart.",
+        "- Standalone: restart the server.",
+    ]
+    return "\n".join(lines)
+
+
 async def serve_setup_required(
     *,
     server: Any,
@@ -75,12 +114,20 @@ async def serve_setup_required(
     tool_prefix: str,
     default_port: int,
     logger: logging.Logger,
+    message: str | None = None,
 ) -> None:
-    """Run the server's transports in setup mode until the client disconnects."""
+    """Run the server's transports in setup mode until the client disconnects.
+
+    ``message`` replaces the controller-host guidance for a server that is
+    configured some other way.
+    """
     from unifi_mcp_shared import bootstrap
     from unifi_mcp_shared.transport import resolve_http_auth_token, resolve_http_config, run_transports
 
-    message = setup_required_message(plugin_name=plugin_name, env_prefix=env_prefix, report=bootstrap._SETTINGS_REPORT)
+    if message is None:
+        message = setup_required_message(
+            plugin_name=plugin_name, env_prefix=env_prefix, report=bootstrap._SETTINGS_REPORT
+        )
     for line in message.splitlines():
         logger.warning("[setup] %s", line)
     report = bootstrap._SETTINGS_REPORT

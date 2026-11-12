@@ -29,6 +29,8 @@ _SENSITIVE_EXACT = frozenset(
         "x_password",
         "x_passphrase",
         "api_key",
+        # The request header that carries an API key.
+        "x_api_key",
         "api_token",
         "private_key",
         "privatekey",
