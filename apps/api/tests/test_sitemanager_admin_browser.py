@@ -21,7 +21,7 @@ def node(source):
 def test_csv_download_carries_cloud_filter_and_admin_bearer():
     template = (TEMPLATES / "audit/_filters.html").read_text()
     assert 'onclick="downloadAuditCsv(event)"' in template
-    script = re.search(r"<script>(.*?)</script>", template, re.S).group(1)
+    script = template.split("<script>", 1)[1].split("</script>", 1)[0]
     node(
         """
 import assert from 'node:assert/strict';

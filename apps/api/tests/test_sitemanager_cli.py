@@ -1,6 +1,7 @@
 """CLI input channels and database changes share management contracts."""
 
 import json
+import re
 import shutil
 import sqlite3
 from unittest.mock import AsyncMock
@@ -101,7 +102,11 @@ def test_cli_has_no_key_value_option(cloud_secrecy_guard):
     for command in ("add", "update", "list", "delete", "probe"):
         assert command in help_result.output
     for command in ("add", "update"):
-        result = runner.invoke(app, ["sitemanager", command, "--help"])
+        # A colour terminal styles and wraps option names, so read plain, wide help.
+        result = runner.invoke(
+            app, ["sitemanager", command, "--help"], env={"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"}
+        )
         assert result.exit_code == 0
-        assert "--key-stdin" in result.output
-        assert "--api-key" not in result.output and "--site-manager-api-key" not in result.output
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "--key-stdin" in plain
+        assert "--api-key" not in plain and "--site-manager-api-key" not in plain
