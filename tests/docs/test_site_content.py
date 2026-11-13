@@ -34,6 +34,7 @@ MCP_SERVER_LINKS = {
     "unifi-network-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/network",
     "unifi-protect-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect",
     "unifi-access-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/access",
+    "unifi-sitemanager-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager",
 }
 
 JSON_LD_PRODUCT_LINKS = MCP_SERVER_LINKS | PRODUCT_LINKS
@@ -42,7 +43,51 @@ MANIFESTS = {
     "network": Path("apps/network/src/unifi_network_mcp/tools_manifest.json"),
     "protect": Path("apps/protect/src/unifi_protect_mcp/tools_manifest.json"),
     "access": Path("apps/access/src/unifi_access_mcp/tools_manifest.json"),
+    "sitemanager": Path("apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json"),
 }
+
+# Whether unifi-sitemanager-mcp has a first release. Until it does, public pages
+# must not present an install command, badge or marketplace link as working.
+SITEMANAGER_RELEASED = False
+
+# Install surfaces that only work once the Site Manager package is published.
+SITEMANAGER_RELEASE_ONLY_TEXT = (
+    "uvx unifi-sitemanager-mcp",
+    "pip install unifi-sitemanager-mcp",
+    "pipx install unifi-sitemanager-mcp",
+    "docker pull ghcr.io/sirkirby/unifi-sitemanager-mcp",
+    "unifi-sitemanager@unifi-plugins",
+    "pypi.org/project/unifi-sitemanager-mcp",
+    "img.shields.io/pypi/v/unifi-sitemanager-mcp",
+)
+
+# Public pages that describe the servers. The Site Manager app's own README
+# keeps its release-gated instructions under a heading that says so.
+SERVER_SURFACES = (
+    Path("README.md"),
+    Path("QUICKSTART.md"),
+    Path("CONTRIBUTING.md"),
+    Path("SECURITY.md"),
+    Path("SUPPORT.md"),
+    Path("PRIVACY.md"),
+    Path(".env.example"),
+    Path("docs/index.html"),
+    Path("docs/404.html"),
+    Path("docs/sponsor/index.html"),
+    Path("docs/privacy.html"),
+    Path("docs/llms.txt"),
+    Path("docs/README.md"),
+    Path("docs/tool-index.md"),
+    Path("docs/ARCHITECTURE.md"),
+    Path("docs/agent-install.md"),
+    Path("docs/credential-providers.md"),
+    Path("docs/permissions.md"),
+    Path("docs/cross-product.md"),
+    Path("docs/support-bundles.md"),
+    Path("docs/tls-verification.md"),
+    Path("apps/network/docs/transports.md"),
+    Path("apps/api/README.md"),
+)
 
 COUNT_SURFACES = {
     "network": [
@@ -62,6 +107,11 @@ COUNT_SURFACES = {
         Path("docs/ARCHITECTURE.md"),
         Path("apps/access/README.md"),
         Path("apps/access/docs/tools.md"),
+    ],
+    # Site Manager states its nine domain tools; its own docs spell the number out.
+    "sitemanager": [
+        Path("README.md"),
+        Path("docs/ARCHITECTURE.md"),
     ],
 }
 
@@ -202,13 +252,15 @@ def pinned_counts(root: Path = Path(".")) -> dict[str, int]:
 
 
 def manifest_counts() -> dict[str, int]:
+    """Published tool counts: every manifest tool, except Site Manager's domain tools only."""
+    refs = _plugin_tool_refs()
     counts: dict[str, int] = {}
     for product, path in MANIFESTS.items():
         manifest = json.loads(path.read_text(encoding="utf-8"))
         tools = manifest["tools"]
         if manifest["count"] != len(tools):
             raise AssertionError(f"Manifest count mismatch in {path}")
-        counts[product] = len(tools)
+        counts[product] = refs.tool_count(manifest, product)
     return counts
 
 
@@ -561,7 +613,41 @@ class PrivacyDataFlowContractTests(unittest.TestCase):
                 self.assertIn(phrase, self.privacy_lower)
 
     def test_privacy_has_current_revision_date(self):
-        self.assertIn("Last updated: October 28, 2026", self.privacy)
+        self.assertIn("Last updated: November 12, 2026", self.privacy)
+
+    def test_privacy_discloses_site_manager_cloud_path(self):
+        section = self.privacy.split('<h2 id="site-manager">', 1)[1].split("<h2", 1)[0].lower()
+        required = (
+            "https://api.ui.com",
+            "even when it runs on your machine over local stdio",
+            "destination is fixed",
+            "account-wide",
+            "never taken from, or shared with, the console credentials",
+            "does not include this server by default",
+        )
+
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+        self.assertIn(
+            "cloud-backed Site Manager server",
+            meta_content(inspect_html(Path("docs/privacy.html")), "name", "description")[0],
+        )
+
+    def test_repository_privacy_policy_matches_the_site_manager_path(self):
+        policy = Path("PRIVACY.md").read_text(encoding="utf-8")
+        section = policy.split("### Site Manager cloud requests", 1)[1].split("\n### ", 1)[0]
+        self.assertNotIn("All communication stays between your AI agent and your local UniFi controller", policy)
+        for phrase in (
+            "https://api.ui.com",
+            "local stdio",
+            "fixed in the code",
+            "account-wide",
+            "never taken from, or shared with",
+            "does not include this server by default",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
 
     def test_privacy_names_only_supported_retention_controls(self):
         self.assertNotIn("delete relay locations", self.privacy_lower)
@@ -794,6 +880,13 @@ class ContentReconciliationTests(unittest.TestCase):
                     rf"\| \[{product}\][^\n]*\| Stable \| {counts[product.lower()]} \|",
                 )
 
+        status = "Beta" if SITEMANAGER_RELEASED else "Not yet released"
+        self.assertIn(
+            f"| [Site Manager](apps/sitemanager/) | {status} | {counts['sitemanager']} |",
+            readme,
+        )
+        self.assertIn(f"<h4>Site Manager <span>{status}</span></h4>", homepage)
+
         for product in ("Protect", "Access"):
             with self.subTest(product=product):
                 self.assertIn(f"<h4>{product} <span>Stable</span></h4>", homepage)
@@ -882,6 +975,103 @@ class ContentReconciliationTests(unittest.TestCase):
         self.assertIn("`unifi-mcp-shared`", relay_section)
         self.assertIn("`unifi-core`", relay_section)
         self.assertRegex(relay_section, r"(?i)does not[^\n]*(?:import|depend)[^\n]*server app packages")
+
+    def test_site_manager_server_row_uses_its_colour_and_release_state(self):
+        parser = inspect_html(Path("docs/index.html"))
+        rows = [
+            attributes
+            for attributes in parser.attributes_for("div")
+            if "server-row" in attributes.get("class", "").split()
+        ]
+        self.assertEqual([row["data-product"] for row in rows], ["network", "protect", "access", "sitemanager"])
+        self.assertIn("sitemanager", rows[-1]["class"].split())
+        self.assertEqual(rows[-1]["data-release"], "released" if SITEMANAGER_RELEASED else "unreleased")
+
+        css = Path("docs/styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"(?m)^  --sitemanager: #7C5CFF;$")
+        self.assertIn(".server-row.sitemanager::before { background: var(--sitemanager); }", css)
+        mobile = css.split("@media (max-width: 760px) {", 1)[1].split("\n}", 1)[0]
+        self.assertIn(".server-row { grid-template-columns: 1fr; gap: 12px; }", mobile)
+
+    def test_landing_page_keeps_three_product_paths(self):
+        homepage = Path("docs/index.html").read_text(encoding="utf-8")
+        self.assertIn("<h2>Three product paths, built for different jobs.</h2>", homepage)
+        self.assertEqual(homepage.count('class="product-number"'), 3)
+
+    def test_unreleased_site_manager_is_not_presented_as_installable(self):
+        if SITEMANAGER_RELEASED:
+            self.skipTest("unifi-sitemanager-mcp is released")
+        for path in SERVER_SURFACES:
+            content = path.read_text(encoding="utf-8")
+            for text in SITEMANAGER_RELEASE_ONLY_TEXT:
+                with self.subTest(path=path, text=text):
+                    self.assertNotIn(text, content)
+
+    def test_site_manager_cloud_boundary_is_stated_where_servers_are_configured(self):
+        surfaces = {
+            Path("README.md"): ("https://api.ui.com", "UNIFI_SITEMANAGER_API_KEY", "no shared fallback"),
+            Path("QUICKSTART.md"): ("https://api.ui.com", "even when your client runs", "port 3003"),
+            Path("SECURITY.md"): ("https://api.ui.com", "cannot be changed", "never sent to a console"),
+            Path(".env.example"): (
+                "UNIFI_SITEMANAGER_API_KEY_FILE",
+                "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+                "Set exactly one",
+            ),
+            Path("docs/credential-providers.md"): ("No shared fallback", "`UNIFI_API_KEY`", "exactly one"),
+            Path("docs/tls-verification.md"): ("Site Manager", "always verifies"),
+            Path("apps/network/docs/transports.md"): (
+                "Site Manager (port 3003)",
+                "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN",
+            ),
+        }
+        for path, phrases in surfaces.items():
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+
+    def test_relay_stays_opt_in_for_site_manager(self):
+        surfaces = (
+            Path("README.md"),
+            Path("QUICKSTART.md"),
+            Path("SECURITY.md"),
+            Path("PRIVACY.md"),
+            Path(".env.example"),
+            Path("docs/privacy.html"),
+            Path("docs/cross-product.md"),
+            Path("apps/network/docs/transports.md"),
+        )
+        for path in surfaces:
+            content = " ".join(path.read_text(encoding="utf-8").split()).lower()
+            with self.subTest(path=path):
+                self.assertRegex(content, r"relay does not (?:include|reach) [^.]*?(?:unless|by default)")
+                self.assertRegex(content, r"read the whole (?:ui |cloud )?account")
+
+    def test_api_readme_documents_every_site_manager_route(self):
+        spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))
+        paths = sorted(path for path in spec["paths"] if path.startswith("/v1/sitemanager/"))
+        self.assertGreater(len(paths), 0)
+        readme = Path("apps/api/README.md").read_text(encoding="utf-8")
+        section = readme.split("## Site Manager cloud connection", 1)[1].split("\n## ", 1)[0]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(path, section)
+        for phrase in (
+            "unifi-api-server sitemanager add",
+            "--key-stdin",
+            "unifi-api-server sitemanager update --rotate-key",
+            "unifi-api-server sitemanager probe",
+            "unifi-api-server sitemanager delete",
+            "/admin/sitemanager",
+            "The `sitemanager` namespace",
+            "`admin` scope",
+            "`read` scope",
+            "can read the whole UI account",
+            "`503` `sitemanager_not_configured`",
+            "NOT_CONFIGURED",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
 
     def test_public_pages_do_not_make_outdated_claims(self):
         for path in PUBLIC_PAGES:
