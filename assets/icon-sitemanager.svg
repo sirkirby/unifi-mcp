@@ -1,0 +1,12 @@
+<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cloud: the account-level view -->
+  <path d="M13.5 17A3.5 3.5 0 0 1 13.5 10A6.5 6.5 0 0 1 26 9.6A3.7 3.7 0 0 1 26.5 17Z" stroke="#7C5CFF" stroke-width="2" fill="#7C5CFF" fill-opacity="0.15" stroke-linejoin="round"/>
+  <!-- Links from the cloud down to each site -->
+  <line x1="20" y1="17" x2="8.5" y2="27" stroke="#7C5CFF" stroke-width="1.5" opacity="0.6"/>
+  <line x1="20" y1="17" x2="20" y2="27" stroke="#7C5CFF" stroke-width="1.5" opacity="0.6"/>
+  <line x1="20" y1="17" x2="31.5" y2="27" stroke="#7C5CFF" stroke-width="1.5" opacity="0.6"/>
+  <!-- Sites: rounded tiles, one highlighted -->
+  <rect x="5" y="27" width="7" height="7" rx="2" stroke="#7C5CFF" stroke-width="2" fill="#7C5CFF" fill-opacity="0.15"/>
+  <rect x="16.5" y="27" width="7" height="7" rx="2" stroke="#7C5CFF" stroke-width="2" fill="#7C5CFF"/>
+  <rect x="28" y="27" width="7" height="7" rx="2" stroke="#7C5CFF" stroke-width="2" fill="#7C5CFF" fill-opacity="0.15"/>
+</svg>
