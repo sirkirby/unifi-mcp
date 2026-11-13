@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
         "Returns Access controller model, firmware version, uptime, and connected device counts. "
         "Use for basic health checks and capacity overview."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="system",
     permission_action="read",
     auth="either",
@@ -48,7 +48,7 @@ async def access_get_system_info() -> Dict[str, Any]:
         "Returns Access system health summary including API client and proxy session status. "
         "Use to verify connectivity and diagnose auth path issues."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="system",
     permission_action="read",
     auth="either",
@@ -71,7 +71,7 @@ async def access_get_health() -> Dict[str, Any]:
         "Lists all users registered in the Access controller with their access credentials and groups. "
         "Use to audit who has physical access or to look up a specific user."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="system",
     permission_action="read",
     auth="local_only",

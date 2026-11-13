@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
     description="List all port profiles (port configurations) on the controller. "
     "Port profiles define VLAN assignment, port isolation, PoE mode, STP, 802.1X, "
     "and storm control settings. Profiles are assigned to switch ports via port overrides.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_port_profiles() -> Dict[str, Any]:
     """Lists all port profiles."""
@@ -70,7 +70,7 @@ async def list_port_profiles() -> Dict[str, Any]:
     name="unifi_get_port_profile_details",
     description="Get detailed configuration for a specific port profile by ID. "
     "Returns full profile including VLAN, isolation, PoE, STP, 802.1X, storm control, and QoS settings.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_port_profile_details(
     profile_id: Annotated[str, Field(description="The unique identifier (_id) of the port profile")],
@@ -363,7 +363,7 @@ async def delete_port_profile(
     name="unifi_get_switch_ports",
     description="Get port assignments for a specific switch. Shows which port profile is assigned "
     "to each port, port names, and PoE mode. Use unifi_list_devices to find switch MAC addresses.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_switch_ports(
     mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
@@ -392,7 +392,7 @@ async def get_switch_ports(
     description="Get live port statistics for a switch. Returns per-port data including "
     "link speed, duplex, PoE draw (voltage/current/power), error counters, MAC table count, "
     "bytes per second, and enabled state. Use unifi_list_devices to find switch MAC addresses.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_port_stats(
     mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
@@ -421,7 +421,7 @@ async def get_port_stats(
     description="Get LLDP neighbor discovery table for a switch. Shows what devices are "
     "connected to each port by their LLDP-advertised chassis ID and descriptions. "
     "Use unifi_list_devices to find switch MAC addresses.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_lldp_neighbors(
     mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
@@ -450,7 +450,7 @@ async def get_lldp_neighbors(
     description="Get switch hardware capabilities including max ACL rules, max VLANs, "
     "max aggregation sessions, max mirror sessions, STP config, and jumbo frame status. "
     "Use unifi_list_devices to find switch MAC addresses.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_switch_capabilities(
     mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],

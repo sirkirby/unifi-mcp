@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
         "by default and unlabeled groups when group_types includes unknown. "
         "Returns metadata and controller image references only; image bytes are not fetched."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="recognition",
 )
 async def protect_list_known_faces(
@@ -109,7 +109,7 @@ async def protect_list_known_faces(
         "`license_plate_known` alarm-rule condition. Returns metadata (incl. color/vehicleType "
         "when Protect provides them) and controller image references only; image bytes are not fetched."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="recognition",
 )
 async def protect_list_known_license_plates(
@@ -341,7 +341,7 @@ async def protect_merge_known_faces(
         "Delete or remove a UniFi Protect face recognition group. This is destructive. "
         "Requires confirm=True to apply; otherwise returns a preview of the exact group."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="recognition",
     permission_action="delete",
 )
@@ -468,7 +468,7 @@ async def protect_update_known_license_plate(
         "Delete or remove a UniFi Protect license-plate recognition group. This is destructive. "
         "Requires confirm=True to apply; otherwise returns a preview of the exact group."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="recognition",
     permission_action="delete",
 )

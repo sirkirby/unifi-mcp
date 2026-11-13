@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
     name="unifi_list_acl_rules",
     description="List MAC ACL rules (Policy Engine) for Layer 2 access control. "
     "These rules control which devices can communicate at Layer 2 within a VLAN.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_acl_rules(
     network_id: Annotated[
@@ -74,7 +74,7 @@ async def list_acl_rules(
     name="unifi_get_acl_rule_details",
     description="Get detailed configuration for a specific MAC ACL rule by ID. "
     "Returns the same field names as unifi_list_acl_rules.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_acl_rule_details(
     rule_id: Annotated[str, Field(description="The id field from unifi_list_acl_rules output")],

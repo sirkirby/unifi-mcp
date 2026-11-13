@@ -32,7 +32,7 @@ DEVICE_ID_DESCRIPTION = (
         "Lists all Access hardware devices (hubs, readers, relays, intercoms) "
         "with their name, type, connection state, and firmware version."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="device",
     permission_action="read",
     auth="either",
@@ -65,7 +65,7 @@ async def access_list_devices(
         "Returns detailed information for a single Access device including "
         "name, type, connection state, firmware version, MAC, and IP address."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="device",
     permission_action="read",
     auth="either",
@@ -93,7 +93,7 @@ async def access_get_device(
         "The device will be temporarily offline during reboot. "
         "Requires confirm=true to execute. Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     permission_category="device",
     permission_action="update",
     auth="local_only",
@@ -146,7 +146,7 @@ async def access_reboot_device(
         "Credential-tagged and secret-named values are redacted. Use this to discover the exact keys before "
         "calling access_update_device_config. Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="device",
     permission_action="read",
     auth="local_only",

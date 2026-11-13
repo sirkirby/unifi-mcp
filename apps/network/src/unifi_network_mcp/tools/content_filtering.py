@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
     "HACKING, ANONYMIZERS, DNS_TUNNELING, ADULT, ALCOHOL, DRUGS, GAMBLING, VIOLENCE, "
     "PORNOGRAPHY, NUDITY, WEAPONS, DATING, HATE_SPEECH_AND_EXTREMISM, CHILD_ABUSE, CIPA, "
     "EMPTY_DOMAINS, NEWLY_DISCOVERED_DOMAINS, PARKED_DOMAINS, UNREACHABLE_DOMAINS.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_content_filters() -> Dict[str, Any]:
     """
@@ -75,7 +75,7 @@ async def list_content_filters() -> Dict[str, Any]:
     description="Get detailed configuration for a specific content filtering profile by ID. "
     "Returns the full profile including categories, client MACs, network IDs, "
     "safe search settings, and allow/block lists.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_content_filter_details(
     filter_id: Annotated[str, Field(description="The unique identifier (_id) of the content filtering profile")],

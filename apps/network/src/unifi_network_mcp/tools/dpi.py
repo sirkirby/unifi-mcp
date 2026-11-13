@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
     "Streaming, social media, and other categories are not yet populated by Ubiquiti. "
     "For apps not found here, add via the UniFi UI and read back the IDs from the policy. "
     "Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dpi_applications(
     search: Annotated[
@@ -99,7 +99,7 @@ async def list_dpi_applications(
     description="List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', "
     "'Media streaming services'). Categories group applications for DPI classification. "
     "Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dpi_categories(
     limit: Annotated[

@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
         "state, brightness level, PIR motion sensitivity, and paired camera. "
         "Use to get an overview of all lights in the system."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_lights() -> Dict[str, Any]:
     """List all lights."""
@@ -146,7 +146,7 @@ async def protect_update_light(
         "status, current readings, and recent detection timestamps. "
         "Use to monitor environmental conditions and sensor health."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_sensors() -> Dict[str, Any]:
     """List all sensors."""
@@ -230,7 +230,7 @@ async def protect_update_sensor_settings(
         "volume, ring settings per camera, and available ringtones/tracks. "
         "Use to see chime configuration and which cameras trigger which chimes."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_chimes() -> Dict[str, Any]:
     """List all chimes."""
@@ -321,7 +321,7 @@ async def protect_update_chime(
         "The chime's default settings are used if not specified. Requires "
         "confirm=True to play the chime; otherwise returns a preview."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     permission_category="chime",
     permission_action="update",
 )
