@@ -22,6 +22,7 @@ Buckets reported:
     409 capability-mismatch             — expected when only some products are registered
     404/422 not-found / validation      — expected for unknown-ID sentinels
     501 not-implemented (api_key_required) — DPI without a token (expected when unset)
+    503 sitemanager-not-configured      — expected: the image has no Site Manager connection
     5xx server-error                    — REAL BUGS, fail
     network/timeout                     — container unreachable, fail
 """
@@ -83,6 +84,15 @@ def _classify(status: int, body: str) -> str:
             detail = json.loads(body).get("detail") or {}
             if isinstance(detail, dict) and detail.get("kind") == "api_key_required":
                 return "501 api-key-required (expected without controller API token)"
+        except Exception:
+            pass
+        return f"{status} server-error"
+    if status == 503:
+        # The image starts with no cloud account; only that exact kind is expected.
+        try:
+            detail = json.loads(body).get("detail") or {}
+            if isinstance(detail, dict) and detail.get("kind") == "sitemanager_not_configured":
+                return "503 sitemanager-not-configured (expected without a Site Manager connection)"
         except Exception:
             pass
         return f"{status} server-error"
