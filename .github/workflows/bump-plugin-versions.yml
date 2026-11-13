@@ -6,6 +6,7 @@ on:
       - 'network/v*.*.*'
       - 'protect/v*.*.*'
       - 'access/v*.*.*'
+      - 'sitemanager/v*.*.*'
       - 'core/v*.*.*'
       - 'shared/v*.*.*'
       - 'relay/v*.*.*'
