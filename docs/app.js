@@ -3,7 +3,8 @@ var EXPECTED_PACKAGE_NAMES = [
   'unifi-api-server',
   'unifi-mcp-relay',
   'unifi-network-mcp',
-  'unifi-protect-mcp'
+  'unifi-protect-mcp',
+  'unifi-sitemanager-mcp'
 ];
 
 var copyResetTimers = new WeakMap();
@@ -196,6 +197,7 @@ async function refreshPackageVersions() {
     'unifi-network-mcp',
     'unifi-protect-mcp',
     'unifi-access-mcp',
+    'unifi-sitemanager-mcp',
     'unifi-api-server',
     'unifi-mcp-relay'
   ];

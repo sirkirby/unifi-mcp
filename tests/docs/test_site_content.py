@@ -811,6 +811,19 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             app,
         )
 
+    def test_app_js_package_lists_include_every_published_python_server(self):
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        expected = re.search(r"var EXPECTED_PACKAGE_NAMES = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        refreshed = re.search(r"var pythonPackages = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        expected_names = re.findall(r"'([^']+)'", expected)
+        refreshed_names = re.findall(r"'([^']+)'", refreshed)
+
+        self.assertEqual(expected_names, sorted(expected_names))
+        self.assertEqual(set(expected_names), set(refreshed_names))
+        for name in MCP_SERVER_LINKS:
+            with self.subTest(package=name):
+                self.assertEqual(name in expected_names, SITEMANAGER_RELEASED or name != "unifi-sitemanager-mcp")
+
     def test_star_fallbacks_match_the_checked_in_snapshot(self):
         snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
         expected = f"★ {snapshot['github']['stars']:,}"
