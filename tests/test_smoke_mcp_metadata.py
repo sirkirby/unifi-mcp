@@ -228,6 +228,17 @@ def test_smoke_env_adds_no_dummy_key_beside_an_indirect_one(monkeypatch, name) -
     assert "UNIFI_SITEMANAGER_API_KEY" not in env
 
 
+def test_smoke_env_adds_no_dummy_key_beside_a_settings_file(monkeypatch) -> None:
+    for name in ("UNIFI_SITEMANAGER_API_KEY", "UNIFI_SITEMANAGER_API_KEY_FILE", "UNIFI_SITEMANAGER_API_KEY_COMMAND"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("UNIFI_SETTINGS_FILE", "/synthetic/sitemanager.env")
+
+    env = smoke_env(registration_mode="lazy", use_current_env=True)
+
+    assert "UNIFI_SITEMANAGER_API_KEY" not in env
+    assert "UNIFI_SITEMANAGER_API_KEY" in smoke_env(registration_mode="lazy")
+
+
 def test_run_smoke_matrix_runs_cases_concurrently_and_preserves_order(monkeypatch) -> None:
     async def exercise() -> tuple[int, list[str]]:
         started = 0
