@@ -145,8 +145,9 @@ def tool_failure(operation: str, exc: Exception) -> dict[str, Any]:
     """Log a failed tool call and build its error response.
 
     Site Manager errors are built from fixed text, the HTTP status and the
-    upstream trace id, so their message is safe to return. Anything else may
-    carry request details: only its class is logged and returned.
+    upstream trace id; a 400 also carries the upstream reason, with the API
+    key removed and its length capped. Their message is returned. Anything
+    else may carry request details: only its class is logged and returned.
     """
     logger.error("Failed to %s: %s", operation, type(exc).__name__)
     if isinstance(exc, UniFiError):

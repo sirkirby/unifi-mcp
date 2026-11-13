@@ -8,8 +8,8 @@ dependencies = [
     # Isolated API-key lookup, API-key setup guidance and the sitemanager
     # icon family require Shared 0.6.40.
     "unifi-mcp-shared>=0.6.40,<0.7",
-    # The Site Manager client, managers and models require Core 0.4.89.
-    "unifi-core>=0.4.89,<0.5",
+    # Key scrubbing in errors and the validated read inputs require Core 0.4.90.
+    "unifi-core>=0.4.90,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
