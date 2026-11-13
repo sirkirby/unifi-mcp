@@ -39,14 +39,14 @@ def test_site_manager_branch_is_key_only_and_cloud_disclosed() -> None:
     assert "UNIFI_SITEMANAGER_HOST" not in guide
 
 
-def test_unreleased_site_manager_has_no_package_install_commands() -> None:
+def test_released_site_manager_uses_published_package_and_plugin() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
     section = guide.split("## Site Manager (cloud account)", 1)[1].split("\n## ", 1)[0]
 
-    assert "not published yet" in section
-    assert "uv run --directory /absolute/path/to/unifi-mcp" in section
-    for text in ("uvx unifi-sitemanager-mcp", "unifi-sitemanager-mcp@latest", "unifi-sitemanager@unifi-plugins"):
-        assert text not in guide
+    assert "not published yet" not in guide
+    assert "/plugin install unifi-sitemanager@unifi-plugins" in section
+    assert "-- uvx --python-preference system unifi-sitemanager-mcp@latest" in section
+    assert "| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` |" in guide
 
 
 def test_skills_install_examples_are_scoped_to_public_product_trees() -> None:

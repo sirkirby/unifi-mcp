@@ -48,7 +48,7 @@ MANIFESTS = {
 
 # Whether unifi-sitemanager-mcp has a first release. Until it does, public pages
 # must not present an install command, badge or marketplace link as working.
-SITEMANAGER_RELEASED = False
+SITEMANAGER_RELEASED = True
 
 # Install surfaces that only work once the Site Manager package is published.
 SITEMANAGER_RELEASE_ONLY_TEXT = (
@@ -1006,6 +1006,31 @@ class ContentReconciliationTests(unittest.TestCase):
             for text in SITEMANAGER_RELEASE_ONLY_TEXT:
                 with self.subTest(path=path, text=text):
                     self.assertNotIn(text, content)
+
+    def test_released_site_manager_install_surfaces_are_present(self):
+        if not SITEMANAGER_RELEASED:
+            self.skipTest("unifi-sitemanager-mcp is not released")
+        expected = {
+            Path("README.md"): (
+                "img.shields.io/pypi/v/unifi-sitemanager-mcp",
+                "uvx unifi-sitemanager-mcp@latest",
+                "unifi-sitemanager@unifi-plugins",
+            ),
+            Path("QUICKSTART.md"): ("uvx unifi-sitemanager-mcp@latest", "unifi-sitemanager@unifi-plugins"),
+            Path("SECURITY.md"): ("| unifi-sitemanager-mcp | Latest release (beta) |",),
+            Path("docs/index.html"): (
+                'uvx <span class="value">unifi-sitemanager-mcp@latest</span>',
+                'pipx install <span class="value">unifi-sitemanager-mcp</span>',
+                '<a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a>',
+            ),
+        }
+        for path, phrases in expected.items():
+            content = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+            with self.subTest(path=path):
+                self.assertNotRegex(content, r"(?i)site manager[^\n]*not (?:yet )?(?:published|released)")
 
     def test_site_manager_cloud_boundary_is_stated_where_servers_are_configured(self):
         surfaces = {

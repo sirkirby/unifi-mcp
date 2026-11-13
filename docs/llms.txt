@@ -7,7 +7,7 @@ The default MCP permission mode previews state-changing operations and requires 
 
 UniFi uses separate API families whose authentication, field schemas, and IDs are not interchangeable: the V2 controller API uses session authentication and controller object IDs; the public Integration API uses X-API-Key authentication and UUIDs; and UniFi OS Alarm Manager v2 uses session authentication with SuperAdmin access and its own UUID namespace. Use IDs only within the tool family that returned them unless an explicit resolver documents a verified bridge.
 
-Ubiquiti's Site Manager API is a fourth, cloud-only surface. The Site Manager server sends every request to the fixed origin https://api.ui.com, even when it runs locally over stdio, and authenticates with one account-wide Site Manager API key (UNIFI_SITEMANAGER_API_KEY, or its _FILE or _COMMAND form). It never uses console credentials such as UNIFI_API_KEY. Its host, site, and device IDs belong to the Site Manager tool family and have no translation to Network, Protect, or Access IDs. It is not published yet; run it from a source checkout.
+Ubiquiti's Site Manager API is a fourth, cloud-only surface. The Site Manager server sends every request to the fixed origin https://api.ui.com, even when it runs locally over stdio, and authenticates with one account-wide Site Manager API key (UNIFI_SITEMANAGER_API_KEY, or its _FILE or _COMMAND form). It never uses console credentials such as UNIFI_API_KEY. Its host, site, and device IDs belong to the Site Manager tool family and have no translation to Network, Protect, or Access IDs.
 
 ## Getting Started
 

@@ -7,6 +7,7 @@
 | unifi-network-mcp | Latest release |
 | unifi-protect-mcp | Latest release (beta) |
 | unifi-access-mcp | Latest release (beta) |
+| unifi-sitemanager-mcp | Latest release (beta) |
 | unifi-mcp-relay | Latest release (beta) |
 | unifi-mcp-worker | Latest release (beta) |
 
