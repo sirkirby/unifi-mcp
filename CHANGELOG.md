@@ -1,7 +1,7 @@
 # Changelog
 
 User-visible changes to the UniFi MCP plugins (`unifi-network`, `unifi-protect`,
-`unifi-access` and `unifi-intelligence`), newest first. Each plugin has its own
+`unifi-access`, `unifi-sitemanager` and `unifi-intelligence`), newest first. Each plugin has its own
 version. A release that only moves a plugin's server pin links to that server's
 release notes. Every server, the API, the relay and the worker publish their own
 notes on [GitHub Releases](https://github.com/sirkirby/unifi-mcp/releases).
@@ -10,6 +10,17 @@ Read the [plugin upgrade guide](docs/plugin-upgrade.md) before updating an
 existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
+
+## 2026-11-13 — unifi-sitemanager 1.0.0
+
+- New plugin for the read-only Site Manager server: hosts, sites, devices, ISP metrics and SD-WAN configurations across every console on a Ubiquiti account. It pins `unifi-sitemanager-mcp` [0.1.0](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.1.0).
+- Setup takes one Site Manager API key, or a file or command that provides it. It never asks for a console host, username or password, and it refuses to reuse a console API key.
+
+
+## 2026-11-13 — unifi-network 1.9.4, unifi-protect 1.6.1, unifi-access 1.4.1
+
+- Setup treats a Site Manager key found in an older project settings file as another plugin's setting. It is never copied into this plugin's settings or offered for migration. Nothing else about setup changes.
+
 
 ## 2026-11-12 — unifi-network 1.9.3
 
