@@ -242,6 +242,26 @@ async def test_cloud_key_misplaced_in_bearer_is_never_prefixed_in_audit(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "path"), [("POST", "/v1/graphql"), ("GET", "/v1/controllers")])
+async def test_cloud_key_misplaced_in_bearer_is_never_prefixed_on_other_paths(
+    tmp_path, monkeypatch, method, path, cloud_secrecy_guard
+):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, _ = await _bootstrap_app(tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        body = {"json": {"query": "{ sitemanager { hosts { items { id } } } }"}} if method == "POST" else {}
+        response = await client.request(method, path, headers={"Authorization": f"Bearer {KEY}"}, **body)
+        # REST denies with a status; GraphQL denies per field inside a 200 response.
+        assert response.status_code == 401 or response.json().get("errors")
+        cloud_secrecy_guard(response.text)
+    async with app.state.sessionmaker() as session:
+        rows = (await session.scalars(select(AuditLog))).all()
+        assert [row.key_id_prefix for row in rows] == ["(unverified)"]
+        cloud_secrecy_guard(str([(row.key_id_prefix, row.target) for row in rows]))
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_total_audit_failure_is_safe_and_fail_visible(tmp_path, monkeypatch, caplog, cloud_secrecy_guard):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)

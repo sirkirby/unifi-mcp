@@ -23,11 +23,13 @@ from unifi_api.services.audit import write_audit
 
 async def _audit_denial(app, *, key_id_prefix: str, target: str, error_kind: str) -> None:
     """Best-effort denial audit. Uses a fresh session so middleware doesn't depend on caller transaction state."""
-    # An unverified bearer on cloud management may be a misplaced cloud key.
-    # Never persist even a prefix of that caller-supplied credential.
+    # A malformed bearer is not one of this server's keys: on any path, GraphQL
+    # included, it may be a misplaced cloud key or password. A well-formed but
+    # unverified bearer on cloud paths is treated the same way. Never persist
+    # even a prefix of such a caller-supplied credential.
     path = target.partition(" ")[2]
-    if error_kind in ("malformed_token", "unknown_token", "invalid_token") and path.startswith(
-        ("/v1/sitemanager", "/admin/sitemanager")
+    if error_kind == "malformed_token" or (
+        error_kind in ("unknown_token", "invalid_token") and path.startswith(("/v1/sitemanager", "/admin/sitemanager"))
     ):
         key_id_prefix = "(unverified)"
     sm = app.state.sessionmaker
