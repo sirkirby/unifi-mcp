@@ -58,20 +58,22 @@ def env_map(value):
     return dict(value)
 
 
-def secret_base(key):
-    return re.fullmatch(r"(UNIFI_(?:(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_)?(?:PASSWORD|API_KEY))(.*)", key)
+def secret_base(key, product):
+    if product == "SITEMANAGER":
+        return re.fullmatch(r"(UNIFI_SITEMANAGER_API_KEY)(.*)", key)
+    return re.fullmatch(r"(UNIFI_(?:(?:NETWORK|PROTECT|ACCESS)_)?(?:PASSWORD|API_KEY))(.*)", key)
 
 
-def validate_key(key):
+def validate_key(key, product):
     if not re.fullmatch(r"UNIFI_[A-Z][A-Z0-9_]*", key):
         refuse("Use uppercase UNIFI_ environment variable names; no settings were changed.")
-    match = secret_base(key)
+    match = secret_base(key, product)
     if match and match[2] not in ("", "_FILE", "_COMMAND"):
         refuse("Unknown credential provider. Use the plain, _FILE or _COMMAND spelling.")
 
 
-def validate_provider(key, value):
-    if not value or not secret_base(key):
+def validate_provider(key, value, product):
+    if not value or not secret_base(key, product):
         return
     if key.endswith("_FILE"):
         path = Path(value)
@@ -87,6 +89,7 @@ def validate_provider(key, value):
             refuse("Credential provider executable is unavailable; install it or correct PATH and rerun.")
 
 
+CLOUD_MIGRATION_ERROR = "Site Manager has no legacy console settings to migrate; configure its cloud API key instead."
 SITEMANAGER_KEYS = frozenset("UNIFI_SITEMANAGER_API_KEY" + suffix for suffix in ("", "_FILE", "_COMMAND"))
 
 
@@ -101,12 +104,12 @@ def merge_env(existing, patch, product, inherited=None):
         validate_cloud_keys(merged)
         validate_cloud_keys(patch)
     for key, value in patch.items():
-        validate_key(key)
+        validate_key(key, product)
         if value is not None and (not isinstance(value, str) or "\0" in value):
             refuse("Environment patch values must be strings or null deletions, without NUL bytes.")
         if value is not None:
-            validate_provider(key, value)
-    bases = {secret_base(key)[1] for key in patch if secret_base(key)}
+            validate_provider(key, value, product)
+    bases = {secret_base(key, product)[1] for key in patch if secret_base(key, product)}
     for base in bases:
         selected = [k for k in (base, base + "_FILE", base + "_COMMAND") if patch.get(k)]
         if len(selected) > 1:
@@ -133,7 +136,7 @@ def merge_env(existing, patch, product, inherited=None):
             if len(selected) > 1:
                 refuse("Credential providers conflict in the effective environment; keep one spelling per level.")
             if selected:
-                validate_provider(selected[0], effective[selected[0]])
+                validate_provider(selected[0], effective[selected[0]], product)
                 break
     return merged
 
@@ -520,8 +523,8 @@ def auto_confirm_notice(env, product, deprecated_client=False):
 
 
 def other_prefixes(product):
-    others = tuple(f"UNIFI_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
-    return others + tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
+    others = tuple(f"UNIFI_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS", "SITEMANAGER") if p != product)
+    return others + tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS", "SITEMANAGER") if p != product)
 
 
 def legacy_settings(product):
@@ -574,7 +577,9 @@ def recovery(name):
 
 
 def legacy_patch(owned, shared, mapping, product):
-    """Translate legacy project variables into this plugin's option variables."""
+    """Translate console settings only; cloud credentials never use console fallbacks."""
+    if product == "SITEMANAGER":
+        refuse(CLOUD_MIGRATION_ERROR)
     legacy = dict(shared, **owned)
     patch = {}
     for credential in ("PASSWORD", "API_KEY"):
@@ -587,7 +592,7 @@ def legacy_patch(owned, shared, mapping, product):
                         patch[product_base + key[len(base) :]] = legacy[key]
                 break
     for variable in mapping:
-        if secret_base(variable) or variable in patch:
+        if secret_base(variable, product) or variable in patch:
             continue
         value = legacy.get(variable) or legacy.get(shared_name(variable, product))
         if value:
@@ -744,7 +749,7 @@ def claude_main(args, root, name, product):
     if product == "SITEMANAGER":
         validate_cloud_keys(patch)
     for key in patch:
-        validate_key(key)
+        validate_key(key, product)
     if "UNIFI_AUTO_CONFIRM" in patch:
         refuse(
             "UNIFI_AUTO_CONFIRM is deprecated and has no Claude Code option. Set "
@@ -786,7 +791,7 @@ def claude_main(args, root, name, product):
         variable_of = {option: variable for variable, option in mapping.items()}
 
         def credential_of(option):
-            match = secret_base(variable_of[option])
+            match = secret_base(variable_of[option], product)
             return match[1] if match else None
 
         if len(cleared) > 1:
@@ -1359,7 +1364,7 @@ def main():
     product = name.removeprefix("unifi-").upper()
     target = args.target
     if product == "SITEMANAGER" and args.migrate:
-        refuse("Site Manager has no legacy console settings to migrate; configure its cloud API key instead.")
+        refuse(CLOUD_MIGRATION_ERROR)
     if args.refresh and (target == "claude" or args.pairs or args.check):
         refuse("Refresh is only supported for Codex and OpenClaw, without environment arguments.")
     if args.migrate and (target != "claude" or args.pairs or args.check):

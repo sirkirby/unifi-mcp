@@ -31,8 +31,10 @@ entry in the client editor rather than importing console settings.
 
 The shared setup helper also ships in `unifi-network` 1.9.4 (was 1.9.3),
 `unifi-protect` 1.6.1 (was 1.6.0), and `unifi-access` 1.4.1 (was 1.4.0).
-Their setup behavior and server pins remain unchanged. Update these plugins
-using the ordinary client update steps; existing users need no setup rerun.
+Their console credential validation and server pins remain unchanged. Site
+Manager settings are kept separate during legacy console migration, rather
+than treated as shared console settings. Update these plugins using the ordinary
+client update steps; existing users need no setup rerun.
 
 ## unifi-intelligence 1.0.0
 

@@ -187,3 +187,129 @@ def test_cloud_provider_validation_never_reads_or_executes_the_key(tmp_path, mon
     assert module.merge_env({}, {"UNIFI_SITEMANAGER_API_KEY_COMMAND": sys.executable}, "SITEMANAGER", inherited={}) == {
         "UNIFI_SITEMANAGER_API_KEY_COMMAND": sys.executable
     }
+
+
+@pytest.mark.parametrize(
+    "other", ["UNIFI_API_KEY", "UNIFI_NETWORK_API_KEY", "UNIFI_PROTECT_API_KEY", "UNIFI_ACCESS_API_KEY"]
+)
+def test_legacy_patch_cannot_migrate_console_credentials_to_cloud(other) -> None:
+    module = load_setup_config("sitemanager")
+    mapping = {"UNIFI_SITEMANAGER_API_KEY" + suffix: "api_key" + suffix.lower() for suffix in ("", "_FILE", "_COMMAND")}
+    with pytest.raises(module.SetupError, match="Site Manager has no legacy console settings to migrate"):
+        module.legacy_patch(
+            {"UNIFI_SITEMANAGER_HOST": "FAKE-unused"}, {other: "FAKE-console-key"}, mapping, "SITEMANAGER"
+        )
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+@pytest.mark.parametrize("case", ["missing_file", "unknown_suffix", "two_forms"])
+def test_console_cloud_named_inputs_match_pre_bundle_helper(tmp_path, product, case) -> None:
+    import copy
+    import subprocess
+    import types
+
+    # Fixed pre-bundle revision: HEAD~2 when the independent review was requested.
+    root = PLUGINS.parent
+    source = subprocess.run(
+        ["git", "show", f"47deaedf:plugins/unifi-{product}/scripts/setup_config.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    baseline = types.ModuleType("pre_bundle_setup")
+    exec(compile(source, "pre-bundle-setup", "exec"), baseline.__dict__)
+    missing = str(tmp_path / "missing-provider")
+    patch = {
+        "missing_file": {"UNIFI_SITEMANAGER_API_KEY_FILE": missing},
+        "unknown_suffix": {"UNIFI_SITEMANAGER_API_KEY_X": "FAKE-opaque"},
+        "two_forms": {"UNIFI_SITEMANAGER_API_KEY": "FAKE-opaque", "UNIFI_SITEMANAGER_API_KEY_FILE": missing},
+    }[case]
+    expected = copy.deepcopy(patch)
+    before = baseline.merge_env({}, patch, product.upper(), inherited={})
+    assert before == expected
+    module = load_setup_config(product)
+    merged = module.merge_env({}, patch, product.upper(), inherited={})
+    assert merged == before
+    # Exercise publication, not just admission: the same opaque inputs still save.
+    settings = tmp_path / "console-settings"
+    module.write_private(settings, module.settings_text(merged, f"unifi-{product}").encode())
+    assert module.read_settings(settings) == before
+
+
+@pytest.mark.parametrize("product,other", [("NETWORK", "ACCESS"), ("PROTECT", "NETWORK"), ("ACCESS", "PROTECT")])
+def test_console_legacy_settings_classify_cloud_keys_as_another_product(tmp_path, monkeypatch, product, other) -> None:
+    import json
+
+    module = load_setup_config(product.lower())
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    env = {
+        f"UNIFI_{product}_HOST": "192.0.2.1",
+        "UNIFI_SITEMANAGER_API_KEY": "FAKE-cloud-key",
+        "UNIFI_SITEMANAGER_API_KEY_FILE": "FAKE-cloud-provider",
+        f"UNIFI_{other}_HOST": "192.0.2.2",
+        "UNIFI_API_KEY": "FAKE-shared-console-key",
+    }
+    (tmp_path / ".claude/settings.local.json").write_text(json.dumps({"env": env}))
+    _, _, owned, shared = module.legacy_settings(product)
+    assert owned == {f"UNIFI_{product}_HOST": "192.0.2.1"}
+    assert shared == {"UNIFI_API_KEY": "FAKE-shared-console-key"}
+    assert "UNIFI_SITEMANAGER_" in module.other_prefixes(product)
+    # Even when an option map contains a cloud-looking variable, it is not offered.
+    patch = module.legacy_patch(
+        owned, shared, {f"UNIFI_{product}_HOST": "host", "UNIFI_SITEMANAGER_API_KEY": "extra"}, product
+    )
+    assert patch == {f"UNIFI_{product}_HOST": "192.0.2.1", f"UNIFI_{product}_API_KEY": "FAKE-shared-console-key"}
+
+
+@pytest.mark.parametrize("target", ["codex", "openclaw"])
+def test_original_shared_key_shadow_case_preserves_differing_saved_settings(tmp_path, monkeypatch, target) -> None:
+    """Retain the original conflict input alongside the new matched shadow-entry fixtures."""
+    import json
+    from types import SimpleNamespace
+
+    module = load_setup_config("sitemanager")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    config = tmp_path / "openclaw.json"
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config))
+    if target == "codex":
+        config = tmp_path / "codex/config.toml"
+        config.parent.mkdir()
+        config.write_text(
+            '[mcp_servers."unifi-sitemanager"]\ncommand="fixture"\n'
+            '[mcp_servers."unifi-sitemanager".env]\nUNIFI_API_KEY="FAKE-console"\n'
+        )
+        client = module.CodexClient()
+    else:
+        config.write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "servers": {
+                            "unifi-sitemanager": {"command": "fixture", "env": {"UNIFI_API_KEY": "FAKE-console"}}
+                        }
+                    }
+                }
+            )
+        )
+        client = module.OpenClawClient()
+    settings = module.settings_path("SITEMANAGER")
+    settings.parent.mkdir(parents=True)
+    module.write_private(
+        settings,
+        module.settings_text({"UNIFI_SITEMANAGER_API_KEY_COMMAND": "fixture-provider"}, "unifi-sitemanager").encode(),
+    )
+    original = config.read_bytes(), settings.read_bytes()
+    with pytest.raises(module.SetupError, match="A client entry shadows the bundled Site Manager server"):
+        module.bundled_main(
+            SimpleNamespace(check=False, refresh=False, dry_run=False),
+            PLUGINS / "unifi-sitemanager",
+            "unifi-sitemanager",
+            "SITEMANAGER",
+            {"UNIFI_SITEMANAGER_API_KEY": 'FAKE-cloud-only "quoted" Ω'},
+            client,
+        )
+    assert (config.read_bytes(), settings.read_bytes()) == original

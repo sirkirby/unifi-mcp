@@ -344,6 +344,7 @@ class Fixtures:
         (config / "config.toml").write_text('model = "fixture"\n', encoding="utf-8")
         (config / "openclaw.json").write_text('{"keep":true}\n', encoding="utf-8")
         settings = workspace / ".config/unifi-mcp/sitemanager.env"
+        legacy_path = workspace / ".claude/settings.local.json"
         (workspace / "argv.jsonl").touch()
         base = "UNIFI_SITEMANAGER_API_KEY"
         module = setup_module(scripts)
@@ -392,6 +393,7 @@ class Fixtures:
                     config / "fake-keychain.json",
                     config / "config.toml",
                     config / "openclaw.json",
+                    legacy_path,
                 )
             }
 
@@ -465,10 +467,29 @@ class Fixtures:
             failure_env = dict(environment, FIXTURE_FAIL="register")
             self.check(run("set-env", {base: key}, env=failure_env).returncode != 0, "cloud client failure is safe")
             self.check(state() == before, "cloud client failure leaves settings intact")
+        if target == "claude":
+            legacy_path.parent.mkdir()
+            legacy_path.write_text(
+                json.dumps(
+                    {
+                        "env": {
+                            "UNIFI_API_KEY": "FAKE-legacy-console-key",
+                            "UNIFI_SITEMANAGER_HOST": "192.0.2.1",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
         before = state()
         flag = "-Migrate" if self.powershell else "--migrate"
-        self.check(run("set-env", extra=(flag,)).returncode != 0, "cloud refuses legacy migration")
-        self.check(state() == before, "cloud migration refusal changes nothing")
+        result = run("set-env", extra=(flag,))
+        self.check(result.returncode != 0, "cloud refuses legacy migration")
+        if target == "claude":
+            self.check(
+                b"Site Manager has no legacy console settings to migrate" in result.stdout + result.stderr,
+                "cloud migration gives the Site Manager refusal, not nothing to migrate",
+            )
+        self.check(state() == before, "cloud migration refusal preserves project, keychain and options")
         if target != "claude":
             self.check(
                 (config / "config.toml").read_text() == 'model = "fixture"\n', "cloud leaves Codex config untouched"
@@ -476,34 +497,28 @@ class Fixtures:
             self.check(
                 (config / "openclaw.json").read_text() == '{"keep":true}\n', "cloud leaves OpenClaw config untouched"
             )
-            # A shadowing manual entry is refused, rather than migrated.
-            if target == "codex":
-                write_toml(
-                    config / "config.toml",
-                    {
-                        "mcp_servers": {
-                            "unifi-sitemanager": {"command": "fixture", "env": {"UNIFI_API_KEY": "FAKE-console"}}
-                        }
-                    },
-                )
-            else:
-                (config / "openclaw.json").write_text(
-                    json.dumps(
-                        {
-                            "mcp": {
-                                "servers": {
-                                    "unifi-sitemanager": {
-                                        "command": "fixture",
-                                        "env": {"UNIFI_API_KEY": "FAKE-console"},
-                                    }
-                                }
-                            }
-                        }
+            # Matching file/entry settings prevent a later conflict check from
+            # substituting for the explicit refusal of a shadowing entry.
+            for entry_env in ({"UNIFI_API_KEY": "FAKE-console"}, {base: "FAKE-shadow-cloud-key"}, None):
+                carried = entry_env or {}
+                module.write_private(settings, module.settings_text(carried, "unifi-sitemanager").encode())
+                entry = {"command": "fixture"}
+                if entry_env is not None:
+                    entry["env"] = entry_env
+                if target == "codex":
+                    write_toml(config / "config.toml", {"mcp_servers": {"unifi-sitemanager": entry}})
+                else:
+                    (config / "openclaw.json").write_text(
+                        json.dumps({"mcp": {"servers": {"unifi-sitemanager": entry}}})
                     )
+                before = state()
+                result = run("set-env", {base: key})
+                self.check(result.returncode != 0, "cloud refuses shadowing entry")
+                self.check(
+                    b"A client entry shadows the bundled Site Manager server" in result.stdout + result.stderr,
+                    "cloud shadowing entry gives the explicit refusal",
                 )
-            before = state()
-            self.check(run("set-env", {base: key}).returncode != 0, "cloud refuses shadowing entry")
-            self.check(state() == before, "cloud shadow refusal changes nothing")
+                self.check(state() == before, "cloud shadow refusal preserves entry and settings file")
 
     def check_failure_reporting(self):
         output = io.StringIO()
