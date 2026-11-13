@@ -2,13 +2,17 @@
 
 import pytest
 from pydantic import ValidationError
-from unifi_core.exceptions import UniFiValidationError
 from unifi_core.sitemanager.models.isp_metrics import (
     SiteManagerMetricsGetInput,
     SiteManagerMetricsQueryInput,
     SiteManagerMetricsSiteInput,
 )
-from unifi_core.sitemanager.models.reads import SiteManagerDevicesInput, SiteManagerPageInput
+from unifi_core.sitemanager.models.reads import (
+    SiteManagerConfigInput,
+    SiteManagerDevicesInput,
+    SiteManagerHostInput,
+    SiteManagerPageInput,
+)
 
 
 @pytest.mark.parametrize("field", ["begin_timestamp", "end_timestamp"])
@@ -55,7 +59,7 @@ def test_query_sites_reject_unknown_missing_and_unbounded_inputs(sites):
     ],
 )
 def test_get_window_constraints_are_checked(args):
-    with pytest.raises((ValidationError, UniFiValidationError)):
+    with pytest.raises(ValidationError):
         SiteManagerMetricsGetInput.model_validate(args)
 
 
@@ -66,3 +70,22 @@ def test_defaults_zero_periods_and_cursor_preserve_values():
     assert SiteManagerPageInput(page_size=500, cursor=cursor).cursor == cursor
     value = SiteManagerDevicesInput(host_ids=["synthetic-two", "synthetic-one"], updated_since="2026-01-01T00:00:00Z")
     assert value.host_ids == ["synthetic-two", "synthetic-one"]
+
+
+@pytest.mark.parametrize(
+    ("model", "args"),
+    [
+        (SiteManagerPageInput, {"cursor": " "}),
+        (SiteManagerDevicesInput, {"updated_since": "SENTINEL-not-a-timestamp"}),
+        (SiteManagerHostInput, {"host_id": "SENTINEL/../escape"}),
+        (SiteManagerConfigInput, {"config_id": "SENTINEL/../escape"}),
+        (
+            SiteManagerMetricsGetInput,
+            {"begin_timestamp": "SENTINEL-not-a-timestamp", "end_timestamp": "2026-01-02T00:00:00Z"},
+        ),
+    ],
+)
+def test_core_argument_checks_surface_as_value_free_pydantic_errors(model, args):
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(args)
+    assert "SENTINEL" not in str(error.value)

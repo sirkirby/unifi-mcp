@@ -164,6 +164,7 @@ class SiteManagerMetricsGetInput(BaseModel):
 
     @model_validator(mode="after")
     def window(self):
+        from unifi_core.exceptions import UniFiValidationError
         from unifi_core.sitemanager.managers.inventory_manager import rfc3339
         from unifi_core.sitemanager.managers.isp_metrics_manager import DURATIONS
 
@@ -171,8 +172,11 @@ class SiteManagerMetricsGetInput(BaseModel):
         if has_range:
             if self.duration is not None or self.begin_timestamp is None or self.end_timestamp is None:
                 raise ValueError("Provide either duration or both timestamp endpoints")
-            rfc3339(self.begin_timestamp, "begin_timestamp")
-            rfc3339(self.end_timestamp, "end_timestamp")
+            for name in ("begin_timestamp", "end_timestamp"):
+                try:
+                    rfc3339(getattr(self, name), name)
+                except UniFiValidationError:
+                    raise ValueError("Provide valid RFC 3339 timestamps") from None
         elif self.duration is not None and self.duration not in DURATIONS[self.metric_type]:
             raise ValueError("Duration is incompatible with the metric interval")
         return self
