@@ -11,6 +11,7 @@ to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md)
 | `unifi-network` | Listed | Listed | `unifi-network-mcp` |
 | `unifi-protect` | Listed | Listed | `unifi-protect-mcp` |
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
+| `unifi-sitemanager` | Listed | Listed | `unifi-sitemanager-mcp==0.1.0` |
 | `unifi-intelligence` | Listed | Listed | None (skills only) |
 
 Each plugin has its own semantic version for everything it ships. For example,
@@ -163,6 +164,40 @@ provides, through a connected [relay](../packages/unifi-mcp-relay/); local stdio
 servers do not expose it. The timeline reports Access as unsupported, so those
 skills read Access events separately.
 
+## Site Manager: cloud account setup
+
+`unifi-sitemanager` starts at plugin 1.0.0 and pins server 0.1.0. Its nine
+read-only domain tools inspect cloud hosts, sites, devices, ISP metrics and
+SD-WAN; five meta-tools provide discovery and execution. It has no writes,
+policy gates or support-bundle tool. IDs belong to Site Manager and cannot be
+passed to console tools.
+
+The dependency is internet access to Ubiquiti's `https://api.ui.com`, rather
+than a reachable console. The cloud key exposes the whole account. Setup asks
+only for `UNIFI_SITEMANAGER_API_KEY` or exactly one `_FILE` / `_COMMAND` provider.
+It refuses console host, login, port, site, TLS, permission and policy options,
+the shared `UNIFI_API_KEY`, and two key forms at once. No console credential is
+reused or migrated. File providers must be absolute, readable and nonempty;
+setup checks command availability without executing the provider.
+
+Claude Code uses the inline server and sensitive keychain option (or provider
+options). Codex and OpenClaw run `.mcp.codex.json`, which points through
+`UNIFI_SETTINGS_FILE` to `~/.config/unifi-mcp/sitemanager.env`
+(`%USERPROFILE%\.config\unifi-mcp\sitemanager.env` on Windows). Setup
+creates no client MCP entry. A manual shadowing entry is refused; remove it
+in the client editor before setup. With no key the server answers in keyless
+setup mode, without contacting the cloud. Codex's warm-up receives neither a
+settings file nor a credential.
+
+Real-client acceptance for Site Manager on Claude Code, Codex and OpenClaw,
+on every operating system, is **not tested** (not yet measured). Static checks
+and fake-client fixtures do not establish installation, keychain behavior,
+cloud reads or upgrade acceptance. Other clients retain the native/manual
+installation guidance and support limits below; no Site Manager measurement
+has been made for them either. Run the Site Manager scenarios in the
+[acceptance procedure](plugin-acceptance.md#site-manager-scenarios) after the
+server package is published; the candidate bundle's pin is not yet installable.
+
 ## Codex: tools on the first turn
 
 Codex 0.162.0 waits `mcp_optional_startup_grace_ms` (default 1000 ms) for
@@ -235,7 +270,7 @@ Those checks do not count as `tested`. To produce `tested` evidence, follow the 
 | Upgrade between plugin versions | `not tested` | `not tested` | `not tested` |
 | Transport: local stdio | `not tested` | `not tested` | `not tested` |
 | Transport: remote HTTP from the plugin | `unsupported` | `unsupported` | `unsupported` |
-| Connection: one UniFi product controller per plugin | `not tested` | `not tested` | `not tested` |
+| Connection: one UniFi product controller per console plugin | `not tested` | `not tested` | `not tested` |
 | Connection: relay | Not required by product plugins | Not required by product plugins | Not required by product plugins |
 | `unifi-intelligence` from a marketplace | `tested` | `tested` | `tested` |
 | Required plugins installed with `unifi-intelligence` | `tested` | `unsupported` | `unsupported` |
@@ -269,7 +304,8 @@ No minimum client version has been established for any client.
 - Network access to PyPI the first time a version is launched.
 - A reachable UniFi controller for the product, with the credentials described
   in each plugin's setup skill (`unifi-network-setup`, `unifi-protect-setup`,
-  `unifi-access-setup`).
+  `unifi-access-setup`). Site Manager instead needs internet access to
+  `api.ui.com` and its separate whole-account cloud key (`unifi-sitemanager-setup`).
 - Claude Code: setup saves the plugin's options with `claude plugin configure`,
   so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
   (Git Bash on Windows).

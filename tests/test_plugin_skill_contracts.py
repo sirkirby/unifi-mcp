@@ -23,10 +23,10 @@ if "plugin_tool_refs" not in sys.modules:
     sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_spec.name])
 refs = sys.modules["plugin_tool_refs"]
-TOOL = r"(?:unifi|protect|access)_[a-z][a-z0-9_]+"
+TOOL = r"(?:unifi|protect|access|sitemanager)_[a-z][a-z0-9_]+"
 # These are event/response field names and contract values, not tools (including in generated prose).
 DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
-SERVERS = {"network", "protect", "access", "worker"}
+SERVERS = {"network", "protect", "access", "sitemanager", "worker"}
 TIMELINE_TOOL = "apps/worker/worker/src/location-timeline-tool.json"
 
 
@@ -42,6 +42,12 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
         )
         for tool in manifest["tools"]:
             result[tool["name"]] = (product, tool["schema"]["input"])
+    # The initial Site Manager bundle is built before its first tag. Validate its
+    # authored scaffold against the explicit candidate manifest; release-pin behavior
+    # is exercised independently with tagged fixtures in test_plugin_pinned_surfaces.
+    candidate = json.loads((ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json").read_text())
+    for tool in candidate["tools"]:
+        result[tool["name"]] = ("sitemanager", tool["schema"]["input"])
     # The cloud worker serves this definition; skills reach it through a connected relay.
     timeline = json.loads((ROOT / TIMELINE_TOOL).read_text(encoding="utf-8"))
     result[timeline["name"]] = ("worker", timeline["inputSchema"])
@@ -207,7 +213,7 @@ OFFER_RULES = (
     "product's own list tool in eager mode.",
 )
 LISTING_TOOL = re.compile(
-    r"\b(?:unifi|protect|access)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
+    r"\b(?:unifi|protect|access|sitemanager)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
 )
 LISTING_OFFER = re.compile(r"\b(?:offer|offers|I can|let me|show)\b[^.]{0,60}\blist\b", re.IGNORECASE)
 
@@ -324,3 +330,39 @@ def test_documented_timeline_signature() -> None:
 def test_legacy_requirement_section_is_rejected(heading: str) -> None:
     text = skills()[0].read_text() + f"\n## {heading}\n\n- Network only; relay is optional.\n"
     assert f"legacy dependency section: {heading}" in structure_errors(text)
+
+
+def test_sitemanager_skill_preserves_cloud_scope_and_bounds() -> None:
+    root = ROOT / "plugins/unifi-sitemanager/skills"
+    main = (root / "unifi-sitemanager/SKILL.md").read_text()
+    setup = " ".join((root / "unifi-sitemanager-setup/SKILL.md").read_text().split())
+    for phrase in (
+        "whole account",
+        "api.ui.com",
+        "read-only",
+        "no writes",
+        "next_cursor",
+        "period_limit",
+        "30 days",
+        "Site Manager tool family",
+        "not interchangeable",
+    ):
+        assert phrase in main
+    for phrase in (
+        "UNIFI_SITEMANAGER_API_KEY_FILE",
+        "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+        "keychain",
+        "stdin",
+        "sitemanager.env",
+        "no MCP client entry",
+        "Never reuse",
+        "not yet measured",
+    ):
+        assert phrase in setup
+    assert "sitemanager_tool_index" in main
+    manifest = json.loads((ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json").read_text())
+    names = {tool["name"] for tool in manifest["tools"]}
+    reference = (root / "unifi-sitemanager/references/sitemanager-tools.md").read_text()
+    assert len(manifest["module_map"]) == 9
+    assert names == set(re.findall(r"\bsitemanager_[a-z_]+\b", reference))
+    assert not reference_errors(setup, catalog())

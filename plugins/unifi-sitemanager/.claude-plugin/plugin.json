@@ -1,0 +1,65 @@
+{
+  "name": "unifi-sitemanager",
+  "version": "1.0.0",
+  "description": "UniFi Site Manager MCP server \u2014 read account-wide cloud inventory, ISP metrics and SD-WAN status",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "license": "MIT",
+  "icon": "./assets/icon.png",
+  "keywords": [
+    "unifi",
+    "sitemanager",
+    "cloud",
+    "read-only",
+    "mcp"
+  ],
+  "mcpServers": {
+    "unifi-sitemanager": {
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-sitemanager-mcp==0.1.0"
+      ],
+      "env": {
+        "UNIFI_SITEMANAGER_API_KEY_FILE": "${user_config.api_key_file}",
+        "UNIFI_SITEMANAGER_API_KEY_COMMAND": "${user_config.api_key_command}",
+        "UNIFI_SITEMANAGER_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "userConfig": {
+    "api_key_file": {
+      "type": "string",
+      "title": "API key file",
+      "description": "Absolute path to a file holding the Site Manager cloud key. This key sees the whole account. Set one key source only."
+    },
+    "api_key_command": {
+      "type": "string",
+      "title": "API key command",
+      "description": "Executable and argv, run without a shell, that prints the Site Manager cloud key. This key sees the whole account. Set one key source only."
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "Site Manager cloud key stored in the system keychain. This key sees the whole account. Prefer a file or command; set one key source only.",
+      "sensitive": true
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/claude-session-check.sh\" sitemanager",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

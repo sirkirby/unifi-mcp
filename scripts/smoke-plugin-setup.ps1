@@ -193,6 +193,7 @@ function Assert-NoReplacementArtifacts {
 $networkDir = Join-Path $RepositoryRoot 'plugins/unifi-network/scripts'
 $protectDir = Join-Path $RepositoryRoot 'plugins/unifi-protect/scripts'
 $accessDir = Join-Path $RepositoryRoot 'plugins/unifi-access/scripts'
+$sitemanagerDir = Join-Path $RepositoryRoot 'plugins/unifi-sitemanager/scripts'
 $networkScript = Join-Path $networkDir 'set-env.ps1'
 $testRoot = Join-Path $RepositoryRoot ('.setup-powershell-smoke space-' + [Guid]::NewGuid().ToString('N'))
 $priorHome = $env:HOME
@@ -235,10 +236,11 @@ try {
     }
 
     Write-Host '== Cross-plugin parity =='
-    foreach ($name in @('set-env.ps1', 'check-prereqs.ps1')) {
+    foreach ($name in @('set-env.ps1', 'check-prereqs.ps1', 'setup_config.py')) {
         $expected = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $networkDir $name)).Hash
         Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $protectDir $name)).Hash $expected "Protect $name matches Network"
         Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $accessDir $name)).Hash $expected "Access $name matches Network"
+        Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $sitemanagerDir $name)).Hash $expected "Site Manager $name matches Network"
     }
 
     Write-Host '== Claude Code options and secret input =='
@@ -362,7 +364,7 @@ try {
             $countLine = @($fixtures.Output -split "`r?`n" | Where-Object { $_ -match '^Fixture assertions: [0-9]+ passed$' } | Select-Object -Last 1)
             if ($countLine.Count -gt 0) { Write-Host ('  ' + $countLine[0]) }
         }
-        Assert-Equal $fixtures.ExitCode 0 'all three plugins and client targets pass portable fixtures'
+        Assert-Equal $fixtures.ExitCode 0 'all four plugins and client targets pass portable fixtures'
     }
 } finally {
     $env:HOME = $priorHome

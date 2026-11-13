@@ -339,3 +339,31 @@ separately.
 
 Stop the loopback server, delete `ACC`, check `git status` shows no scratch
 files, and compare the `shasum` output with the value recorded at the start.
+
+## Site Manager scenarios
+
+Status: **not yet measured** for any real client or OS. The bundle pins the
+first server release, `unifi-sitemanager-mcp==0.1.0`; wait for its publication
+before real-client acceptance. Run each scenario with Claude Code, Codex and
+OpenClaw in isolated profiles. Use the existing isolation procedure; do not
+set console safety gates or permission options for this read-only server.
+Select eager registration in the isolated launch environment if a client
+requires directly listed domain reads; registration is not a setup option.
+Only the following key inputs are accepted; no console setup steps apply.
+
+| Scenario | Expected result |
+|---|---|
+| No key | MCP handshake completes in keyless setup mode. No cloud request occurs; guidance names the cloud key, with no console login prompt. |
+| One key | A masked raw-key input uses Claude's sensitive keychain option, or stdin JSON for the settings helper. After consent to whole-account visibility, a bounded inventory read succeeds through `https://api.ui.com`; record status and counts only. Never use a real raw key in the shared-keychain isolation profile described above; measure that flow only with a synthetic key in a separately disposable keychain. |
+| One provider | An absolute private key file or command provider is saved alone. Setup validates the reference without running the command or reading its key; the server resolves it after reconnect. Test both provider forms, including switching sources. |
+| Two forms | Raw+file, raw+command and file+command are each refused before publication. Previous settings and options remain byte-identical; no key appears in argv, output or logs. |
+| Console or shared input | Host, username, password, port, site, TLS, permission/policy options, `UNIFI_API_KEY` and console migration are refused. No credential is copied or forwarded. |
+| Bundled server | Codex and OpenClaw write only `~/.config/unifi-mcp/sitemanager.env` (`%USERPROFILE%\.config\unifi-mcp\sitemanager.env` on Windows). `UNIFI_SETTINGS_FILE` points there; no MCP client entry is created. A manual shadowing entry is refused without migration. |
+| Warm-up | Codex starts the pinned package with no `UNIFI_` variables, settings file or credential, completes initialize, and closes it. It makes no authenticated read. |
+| Reconnect and upgrade | Claude reload/new session, Codex new session and OpenClaw new session/Gateway restart after initial setup retain the single key source; subsequent plugin upgrades take effect at the next OpenClaw turn; the bundle owns the server pin. For this first release, record initial install; measure upgrade only once a prior Site Manager release exists. |
+
+Confirm that the main and setup skills are discovered, there is no support
+skill or Write capability, and IDs are scoped to Site Manager. Cloud dependency
+or partial pages must appear as limitations, not an all-clear. Record sanitized
+client versions, OS, candidate commit, plugin version and server pin separately
+from fixture results. Do not mark any scenario tested from packaging checks.

@@ -276,7 +276,7 @@ class Fixtures:
     def check_script_parity(self):
         """Keep shipped setup implementations byte-identical across products."""
         reference = self.repo / "plugins/unifi-network/scripts"
-        for product in ("network", "protect", "access"):
+        for product in ("network", "protect", "access", "sitemanager"):
             scripts = self.repo / f"plugins/unifi-{product}/scripts"
             for filename in (
                 "set-env.sh",
@@ -298,6 +298,212 @@ class Fixtures:
             self.claude_scenario(product)
             for target in ("codex", "openclaw"):
                 self.scenario(product, target)
+
+        for target in ("claude", "codex", "openclaw"):
+            self.sitemanager_scenario(target)
+
+    def sitemanager_scenario(self, target):
+        """Key-only cloud setup through each shipped wrapper, using synthetic secrets."""
+        plugin = self.repo / "plugins/unifi-sitemanager"
+        scripts = plugin / "scripts"
+        workspace = self.root / ("sitemanager-" + target)
+        bindir = workspace / "bin"
+        bindir.mkdir(parents=True)
+        for name in ("uvx", target):
+            client_executable(bindir, name)
+        provider_marker = workspace / "provider-ran"
+        executable(
+            bindir, "fixture-provider", "from pathlib import Path\nPath(" + repr(str(provider_marker)) + ").touch()\n"
+        )
+        key = 'FAKE-cloud-only "quoted" Ω'
+        provider_file = workspace / "provider-key"
+        provider_file.write_text(key, encoding="utf-8")
+        output_marker = workspace / "output-marker"
+        output_marker.write_text(key, encoding="utf-8")
+        config = workspace / "client"
+        config.mkdir()
+        environment = {
+            k: v for k, v in os.environ.items() if not k.startswith(("UNIFI_", "CODEX_", "CLAUDE_", "OPENCLAW_"))
+        }
+        environment.update(
+            HOME=str(workspace),
+            USERPROFILE=str(workspace),
+            CODEX_HOME=str(config),
+            CLAUDE_CONFIG_DIR=str(config),
+            OPENCLAW_CONFIG_PATH=str(config / "openclaw.json"),
+            OPENCLAW_STATE_DIR=str(config),
+            PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+            FIXTURE_PLUGIN_ROOT=str(plugin),
+            FIXTURE_ARGV=str(workspace / "argv.jsonl"),
+            FIXTURE_OUTPUT_MARKER_FILE=str(output_marker),
+            PYTHONIOENCODING="cp1252",
+            # These must never become a Site Manager credential or settings.
+            UNIFI_API_KEY="FAKE-shared-console-key",
+            UNIFI_ACCESS_HOST="192.0.2.1",
+        )
+        (config / "config.toml").write_text('model = "fixture"\n', encoding="utf-8")
+        (config / "openclaw.json").write_text('{"keep":true}\n', encoding="utf-8")
+        settings = workspace / ".config/unifi-mcp/sitemanager.env"
+        (workspace / "argv.jsonl").touch()
+        base = "UNIFI_SITEMANAGER_API_KEY"
+        module = setup_module(scripts)
+
+        def run(name, patch=None, extra=(), env=None):
+            if self.powershell:
+                command = [
+                    self.powershell,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(scripts / (name + ".ps1")),
+                    "-Target",
+                    target,
+                ]
+                if patch is not None:
+                    command += ["-InputJson"]
+            else:
+                command = [self.shell, str(scripts / (name + ".sh")), "--target", target]
+                if patch is not None:
+                    command += ["--input-json"]
+            result = subprocess.run(
+                command + list(extra),
+                env=env or environment,
+                cwd=workspace,
+                input=json.dumps(patch, ensure_ascii=False).encode("utf-8") if patch is not None else b"",
+                capture_output=True,
+                timeout=60,
+            )
+            self.check(b"FAKE-cloud-only" not in result.stdout + result.stderr, "cloud key absent from wrapper output")
+            self.check(
+                "FAKE-cloud-only" not in (workspace / "argv.jsonl").read_text(encoding="utf-8"),
+                "cloud key absent from client argv",
+            )
+            return result
+
+        def state():
+            return {
+                str(p): p.read_bytes() if p.exists() else None
+                for p in (
+                    settings,
+                    config / "settings.json",
+                    config / "fake-keychain.json",
+                    config / "config.toml",
+                    config / "openclaw.json",
+                )
+            }
+
+        def configured():
+            if target == "claude":
+                saved = json.loads((config / "settings.json").read_text(encoding="utf-8"))
+                options = saved["pluginConfigs"]["unifi-sitemanager@fixture-market"]["options"]
+                return {
+                    base + suffix: options.get(option, "")
+                    for suffix, option in (("_FILE", "api_key_file"), ("_COMMAND", "api_key_command"))
+                }
+            return module.read_settings(settings)
+
+        self.check(run("check-prereqs").returncode == 0, "cloud keyless prerequisites")
+        self.check(not settings.exists(), "cloud keyless check creates no settings")
+        self.check(run("set-env", {base: key}).returncode == 0, "cloud raw key via stdin")
+        if target == "claude":
+            chain = json.loads((config / "fake-keychain.json").read_text(encoding="utf-8"))
+            self.check(chain["unifi-sitemanager@fixture-market"]["api_key"] == key, "cloud raw key uses keychain")
+            self.check(
+                key not in (config / "settings.json").read_text(encoding="utf-8"),
+                "cloud raw key absent from ordinary Claude options",
+            )
+            # Model a future client that supports clearing a keychain value.
+            environment["FIXTURE_CLAUDE_VERSION"] = "99.0.0"
+            environment["FIXTURE_CLAUDE_CLEARS"] = "1"
+        else:
+            self.check(module.read_settings(settings) == {base: key}, "cloud settings contain only scoped key")
+            if os.name != "nt":
+                self.check(settings.stat().st_mode & 0o077 == 0, "cloud settings private")
+        self.check(
+            run("set-env", {base + "_FILE": str(provider_file)}).returncode == 0, "cloud switch to file provider"
+        )
+        self.check(configured().get(base + "_FILE") == str(provider_file), "cloud file provider retained")
+        command = "fixture-provider"
+        self.check(run("set-env", {base + "_COMMAND": command}).returncode == 0, "cloud switch to command provider")
+        self.check(configured().get(base + "_COMMAND") == command, "cloud command provider retained")
+        self.check(not provider_marker.exists(), "cloud setup never executes provider")
+        for first, second in ((base, base + "_FILE"), (base, base + "_COMMAND"), (base + "_FILE", base + "_COMMAND")):
+            values = {base: key, base + "_FILE": str(provider_file), base + "_COMMAND": command}
+            before = state()
+            self.check(
+                run("set-env", {first: values[first], second: values[second]}).returncode != 0,
+                "cloud refuses two forms",
+            )
+            self.check(state() == before, "cloud ambiguity changes nothing")
+        for rejected in (
+            "UNIFI_SITEMANAGER_HOST",
+            "UNIFI_SITEMANAGER_USERNAME",
+            "UNIFI_SITEMANAGER_PASSWORD",
+            "UNIFI_SITEMANAGER_PORT",
+            "UNIFI_SITEMANAGER_SITE",
+            "UNIFI_SITEMANAGER_VERIFY_SSL",
+            "UNIFI_SITEMANAGER_SSL_FINGERPRINT",
+            "UNIFI_SITEMANAGER_API_SSL_FINGERPRINT",
+            "UNIFI_SITEMANAGER_TOOL_PERMISSION_MODE",
+            "UNIFI_POLICY_SITEMANAGER_CREATE",
+            "UNIFI_POLICY_SITEMANAGER_UPDATE",
+            "UNIFI_POLICY_SITEMANAGER_DELETE",
+            "UNIFI_API_KEY",
+            "UNIFI_API_KEY_FILE",
+            "UNIFI_API_KEY_COMMAND",
+            "UNIFI_HOST",
+            "UNIFI_TOOL_REGISTRATION_MODE",
+        ):
+            before = state()
+            self.check(run("set-env", {rejected: "FAKE-rejected"}).returncode != 0, "cloud refuses non-key input")
+            self.check(state() == before, "cloud rejected input changes nothing")
+        if target == "claude":
+            before = state()
+            failure_env = dict(environment, FIXTURE_FAIL="register")
+            self.check(run("set-env", {base: key}, env=failure_env).returncode != 0, "cloud client failure is safe")
+            self.check(state() == before, "cloud client failure leaves settings intact")
+        before = state()
+        flag = "-Migrate" if self.powershell else "--migrate"
+        self.check(run("set-env", extra=(flag,)).returncode != 0, "cloud refuses legacy migration")
+        self.check(state() == before, "cloud migration refusal changes nothing")
+        if target != "claude":
+            self.check(
+                (config / "config.toml").read_text() == 'model = "fixture"\n', "cloud leaves Codex config untouched"
+            )
+            self.check(
+                (config / "openclaw.json").read_text() == '{"keep":true}\n', "cloud leaves OpenClaw config untouched"
+            )
+            # A shadowing manual entry is refused, rather than migrated.
+            if target == "codex":
+                write_toml(
+                    config / "config.toml",
+                    {
+                        "mcp_servers": {
+                            "unifi-sitemanager": {"command": "fixture", "env": {"UNIFI_API_KEY": "FAKE-console"}}
+                        }
+                    },
+                )
+            else:
+                (config / "openclaw.json").write_text(
+                    json.dumps(
+                        {
+                            "mcp": {
+                                "servers": {
+                                    "unifi-sitemanager": {
+                                        "command": "fixture",
+                                        "env": {"UNIFI_API_KEY": "FAKE-console"},
+                                    }
+                                }
+                            }
+                        }
+                    )
+                )
+            before = state()
+            self.check(run("set-env", {base: key}).returncode != 0, "cloud refuses shadowing entry")
+            self.check(state() == before, "cloud shadow refusal changes nothing")
 
     def check_failure_reporting(self):
         output = io.StringIO()

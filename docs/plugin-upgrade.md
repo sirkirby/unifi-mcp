@@ -5,6 +5,35 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## unifi-sitemanager 1.0.0
+
+The new `unifi-sitemanager` bundle pins `unifi-sitemanager-mcp==0.1.0` and
+supports the same Claude Code, Codex and OpenClaw bundle mechanisms. The
+server package must be published before this candidate can be installed.
+Real-client acceptance is not yet measured.
+
+Setup is cloud-key-only: choose `UNIFI_SITEMANAGER_API_KEY`, `_API_KEY_FILE`
+or `_API_KEY_COMMAND` with the full `UNIFI_SITEMANAGER` prefix. Exactly one
+nonempty form is allowed. Console credentials, shared `UNIFI_API_KEY`, host,
+port, site, TLS and policy/permission settings are refused and never migrated.
+The key can see the whole account through `https://api.ui.com`; internet and
+Ubiquiti's cloud are required. All nine domain tools are reads.
+
+Claude Code keeps a masked key in its keychain or saves provider references
+as plugin options. Reload plugins or start a new session after changing them.
+Codex and OpenClaw read `~/.config/unifi-mcp/sitemanager.env` through the
+bundled `.mcp.codex.json` and `UNIFI_SETTINGS_FILE`; setup creates no shadowing
+MCP entry. Start a new Codex or OpenClaw session after initial setup; an open OpenClaw
+session may keep the unconfigured server until a Gateway restart. Later plugin
+upgrades take effect from the next OpenClaw turn.
+There is no earlier Site Manager setup to migrate: remove any manual shadowing
+entry in the client editor rather than importing console settings.
+
+The shared setup helper also ships in `unifi-network` 1.9.4 (was 1.9.3),
+`unifi-protect` 1.6.1 (was 1.6.0), and `unifi-access` 1.4.1 (was 1.4.0).
+Their setup behavior and server pins remain unchanged. Update these plugins
+using the ordinary client update steps; existing users need no setup rerun.
+
 ## unifi-intelligence 1.0.0
 
 The cross-product skills move from the unlisted `cross-product` bundle into a
