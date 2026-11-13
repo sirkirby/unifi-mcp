@@ -832,6 +832,18 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             with self.subTest(package=name):
                 self.assertEqual(name in expected_names, SITEMANAGER_RELEASED or name != "unifi-sitemanager-mcp")
 
+    def test_app_js_tolerates_exactly_the_packages_the_snapshot_lacks(self):
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        expected = re.search(r"var EXPECTED_PACKAGE_NAMES = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        awaiting = re.search(r"var AWAITING_FIRST_STATS = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        expected_names = set(re.findall(r"'([^']+)'", expected))
+        awaiting_names = set(re.findall(r"'([^']+)'", awaiting))
+        snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
+
+        for section in ("python", "containers"):
+            with self.subTest(section=section):
+                self.assertEqual(expected_names - set(snapshot[section]["packages"]), awaiting_names)
+
     def test_star_fallbacks_match_the_checked_in_snapshot(self):
         snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
         expected = f"★ {snapshot['github']['stars']:,}"

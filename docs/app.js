@@ -7,6 +7,10 @@ var EXPECTED_PACKAGE_NAMES = [
   'unifi-sitemanager-mcp'
 ];
 
+// Packages too new for the committed stats snapshot. The snapshot stays valid
+// without them; remove a name once a stats refresh has added its totals.
+var AWAITING_FIRST_STATS = ['unifi-sitemanager-mcp'];
+
 var copyResetTimers = new WeakMap();
 
 function activateTab(tab) {
@@ -114,11 +118,13 @@ function isNonNegativeInteger(value) {
 function hasCompletePackageMap(packages) {
   if (!packages || typeof packages !== 'object' || Array.isArray(packages)) return false;
 
-  var names = Object.keys(packages).sort();
-  if (names.length !== EXPECTED_PACKAGE_NAMES.length) return false;
+  var names = Object.keys(packages);
+  var known = names.every(function (name) {
+    return EXPECTED_PACKAGE_NAMES.indexOf(name) !== -1 && isNonNegativeInteger(packages[name]);
+  });
 
-  return names.every(function (name, index) {
-    return name === EXPECTED_PACKAGE_NAMES[index] && isNonNegativeInteger(packages[name]);
+  return known && EXPECTED_PACKAGE_NAMES.every(function (name) {
+    return Object.prototype.hasOwnProperty.call(packages, name) || AWAITING_FIRST_STATS.indexOf(name) !== -1;
   });
 }
 
