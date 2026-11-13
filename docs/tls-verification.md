@@ -1,5 +1,7 @@
 # Checking the controller's identity
 
+This page is about the Network, Protect and Access servers, which connect to a console on your network. The Site Manager server connects only to Ubiquiti's public `https://api.ui.com`, always verifies its certificate against the system's trusted CAs, and has no host, fingerprint or verification setting to configure.
+
 The Network, Protect and Access servers don't verify the controller's TLS certificate by default. Most UniFi OS consoles run on a factory self-signed certificate and are reached by IP, so verification on by default would stop nearly every install from connecting.
 
 That leaves the controller's identity unchecked, so anything on the network path can pose as the controller and capture the credentials. Each server logs one warning about this at startup. To add the check, pin the certificate, or turn on verification if the certificate is trusted.
