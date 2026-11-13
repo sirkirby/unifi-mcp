@@ -203,22 +203,11 @@ def test_legacy_patch_cannot_migrate_console_credentials_to_cloud(other) -> None
 
 @pytest.mark.parametrize("product", ["network", "protect", "access"])
 @pytest.mark.parametrize("case", ["missing_file", "unknown_suffix", "two_forms"])
-def test_console_cloud_named_inputs_match_pre_bundle_helper(tmp_path, product, case) -> None:
+def test_console_cloud_named_inputs_are_saved_unchanged(tmp_path, product, case) -> None:
     import copy
-    import subprocess
-    import types
 
-    # Fixed pre-bundle revision: HEAD~2 when the independent review was requested.
-    root = PLUGINS.parent
-    source = subprocess.run(
-        ["git", "show", f"47deaedf:plugins/unifi-{product}/scripts/setup_config.py"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    baseline = types.ModuleType("pre_bundle_setup")
-    exec(compile(source, "pre-bundle-setup", "exec"), baseline.__dict__)
+    # The helper released before the Site Manager bundle accepted each of these
+    # inputs for a console product and saved it unchanged.
     missing = str(tmp_path / "missing-provider")
     patch = {
         "missing_file": {"UNIFI_SITEMANAGER_API_KEY_FILE": missing},
@@ -226,15 +215,13 @@ def test_console_cloud_named_inputs_match_pre_bundle_helper(tmp_path, product, c
         "two_forms": {"UNIFI_SITEMANAGER_API_KEY": "FAKE-opaque", "UNIFI_SITEMANAGER_API_KEY_FILE": missing},
     }[case]
     expected = copy.deepcopy(patch)
-    before = baseline.merge_env({}, patch, product.upper(), inherited={})
-    assert before == expected
     module = load_setup_config(product)
     merged = module.merge_env({}, patch, product.upper(), inherited={})
-    assert merged == before
+    assert merged == expected
     # Exercise publication, not just admission: the same opaque inputs still save.
     settings = tmp_path / "console-settings"
     module.write_private(settings, module.settings_text(merged, f"unifi-{product}").encode())
-    assert module.read_settings(settings) == before
+    assert module.read_settings(settings) == expected
 
 
 @pytest.mark.parametrize("product,other", [("NETWORK", "ACCESS"), ("PROTECT", "NETWORK"), ("ACCESS", "PROTECT")])
