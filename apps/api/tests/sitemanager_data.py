@@ -119,11 +119,18 @@ class DataFactory:
             for method in methods:
                 setattr(manager, method, AsyncMock(wraps=getattr(manager, method)))
         self.acquisitions = 0
+        self.open_leases = 0
+        self.releases = 0
 
     @asynccontextmanager
     async def acquire(self):
         self.acquisitions += 1
-        yield self.bundle
+        self.open_leases += 1
+        try:
+            yield self.bundle
+        finally:
+            self.open_leases -= 1
+            self.releases += 1
 
 
 async def bootstrap(tmp_path, monkeypatch, scope="read", *, fake=True):
