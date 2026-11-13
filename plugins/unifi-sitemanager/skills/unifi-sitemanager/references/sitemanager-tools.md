@@ -22,7 +22,7 @@ Network, Protect, or Access tools.
 | Tool | Type | Description |
 |------|------|-------------|
 | `sitemanager_get_host` | Read | Returns one host by its Site Manager host id. |
-| `sitemanager_list_hosts` | Read | Lists the UniFi consoles and self-hosted servers linked to the account behind the Site Manager API key, with connection state, OS version, hardware model and installed applications. |
+| `sitemanager_list_hosts` | Read | Lists the UniFi consoles and self-hosted servers linked to the account behind the Site Manager API key, with connection state, OS version... |
 <!-- /AUTO:tools:hosts -->
 
 ## Sites
@@ -32,7 +32,7 @@ Network, Protect, or Access tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `sitemanager_list_sites` | Read | Lists the sites on every host the account behind the Site Manager API key can see, with device and client counts, ISP details and WAN health. |
+| `sitemanager_list_sites` | Read | Lists the sites on every host the account behind the Site Manager API key can see, with device and client counts, ISP details and WAN hea... |
 <!-- /AUTO:tools:sites -->
 
 ## Devices
