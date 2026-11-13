@@ -343,8 +343,8 @@ files, and compare the `shasum` output with the value recorded at the start.
 ## Site Manager scenarios
 
 Status: **not yet measured** for any real client or OS. The bundle pins the
-first server release, `unifi-sitemanager-mcp==0.1.0`; wait for its publication
-before real-client acceptance. Run each scenario with Claude Code, Codex and
+first server release, `unifi-sitemanager-mcp==0.1.0`, which is published. Run
+each scenario with Claude Code, Codex and
 OpenClaw in isolated profiles. Use the existing isolation procedure; do not
 set console safety gates or permission options for this read-only server.
 Select eager registration in the isolated launch environment if a client

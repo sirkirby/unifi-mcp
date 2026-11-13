@@ -7,8 +7,7 @@
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for Ubiquiti's official [Site Manager API](https://developer.ui.com/site-manager-api/). It gives an AI assistant the account-wide view that the Network, Protect and Access servers cannot see from inside one console: every host, site and device on a UI account, WAN performance per site, and SD-WAN configurations.
 
-> **Not yet published.** `unifi-sitemanager-mcp` has no release yet: it is not on PyPI, there is no container image on GHCR, and there is no plugin. Until the first release, run it from a checkout of this repository as described under [Install from source](#install-from-source). The instructions under [After the first release](#after-the-first-release) apply once it is published.
-
+[![PyPI](https://img.shields.io/pypi/v/unifi-sitemanager-mcp)](https://pypi.org/project/unifi-sitemanager-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -21,29 +20,6 @@ The other servers in this project connect directly to a console you name. This o
 - It is read-only. The Site Manager API has no write operations, and neither does this server.
 
 ## Install
-
-### Install from source
-
-This works today. You need [uv](https://docs.astral.sh/uv/) and Python 3.13 or later.
-
-```bash
-git clone https://github.com/sirkirby/unifi-mcp.git
-cd unifi-mcp
-uv sync
-```
-
-Create an API key at [unifi.ui.com](https://unifi.ui.com) under Settings > API Keys, save it in a file only you can read, and start the server:
-
-```bash
-export UNIFI_SITEMANAGER_API_KEY_FILE="$HOME/.config/unifi-mcp/sitemanager-api-key"
-uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp
-```
-
-Without a key the server still starts. It answers the client in setup mode, offers only `sitemanager_setup_status`, explains what to set, and makes no request.
-
-### After the first release
-
-The instructions in this section need the published package, container image or plugin. None of them exists yet; until they do, use [Install from source](#install-from-source).
 
 **Claude Code plugin.**
 
@@ -72,6 +48,25 @@ uvx unifi-sitemanager-mcp@latest
 # Docker
 docker pull ghcr.io/sirkirby/unifi-sitemanager-mcp:latest
 ```
+
+### Install from source
+
+You need [uv](https://docs.astral.sh/uv/) and Python 3.13 or later.
+
+```bash
+git clone https://github.com/sirkirby/unifi-mcp.git
+cd unifi-mcp
+uv sync
+```
+
+Create an API key at [unifi.ui.com](https://unifi.ui.com) under Settings > API Keys, save it in a file only you can read, and start the server:
+
+```bash
+export UNIFI_SITEMANAGER_API_KEY_FILE="$HOME/.config/unifi-mcp/sitemanager-api-key"
+uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+```
+
+Without a key the server still starts. It answers the client in setup mode, offers only `sitemanager_setup_status`, explains what to set, and makes no request.
 
 ## Usage Examples
 
@@ -152,17 +147,14 @@ The key is taken from your shell when the container starts and is never built in
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`, with the absolute path to your checkout:
+Add to `claude_desktop_config.json`:
 
 ```jsonc
 {
   "mcpServers": {
     "unifi-sitemanager": {
-      "command": "uv",
-      "args": [
-        "run", "--directory", "/absolute/path/to/unifi-mcp",
-        "--package", "unifi-sitemanager-mcp", "unifi-sitemanager-mcp"
-      ],
+      "command": "uvx",
+      "args": ["unifi-sitemanager-mcp@latest"],
       "env": {
         "UNIFI_SITEMANAGER_API_KEY_FILE": "/Users/you/.config/unifi-mcp/sitemanager-api-key"
       }
@@ -171,7 +163,7 @@ Add to `claude_desktop_config.json`, with the absolute path to your checkout:
 }
 ```
 
-After the first release, the same entry can use `"command": "uvx"` and `"args": ["unifi-sitemanager-mcp"]`. Use a file or command provider rather than putting the key itself in the config file.
+Use a file or command provider rather than putting the key itself in the config file.
 
 ## Remote access
 

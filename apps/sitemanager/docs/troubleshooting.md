@@ -114,7 +114,7 @@ Something between the server and `api.ui.com` answered with a redirect, such as 
 
 ## Docker
 
-The image and Compose service are built from a checkout until the first release; see the [README](../README.md#docker-compose).
+The published image is `ghcr.io/sirkirby/unifi-sitemanager-mcp`. The Compose service builds the image from a checkout; see the [README](../README.md#docker-compose).
 
 ### The container exits immediately
 

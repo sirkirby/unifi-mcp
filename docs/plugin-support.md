@@ -195,8 +195,8 @@ and fake-client fixtures do not establish installation, keychain behavior,
 cloud reads or upgrade acceptance. Other clients retain the native/manual
 installation guidance and support limits below; no Site Manager measurement
 has been made for them either. Run the Site Manager scenarios in the
-[acceptance procedure](plugin-acceptance.md#site-manager-scenarios) after the
-server package is published; the candidate bundle's pin is not yet installable.
+[acceptance procedure](plugin-acceptance.md#site-manager-scenarios) to
+measure them.
 
 ## Codex: tools on the first turn
 
