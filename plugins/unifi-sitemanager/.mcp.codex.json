@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "unifi-sitemanager": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-sitemanager-mcp==0.1.0"
+      ],
+      "env": {
+        "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/sitemanager.env"
+      }
+    }
+  }
+}

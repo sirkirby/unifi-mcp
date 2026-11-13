@@ -132,8 +132,8 @@
               <div><h4>Access <span>Stable</span></h4><p>Doors, visitors, credentials, policies, devices, and activity records.</p></div>
               <div class="server-meta"><strong>37 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/access">unifi-access-mcp</a></div>
             </div>
-            <div class="server-row sitemanager" data-product="sitemanager" data-tool-count="9" data-release="unreleased">
-              <div><h4>Site Manager <span>Not yet released</span></h4><p>Read-only, account-wide hosts, sites, devices, ISP metrics, and SD-WAN status. Requests go to Ubiquiti's cloud at api.ui.com with one account key.</p></div>
+            <div class="server-row sitemanager" data-product="sitemanager" data-tool-count="9" data-release="released">
+              <div><h4>Site Manager <span>Beta</span></h4><p>Read-only, account-wide hosts, sites, devices, ISP metrics, and SD-WAN status. Requests go to Ubiquiti's cloud at api.ui.com with one account key.</p></div>
               <div class="server-meta"><strong>9 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager">unifi-sitemanager-mcp</a></div>
             </div>
           </div>
@@ -237,7 +237,7 @@
         <div class="section-intro">
           <p class="kicker">Install</p>
           <h2>Start with the MCP path that fits your client.</h2>
-          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent. Already using the plugins? Read the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md">plugin upgrade guide</a> before updating. The Site Manager server is not published yet; run it <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager#install-from-source">from a source checkout</a>.</p>
+          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent. Already using the plugins? Read the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md">plugin upgrade guide</a> before updating. The Site Manager server reads a whole UI account from Ubiquiti's cloud and needs only its own <a href="https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/configuration.md">Site Manager API key</a>.</p>
         </div>
         <div class="install-card">
           <div class="install-tabs" role="tablist" aria-label="MCP installation methods">
@@ -274,7 +274,10 @@ uvx <span class="value">unifi-network-mcp@latest</span>
 uvx <span class="value">unifi-protect-mcp@latest</span>
 uvx <span class="value">unifi-access-mcp@latest</span>
 
-<span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span></code></pre>
+<span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span>
+
+<span class="comment"># Site Manager reads the cloud account; give it only UNIFI_SITEMANAGER_API_KEY_FILE</span>
+uvx <span class="value">unifi-sitemanager-mcp@latest</span></code></pre>
           </div>
           <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" class="install-panel" data-install-panel="docker" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>
@@ -307,6 +310,7 @@ docker compose up -d</code></pre>
 pipx install <span class="value">unifi-network-mcp</span>
 pipx install <span class="value">unifi-protect-mcp</span>
 pipx install <span class="value">unifi-access-mcp</span>
+pipx install <span class="value">unifi-sitemanager-mcp</span>
 
 <span class="comment"># Then point your MCP client at the binary on PATH</span>
 <span class="command">unifi-network-mcp</span></code></pre>
@@ -344,7 +348,7 @@ pipx install <span class="value">unifi-access-mcp</span>
         </a>
         <p>Open-source interfaces for agents and applications working with UniFi infrastructure.</p>
       </div>
-      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li></ul></div>
+      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li><li><a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a></li></ul></div>
       <div><h2>Applications</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API server</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay">Relay sidecar</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker">Worker gateway</a></li></ul></div>
       <div><h2>Project</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/docs">Documentation</a></li><li><a href="https://github.com/sirkirby/unifi-mcp">GitHub</a></li><li><a href="sponsor/">Sponsor</a></li><li><a href="privacy.html">Privacy</a></li><li><a href="llms.txt">llms.txt</a></li></ul></div>
     </div>

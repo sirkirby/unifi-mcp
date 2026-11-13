@@ -48,7 +48,7 @@ MANIFESTS = {
 
 # Whether unifi-sitemanager-mcp has a first release. Until it does, public pages
 # must not present an install command, badge or marketplace link as working.
-SITEMANAGER_RELEASED = False
+SITEMANAGER_RELEASED = True
 
 # Install surfaces that only work once the Site Manager package is published.
 SITEMANAGER_RELEASE_ONLY_TEXT = (
@@ -811,6 +811,39 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             app,
         )
 
+    def test_footers_link_every_published_mcp_server(self):
+        servers = ["Network", "Protect", "Access"] + (["Site Manager"] if SITEMANAGER_RELEASED else [])
+        for path in (Path("docs/index.html"), Path("docs/404.html"), Path("docs/sponsor/index.html")):
+            html = path.read_text(encoding="utf-8")
+            footer = html.split("<h2>MCP servers</h2>", 1)[1].split("</div>", 1)[0]
+            with self.subTest(path=path):
+                self.assertEqual(re.findall(r'<a href="https://pypi\.org/project/[^"]+/">([^<]+)</a>', footer), servers)
+
+    def test_app_js_package_lists_include_every_published_python_server(self):
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        expected = re.search(r"var EXPECTED_PACKAGE_NAMES = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        refreshed = re.search(r"var pythonPackages = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        expected_names = re.findall(r"'([^']+)'", expected)
+        refreshed_names = re.findall(r"'([^']+)'", refreshed)
+
+        self.assertEqual(expected_names, sorted(expected_names))
+        self.assertEqual(set(expected_names), set(refreshed_names))
+        for name in MCP_SERVER_LINKS:
+            with self.subTest(package=name):
+                self.assertEqual(name in expected_names, SITEMANAGER_RELEASED or name != "unifi-sitemanager-mcp")
+
+    def test_app_js_tolerates_exactly_the_packages_the_snapshot_lacks(self):
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        expected = re.search(r"var EXPECTED_PACKAGE_NAMES = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        awaiting = re.search(r"var AWAITING_FIRST_STATS = \[(.*?)\];", app, flags=re.DOTALL).group(1)
+        expected_names = set(re.findall(r"'([^']+)'", expected))
+        awaiting_names = set(re.findall(r"'([^']+)'", awaiting))
+        snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
+
+        for section in ("python", "containers"):
+            with self.subTest(section=section):
+                self.assertEqual(expected_names - set(snapshot[section]["packages"]), awaiting_names)
+
     def test_star_fallbacks_match_the_checked_in_snapshot(self):
         snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
         expected = f"★ {snapshot['github']['stars']:,}"
@@ -1006,6 +1039,31 @@ class ContentReconciliationTests(unittest.TestCase):
             for text in SITEMANAGER_RELEASE_ONLY_TEXT:
                 with self.subTest(path=path, text=text):
                     self.assertNotIn(text, content)
+
+    def test_released_site_manager_install_surfaces_are_present(self):
+        if not SITEMANAGER_RELEASED:
+            self.skipTest("unifi-sitemanager-mcp is not released")
+        expected = {
+            Path("README.md"): (
+                "img.shields.io/pypi/v/unifi-sitemanager-mcp",
+                "uvx unifi-sitemanager-mcp@latest",
+                "unifi-sitemanager@unifi-plugins",
+            ),
+            Path("QUICKSTART.md"): ("uvx unifi-sitemanager-mcp@latest", "unifi-sitemanager@unifi-plugins"),
+            Path("SECURITY.md"): ("| unifi-sitemanager-mcp | Latest release (beta) |",),
+            Path("docs/index.html"): (
+                'uvx <span class="value">unifi-sitemanager-mcp@latest</span>',
+                'pipx install <span class="value">unifi-sitemanager-mcp</span>',
+                '<a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a>',
+            ),
+        }
+        for path, phrases in expected.items():
+            content = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+            with self.subTest(path=path):
+                self.assertNotRegex(content, r"(?i)site manager[^\n]*not (?:yet )?(?:published|released)")
 
     def test_site_manager_cloud_boundary_is_stated_where_servers_are_configured(self):
         surfaces = {

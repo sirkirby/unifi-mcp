@@ -163,3 +163,68 @@ def test_a_missing_pinned_tag_is_reported_not_replaced_by_the_workspace(repo: Pa
     pin(repo, "0.39.0")
     with pytest.raises(ValueError, match=r"pinned release tag network/v0\.39\.0 is missing; fetch tags"):
         generator.run(repo, check_mode=True)
+
+
+@pytest.fixture
+def sitemanager_repo(tmp_path: Path) -> Path:
+    """A tagged first cloud release, with workspace-only drift after the tag."""
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "--local", "user.name", "Fixture")
+    git(tmp_path, "config", "--local", "user.email", "fixture@example.invalid")
+    git(tmp_path, "config", "--local", "commit.gpgsign", "false")
+    git(tmp_path, "config", "--local", "core.hooksPath", str(tmp_path / "no-hooks"))
+    bundle = "plugins/unifi-sitemanager"
+    for filename in (
+        ".mcp.codex.json",
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "skills/unifi-sitemanager/SKILL.md",
+        "skills/unifi-sitemanager/references/sitemanager-tools.md",
+    ):
+        write(tmp_path, f"{bundle}/{filename}", (ROOT / bundle / filename).read_text())
+    path = "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json"
+    source = json.loads((ROOT / path).read_text())
+    write(tmp_path, path, json.dumps(source))
+    release(tmp_path, "sitemanager/v0.1.0")
+    source["tools"].append({"name": "sitemanager_fixture_future", "schema": {"input": {"properties": {}}}})
+    write(tmp_path, path, json.dumps(source))
+    return tmp_path
+
+
+def test_sitemanager_pinned_surface_has_nine_domain_tools_and_five_meta_tools(sitemanager_repo: Path) -> None:
+    tag, pinned = refs.pinned_manifest(sitemanager_repo, "sitemanager")
+    assert tag == "sitemanager/v0.1.0"
+    domain = set(pinned["module_map"])
+    names = {tool["name"] for tool in pinned["tools"]}
+    assert len(domain) == 9
+    assert names - domain == {f"sitemanager_{name}" for name in refs.META_TOOLS}
+    assert len(names) == 14
+    assert "sitemanager_get_support_bundle" not in names
+    assert "sitemanager_fixture_future" not in names
+    for tool in pinned["tools"]:
+        if tool["name"] in domain:
+            assert tool["annotations"]["readOnlyHint"] is True
+    assert "sitemanager_get_support_bundle" not in refs.pinned_release(sitemanager_repo, "sitemanager").tools
+
+
+def test_sitemanager_reference_generator_handles_multiword_title(sitemanager_repo: Path) -> None:
+    reference = "plugins/unifi-sitemanager/skills/unifi-sitemanager/references/sitemanager-tools.md"
+    write(
+        sitemanager_repo,
+        reference,
+        (sitemanager_repo / reference)
+        .read_text()
+        .replace("(9 read-only domain tools, plus 5 meta-tools)", "(0 read-only domain tools, plus 5 meta-tools)"),
+    )
+    assert generator.run(sitemanager_repo, check_mode=True) == 1
+    assert generator.run(sitemanager_repo, check_mode=False) == 0
+    text = (sitemanager_repo / reference).read_text()
+    assert "# Site Manager Server Tool Reference (9 read-only domain tools, plus 5 meta-tools)" in text
+    assert "sitemanager_fixture_future" not in text
+    assert generator.run(sitemanager_repo, check_mode=True) == 0
+
+
+def test_sitemanager_missing_release_tag_never_uses_workspace(sitemanager_repo: Path) -> None:
+    git(sitemanager_repo, "tag", "-d", "sitemanager/v0.1.0")
+    with pytest.raises(ValueError, match=r"pinned release tag sitemanager/v0\.1\.0 is missing; fetch tags"):
+        refs.pinned_manifest(sitemanager_repo, "sitemanager")

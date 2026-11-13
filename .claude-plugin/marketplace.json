@@ -36,6 +36,15 @@
       "repository": "https://github.com/sirkirby/unifi-mcp"
     },
     {
+      "name": "unifi-sitemanager",
+      "source": "./plugins/unifi-sitemanager",
+      "description": "Read-only UniFi Site Manager cloud inventory, ISP metrics and SD-WAN across the whole account",
+      "license": "MIT",
+      "keywords": ["unifi", "sitemanager", "cloud", "read-only", "mcp"],
+      "category": "networking",
+      "repository": "https://github.com/sirkirby/unifi-mcp"
+    },
+    {
       "name": "unifi-intelligence",
       "source": "./plugins/unifi-intelligence",
       "description": "UniFi Intelligence skills — investigate Network device incidents with Protect camera context; requires the unifi-network and unifi-protect plugins",

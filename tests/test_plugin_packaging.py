@@ -46,13 +46,13 @@ DIRECTORY_CHECKS = re.compile(
 USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
 # Variables the servers resolve with resolve_env, where an empty value counts as unset.
 EMPTY_IS_UNSET = re.compile(
-    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
 )
-RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:PASSWORD|API_KEY)$")
+RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:PASSWORD|API_KEY)$")
 # Claude option defaults must match today's closed, preview-first behaviour.
 SAFE_DEFAULTS = (
-    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS)_(?:CREATE|UPDATE|DELETE)$"), False),
-    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_TOOL_PERMISSION_MODE$"), "confirm"),
+    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:CREATE|UPDATE|DELETE)$"), False),
+    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_TOOL_PERMISSION_MODE$"), "confirm"),
     (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
 )
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
@@ -798,7 +798,7 @@ def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     assert pins == expected
 
 
-@pytest.mark.parametrize("name", _mcp_bundles())
+@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name != "unifi-sitemanager"])
 def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> None:
     root = _copy_packaging_tree(tmp_path)
     _edit_json(_claude_manifest(root, name), lambda d: d["userConfig"]["policy_delete"].update(default=True))
@@ -867,7 +867,7 @@ def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
     return env
 
 
-@pytest.mark.parametrize("name", _mcp_bundles())
+@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name != "unifi-sitemanager"])
 def test_claude_options_resolve_like_unset_variables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, name: str
 ) -> None:
@@ -929,3 +929,27 @@ def test_claude_options_resolve_like_unset_variables(
     assert checker.check("any_category", "update") and not checker.check("any_category", "delete")
     assert policy_gate.resolve_permission_mode(product) == "bypass"
     assert bootstrap.validate_registration_mode(logger) == "eager"
+
+
+def test_sitemanager_is_a_key_only_read_only_bundle() -> None:
+    bundle = REPO_ROOT / "plugins/unifi-sitemanager"
+    claude = _load(bundle / CLAUDE_MANIFEST)
+    codex = _load(bundle / ".codex-plugin/plugin.json")
+    assert set(claude["userConfig"]) == {"api_key", "api_key_file", "api_key_command"}
+    assert claude["userConfig"]["api_key"]["sensitive"] is True
+    assert claude["version"] == codex["version"] == "1.0.0"
+    assert set(claude["mcpServers"]["unifi-sitemanager"]["env"]) == {
+        "UNIFI_SITEMANAGER_API_KEY",
+        "UNIFI_SITEMANAGER_API_KEY_FILE",
+        "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+    }
+    assert codex["interface"]["capabilities"] == ["Interactive", "Read"]
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
+        server = _load(bundle / filename)["mcpServers"]["unifi-sitemanager"]
+        assert server["args"] == ["--python-preference", "system", "unifi-sitemanager-mcp==0.1.0"]
+        assert not server.get("env_vars")
+    assert sorted(p.name for p in (bundle / "skills").iterdir()) == ["unifi-sitemanager", "unifi-sitemanager-setup"]
+    for filename in (".mcp.json", "hooks.json", "README.md"):
+        assert not (bundle / filename).exists()
+    assert claude["icon"] == codex["interface"]["logo"] == codex["interface"]["composerIcon"] == "./assets/icon.png"
+    assert "sitemanager" in claude["hooks"]["SessionStart"][0]["hooks"][0]["command"]

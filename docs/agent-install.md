@@ -19,7 +19,7 @@ Site Manager is a fourth server of a different kind. It reads every console,
 site and device on a UI account from Ubiquiti's cloud API at `api.ui.com`, with
 one account-wide key, and has no console host, local account or write tools.
 Offer it when the user wants an account-wide inventory, WAN health or SD-WAN
-status rather than work inside one console. It is not published yet; see
+status rather than work inside one console; see
 [Site Manager (cloud account)](#site-manager-cloud-account).
 
 ## Instructions for the installing agent
@@ -336,9 +336,12 @@ Current first-party references:
 
 ## Site Manager (cloud account)
 
-The Site Manager server is not published yet: there is no PyPI package,
-container image or plugin. Until its first release, register it from a source
-checkout. Setup differs from the console servers:
+Install the `unifi-sitemanager` plugin from the same marketplace as the other
+products (`/plugin install unifi-sitemanager@unifi-plugins` in Claude Code,
+`/plugins` in Codex, `openclaw plugins install unifi-sitemanager --marketplace
+https://github.com/sirkirby/unifi-mcp` in OpenClaw) and run its setup skill, or
+register the `unifi-sitemanager-mcp` package manually. Setup differs from the
+console servers:
 
 - Ask for no host, username, password, port, site or TLS setting, and do not
   ask about write permissions or policy gates. The server has none; every tool
@@ -353,20 +356,14 @@ checkout. Setup differs from the console servers:
   key in chat, and never offer `UNIFI_API_KEY` or another console key in its
   place: the server never reads them.
 
-Clone the repository and run `uv sync`, then register a local stdio server
-whose command is `uv` with these arguments, using the checkout's absolute path:
-
-```text
-run --directory /absolute/path/to/unifi-mcp --package unifi-sitemanager-mcp unifi-sitemanager-mcp
-```
-
-In OpenCode, for example:
+For a manual install, register a local stdio server whose command is `uvx`
+with the arguments `--python-preference`, `system`, and
+`unifi-sitemanager-mcp@latest`. In OpenCode, for example:
 
 ```bash
 opencode mcp add unifi-sitemanager \
   --env 'UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key' \
-  -- uv run --directory /absolute/path/to/unifi-mcp \
-  --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+  -- uvx --python-preference system unifi-sitemanager-mcp@latest
 ```
 
 For other native clients, add the same command and the one key variable
@@ -383,7 +380,7 @@ server in each client has not been verified yet. See
 | Network | `unifi-network` | `unifi-network-mcp@latest` | `UNIFI_NETWORK_HOST`, plus an API-key provider for limited inventory or username and a password provider for session tools |
 | Protect | `unifi-protect` | `unifi-protect-mcp@latest` | `UNIFI_PROTECT_HOST`, `UNIFI_PROTECT_USERNAME`, one `UNIFI_PROTECT_PASSWORD*` provider |
 | Access | `unifi-access` | `unifi-access-mcp@latest` | `UNIFI_ACCESS_HOST`, plus a supported local credential or API-key provider |
-| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp` (source checkout until its first release) | One `UNIFI_SITEMANAGER_API_KEY*` provider; no host |
+| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` | One `UNIFI_SITEMANAGER_API_KEY*` provider; no host |
 
 See each product's configuration documentation for ports, sites, API-key
 limitations, TLS verification, and policy gates:

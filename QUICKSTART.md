@@ -48,14 +48,17 @@ through Ubiquiti's cloud API at `https://api.ui.com`, using one Site Manager API
 key. Every request goes to that fixed cloud address, even when your client runs
 the server locally over stdio.
 
-It is not published yet. Create an API key at [unifi.ui.com](https://unifi.ui.com)
-under Settings > API Keys, save it in a file only you can read, and run the
-server from a [source checkout](#source-checkout):
+Create an API key at [unifi.ui.com](https://unifi.ui.com) under Settings > API
+Keys, save it in a file only you can read, and run the server:
 
 ```bash
 export UNIFI_SITEMANAGER_API_KEY_FILE="$HOME/.config/unifi-mcp/sitemanager-api-key"
-uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+uvx unifi-sitemanager-mcp@latest
 ```
+
+In Claude Code, `/plugin install unifi-sitemanager@unifi-plugins` installs it
+with a setup skill. The container image is
+`ghcr.io/sirkirby/unifi-sitemanager-mcp:latest`.
 
 Set exactly one of `UNIFI_SITEMANAGER_API_KEY`, `UNIFI_SITEMANAGER_API_KEY_FILE`
 or `UNIFI_SITEMANAGER_API_KEY_COMMAND`. The server never uses `UNIFI_API_KEY`

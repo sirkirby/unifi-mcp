@@ -9,6 +9,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 [![PyPI - Network](https://img.shields.io/pypi/v/unifi-network-mcp)](https://pypi.org/project/unifi-network-mcp/)
 [![PyPI - Protect](https://img.shields.io/pypi/v/unifi-protect-mcp)](https://pypi.org/project/unifi-protect-mcp/)
 [![PyPI - Access](https://img.shields.io/pypi/v/unifi-access-mcp)](https://pypi.org/project/unifi-access-mcp/)
+[![PyPI - Site Manager](https://img.shields.io/pypi/v/unifi-sitemanager-mcp)](https://pypi.org/project/unifi-sitemanager-mcp/)
 [![PyPI - Relay](https://img.shields.io/pypi/v/unifi-mcp-relay)](https://pypi.org/project/unifi-mcp-relay/)
 [![PyPI - API Server](https://img.shields.io/pypi/v/unifi-api-server)](https://pypi.org/project/unifi-api-server/)
 [![npm - Worker](https://img.shields.io/npm/v/unifi-mcp-worker)](https://www.npmjs.com/package/unifi-mcp-worker)
@@ -22,7 +23,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Network](apps/network/) | Stable | 210 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
 | [Protect](apps/protect/) | Stable | 65 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
-| [Site Manager](apps/sitemanager/) | Not yet released | 9 | `unifi-sitemanager-mcp` (run [from source](#site-manager-from-source)) |
+| [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
 
 Network, Protect and Access each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
@@ -35,6 +36,7 @@ Install these from the Claude Code, Codex or OpenClaw marketplace; [Quick Start]
 | `unifi-network` | The Network MCP server, its agent skills and guided setup |
 | `unifi-protect` | The Protect MCP server, its agent skills and guided setup |
 | `unifi-access` | The Access MCP server, its agent skills and guided setup |
+| `unifi-sitemanager` | The Site Manager MCP server for a whole UI account, its agent skills and guided key setup |
 | `unifi-intelligence` | Cross-product investigations that use Network and Protect together, with every claim cited. Incident Investigation runs locally; Security Patrol and Visitor Audit need the [cloud worker](#cloud-relay). It requires the Network and Protect plugins |
 
 The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
@@ -158,6 +160,8 @@ Repeat for Protect or Access if needed:
 /plugin install unifi-access@unifi-plugins
 ```
 
+For an account-wide view from Ubiquiti's cloud, `/plugin install unifi-sitemanager@unifi-plugins`, then run its setup skill to give it a Site Manager API key as a file or command provider. It asks for no console host or login.
+
 For the cross-product skills, `/plugin install unifi-intelligence@unifi-plugins`
 also installs the Network and Protect plugins it needs. Claude Code opens no
 options dialog for plugins it installs as dependencies, so run each product's
@@ -176,7 +180,7 @@ Register the UniFi MCP marketplace, then install the plugins from Codex's `/plug
 codex plugin marketplace add sirkirby/unifi-mcp
 ```
 
-Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. `unifi-intelligence` adds the cross-product skills; Codex does not install plugin dependencies, so install and set up `unifi-network` and `unifi-protect` before it. After installing, ask Codex to run the plugin's setup skill, for example:
+Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, `unifi-access`, or `unifi-sitemanager`. `unifi-intelligence` adds the cross-product skills; Codex does not install plugin dependencies, so install and set up `unifi-network` and `unifi-protect` before it. After installing, ask Codex to run the plugin's setup skill, for example:
 
 > Use the `unifi-network-setup` skill to configure this for Codex.
 
@@ -218,6 +222,7 @@ Run the servers directly:
 uvx unifi-network-mcp@latest
 uvx unifi-protect-mcp@latest
 uvx unifi-access-mcp@latest
+uvx unifi-sitemanager-mcp@latest
 ```
 
 For Claude Desktop, add to your `claude_desktop_config.json`:
@@ -259,19 +264,25 @@ For Claude Desktop, add to your `claude_desktop_config.json`:
 
 > **Tip:** If all servers connect to the same controller, you can use the shared `UNIFI_HOST` / `UNIFI_USERNAME` / `UNIFI_PASSWORD` variables instead of repeating them per server.
 
-### Site Manager from source
+### Site Manager
 
-The Site Manager server is not published yet. Run it from a checkout with [uv](https://docs.astral.sh/uv/), giving it a Site Manager API key in a file only you can read:
+Give the Site Manager server only its own key, in a file only you can read. It takes none of the console variables above:
 
-```bash
-git clone https://github.com/sirkirby/unifi-mcp.git
-cd unifi-mcp
-uv sync
-export UNIFI_SITEMANAGER_API_KEY_FILE="$HOME/.config/unifi-mcp/sitemanager-api-key"
-uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+```jsonc
+{
+  "mcpServers": {
+    "unifi-sitemanager": {
+      "command": "uvx",
+      "args": ["unifi-sitemanager-mcp@latest"],
+      "env": {
+        "UNIFI_SITEMANAGER_API_KEY_FILE": "/Users/you/.config/unifi-mcp/sitemanager-api-key"
+      }
+    }
+  }
+}
 ```
 
-It uses stdio by default; HTTP is opt-in on port 3003. The [Site Manager README](apps/sitemanager/README.md#claude-desktop) has the Claude Desktop entry for a checkout.
+It uses stdio by default; HTTP is opt-in on port 3003. See the [Site Manager README](apps/sitemanager/README.md).
 
 ## Usage Examples
 
@@ -379,7 +390,7 @@ apps/
   network/          # UniFi Network MCP server (stable, 210 tools)
   protect/          # UniFi Protect MCP server (stable, 65 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
-  sitemanager/      # UniFi Site Manager MCP server (cloud, read-only, 9 tools; not yet released)
+  sitemanager/      # UniFi Site Manager MCP server (beta, cloud, read-only, 9 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/

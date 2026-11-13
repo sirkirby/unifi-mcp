@@ -1,0 +1,42 @@
+{
+  "name": "unifi-sitemanager",
+  "version": "1.0.0",
+  "description": "UniFi Site Manager MCP server \u2014 read account-wide cloud inventory, ISP metrics and SD-WAN status",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "sitemanager",
+    "cloud",
+    "read-only",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.codex.json",
+  "interface": {
+    "displayName": "UniFi Site Manager",
+    "shortDescription": "Read UniFi account-wide cloud inventory and WAN health",
+    "longDescription": "Read inventory, ISP metrics and SD-WAN status across the whole UniFi Site Manager account through api.ui.com. Uses one cloud account API key; all domain operations are read-only.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi Site Manager MCP",
+      "List my Site Manager hosts",
+      "Show account WAN health"
+    ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}
