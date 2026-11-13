@@ -22,6 +22,7 @@ PACKAGE_MAP = {
     "network": ("unifi-network-mcp", "unifi-network-mcp"),
     "protect": ("unifi-protect-mcp", "unifi-protect-mcp"),
     "access": ("unifi-access-mcp", "unifi-access-mcp"),
+    "sitemanager": ("unifi-sitemanager-mcp", "unifi-sitemanager-mcp"),
     "api": ("unifi-api-server", "unifi-api-server"),
     "relay": ("unifi-mcp-relay", "unifi-mcp-relay"),
 }
