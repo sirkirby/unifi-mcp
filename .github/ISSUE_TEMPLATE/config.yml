@@ -3,6 +3,9 @@ contact_links:
   - name: Generate a sanitized support bundle
     url: https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md
     about: Review the privacy-bounded Network, Protect, or Access troubleshooting workflow before opening a bug report.
+  - name: Site Manager troubleshooting
+    url: https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/troubleshooting.md
+    about: The Site Manager server has no support bundle. Check its troubleshooting guide, then report with the manual bug form fields.
   - name: Security vulnerability
     url: https://github.com/sirkirby/unifi-mcp/security/advisories
     about: Please report suspected vulnerabilities privately through GitHub Security Advisories.

@@ -54,11 +54,23 @@ UniFi MCP is designed with a **secure-by-default** posture:
 - API key authentication is supported as an experimental additive option
 - The relay sidecar connects to a Cloudflare Worker via token-scoped WebSocket — no inbound ports are exposed
 
+### Site Manager Cloud Credential
+
+The Site Manager server (`apps/sitemanager/`) is not local-first. It has a different trust boundary from the console servers:
+
+- Every request goes to Ubiquiti's cloud at `https://api.ui.com`, including when an MCP client runs the server locally over stdio. The destination is a constant in the code and cannot be changed by environment or configuration. Redirects are never followed and proxy environment variables are ignored.
+- TLS uses standard certificate verification against the public CA trust store. There is no verification switch or fingerprint pin to configure, and none is needed.
+- Its one credential, a Site Manager API key, reads every console, site and device the UI account can see, from anywhere on the internet. Treat it as more sensitive than any single console's local key.
+- The key is read only from `UNIFI_SITEMANAGER_API_KEY` or its `_FILE` / `_COMMAND` form. It is never taken from `UNIFI_API_KEY`, any other shared `UNIFI_*` variable, `config.yaml` or `CONFIG_PATH`, and it is never sent to a console. Console credentials are never sent to the cloud.
+- The server is read-only: the Site Manager API has no write operations and the server registers none.
+- Over HTTP, anyone who can reach the endpoint can read the whole account's inventory. Keep the default loopback bind and set a bearer token. The Cloud Relay does not include this server unless an operator adds it to `UNIFI_RELAY_SERVERS`; a relay token for that location, including a read-only one, could then read the whole account.
+- In `unifi-api-server`, the key is stored encrypted in the API database, is never returned by any route, and is managed only with the `admin` scope. Once it is configured, every API key with the `read` scope can read the whole account.
+
 ### MCP Transport Trust Boundary
 
 - MCP HTTP does not authenticate callers by default. Anyone who can reach it can invoke the enabled tools using the server's controller credentials. Allowed Host/Origin checks protect against DNS rebinding; they do not authenticate a network peer.
 - Setting `UNIFI_MCP_HTTP_AUTH_TOKEN` makes HTTP require one static bearer token on every request ([details](apps/network/docs/transports.md#http-bearer-token)). It has no scopes, expiry or per-client revocation, and it is not encryption: carry it only over TLS or loopback.
-- Package defaults disable HTTP and use a loopback bind address when enabled. Docker Compose explicitly enables HTTP inside its container network and publishes ports 3000–3002 on host `127.0.0.1` only.
+- Package defaults disable HTTP and use a loopback bind address when enabled. Docker Compose explicitly enables HTTP inside its container network and publishes ports 3000–3002 on host `127.0.0.1` only. The opt-in `sitemanager` profile adds port 3003, also on `127.0.0.1`.
 - Remote MCP clients must use the authenticated Cloud Relay gateway, an authenticated TLS reverse proxy, or a TLS tunnel to a backend with the bearer token set. Restrict direct backend access to that proxy; never publish the backend on a LAN/public interface. Trust every process/container with backend access.
 - Use Docker Engine 28.0.0 or newer with ordinary NAT bridge networking. Older Docker engines can expose localhost-published ports to peers on the same network; direct-routing, host-network, and custom firewall configurations require separate access restrictions. See [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/).
 
@@ -81,13 +93,13 @@ UniFi MCP is designed with a **secure-by-default** posture:
 
 ### No Persistent Storage
 
-- All state lives on the UniFi controller — the MCP server stores nothing locally
+- All state lives on the UniFi controller (or, for Site Manager, the UI account) — the MCP server stores nothing locally
 - No database, no cache, no session files
 - Configuration is read from environment variables and config YAML at startup
 
 ## Known Controller Vulnerabilities
 
-These are vulnerabilities in Ubiquiti's UniFi controller software, **not in this MCP server**. We document them here so users can verify their controllers are patched.
+These are vulnerabilities in Ubiquiti's UniFi controller software, **not in this MCP server**. They apply to the consoles the Network, Protect and Access servers connect to; the Site Manager server talks only to Ubiquiti's cloud API. We document them here so users can verify their controllers are patched.
 
 | CVE | CVSS | Affected Product | Affected Versions | Fixed In | Notes |
 |-----|------|-----------------|-------------------|----------|-------|
@@ -107,7 +119,7 @@ We recommend running at least these controller versions for security and API com
 
 ### In Scope
 
-- MCP server code (`apps/network/`, `apps/protect/`, `apps/access/`)
+- MCP server code (`apps/network/`, `apps/protect/`, `apps/access/`, `apps/sitemanager/`)
 - Shared packages (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 - Relay sidecar (`packages/unifi-mcp-relay/`)
 - Cloudflare Worker relay and CLI (`apps/worker/`)
@@ -118,6 +130,7 @@ We recommend running at least these controller versions for security and API com
 The following are **not** maintained by this project. Report issues to their respective maintainers:
 
 - UniFi controller firmware (report to [Ubiquiti](https://community.ui.com))
+- Ubiquiti's Site Manager API service at `api.ui.com` (report to [Ubiquiti](https://community.ui.com))
 - [aiounifi](https://github.com/Kane610/aiounifi) library
 - [pyunifiprotect](https://github.com/uilibs/uiprotect) library
 - [py-unifi-access](https://github.com/sirkirby/py-unifi-access) library

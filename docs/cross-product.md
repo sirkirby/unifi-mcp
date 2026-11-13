@@ -6,6 +6,14 @@ An MCP client connected to multiple UniFi product servers can query Network, Pro
 
 Each UniFi product (Network, Protect, Access) runs as an independent MCP server. When connected to the same MCP client or relay, an agent can call tools from all three in one conversation.
 
+### Site Manager is a separate family
+
+The Site Manager server reads a whole UI account from Ubiquiti's cloud API, not from a console. An agent can use it in the same session as the console servers, for example to find which console reports a WAN problem before opening that console's Network server. It is not part of the cross-product features on this page:
+
+- Its host, site and device IDs belong to the Site Manager tool family. Do not pass them to Network, Protect or Access tools, and do not join or translate them to those servers' IDs. There is no bridging tool. Match by a value both sides report, such as a device name or MAC address, only when the user confirms the match.
+- Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the console servers only. The Site Manager server has no incident evidence tool and no events.
+- The relay does not include it by default. Adding it to a relay location lets any relay token for that location, including a read-only one, read the whole account.
+
 ### Local Mode (stdio)
 
 Each server runs independently. An agent connected to several servers can call

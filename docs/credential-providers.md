@@ -16,9 +16,32 @@ way, as do the shared `UNIFI_PASSWORD_*` and `UNIFI_API_KEY_*` forms. Set exactl
 one spelling per precedence level; two is refused as ambiguous rather than
 resolved by a rule nobody remembers.
 
+## Site Manager: one level, no shared fallback
+
+The Site Manager server has one secret, its cloud API key, and one precedence
+level. It reads `UNIFI_SITEMANAGER_API_KEY`, `UNIFI_SITEMANAGER_API_KEY_FILE` or
+`UNIFI_SITEMANAGER_API_KEY_COMMAND`, exactly one of them, and nothing else:
+
+- No shared fallback. It never reads `UNIFI_API_KEY`, `UNIFI_API_KEY_FILE`,
+  `UNIFI_API_KEY_COMMAND` or any other shared `UNIFI_*` variable. Those hold
+  console credentials, which must never be sent to Ubiquiti's cloud.
+- No configuration file. `config.yaml` and a `CONFIG_PATH` file hold no
+  credential for this server.
+- No password and no host. The destination is the fixed `https://api.ui.com`.
+- No migration. Setup never offers to reuse or copy a console's `UNIFI_API_KEY`
+  as a Site Manager key; they are different credentials for different places.
+
+Setting two of the three spellings refuses startup, and a provider that fails
+refuses startup rather than falling back. The `_FILE` and `_COMMAND` contract
+below applies unchanged. A per-user settings file named by
+`UNIFI_SETTINGS_FILE` may hold the provider for clients without per-user
+server options; see
+[Site Manager configuration](../apps/sitemanager/docs/configuration.md).
+
 ## Shared and product-specific precedence
 
-All three servers resolve non-empty product-specific values before shared values:
+This section applies to the three console servers. Network, Protect, and Access
+resolve non-empty product-specific values before shared values:
 `UNIFI_NETWORK_*`, `UNIFI_PROTECT_*`, or `UNIFI_ACCESS_*` > `UNIFI_*`. Empty
 variables count as unset. This applies to host, username, password, API key and
 other connection settings. The shared bootstrap overlays this rule after loading
@@ -39,8 +62,9 @@ Raw credentials belong only in private stdin input, never command arguments.
 
 ## Claude Code plugin options
 
-In Claude Code, each plugin keeps its settings as plugin options (`userConfig`)
-rather than environment settings:
+In Claude Code, each console product plugin keeps its settings as plugin
+options (`userConfig`) rather than environment settings (the Site Manager
+server has no released plugin yet):
 
 - Non-secret options, including `password_file`, `password_command`,
   `api_key_file` and `api_key_command`, are saved in the user's

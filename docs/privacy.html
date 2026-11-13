@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Policy — UniFi MCP</title>
-  <meta name="description" content="UniFi MCP privacy and data-flow details for local-first MCP servers, the self-hosted API, optional Cloud Relay, and the documentation site.">
+  <meta name="description" content="UniFi MCP privacy and data-flow details for local-first MCP servers, the cloud-backed Site Manager server, the self-hosted API, optional Cloud Relay, and the documentation site.">
   <meta name="theme-color" content="#0a0e1a">
   <link rel="canonical" href="https://unifimcp.com/privacy.html">
   <meta property="og:type" content="website">
@@ -163,14 +163,14 @@
     <a href="/" class="back-link">&larr; Back to UniFi MCP</a>
 
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: October 28, 2026</p>
+    <p class="updated">Last updated: November 12, 2026</p>
 
     <div class="summary">
-      UniFi MCP has several independently operated surfaces. Local MCP servers can keep controller traffic on infrastructure you control. The optional self-hosted API stores operator-managed state, the optional Cloud Relay passes tool traffic through Cloudflare and stores routing metadata, and this documentation site makes limited third-party requests.
+      UniFi MCP has several independently operated surfaces. Local MCP servers can keep controller traffic on infrastructure you control. The Site Manager server always sends its requests to Ubiquiti's cloud API. The optional self-hosted API stores operator-managed state, the optional Cloud Relay passes tool traffic through Cloudflare and stores routing metadata, and this documentation site makes limited third-party requests.
     </div>
 
     <h2>Choose the Data Path You Need</h2>
-    <p>UniFi MCP includes local <a href="https://modelcontextprotocol.io/">Model Context Protocol</a> servers, an independent self-hosted API, and an optional Cloud Relay. These paths are not interchangeable and do not have the same storage or network boundaries.</p>
+    <p>UniFi MCP includes local <a href="https://modelcontextprotocol.io/">Model Context Protocol</a> servers, a cloud-backed Site Manager server, an independent self-hosted API, and an optional Cloud Relay. These paths are not interchangeable and do not have the same storage or network boundaries.</p>
 
     <h2>Local MCP Servers</h2>
     <p>The Network, Protect, and Access MCP servers run on an operator-controlled machine and connect directly to configured UniFi controllers. With stdio or local HTTP and no Cloud Relay, the project does not route tool-call payloads through a hosted UniFi MCP service.</p>
@@ -184,12 +184,26 @@
       <li>Known secret-bearing response fields are redacted by default at the project response boundary, but operators remain responsible for credential scope, configuration, and log access.</li>
     </ul>
 
+    <h2 id="site-manager">Site Manager Server (Ubiquiti Cloud)</h2>
+    <p>The Site Manager MCP server is not local-first. It reads a whole UI account through Ubiquiti's Site Manager API. Even when it runs on your machine over local stdio, every tool call becomes an HTTPS request to <code>https://api.ui.com</code>. That destination is fixed in the code; no setting can point it elsewhere.</p>
+
+    <pre><code>MCP client &lt;--stdio or local HTTP--&gt; Site Manager server &lt;--internet--&gt; Ubiquiti api.ui.com</code></pre>
+
+    <ul>
+      <li>Each request carries your Site Manager API key. Ubiquiti receives the key and the requests, and returns account data (hosts, sites, devices, WAN metrics, and SD-WAN configurations) under its own privacy terms.</li>
+      <li>The key is account-wide: it reads every console the UI account can see, not one console.</li>
+      <li>The key is never taken from, or shared with, the console credentials the Network, Protect, and Access servers use. No console credential is sent to the cloud, and the Site Manager key is never sent to a console.</li>
+      <li>The server is read-only, stores nothing, and never returns the account holder's name, email, or role.</li>
+      <li>The Cloud Relay does not include this server by default. If an operator adds it, a relay token for that location can read the whole account.</li>
+    </ul>
+
     <h2>Self-Hosted API Server (Optional)</h2>
     <p><code>unifi-api-server</code> is an independent HTTP service for applications and automation. It includes an administrative UI and uses an operator-controlled SQLite state database. The SQLite file itself is not fully encrypted; controller credential values are stored as encrypted controller credentials using application-layer AES-256-GCM.</p>
     <ul>
       <li>Persisted API state includes controller registrations, encrypted controller credentials, API-key hashes and scopes, sessions, audit records, and application settings.</li>
       <li>API clients send requests and receive controller-derived responses through the API endpoint the operator exposes. Operators choose its bind address, network controls, state volume, encryption-key handling, audit retention, and log settings.</li>
       <li>Known secret-bearing response fields are redacted by default. This response policy does not remove the API's need to persist encrypted credentials for registered controllers.</li>
+      <li>An administrator can also add one Site Manager cloud connection. Its key is stored encrypted in the same database and is never returned. The API then sends that key to Ubiquiti's <code>api.ui.com</code> for Site Manager reads, and any API key with the read scope can read the whole account through it.</li>
     </ul>
 
     <h2>Cloud Relay (Optional)</h2>
@@ -232,7 +246,7 @@
     <p>The committed project-statistics snapshot is loaded from this site. Live star and package-version requests are optional enhancements; blocking them leaves the static page and snapshot usable. Following external links, installing packages, or using GitHub Sponsors contacts those providers under their own policies.</p>
 
     <h2>Operator Choices and Retention</h2>
-    <p>Retention depends on which components an operator enables. A local MCP-only deployment does not create the API or Worker databases. Enabling the API creates local SQLite state and any configured logs. Enabling Cloud Relay creates Worker routing/catalog records and sends tool traffic through Cloudflare. Operators can remove API state volumes, revoke API keys, rotate relay tokens, destroy the Worker deployment, change audit retention, and disable optional components they do not need.</p>
+    <p>Retention depends on which components an operator enables. A local MCP-only deployment does not create the API or Worker databases; running the Site Manager server sends requests to Ubiquiti's cloud but stores nothing locally. Enabling the API creates local SQLite state and any configured logs. Enabling Cloud Relay creates Worker routing/catalog records and sends tool traffic through Cloudflare. Operators can remove API state volumes, revoke API keys, rotate relay tokens, destroy the Worker deployment, change audit retention, and disable optional components they do not need.</p>
 
     <h2>Changes to This Policy</h2>
     <p>Policy changes are dated here and committed to the <a href="https://github.com/sirkirby/unifi-mcp">repository</a>. The repository history is the record of changes to these project-specific descriptions.</p>
