@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-13 — unifi-sitemanager 1.0.1
+
+- Pins `unifi-sitemanager-mcp` [0.1.1](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.1.1).
+
+
 ## 2026-11-13 — unifi-sitemanager 1.0.0
 
 - New plugin for the read-only Site Manager server: hosts, sites, devices, ISP metrics and SD-WAN configurations across every console on a Ubiquiti account. It pins `unifi-sitemanager-mcp` [0.1.0](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.1.0).

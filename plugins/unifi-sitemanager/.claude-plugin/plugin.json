@@ -1,6 +1,6 @@
 {
   "name": "unifi-sitemanager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "UniFi Site Manager MCP server \u2014 read account-wide cloud inventory, ISP metrics and SD-WAN status",
   "author": {
     "name": "sirkirby",
@@ -21,7 +21,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-sitemanager-mcp==0.1.0"
+        "unifi-sitemanager-mcp==0.1.1"
       ],
       "env": {
         "UNIFI_SITEMANAGER_API_KEY_FILE": "${user_config.api_key_file}",

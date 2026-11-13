@@ -3,7 +3,7 @@
   "name": "io.github.sirkirby/unifi-sitemanager-mcp",
   "title": "UniFi Site Manager MCP",
   "description": "Read hosts, sites, devices, ISP metrics, and SD-WAN status across a UI account via MCP.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/sirkirby/unifi-mcp",
     "source": "github",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "unifi-sitemanager-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       },

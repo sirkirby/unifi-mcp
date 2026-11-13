@@ -1,6 +1,6 @@
 {
   "name": "unifi-sitemanager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "UniFi Site Manager MCP server \u2014 read account-wide cloud inventory, ISP metrics and SD-WAN status",
   "author": {
     "name": "sirkirby",
