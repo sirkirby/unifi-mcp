@@ -48,6 +48,9 @@ first-boot, and prints the URL and key. Open the URL, paste the key, sign in.
 Once you're signed in:
 
 - **Register a controller** via the **Controllers** tab (or `POST /v1/controllers`).
+- **Optionally add a Site Manager cloud connection** via the **Site Manager**
+  tab, to read every console on a UI account from Ubiquiti's cloud. See
+  [Site Manager cloud connection](#site-manager-cloud-connection).
 - **Mint your own keys** via the **Keys** tab — pick `read`, `write`, or `admin`
   scope per consumer. Once you have a personal key saved, revoke
   `bootstrap-admin` and delete `/var/lib/unifi-api/bootstrap-admin-key`.
@@ -173,6 +176,144 @@ metadata, manager bindings, exclusions, or bytes drift from the product source.
 
 REST, GraphQL, and action responses redact known controller secret fields by default. Disable redaction for a trusted local API process with `UNIFI_API_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required. The action endpoint (`POST /v1/actions/{tool}`) rejects `include_sensitive`; response redaction is process policy, not a request argument.
 
+## Site Manager cloud connection
+
+> Site Manager support is in the current source and is not in
+> `unifi-api-server` 0.27.0 or earlier. Run the API from a source checkout
+> ([Quickstart A](#a-local-clone-developing-or-testing-changes)) to use it
+> before the next API release.
+
+The API server serves the same nine read-only reads as the
+[Site Manager MCP server](../sitemanager/): hosts, sites, devices, ISP metrics
+and SD-WAN configurations for a whole UI account, read from Ubiquiti's cloud
+API at `https://api.ui.com`. That destination is fixed and cannot be
+configured.
+
+The cloud account is **one account-level connection**, separate from
+controllers. It is not a controller record, it takes no host or site, and its
+key is never read from the environment, `config.yaml`, or a console's API key.
+There is at most one connection per API server.
+
+### Add, rotate, probe and remove
+
+Create the key at [unifi.ui.com](https://unifi.ui.com) under Settings > API
+Keys. Every management path needs the `admin` scope. The key is stored
+encrypted in the state database with the same column encryption as controller
+credentials, and no route, page or command ever returns it: reads show only
+`key_configured`. Adding a connection makes no call to the cloud; probe it to
+check the key.
+
+**CLI.** The key enters only through a hidden prompt or one line of stdin,
+never as an argument:
+
+```bash
+unifi-api-server sitemanager add --name "Example account"      # prompts for the key
+unifi-api-server sitemanager add --name "Example account" --key-stdin < /path/to/sitemanager-api-key
+unifi-api-server sitemanager list                               # metadata only; never the key
+unifi-api-server sitemanager probe                              # one small read against api.ui.com
+unifi-api-server sitemanager update --rotate-key                # prompts for the replacement key
+unifi-api-server sitemanager update --key-stdin < /path/to/new-key
+unifi-api-server sitemanager update --name "Renamed account"
+unifi-api-server sitemanager delete
+```
+
+In the container, run the same commands with `docker exec -i unifi-api-server`
+in front, and pass `--config-path` if you use a custom `config.yaml`.
+
+**REST** (`admin` scope):
+
+| Method and path | Purpose |
+|---|---|
+| `POST /v1/sitemanager/connection` | Create; body `{"name": "...", "site_manager_api_key": "..."}`. Returns `201`, or `409` (`sitemanager_already_configured`) when one exists |
+| `GET /v1/sitemanager/connection` | `id`, `name`, `key_configured`, `revision`, `created_at`, `updated_at` |
+| `PATCH /v1/sitemanager/connection` | Rename, or rotate with a new `site_manager_api_key` |
+| `DELETE /v1/sitemanager/connection` | Remove the connection and its stored key; `204` |
+| `POST /v1/sitemanager/connection/probe` | One small read to check the key: `ok`, `latency_ms`, `error_kind`, `checked_at` |
+
+```bash
+curl -s -X POST http://localhost:8080/v1/sitemanager/connection \
+  -H "Authorization: Bearer $ADMIN_KEY" -H "Content-Type: application/json" \
+  --data @- <<< "{\"name\": \"Example account\", \"site_manager_api_key\": \"$(cat /path/to/sitemanager-api-key)\"}"
+```
+
+**Admin UI.** The **Site Manager** page at `/admin/sitemanager` adds, edits,
+probes and deletes the connection; leave the key field empty when editing to
+keep the stored key.
+
+Management responses carry `Cache-Control: no-store`. Each create, update,
+delete and probe writes an audit record with the connection id and never the
+key; filter them with `GET /v1/audit?sitemanager_connection=<id>`. Updating or
+deleting the connection retires the cached cloud session, so later reads use
+the new state.
+
+### Reading the account
+
+All read paths need only the `read` scope:
+
+| Surface | Paths |
+|---|---|
+| REST | `GET /v1/sitemanager/hosts`, `GET /v1/sitemanager/hosts/{host_id}`, `GET /v1/sitemanager/sites`, `GET /v1/sitemanager/devices`, `GET /v1/sitemanager/isp-metrics`, `POST /v1/sitemanager/isp-metrics/query`, `GET /v1/sitemanager/sd-wan-configs`, `GET /v1/sitemanager/sd-wan-configs/{config_id}`, `GET /v1/sitemanager/sd-wan-configs/{config_id}/status` |
+| GraphQL | The `sitemanager` namespace: `hosts`, `host`, `sites`, `devices`, `ispMetrics`, `queryIspMetrics`, `sdwanConfigs`, `sdwanConfig`, `sdwanConfigStatus` |
+| Actions | `POST /v1/sitemanager/actions/{tool_name}` with `{"args": {...}}`, for the nine `sitemanager_*` read tools |
+
+`POST /v1/sitemanager/isp-metrics/query` is a read that takes its site list in
+the body. The paged reads take `page_size` (1-500) and `cursor` and return
+`next_cursor`, one page per request. No read takes a `controller`
+argument: there is only one account.
+
+```bash
+curl -s "http://localhost:8080/v1/sitemanager/hosts?page_size=10" \
+  -H "Authorization: Bearer $READ_KEY"
+
+curl -s http://localhost:8080/v1/graphql \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"query":"{ sitemanager { hosts(pageSize: 10) { items { id name state } nextCursor } } }"}'
+
+curl -s -X POST http://localhost:8080/v1/sitemanager/actions/sitemanager_list_sites \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"args": {"page_size": 10}}'
+```
+
+The controller action endpoint `POST /v1/actions/{tool_name}` refuses
+`sitemanager_*` tools with `409` and points to the account endpoint, and the
+account endpoint refuses console tools the same way. Each account action
+writes an audit record.
+
+**What `read` now exposes.** Once a connection exists, every API key with the
+`read` scope (and every `admin` key) can read the whole UI account behind it:
+every console, site and device the cloud key can see. There is no per-key or
+per-console restriction on Site Manager reads.
+Before adding a connection, review which keys hold `read`.
+
+Host, site and device ids from these routes belong to the Site Manager family.
+Do not pass them to Network, Protect or Access routes.
+
+### Errors
+
+Errors use fixed text and never include the key or upstream exception text.
+REST answers `{"detail": {"kind": "...", "message": "..."}}`; GraphQL puts the
+code in the error's `extensions`.
+
+| Situation | REST status and `kind` | GraphQL code |
+|---|---|---|
+| No connection configured (reads) | `503` `sitemanager_not_configured` | `NOT_CONFIGURED` |
+| No connection configured (`GET`, `PATCH`, `DELETE` on the connection) | `404` `sitemanager_not_configured` | |
+| Stored key cannot be decrypted | `503` `sitemanager_configuration_error` | `NOT_CONFIGURED` |
+| Key rejected by Ubiquiti | `502` `sitemanager_auth_failed` | `UPSTREAM_AUTH_FAILED` |
+| Ubiquiti refused the request | `502` `sitemanager_permission_denied` | `UPSTREAM_FORBIDDEN` |
+| Host or SD-WAN configuration not found | `404` `sitemanager_resource_not_found` | `NOT_FOUND` |
+| Rate limited by Ubiquiti | `429` `sitemanager_rate_limited` | `RATE_LIMITED` |
+| Network or upstream failure | `502` `sitemanager_upstream_error` | `UPSTREAM_ERROR` |
+
+An unconfigured read answers, for example:
+
+```json
+{"detail": {"kind": "sitemanager_not_configured", "message": "Failed to list hosts from Site Manager: Ask an administrator to configure the API cloud connection."}}
+```
+
+A probe without a connection answers `503` with `"ok": false` and
+`"error_kind": "sitemanager_not_configured"`.
+
 ## Distribution
 
 `unifi-api-server` is published to:
@@ -199,7 +340,9 @@ standard local install; override only what you need.
 | `UNIFI_API_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 
 Per-controller credentials are stored encrypted in the state DB after the first
-`POST /v1/controllers` call — no controller credentials in env vars.
+`POST /v1/controllers` call — no controller credentials in env vars. The
+optional Site Manager cloud key is stored the same way and is never read from
+the environment; see [Site Manager cloud connection](#site-manager-cloud-connection).
 
 ## MFA / 2FA support
 

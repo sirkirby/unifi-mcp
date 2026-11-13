@@ -33,6 +33,7 @@ Each app exposes the following lazy-loading meta-tools:
 | Network | `unifi_` | `unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_batch_status`, `unifi_load_tools` in lazy mode |
 | Protect | `protect_` | `protect_tool_index`, `protect_execute`, `protect_batch`, `protect_batch_status`, `protect_load_tools` in lazy mode |
 | Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_load_tools` in lazy mode |
+| Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_load_tools` in lazy mode |
 
 These tools are not replacements for `tools/list`. They are UniFi-specific
 extensions for clients and models that need a compact, filterable catalog or
@@ -62,8 +63,8 @@ Do not combine `name` with `category` or `search`; the index returns an error fo
 that combination, even when the other filter is an empty string. Omitting `name`
 preserves the existing category and ranked-search behavior. In `meta_only` mode,
 exact lookup covers the currently registered catalog; it does not load a domain
-module. The same contract applies to Network, Protect, and Access, including
-when their index tools are called through the relay.
+module. The same contract applies to Network, Protect, Access, and Site Manager,
+including when their index tools are called through the relay.
 
 Example:
 
@@ -128,6 +129,25 @@ registered with MCP.
 | `lazy` (default) | Meta-tools plus `*_load_tools` are registered initially, with a few read-only domain tools listed directly (each app's `LAZY_DIRECT_TOOLS`) | `*_tool_index` plus `*_execute`, or `*_load_tools` followed by `tools/list` refresh | Production LLM clients with limited context |
 | `meta_only` | Only the core meta-tools are registered and indexed initially; executed domain modules are then registered | `*_execute`/`*_batch` with already-known domain tool names | Maximum initial context control; clients that already know the domain tools they need |
 
+### Site Manager differences
+
+The Site Manager server has nine domain tools, all read-only, and it adjusts
+the shared model in three ways:
+
+- In `lazy` mode it lists all nine domain tools directly, not a few. Its
+  dispatchers carry conservative annotations: `sitemanager_tool_index` and
+  `sitemanager_batch_status` are marked read-only, while `sitemanager_execute`,
+  `sitemanager_batch`, and `sitemanager_load_tools` are not, because a
+  dispatcher's hint has to hold for any tool it could run. A client that allows
+  only read-only tools can still call the nine tools by name.
+- In `meta_only` mode the nine tools are reachable only through
+  `sitemanager_execute`, so a client that allows only read-only tools reaches
+  none of them.
+- Without a key it starts in setup mode and registers only
+  `sitemanager_setup_status`, which explains what to set and makes no request.
+
+See [Site Manager permissions](../apps/sitemanager/docs/permissions.md#meta-tools-and-read-only-clients).
+
 Standard MCP-only clients remain supported in `eager` mode. In `lazy` and
 `meta_only` modes, `tools/list` is still correct: it reports the tools currently
 registered with the server. The UniFi extension path exposes the larger
@@ -169,4 +189,6 @@ When adopting new MCP spec features:
 - map future standard metadata surfaces to the generated manifest before adding
   new bespoke discovery APIs
 - keep OAuth and remote exposure concerns scoped to relay/cloud deployments;
-  local servers continue to target local controller access
+  the Network, Protect, and Access servers continue to target local controller
+  access, and the Site Manager server targets only Ubiquiti's fixed
+  `api.ui.com` origin

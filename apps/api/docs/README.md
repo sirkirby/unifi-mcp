@@ -20,6 +20,7 @@ drift-gated by CI — `openapi.json`, `openapi-reference.md`, and
 
 - [`graphql-versioning.md`](./graphql-versioning.md) — schema versioning policy (Phase 6)
 - [`docker-compose.example.yml`](./docker-compose.example.yml) — deployment patterns (Phase 8 — added in PR4)
+- [Site Manager cloud connection](../README.md#site-manager-cloud-connection) — adding, rotating, probing and removing the one account-level cloud connection; its REST routes under `/v1/sitemanager/`, the `sitemanager` GraphQL namespace, `POST /v1/sitemanager/actions/{tool_name}`, scopes and errors. Every key with the `read` scope can read the whole UI account once a connection exists.
 
 ## Deployment
 

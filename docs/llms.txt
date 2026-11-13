@@ -1,11 +1,13 @@
 # UniFi MCP
-> UniFi MCP is an open-source collection of local-first MCP servers and an independent HTTP API for controlled access to UniFi Network, Protect, and Access infrastructure.
+> UniFi MCP is an open-source collection of local-first MCP servers and an independent HTTP API for controlled access to UniFi Network, Protect, and Access infrastructure, plus a read-only Site Manager server for a whole UniFi cloud account.
 
 UniFi MCP is an independent project and is not affiliated with Ubiquiti Inc.
 
 The default MCP permission mode previews state-changing operations and requires confirmation before execution. Known secret-bearing response fields are redacted by default at response boundaries; operators remain responsible for controller credentials, policy configuration, and network exposure.
 
 UniFi uses separate API families whose authentication, field schemas, and IDs are not interchangeable: the V2 controller API uses session authentication and controller object IDs; the public Integration API uses X-API-Key authentication and UUIDs; and UniFi OS Alarm Manager v2 uses session authentication with SuperAdmin access and its own UUID namespace. Use IDs only within the tool family that returned them unless an explicit resolver documents a verified bridge.
+
+Ubiquiti's Site Manager API is a fourth, cloud-only surface. The Site Manager server sends every request to the fixed origin https://api.ui.com, even when it runs locally over stdio, and authenticates with one account-wide Site Manager API key (UNIFI_SITEMANAGER_API_KEY, or its _FILE or _COMMAND form). It never uses console credentials such as UNIFI_API_KEY. Its host, site, and device IDs belong to the Site Manager tool family and have no translation to Network, Protect, or Access IDs. It is not published yet; run it from a source checkout.
 
 ## Getting Started
 
@@ -20,10 +22,14 @@ UniFi uses separate API families whose authentication, field schemas, and IDs ar
 - [Network MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/network/README.md): Network devices, clients, Wi-Fi, routing, firewall, VPN, traffic, and controlled configuration.
 - [Protect MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/protect/README.md): Cameras, events, detections, recordings, and Protect device operations.
 - [Access MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/access/README.md): Doors, credentials, visitors, policies, devices, and access events.
+- [Site Manager MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/README.md): Cloud-backed and read-only: hosts, sites, devices, ISP metrics, and SD-WAN across a UI account, from Ubiquiti's api.ui.com.
+- [Site Manager tools](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/tools.md): The nine read-only tools with arguments, paging, and response shapes.
+- [Site Manager configuration](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/configuration.md): The account key, HTTP transport on port 3003, and runtime settings.
+- [Site Manager troubleshooting](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/troubleshooting.md): Key, network, missing-tool, and Docker problems.
 
 ## API Server
 
-- [API server README](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/README.md): Independent HTTP service for custom applications and MCP adapters, with typed REST resources, read-only GraphQL, REST actions, SSE streams, scoped keys, and administration.
+- [API server README](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/README.md): Independent HTTP service for custom applications and MCP adapters, with typed REST resources, read-only GraphQL, REST actions, SSE streams, scoped keys, and administration. An administrator can add one Site Manager cloud connection, after which every READ-scoped key can read the whole account.
 - [OpenAPI reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/openapi-reference.md): Generated REST endpoint reference.
 - [GraphQL reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/graphql-reference.md): Generated query and type reference.
 
@@ -51,6 +57,6 @@ UniFi uses separate API families whose authentication, field schemas, and IDs ar
 ## Optional Resources
 
 - [Sponsor the project](https://unifimcp.com/sponsor/): Support independent maintenance and compatibility work.
-- [Privacy policy](https://unifimcp.com/privacy.html): Local data flow and optional-service privacy details.
+- [Privacy policy](https://unifimcp.com/privacy.html#site-manager): Local data flow, the Site Manager cloud path, and optional-service privacy details.
 - [API GraphQL SDL](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/src/unifi_api/graphql/schema.graphql): Generated schema for deeper API inspection.
 - [MCP tool manifests](https://github.com/sirkirby/unifi-mcp/tree/main/apps): Generated server tool catalogs alongside each MCP application.

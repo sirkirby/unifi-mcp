@@ -94,6 +94,7 @@ SECURITY_FLOORS: dict[str, dict[str, str]] = {
     "unifi-network-mcp": MCP_SECURITY_FLOORS,
     "unifi-protect-mcp": MCP_SECURITY_FLOORS,
     "unifi-access-mcp": MCP_SECURITY_FLOORS,
+    "unifi-sitemanager-mcp": MCP_SECURITY_FLOORS,
     "unifi-mcp-relay": MCP_SECURITY_FLOORS,
     "unifi-api-server": {
         "anyio": "4.14.2",
@@ -143,6 +144,9 @@ DOWNSTREAM_PACKAGES: list[Downstream] = [
     Downstream(REPO / "apps/network", "unifi-network-mcp", "unifi_network_mcp.main", "unifi_network_mcp"),
     Downstream(REPO / "apps/protect", "unifi-protect-mcp", "unifi_protect_mcp.main", "unifi_protect_mcp"),
     Downstream(REPO / "apps/access", "unifi-access-mcp", "unifi_access_mcp.main", "unifi_access_mcp"),
+    Downstream(
+        REPO / "apps/sitemanager", "unifi-sitemanager-mcp", "unifi_sitemanager_mcp.main", "unifi_sitemanager_mcp"
+    ),
     Downstream(REPO / "apps/api", "unifi-api-server", "unifi_api", "unifi_api"),
     Downstream(
         REPO / "packages/unifi-mcp-relay",
@@ -333,6 +337,25 @@ import dis, inspect
 from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
 from unifi_api.services.managers import _PRODUCT_BUILDERS
 from unifi_api.services.manifest import ManifestRegistry
+from unifi_api.services.sitemanager_managers import _build_sitemanager_managers
+from unifi_core.sitemanager.models.connections import SiteManagerConnectionCreate, SiteManagerConnectionPatch
+from unifi_core.sitemanager.models.isp_metrics import SiteManagerMetricsGetInput, SiteManagerMetricsQueryInput
+from unifi_core.sitemanager.models.reads import (
+    SiteManagerConfigInput, SiteManagerDevicesInput, SiteManagerEmptyInput,
+    SiteManagerHostInput, SiteManagerPageInput,
+)
+
+SiteManagerConnectionCreate(name="Synthetic", site_manager_api_key="synthetic-floor-key")
+SiteManagerConnectionPatch()
+SiteManagerMetricsGetInput()
+SiteManagerMetricsQueryInput(sites=[{"host_id": "synthetic-host", "site_id": "synthetic-site"}])
+SiteManagerEmptyInput()
+SiteManagerPageInput()
+SiteManagerDevicesInput()
+SiteManagerHostInput(host_id="synthetic-host")
+SiteManagerConfigInput(config_id="synthetic-config")
+cloud_connection = object()
+cloud_managers = _build_sitemanager_managers(cloud_connection)
 
 manager_types = {}
 for product, factory in _PRODUCT_BUILDERS.items():
@@ -345,11 +368,15 @@ for product, factory in _PRODUCT_BUILDERS.items():
         )
         manager_types[(product, manager_attr)] = closure[target_name].cell_contents
 
+manager_types.update({("sitemanager", attr): type(manager) for attr, manager in cloud_managers.items()})
 failures = []
 registry = ManifestRegistry.load()
 for name in registry.all_tools():
     entry = registry.resolve(name)
-    manager_type = manager_types[(entry.product, entry.manager_attr)]
+    manager_type = manager_types.get((entry.product, entry.manager_attr))
+    if manager_type is None:
+        failures.append(f"{name}: missing manager {entry.manager_attr}")
+        continue
     method = getattr(manager_type, entry.manager_method, None)
     if method is None or not callable(method):
         failures.append(f"{name}: missing {entry.manager_attr}.{entry.manager_method}")
@@ -382,6 +409,10 @@ for name in registry.all_tools():
             f"{name}: {entry.manager_attr}.{entry.manager_method} "
             f"unexpected={sorted(unexpected)} missing={sorted(missing)}"
         )
+if set(cloud_managers) != {"inventory_manager", "isp_metrics_manager", "sdwan_manager"}:
+    failures.append("incomplete Site Manager manager family")
+if any(manager._connection is not cloud_connection for manager in cloud_managers.values()):
+    failures.append("Site Manager manager did not retain its account connection")
 if failures:
     raise SystemExit("\\n".join(failures))
 connection = type("Connection", (), {"unifi_auth": object()})()
@@ -884,6 +915,7 @@ def check_network_core_floor(
 FLOOR_ONLY_CORE_EXTRAS: dict[str, str] = {
     "unifi-protect-mcp": "protect",
     "unifi-access-mcp": "access",
+    "unifi-sitemanager-mcp": "",
     "unifi-mcp-relay": "",
 }
 

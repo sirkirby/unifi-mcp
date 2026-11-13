@@ -1,6 +1,8 @@
 # Local-dev compose for unifi-api-server.
 #
-# Independent of docker/docker-compose.yml (which stands up the 3 MCP servers).
+# Independent of docker/docker-compose.yml (which stands up the 3 local MCP
+# servers, plus the Site Manager cloud server under the optional
+# `sitemanager` profile).
 # These two compose files can run side-by-side or independently.
 #
 # Recommended usage: run `./scripts/start-api.sh` from the repo root. It

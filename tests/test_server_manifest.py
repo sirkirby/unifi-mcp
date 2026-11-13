@@ -88,7 +88,20 @@ class TestAppSpecificConfigs:
         assert "UNIFI_SITE" not in names
 
     def test_all_apps_configured(self):
-        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access"}
+        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access", "sitemanager"}
+
+    def test_sitemanager_offers_only_its_own_key(self):
+        manifest = build_server_manifest("sitemanager", "0.1.0")
+        env_vars = manifest["packages"][0]["environmentVariables"]
+
+        assert [v["name"] for v in env_vars] == ["UNIFI_SITEMANAGER_API_KEY"]
+        assert env_vars[0]["isRequired"] is True and env_vars[0]["isSecret"] is True
+        assert manifest["name"] == "io.github.sirkirby/unifi-sitemanager-mcp"
+        assert manifest["packages"][0]["identifier"] == "unifi-sitemanager-mcp"
+        assert manifest["repository"]["subfolder"] == "apps/sitemanager"
+
+    def test_sitemanager_version_ignores_plain_v_tags(self):
+        assert APP_CONFIGS["sitemanager"]["tag_prefixes"] == ["sitemanager/v"]
 
     def test_invalid_app_raises(self):
         with pytest.raises(ValueError, match="Unknown app"):

@@ -10,6 +10,7 @@
   --network: #76a7ff;
   --protect: #b49af4;
   --access: #e6bd73;
+  --sitemanager: #7C5CFF;
   --shell: 1180px;
   --display: "Inter Tight", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -78,6 +79,7 @@ h3 { font-size: 1.45rem; }
 .server-row::before { content: ""; position: absolute; top: 28px; bottom: 28px; left: 0; width: 2px; background: var(--network); }
 .server-row.protect::before { background: var(--protect); }
 .server-row.access::before { background: var(--access); }
+.server-row.sitemanager::before { background: var(--sitemanager); }
 .server-row h4 { margin-bottom: 7px; font-size: 1.2rem; }
 .server-row h4 span { margin-left: 8px; color: var(--muted); font: 500 .65rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .server-row p { margin-bottom: 0; color: var(--muted); font-size: .92rem; }

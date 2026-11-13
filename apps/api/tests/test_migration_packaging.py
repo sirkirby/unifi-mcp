@@ -76,3 +76,8 @@ if result.exit_code != 0:
     )
 
     assert db_path.is_file()
+    import sqlite3
+
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT * FROM sitemanager_connections").fetchall() == []
+        assert "sitemanager_connection" in [r[1] for r in connection.execute("PRAGMA table_info(audit_log)")]

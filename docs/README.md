@@ -12,6 +12,7 @@ Complete documentation for the UniFi MCP ecosystem.
 - **[Plugin Upgrade Guide](plugin-upgrade.md)** - Updating existing plugin installs, including the 1.0.0 Claude Code settings migration
 - **[Plugin Acceptance Procedure](plugin-acceptance.md)** - How real-client evidence for the support matrix is produced
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
+- **[Site Manager Server](../apps/sitemanager/)** - Read-only, account-wide view from Ubiquiti's cloud API; its own [configuration](../apps/sitemanager/docs/configuration.md), [tools](../apps/sitemanager/docs/tools.md) and [troubleshooting](../apps/sitemanager/docs/troubleshooting.md)
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
 - **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
@@ -32,7 +33,7 @@ UniFi `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are
 optional lazy-loading extensions for filtered discovery and indirect execution, not replacements
 for the protocol path.
 
-The server now supports three tool registration modes:
+Every server supports the same three tool registration modes:
 
 | Mode | Description | Tokens | Use Case |
 |------|-------------|--------|----------|
@@ -52,11 +53,11 @@ export UNIFI_TOOL_REGISTRATION_MODE=lazy  # default, recommended
 ### Core Guides
 
 #### [Sanitized Support Bundles](support-bundles.md)
-Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe.
+Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe. The Site Manager server has no support bundle; see its [troubleshooting guide](../apps/sitemanager/docs/troubleshooting.md).
 
 #### [Checking the Controller's Identity](tls-verification.md)
 
-Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to.
+Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to. This applies to the Network, Protect and Access servers; Site Manager always verifies Ubiquiti's public certificate.
 
 #### [Credential Providers](credential-providers.md)
 Keep the controller password and API key out of the MCP client's environment with the `_FILE` and `_COMMAND` spellings, and the contract the command provider runs under: supported platforms, executable resolution, and process lifecycle.
@@ -136,6 +137,14 @@ UNIFI_MCP_DIAGNOSTICS=false
 The `_FILE` and `_COMMAND` spellings keep the secret out of the MCP client's environment; their trust boundary, and the command provider's platform, executable-resolution and process-lifecycle contract, are in [credential-providers.md](credential-providers.md).
 
 Full Network server defaults are in [config.yaml](../apps/network/src/unifi_network_mcp/config/config.yaml). Protect and Access keep their own defaults under `apps/protect/` and `apps/access/`.
+
+The Site Manager server uses none of the controller variables above. It reads only its own cloud key, with no shared fallback:
+
+```bash
+UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key  # or UNIFI_SITEMANAGER_API_KEY / _COMMAND; set exactly one
+```
+
+See [Site Manager configuration](../apps/sitemanager/docs/configuration.md).
 
 ### Worker and Relay
 

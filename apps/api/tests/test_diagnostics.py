@@ -81,7 +81,7 @@ async def test_collect_diagnostics_shape_and_counts(tmp_path: Path) -> None:
     )
 
     # Shape assertions
-    assert set(snap.keys()) == {"service", "database", "capability_cache", "logs", "counts"}
+    assert set(snap.keys()) == {"service", "database", "capability_cache", "logs", "counts", "sitemanager"}
 
     # Service
     assert snap["service"]["version"] == "0.1.0"
@@ -108,4 +108,53 @@ async def test_collect_diagnostics_shape_and_counts(tmp_path: Path) -> None:
     assert snap["counts"]["controllers"] == 1
     assert snap["counts"]["audit_rows"] == 3
 
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cloud_diagnostics_only_count_configuration_without_decryption(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from unifi_api.db.crypto import ColumnCipher
+    from unifi_api.db.engine import create_engine
+    from unifi_api.db.models import Base, SiteManagerConnection
+    from unifi_api.db.session import get_sessionmaker
+    from unifi_api.services.capability_cache import CapabilityCache
+    from unifi_api.services.diagnostics import collect_diagnostics
+
+    engine = create_engine(tmp_path / "state.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = get_sessionmaker(engine)
+    now = datetime.now(timezone.utc)
+    # Even an unreadable blob must count as configured without trying to decrypt.
+    async with sm() as session:
+        session.add(
+            SiteManagerConnection(
+                id="synthetic-local-id",
+                name="Account",
+                api_key_blob=b"synthetic-broken-blob",
+                revision=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    def fail(*args, **kwargs):
+        pytest.fail("Diagnostics decrypted a cloud key")
+
+    monkeypatch.setattr(ColumnCipher, "decrypt", fail)
+    snapshot = await collect_diagnostics(
+        sessionmaker=sm,
+        db_path=tmp_path / "state.db",
+        capability_cache=CapabilityCache(ttl_seconds=30),
+        log_path=None,
+        version="test",
+        started_at=now,
+    )
+    assert snapshot["sitemanager"] == {"configured": True}
+    assert snapshot["counts"]["sitemanager_connections"] == 1
+    assert snapshot["counts"]["controllers"] == 0
+    assert "synthetic-broken-blob" not in str(snapshot)
     await engine.dispose()

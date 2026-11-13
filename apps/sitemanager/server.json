@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sirkirby/unifi-sitemanager-mcp",
+  "title": "UniFi Site Manager MCP",
+  "description": "Read hosts, sites, devices, ISP metrics, and SD-WAN status across a UI account via MCP.",
+  "version": "0.0.0",
+  "repository": {
+    "url": "https://github.com/sirkirby/unifi-mcp",
+    "source": "github",
+    "subfolder": "apps/sitemanager"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "unifi-sitemanager-mcp",
+      "version": "0.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "UNIFI_SITEMANAGER_API_KEY",
+          "description": "Site Manager API key from unifi.ui.com > Settings > API Keys",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

@@ -15,7 +15,9 @@ Thanks for helping improve UniFi MCP. Please follow the
   screenshots, or logs.
 - For a Network, Protect, or Access MCP bug, prefer a reviewed
   [sanitized support bundle](docs/support-bundles.md) over raw tool output or
-  diagnostic logs.
+  diagnostic logs. The Site Manager server has no support bundle; describe the
+  problem by hand and follow its
+  [troubleshooting guide](apps/sitemanager/docs/troubleshooting.md).
 - Report suspected vulnerabilities privately through
   [GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories),
   not public issues.
@@ -58,6 +60,7 @@ This installs all Python workspace packages in development mode plus the self-co
 | `apps/network/` | Network MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/protect/` | Protect MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/access/` | Access MCP server | `make test`, `make lint`, `make manifest` |
+| `apps/sitemanager/` | Site Manager MCP server (cloud account, read-only) | `make test`, `make lint`, `make manifest` |
 | `apps/worker/` | Cloudflare Worker gateway + npm CLI | `make check` |
 | `packages/unifi-core/` | Shared connectivity | Tested via root `make core-test` |
 | `packages/unifi-mcp-shared/` | Shared MCP patterns | Tested via root `make shared-test` |
@@ -82,7 +85,7 @@ make relay-test        # Run unifi-mcp-relay tests
 make worker-build      # Install worker deps + typecheck the Worker app
 make worker-check      # Run worker CLI tests + TypeScript checks
 
-# Individual apps (network, protect, access) — see "App-Level Makefile" below
+# Individual apps (network, protect, access, sitemanager) — see "App-Level Makefile" below
 make -C apps/network test      # Run network server tests
 make -C apps/network lint      # Lint network server
 make -C apps/network manifest  # Regenerate network tools manifest
@@ -132,6 +135,24 @@ make console      # Start interactive dev console
 make pre-commit   # Format + lint + test
 ```
 
+The Site Manager server has a smaller set: it has no dev console, and `make run`
+starts it in lazy mode.
+
+```bash
+cd apps/sitemanager
+make test         # Run sitemanager tests
+make lint         # Lint sitemanager code
+make format       # Format sitemanager code
+make manifest     # Regenerate tools_manifest.json
+make run          # Run the server locally (lazy mode)
+make pre-commit   # Format, manifests, lint and test
+```
+
+Its tests never call `api.ui.com`; they pass a loopback `base_url` to the
+connection manager or mock the transport. A live read-only smoke run needs a
+Site Manager API key of your own and is skipped without one:
+`uv run --all-packages python scripts/live_smoke.py --server sitemanager --phase readonly`.
+
 ## Development Workflow
 
 ### Adding a tool to the network server
@@ -158,6 +179,18 @@ make pre-commit   # Format + lint + test
 2. Add the tool function in `apps/access/src/unifi_access_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/access/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/access/tests/`
+5. Commit code + manifest + tests together
+
+### Adding a tool to the sitemanager server
+
+The Site Manager server is read-only by design, and its destination is the
+fixed `api.ui.com` origin. Follow the "Site Manager credential isolation" rules
+in [AGENTS.md](AGENTS.md) before adding a tool.
+
+1. Add the manager method under `packages/unifi-core/src/unifi_core/sitemanager/managers/`
+2. Add the tool function in `apps/sitemanager/src/unifi_sitemanager_mcp/tools/<category>.py`
+3. Run `make manifest` from `apps/sitemanager/` (or `make manifest` from the repo root to regenerate every app)
+4. Add tests in `apps/sitemanager/tests/`
 5. Commit code + manifest + tests together
 
 ### Adding a shared package feature
@@ -209,6 +242,7 @@ make test
 cd apps/network && make test-cov
 cd apps/protect && make test-cov
 cd apps/access && make test-cov
+cd apps/sitemanager && make test-cov
 
 # Specific test file
 uv run --package unifi-network-mcp pytest apps/network/tests/unit/test_permissions.py -v
@@ -225,7 +259,7 @@ merge; see [Plugin changes](#plugin-changes). The `monorepo-release-pipeline`
 skill is the full procedure for both.
 
 1. Run `make pre-commit` from root.
-2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`, `worker/v*`).
+2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `sitemanager/v*`, `api/v*`, `relay/v*`, `worker/v*`).
 3. Build release batches from actual dependency edges. A downstream package must wait when its
    wheel metadata names the new upstream version, its code requires a newly published upstream API,
    or its release workflow installs that new version. Existing compatible bounds alone do not

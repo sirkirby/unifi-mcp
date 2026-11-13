@@ -1,0 +1,9 @@
+{% extends "_layout.html" %}
+{% block title %}Site Manager — unifi-api admin{% endblock %}
+{% block content %}
+<h1>Site Manager cloud connection</h1>
+<div id="cloud-connection" hx-get="/admin/sitemanager/_connection"
+     hx-trigger="load, sitemanager-changed from:body" hx-swap="innerHTML">Loading…</div>
+<div id="cloud-form"></div>
+<div id="cloud-probe" hx-on::before-swap="if (event.detail.xhr.status >= 400) event.detail.shouldSwap = true;"></div>
+{% endblock %}

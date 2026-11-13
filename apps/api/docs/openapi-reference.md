@@ -4,6 +4,28 @@
 > Regenerate with `python -m unifi_api.graphql.docgen`.
 
 
+## Site Manager connection
+
+### `DELETE /v1/sitemanager/connection` — Delete
+
+### `GET /v1/sitemanager/connection` — Get
+
+
+**Returns:** `SiteManagerConnectionOut`
+
+### `PATCH /v1/sitemanager/connection` — Patch
+
+
+**Returns:** `SiteManagerConnectionOut`
+
+### `POST /v1/sitemanager/connection` — Create
+
+### `POST /v1/sitemanager/connection/probe` — Probe
+
+
+**Returns:** `SiteManagerProbeOut`
+
+
 ## access/credentials
 
 ### `GET /v1/sites/{site_id}/credentials` — List Credentials
@@ -2132,6 +2154,132 @@ List configured alarm profiles, including each profile's state and state_set_at 
 **Returns:** `object`
 
 
+## sitemanager/inventory
+
+### `GET /v1/sitemanager/devices` — List Sitemanager Devices
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `host_ids` (query)
+- `updated_since` (query)
+- `page_size` (query)
+- `cursor` (query)
+
+
+**Returns:** `Page_SiteManagerHostDevicesModel_`
+
+### `GET /v1/sitemanager/hosts` — List Sitemanager Hosts
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `page_size` (query)
+- `cursor` (query)
+
+
+**Returns:** `Page_SiteManagerHostModel_`
+
+### `GET /v1/sitemanager/hosts/{host_id}` — Get Sitemanager Host
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `host_id` (path) (required)
+- `include_reported_state` (query)
+
+
+**Returns:** `Detail_SiteManagerHostModel_`
+
+### `GET /v1/sitemanager/sites` — List Sitemanager Sites
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `page_size` (query)
+- `cursor` (query)
+
+
+**Returns:** `Page_SiteManagerSiteModel_`
+
+
+## sitemanager/isp-metrics
+
+### `GET /v1/sitemanager/isp-metrics` — Get Sitemanager Isp Metrics
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `metric_type` (query)
+- `duration` (query)
+- `begin_timestamp` (query)
+- `end_timestamp` (query)
+- `period_limit` (query)
+
+
+**Returns:** `SiteManagerIspMetricsModel`
+
+### `POST /v1/sitemanager/isp-metrics/query` — Query Sitemanager Isp Metrics
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Returns:** `SiteManagerIspMetricsQueryResultModel`
+
+
+## sitemanager/sdwan
+
+### `GET /v1/sitemanager/sd-wan-configs` — List Sitemanager Sdwan Configs
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Returns:** `Page_SiteManagerSdwanConfigSummaryModel_`
+
+### `GET /v1/sitemanager/sd-wan-configs/{config_id}` — Get Sitemanager Sdwan Config
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `config_id` (path) (required)
+
+
+**Returns:** `Detail_SiteManagerSdwanConfigModel_`
+
+### `GET /v1/sitemanager/sd-wan-configs/{config_id}/status` — Get Sitemanager Sdwan Config Status
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `config_id` (path) (required)
+
+
+**Returns:** `Detail_SiteManagerSdwanConfigStatusModel_`
+
+
 ## untagged
 
 ### `POST /v1/actions/{tool_name}` — Preview or execute a catalog action
@@ -2153,6 +2301,7 @@ Read actions execute immediately. Mutations with `confirm=false` validate the re
 **Parameters:**
 
 - `controller` (query)
+- `sitemanager_connection` (query)
 - `outcome` (query)
 - `since` (query)
 - `until` (query)
@@ -2291,6 +2440,16 @@ template under /v1/sites/{site_id}/.
 
 
 **Returns:** `object`
+
+### `POST /v1/sitemanager/actions/{tool_name}` — Post Sitemanager Action
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Parameters:**
+
+- `tool_name` (path) (required)
 
 ### `GET /v1/streams/access/doors/{door_id}/events` — Stream Access Door Events
 

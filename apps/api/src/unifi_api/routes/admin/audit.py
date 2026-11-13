@@ -40,6 +40,7 @@ def _row_view(r: AuditLog) -> dict[str, Any]:
         "ts": r.ts.isoformat(),
         "key_id_prefix": r.key_id_prefix,
         "controller": r.controller,
+        "sitemanager_connection": r.sitemanager_connection,
         "target": r.target,
         "outcome": r.outcome,
         "error_kind": r.error_kind,
@@ -54,6 +55,7 @@ def _audit_key(r: AuditLog) -> tuple:
 def _build_filtered_query(
     *,
     controller: str | None,
+    sitemanager_connection: str | None = None,
     outcome: str | None,
     since: str | None,
     until: str | None,
@@ -62,6 +64,8 @@ def _build_filtered_query(
     stmt = select(AuditLog)
     if controller:
         stmt = stmt.where(AuditLog.controller == controller)
+    if sitemanager_connection:
+        stmt = stmt.where(AuditLog.sitemanager_connection == sitemanager_connection)
     if outcome:
         stmt = stmt.where(AuditLog.outcome == outcome)
     if since:
@@ -93,6 +97,7 @@ async def audit_page(request: Request):
 async def audit_rows(
     request: Request,
     controller: str | None = Query(None),
+    sitemanager_connection: str | None = Query(None),
     outcome: str | None = Query(None),
     since: str | None = Query(None),
     until: str | None = Query(None),
@@ -103,6 +108,7 @@ async def audit_rows(
     sm = request.app.state.sessionmaker
     stmt = _build_filtered_query(
         controller=controller,
+        sitemanager_connection=sitemanager_connection,
         outcome=outcome,
         since=since,
         until=until,
@@ -130,6 +136,7 @@ async def audit_rows(
         f"{k}={v}"
         for k, v in (
             ("controller", controller),
+            ("sitemanager_connection", sitemanager_connection),
             ("outcome", outcome),
             ("since", since),
             ("until", until),
@@ -183,12 +190,14 @@ async def _admin_audit_event_stream(filter_fn):
         unsub()
 
 
-def _make_filter_fn(*, outcome, q):
+def _make_filter_fn(*, outcome, q, sitemanager_connection=None):
     """Build a filter_fn closure for the live-tail subscriber."""
-    if not outcome and not q:
+    if not outcome and not q and not sitemanager_connection:
         return None
 
     def _fn(row: dict) -> bool:
+        if sitemanager_connection and row.get("sitemanager_connection") != sitemanager_connection:
+            return False
         if outcome and row.get("outcome") != outcome:
             return False
         if q and q.lower() not in str(row.get("target", "")).lower():
@@ -205,11 +214,12 @@ def _make_filter_fn(*, outcome, q):
 )
 async def audit_stream(
     request: Request,
+    sitemanager_connection: str | None = Query(None),
     outcome: str | None = Query(None),
     q: str | None = Query(None),
 ):
     return StreamingResponse(
-        _admin_audit_event_stream(_make_filter_fn(outcome=outcome, q=q)),
+        _admin_audit_event_stream(_make_filter_fn(outcome=outcome, q=q, sitemanager_connection=sitemanager_connection)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -227,6 +237,7 @@ async def audit_stream(
 async def audit_export_csv(
     request: Request,
     controller: str | None = Query(None),
+    sitemanager_connection: str | None = Query(None),
     outcome: str | None = Query(None),
     since: str | None = Query(None),
     until: str | None = Query(None),
@@ -235,6 +246,7 @@ async def audit_export_csv(
     sm = request.app.state.sessionmaker
     stmt = _build_filtered_query(
         controller=controller,
+        sitemanager_connection=sitemanager_connection,
         outcome=outcome,
         since=since,
         until=until,
@@ -256,6 +268,7 @@ async def audit_export_csv(
                 "outcome",
                 "error_kind",
                 "detail",
+                "sitemanager_connection",
             ]
         )
         yield buf.getvalue()
@@ -272,6 +285,7 @@ async def audit_export_csv(
                     r.outcome,
                     r.error_kind or "",
                     r.detail or "",
+                    r.sitemanager_connection or "",
                 ]
             )
             yield buf.getvalue()

@@ -1005,6 +1005,11 @@
           },
           "product_kinds": {
             "items": {
+              "enum": [
+                "network",
+                "protect",
+                "access"
+              ],
               "type": "string"
             },
             "title": "Product Kinds",
@@ -1141,6 +1146,11 @@
             "anyOf": [
               {
                 "items": {
+                  "enum": [
+                    "network",
+                    "protect",
+                    "access"
+                  ],
                   "type": "string"
                 },
                 "type": "array"
@@ -1874,6 +1884,81 @@
           "data"
         ],
         "title": "Detail[RouteModel]",
+        "type": "object"
+      },
+      "Detail_SiteManagerHostModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SiteManagerHostModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[SiteManagerHostModel]",
+        "type": "object"
+      },
+      "Detail_SiteManagerSdwanConfigModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SiteManagerSdwanConfigModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[SiteManagerSdwanConfigModel]",
+        "type": "object"
+      },
+      "Detail_SiteManagerSdwanConfigStatusModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SiteManagerSdwanConfigStatusModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[SiteManagerSdwanConfigStatusModel]",
         "type": "object"
       },
       "Detail_ThreatManagementSettingsModel_": {
@@ -7087,6 +7172,166 @@
         "title": "Page[RouteModel]",
         "type": "object"
       },
+      "Page_SiteManagerHostDevicesModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerHostDevicesModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SiteManagerHostDevicesModel]",
+        "type": "object"
+      },
+      "Page_SiteManagerHostModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerHostModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SiteManagerHostModel]",
+        "type": "object"
+      },
+      "Page_SiteManagerSdwanConfigSummaryModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerSdwanConfigSummaryModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SiteManagerSdwanConfigSummaryModel]",
+        "type": "object"
+      },
+      "Page_SiteManagerSiteModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerSiteModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SiteManagerSiteModel]",
+        "type": "object"
+      },
       "Page_SmartDetectionModel_": {
         "additionalProperties": true,
         "properties": {
@@ -8079,6 +8324,1525 @@
           "settings"
         ],
         "title": "SettingsBody",
+        "type": "object"
+      },
+      "SiteManagerActionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          }
+        },
+        "title": "SiteManagerActionIn",
+        "type": "object"
+      },
+      "SiteManagerConnectionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "site_manager_api_key": {
+            "format": "password",
+            "title": "Site Manager Api Key",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "name",
+          "site_manager_api_key"
+        ],
+        "title": "SiteManagerConnectionCreate",
+        "type": "object"
+      },
+      "SiteManagerConnectionOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key_configured": {
+            "title": "Key Configured",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key_configured",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SiteManagerConnectionOut",
+        "type": "object"
+      },
+      "SiteManagerConnectionPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "site_manager_api_key": {
+            "format": "password",
+            "title": "Site Manager Api Key",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "title": "SiteManagerConnectionPatch",
+        "type": "object"
+      },
+      "SiteManagerHostApplicationModel": {
+        "additionalProperties": true,
+        "properties": {
+          "is_configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether initial setup is complete",
+            "title": "Is Configured"
+          },
+          "is_installed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the application is installed",
+            "title": "Is Installed"
+          },
+          "is_running": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the application is running",
+            "title": "Is Running"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Application name, such as network or protect",
+            "title": "Name"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lifecycle state reported by the console",
+            "title": "State"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Status reported by the application",
+            "title": "Status"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Application type",
+            "title": "Type"
+          },
+          "update_available": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Version available as an update, if any",
+            "title": "Update Available"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Installed version",
+            "title": "Version"
+          }
+        },
+        "title": "SiteManagerHostApplicationModel",
+        "type": "object"
+      },
+      "SiteManagerHostDevicesModel": {
+        "additionalProperties": true,
+        "properties": {
+          "devices": {
+            "description": "Devices managed by the host",
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerManagedDeviceModel"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "host_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager host id",
+            "title": "Host Id"
+          },
+          "host_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Host name",
+            "title": "Host Name"
+          },
+          "updated_at": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the host last reported its devices",
+            "title": "Updated At"
+          }
+        },
+        "title": "SiteManagerHostDevicesModel",
+        "type": "object"
+      },
+      "SiteManagerHostModel": {
+        "additionalProperties": true,
+        "properties": {
+          "applications": {
+            "description": "Applications on the host",
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerHostApplicationModel"
+            },
+            "title": "Applications",
+            "type": "array"
+          },
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hardware firmware version",
+            "title": "Firmware Version"
+          },
+          "hardware_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hardware id",
+            "title": "Hardware Id"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Console hostname",
+            "title": "Hostname"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager host id",
+            "title": "Id"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public IP address",
+            "title": "Ip Address"
+          },
+          "is_blocked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the host is blocked",
+            "title": "Is Blocked"
+          },
+          "last_connection_state_change": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the host last connected or disconnected",
+            "title": "Last Connection State Change"
+          },
+          "latest_backup_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the latest cloud backup was taken",
+            "title": "Latest Backup Time"
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Console MAC address",
+            "title": "Mac"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hardware model name",
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Console name",
+            "title": "Name"
+          },
+          "os_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "UniFi OS or server version",
+            "title": "Os Version"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the API key's account owns this host",
+            "title": "Owner"
+          },
+          "registration_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the host was registered",
+            "title": "Registration Time"
+          },
+          "release_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Update release channel",
+            "title": "Release Channel"
+          },
+          "reported_state": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full state reported by the host; present only when requested",
+            "title": "Reported State"
+          },
+          "shortname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hardware short name, such as UDMPROSE",
+            "title": "Shortname"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connection state, such as connected",
+            "title": "State"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Console timezone",
+            "title": "Timezone"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Host type, such as console or network-server",
+            "title": "Type"
+          }
+        },
+        "title": "SiteManagerHostModel",
+        "type": "object"
+      },
+      "SiteManagerIspMetricPeriodModel": {
+        "additionalProperties": true,
+        "properties": {
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average latency in milliseconds",
+            "title": "Avg Latency Ms"
+          },
+          "download_kbps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download throughput in kbps",
+            "title": "Download Kbps"
+          },
+          "downtime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Downtime within the interval as reported",
+            "title": "Downtime"
+          },
+          "isp_asn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISP autonomous system number",
+            "title": "Isp Asn"
+          },
+          "isp_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISP name",
+            "title": "Isp Name"
+          },
+          "max_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum latency in milliseconds",
+            "title": "Max Latency Ms"
+          },
+          "packet_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Packet loss as reported by the API",
+            "title": "Packet Loss"
+          },
+          "time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start of the interval",
+            "title": "Time"
+          },
+          "upload_kbps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upload throughput in kbps",
+            "title": "Upload Kbps"
+          },
+          "uptime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Uptime within the interval as reported",
+            "title": "Uptime"
+          }
+        },
+        "title": "SiteManagerIspMetricPeriodModel",
+        "type": "object"
+      },
+      "SiteManagerIspMetricSeriesModel": {
+        "additionalProperties": true,
+        "properties": {
+          "host_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager host id",
+            "title": "Host Id"
+          },
+          "metric_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Interval of the series: 5m or 1h",
+            "title": "Metric Type"
+          },
+          "periods": {
+            "description": "Most recent periods, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerIspMetricPeriodModel"
+            },
+            "title": "Periods",
+            "type": "array"
+          },
+          "periods_truncated": {
+            "description": "Whether older periods were left out of periods",
+            "title": "Periods Truncated",
+            "type": "boolean"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager site id",
+            "title": "Site Id"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SiteManagerIspMetricSummaryModel",
+            "description": "Aggregates over the window"
+          }
+        },
+        "title": "SiteManagerIspMetricSeriesModel",
+        "type": "object"
+      },
+      "SiteManagerIspMetricSummaryModel": {
+        "additionalProperties": true,
+        "properties": {
+          "avg_download_kbps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean download throughput in kbps",
+            "title": "Avg Download Kbps"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean of the periods' average latency",
+            "title": "Avg Latency Ms"
+          },
+          "avg_packet_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean packet loss",
+            "title": "Avg Packet Loss"
+          },
+          "avg_upload_kbps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean upload throughput in kbps",
+            "title": "Avg Upload Kbps"
+          },
+          "first_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Time of the earliest period",
+            "title": "First Time"
+          },
+          "last_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Time of the latest period",
+            "title": "Last Time"
+          },
+          "max_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest latency in the window",
+            "title": "Max Latency Ms"
+          },
+          "period_count": {
+            "description": "Number of periods in the window",
+            "title": "Period Count",
+            "type": "integer"
+          },
+          "periods_with_downtime": {
+            "description": "Number of periods reporting any downtime",
+            "title": "Periods With Downtime",
+            "type": "integer"
+          },
+          "total_downtime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of reported downtime",
+            "title": "Total Downtime"
+          }
+        },
+        "title": "SiteManagerIspMetricSummaryModel",
+        "type": "object"
+      },
+      "SiteManagerIspMetricsModel": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerIspMetricSeriesModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "SiteManagerIspMetricsModel",
+        "type": "object"
+      },
+      "SiteManagerIspMetricsQueryResultModel": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerIspMetricSeriesModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          }
+        },
+        "title": "SiteManagerIspMetricsQueryResultModel",
+        "type": "object"
+      },
+      "SiteManagerManagedDeviceModel": {
+        "additionalProperties": true,
+        "properties": {
+          "adoption_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the device was adopted",
+            "title": "Adoption Time"
+          },
+          "firmware_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Firmware status, such as upToDate",
+            "title": "Firmware Status"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager device id",
+            "title": "Id"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Device IP address",
+            "title": "Ip"
+          },
+          "is_console": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the device is the host console itself",
+            "title": "Is Console"
+          },
+          "is_managed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the device is managed by the host",
+            "title": "Is Managed"
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Device MAC address",
+            "title": "Mac"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Device model",
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Device name",
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Operator note on the device",
+            "title": "Note"
+          },
+          "product_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Product line, such as network or protect",
+            "title": "Product Line"
+          },
+          "shortname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Device short name",
+            "title": "Shortname"
+          },
+          "startup_time": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the device last started",
+            "title": "Startup Time"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connection status",
+            "title": "Status"
+          },
+          "update_available": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Firmware version available as an update",
+            "title": "Update Available"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Firmware version",
+            "title": "Version"
+          }
+        },
+        "title": "SiteManagerManagedDeviceModel",
+        "type": "object"
+      },
+      "SiteManagerMetricsQueryInput": {
+        "additionalProperties": false,
+        "description": "Strict body for the read-only ISP metrics query.",
+        "properties": {
+          "metric_type": {
+            "default": "1h",
+            "enum": [
+              "5m",
+              "1h"
+            ],
+            "title": "Metric Type",
+            "type": "string"
+          },
+          "period_limit": {
+            "default": 12,
+            "maximum": 720.0,
+            "minimum": 0.0,
+            "title": "Period Limit",
+            "type": "integer"
+          },
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/SiteManagerMetricsSiteInput"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Sites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sites"
+        ],
+        "title": "SiteManagerMetricsQueryInput",
+        "type": "object"
+      },
+      "SiteManagerMetricsSiteInput": {
+        "additionalProperties": false,
+        "description": "Closed per-site query input; either timestamp may be supplied independently.",
+        "properties": {
+          "begin_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Begin Timestamp"
+          },
+          "end_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Timestamp"
+          },
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host_id",
+          "site_id"
+        ],
+        "title": "SiteManagerMetricsSiteInput",
+        "type": "object"
+      },
+      "SiteManagerProbeOut": {
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "latency_ms",
+          "error_kind",
+          "checked_at"
+        ],
+        "title": "SiteManagerProbeOut",
+        "type": "object"
+      },
+      "SiteManagerSdwanConfigModel": {
+        "additionalProperties": true,
+        "properties": {
+          "hubs": {
+            "description": "Hub members",
+            "items": {},
+            "title": "Hubs",
+            "type": "array"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SD-WAN configuration id",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Configuration name",
+            "title": "Name"
+          },
+          "settings": {
+            "description": "Configuration settings",
+            "title": "Settings"
+          },
+          "spokes": {
+            "description": "Spoke members",
+            "items": {},
+            "title": "Spokes",
+            "type": "array"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Topology type",
+            "title": "Type"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Topology variant",
+            "title": "Variant"
+          }
+        },
+        "title": "SiteManagerSdwanConfigModel",
+        "type": "object"
+      },
+      "SiteManagerSdwanConfigStatusModel": {
+        "additionalProperties": true,
+        "properties": {
+          "errors": {
+            "description": "Configuration-level errors",
+            "items": {},
+            "title": "Errors",
+            "type": "array"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fingerprint of the generated configuration",
+            "title": "Fingerprint"
+          },
+          "generate_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Status of configuration generation",
+            "title": "Generate Status"
+          },
+          "hubs": {
+            "description": "Per-hub status",
+            "items": {},
+            "title": "Hubs",
+            "type": "array"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SD-WAN configuration id",
+            "title": "Id"
+          },
+          "last_generated_at": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the configuration was generated",
+            "title": "Last Generated At"
+          },
+          "spokes": {
+            "description": "Per-spoke status",
+            "items": {},
+            "title": "Spokes",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the status was last updated",
+            "title": "Updated At"
+          },
+          "warnings": {
+            "description": "Configuration-level warnings",
+            "items": {},
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "SiteManagerSdwanConfigStatusModel",
+        "type": "object"
+      },
+      "SiteManagerSdwanConfigSummaryModel": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SD-WAN configuration id",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Configuration name",
+            "title": "Name"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Topology type",
+            "title": "Type"
+          }
+        },
+        "title": "SiteManagerSdwanConfigSummaryModel",
+        "type": "object"
+      },
+      "SiteManagerSiteModel": {
+        "additionalProperties": true,
+        "properties": {
+          "counts": {
+            "description": "Device, client and configuration counts",
+            "title": "Counts"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site display name",
+            "title": "Description"
+          },
+          "gateway": {
+            "description": "Gateway model and threat-inspection state",
+            "title": "Gateway"
+          },
+          "gateway_mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "MAC address of the site's gateway",
+            "title": "Gateway Mac"
+          },
+          "host_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager id of the host running the site",
+            "title": "Host Id"
+          },
+          "internet_issues": {
+            "description": "Recent internet issue intervals, most recent API order",
+            "items": {},
+            "title": "Internet Issues",
+            "type": "array"
+          },
+          "is_owner": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the API key's account owns the site",
+            "title": "Is Owner"
+          },
+          "isp": {
+            "description": "ISP name and organization",
+            "title": "Isp"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site name key",
+            "title": "Name"
+          },
+          "permission": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account's permission on the site",
+            "title": "Permission"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site Manager site id",
+            "title": "Site Id"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Site timezone",
+            "title": "Timezone"
+          },
+          "wan_uptime_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "WAN uptime percentage",
+            "title": "Wan Uptime Percent"
+          }
+        },
+        "title": "SiteManagerSiteModel",
         "type": "object"
       },
       "SmartDetectionModel": {
@@ -10118,6 +11882,22 @@
           },
           {
             "in": "query",
+            "name": "sitemanager_connection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sitemanager Connection"
+            }
+          },
+          {
+            "in": "query",
             "name": "outcome",
             "required": false,
             "schema": {
@@ -10848,6 +12628,742 @@
           }
         },
         "summary": "Put Settings"
+      }
+    },
+    "/v1/sitemanager/actions/{tool_name}": {
+      "post": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "post_sitemanager_action_v1_sitemanager_actions__tool_name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool_name",
+            "required": true,
+            "schema": {
+              "title": "Tool Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Sitemanager Action",
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/connection": {
+      "delete": {
+        "operationId": "delete_v1_sitemanager_connection_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "get": {
+        "operationId": "get_v1_sitemanager_connection_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_v1_sitemanager_connection_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerConnectionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch",
+        "tags": [
+          "Site Manager connection"
+        ]
+      },
+      "post": {
+        "operationId": "create_v1_sitemanager_connection_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerConnectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerConnectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "Site Manager connection"
+        ]
+      }
+    },
+    "/v1/sitemanager/connection/probe": {
+      "post": {
+        "operationId": "probe_v1_sitemanager_connection_probe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerProbeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe",
+        "tags": [
+          "Site Manager connection"
+        ]
+      }
+    },
+    "/v1/sitemanager/devices": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "list_sitemanager_devices_v1_sitemanager_devices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "host_ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Host Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "updated_since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Size"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SiteManagerHostDevicesModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sitemanager Devices",
+        "tags": [
+          "sitemanager/inventory"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/hosts": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "list_sitemanager_hosts_v1_sitemanager_hosts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Size"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SiteManagerHostModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sitemanager Hosts",
+        "tags": [
+          "sitemanager/inventory"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/hosts/{host_id}": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "get_sitemanager_host_v1_sitemanager_hosts__host_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_reported_state",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Reported State",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_SiteManagerHostModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sitemanager Host",
+        "tags": [
+          "sitemanager/inventory"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/isp-metrics": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "get_sitemanager_isp_metrics_v1_sitemanager_isp_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "metric_type",
+            "required": false,
+            "schema": {
+              "default": "1h",
+              "title": "Metric Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "duration",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duration"
+            }
+          },
+          {
+            "in": "query",
+            "name": "begin_timestamp",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Begin Timestamp"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_timestamp",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Timestamp"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 720,
+              "minimum": 0,
+              "title": "Period Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerIspMetricsModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sitemanager Isp Metrics",
+        "tags": [
+          "sitemanager/isp-metrics"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/isp-metrics/query": {
+      "post": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "query_sitemanager_isp_metrics_v1_sitemanager_isp_metrics_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteManagerMetricsQueryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteManagerIspMetricsQueryResultModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Query Sitemanager Isp Metrics",
+        "tags": [
+          "sitemanager/isp-metrics"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/sd-wan-configs": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "list_sitemanager_sdwan_configs_v1_sitemanager_sd_wan_configs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SiteManagerSdwanConfigSummaryModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Sitemanager Sdwan Configs",
+        "tags": [
+          "sitemanager/sdwan"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/sd-wan-configs/{config_id}": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "get_sitemanager_sdwan_config_v1_sitemanager_sd_wan_configs__config_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "title": "Config Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_SiteManagerSdwanConfigModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sitemanager Sdwan Config",
+        "tags": [
+          "sitemanager/sdwan"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/sd-wan-configs/{config_id}/status": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "get_sitemanager_sdwan_config_status_v1_sitemanager_sd_wan_configs__config_id__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "title": "Config Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_SiteManagerSdwanConfigStatusModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sitemanager Sdwan Config Status",
+        "tags": [
+          "sitemanager/sdwan"
+        ],
+        "x-sitemanager-read": true
+      }
+    },
+    "/v1/sitemanager/sites": {
+      "get": {
+        "description": "A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family \u2014 do not pass them to other resource tools.",
+        "operationId": "list_sitemanager_sites_v1_sitemanager_sites_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Size"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SiteManagerSiteModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sitemanager Sites",
+        "tags": [
+          "sitemanager/inventory"
+        ],
+        "x-sitemanager-read": true
       }
     },
     "/v1/sites/{site_id}/access-devices": {

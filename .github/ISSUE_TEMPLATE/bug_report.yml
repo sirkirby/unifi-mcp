@@ -11,6 +11,8 @@ body:
 
         If your bug involves one of the MCP servers (Network / Protect / Access), the controller fields below are critical for reproduction — please fill them in even if they feel redundant.
 
+        The Site Manager server talks to Ubiquiti's cloud API, not a console: choose "N/A — Site Manager (cloud account)" for the controller host and skip the controller and application version fields. Never paste your Site Manager API key, host or site ids, site names, MAC addresses, or IP addresses.
+
         If this is a security vulnerability, do not open a public issue. Use GitHub Security Advisories instead: https://github.com/sirkirby/unifi-mcp/security/advisories
   - type: checkboxes
     id: preflight
@@ -33,6 +35,7 @@ body:
         - Network MCP server
         - Protect MCP server
         - Access MCP server
+        - Site Manager MCP server
         - Relay sidecar
         - Cloudflare Worker / CLI
         - API server
@@ -53,7 +56,7 @@ body:
     id: controller_host
     attributes:
       label: Controller hardware / host
-      description: Where the UniFi controller runs. Required for MCP server bugs.
+      description: Where the UniFi controller runs. Required for Network, Protect, and Access MCP server bugs.
       options:
         - UDM Pro
         - UDM Pro Max
@@ -66,6 +69,7 @@ body:
         - Self-hosted (Docker)
         - UniFi-hosted (Site Manager / Cloud Console)
         - Other
+        - N/A — Site Manager (cloud account)
         - N/A — not an MCP server bug
     validations:
       required: true
@@ -73,7 +77,7 @@ body:
     id: unifi_os
     attributes:
       label: UniFi OS version
-      description: Settings → System on the controller UI. Required for MCP server bugs.
+      description: Settings → System on the controller UI. Required for Network, Protect, and Access MCP server bugs; not needed for Site Manager.
       placeholder: "e.g. 4.0.21"
   - type: input
     id: network_app
@@ -93,6 +97,12 @@ body:
       label: Access application version
       description: Required if reporting an Access MCP bug.
       placeholder: "e.g. 1.27.5"
+  - type: input
+    id: sitemanager_trace_id
+    attributes:
+      label: Site Manager trace id
+      description: Optional — for a Site Manager MCP bug, the trace id from Ubiquiti shown in the error, if any. It is safe to share; the API key is not.
+      placeholder: "e.g. 0123456789abcdef0123456789abcdef"
   - type: input
     id: site_setup
     attributes:
@@ -148,7 +158,8 @@ body:
         dragging a reviewed `.json` file here. Review must happen before paste or
         drag-and-drop because an attachment on a public issue is publicly
         accessible. Never attach raw configuration, logs, controller responses,
-        credentials, or private identifiers in its place. Guide:
+        credentials, or private identifiers in its place. The Site Manager
+        server has no support bundle; use the manual fields. Guide:
         https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md
   - type: textarea
     id: raw_tool_output

@@ -1,6 +1,6 @@
 # Install UniFi MCP with an agent
 
-Last reviewed: 2026-10-11
+Last reviewed: 2026-11-12
 
 This guide is written for both people and coding agents. It separates three
 things that are easy to confuse:
@@ -15,12 +15,20 @@ Install only the UniFi products the user needs. Network, Protect, and Access
 are separate servers; loading all three adds tools and context that may not be
 useful for a particular deployment.
 
+Site Manager is a fourth server of a different kind. It reads every console,
+site and device on a UI account from Ubiquiti's cloud API at `api.ui.com`, with
+one account-wide key, and has no console host, local account or write tools.
+Offer it when the user wants an account-wide inventory, WAN health or SD-WAN
+status rather than work inside one console. It is not published yet; see
+[Site Manager (cloud account)](#site-manager-cloud-account).
+
 ## Instructions for the installing agent
 
 Before changing anything:
 
 1. Identify the user's operating system and agent client.
-2. Ask whether they need Network, Protect, Access, or more than one product.
+2. Ask whether they need Network, Protect, Access, Site Manager, or more than
+   one product.
 3. Check that `uvx` is available. If it is missing, explain the official
    [uv installation options](https://docs.astral.sh/uv/getting-started/installation/)
    and wait before installing software globally.
@@ -326,6 +334,48 @@ Current first-party references:
 - [Migrating Gemini CLI configuration to Antigravity](https://antigravity.google/docs/cli/gcli-migration/)
 - [Cursor MCP documentation](https://docs.cursor.com/context/model-context-protocol)
 
+## Site Manager (cloud account)
+
+The Site Manager server is not published yet: there is no PyPI package,
+container image or plugin. Until its first release, register it from a source
+checkout. Setup differs from the console servers:
+
+- Ask for no host, username, password, port, site or TLS setting, and do not
+  ask about write permissions or policy gates. The server has none; every tool
+  reads.
+- Tell the user that every request goes to Ubiquiti's cloud at
+  `https://api.ui.com`, even over local stdio, and that the key reads every
+  console on the account.
+- The only credential is one Site Manager API key, created at
+  [unifi.ui.com](https://unifi.ui.com) under Settings > API Keys. Give it as
+  `UNIFI_SITEMANAGER_API_KEY_FILE` (a file only the user can read) or
+  `UNIFI_SITEMANAGER_API_KEY_COMMAND`, exactly one of them. Do not ask for the
+  key in chat, and never offer `UNIFI_API_KEY` or another console key in its
+  place: the server never reads them.
+
+Clone the repository and run `uv sync`, then register a local stdio server
+whose command is `uv` with these arguments, using the checkout's absolute path:
+
+```text
+run --directory /absolute/path/to/unifi-mcp --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+```
+
+In OpenCode, for example:
+
+```bash
+opencode mcp add unifi-sitemanager \
+  --env 'UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key' \
+  -- uv run --directory /absolute/path/to/unifi-mcp \
+  --package unifi-sitemanager-mcp unifi-sitemanager-mcp
+```
+
+For other native clients, add the same command and the one key variable
+through the client's MCP configuration flow. Verify by listing hosts
+(`sitemanager_list_hosts`). Without a key the server lists only
+`sitemanager_setup_status`, which explains what to set. Support for this
+server in each client has not been verified yet. See
+[Site Manager configuration](../apps/sitemanager/docs/configuration.md).
+
 ## Server names and variables
 
 | Product | MCP name | Package | Minimum connection variables |
@@ -333,6 +383,7 @@ Current first-party references:
 | Network | `unifi-network` | `unifi-network-mcp@latest` | `UNIFI_NETWORK_HOST`, plus an API-key provider for limited inventory or username and a password provider for session tools |
 | Protect | `unifi-protect` | `unifi-protect-mcp@latest` | `UNIFI_PROTECT_HOST`, `UNIFI_PROTECT_USERNAME`, one `UNIFI_PROTECT_PASSWORD*` provider |
 | Access | `unifi-access` | `unifi-access-mcp@latest` | `UNIFI_ACCESS_HOST`, plus a supported local credential or API-key provider |
+| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp` (source checkout until its first release) | One `UNIFI_SITEMANAGER_API_KEY*` provider; no host |
 
 See each product's configuration documentation for ports, sites, API-key
 limitations, TLS verification, and policy gates:
@@ -340,6 +391,7 @@ limitations, TLS verification, and policy gates:
 - [Network configuration](../apps/network/docs/configuration.md)
 - [Protect configuration](../apps/protect/docs/configuration.md)
 - [Access configuration](../apps/access/docs/configuration.md)
+- [Site Manager configuration](../apps/sitemanager/docs/configuration.md)
 
 ## Verification checklist
 
@@ -352,5 +404,6 @@ An installation is complete only when all applicable checks pass:
   use system information or health when session credentials are available.
 - With the default read-only gates, a mutation request is denied by policy. If
   the user opted into that action, it produces a preview and asks for
-  confirmation by default.
+  confirmation by default. Site Manager has no mutations, so this check does
+  not apply to it.
 - No secret was printed in a command log, chat transcript, or committed file.

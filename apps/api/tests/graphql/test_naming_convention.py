@@ -27,7 +27,12 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
     type_registry = build_type_registry()
 
     # Build per-product LIST stem set first (collision-aware DETAIL mapping needs this).
-    list_stems_by_product: dict[str, set[str]] = {"network": set(), "protect": set(), "access": set()}
+    list_stems_by_product: dict[str, set[str]] = {
+        "network": set(),
+        "protect": set(),
+        "access": set(),
+        "sitemanager": set(),
+    }
     for name in manifest.all_tools():
         try:
             entry = manifest.resolve(name)
@@ -66,3 +71,25 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
         if path in seen:
             raise AssertionError(f"naming collision: {name} and {seen[path]} both map to {path}")
         seen[path] = name
+
+
+def test_all_account_fields_have_exact_canonical_names():
+    expected = {
+        "sitemanager_list_hosts": "hosts",
+        "sitemanager_get_host": "host",
+        "sitemanager_list_sites": "sites",
+        "sitemanager_list_devices": "devices",
+        "sitemanager_get_isp_metrics": "ispMetrics",
+        "sitemanager_query_isp_metrics": "queryIspMetrics",
+        "sitemanager_list_sdwan_configs": "sdwanConfigs",
+        "sitemanager_get_sdwan_config": "sdwanConfig",
+        "sitemanager_get_sdwan_config_status": "sdwanConfigStatus",
+    }
+    assert len(expected) == 9
+    from unifi_api.graphql.schema import schema
+
+    namespace = schema._schema.get_type("SiteManagerQuery")
+    assert set(namespace.fields) == set(expected.values())
+    for name, field in expected.items():
+        assert tool_to_field_path(name, product="sitemanager") == "query.sitemanager." + field
+        assert "A READ key sees every resource the cloud account can see." in namespace.fields[field].description
