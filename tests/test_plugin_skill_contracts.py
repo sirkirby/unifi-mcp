@@ -34,7 +34,7 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
     """Tool input schemas: the server releases plugins pin, or with ``pinned=False`` the workspace servers."""
     result = {}
     # Plugin skills call the server release their plugin pins; repository docs describe the workspace server.
-    for product in ("network", "protect", "access"):
+    for product in ("network", "protect", "access", "sitemanager"):
         manifest = (
             refs.pinned_manifest(ROOT, product)[1]
             if pinned
@@ -42,12 +42,6 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
         )
         for tool in manifest["tools"]:
             result[tool["name"]] = (product, tool["schema"]["input"])
-    # The initial Site Manager bundle is built before its first tag. Validate its
-    # authored scaffold against the explicit candidate manifest; release-pin behavior
-    # is exercised independently with tagged fixtures in test_plugin_pinned_surfaces.
-    candidate = json.loads((ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json").read_text())
-    for tool in candidate["tools"]:
-        result[tool["name"]] = ("sitemanager", tool["schema"]["input"])
     # The cloud worker serves this definition; skills reach it through a connected relay.
     timeline = json.loads((ROOT / TIMELINE_TOOL).read_text(encoding="utf-8"))
     result[timeline["name"]] = ("worker", timeline["inputSchema"])
@@ -360,7 +354,8 @@ def test_sitemanager_skill_preserves_cloud_scope_and_bounds() -> None:
     ):
         assert phrase in setup
     assert "sitemanager_tool_index" in main
-    manifest = json.loads((ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json").read_text())
+    # The reference documents the release the plugin pins, not the workspace server.
+    manifest = refs.pinned_manifest(ROOT, "sitemanager")[1]
     names = {tool["name"] for tool in manifest["tools"]}
     reference = (root / "unifi-sitemanager/references/sitemanager-tools.md").read_text()
     assert len(manifest["module_map"]) == 9
