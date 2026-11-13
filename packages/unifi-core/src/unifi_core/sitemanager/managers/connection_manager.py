@@ -49,6 +49,26 @@ _MAX_RATE_LIMIT_RETRIES = 2
 _MAX_ID_LENGTH = 256
 _UNSAFE_SEGMENT = re.compile(r"[/?#%\\\s\x00-\x1f\x7f]")
 _UPSTREAM_MESSAGE_LIMIT = 200
+_LOG_ROUTES = (
+    (r"/v1/hosts", "/v1/hosts"),
+    (r"/v1/hosts/[^/]+", "/v1/hosts/{id}"),
+    (r"/v1/sites", "/v1/sites"),
+    (r"/v1/devices", "/v1/devices"),
+    (r"/v1/isp-metrics/(?:5m|1h)", "/v1/isp-metrics/{metric_type}"),
+    (r"/v1/isp-metrics/(?:5m|1h)/query", "/v1/isp-metrics/{metric_type}/query"),
+    (r"/v1/sd-wan-configs", "/v1/sd-wan-configs"),
+    (r"/v1/sd-wan-configs/[^/]+", "/v1/sd-wan-configs/{id}"),
+    (r"/v1/sd-wan-configs/[^/]+/status", "/v1/sd-wan-configs/{id}/status"),
+)
+
+
+def _log_route(path: str) -> str:
+    """Return fixed route vocabulary only, including for unknown paths and queries."""
+    route = path.partition("?")[0].partition("#")[0]
+    for pattern, template in _LOG_ROUTES:
+        if re.fullmatch(pattern, route):
+            return template
+    return "/{unknown}"
 
 
 class SiteManagerNotConfiguredError(UniFiAuthError):
@@ -185,7 +205,7 @@ class SiteManagerConnectionManager:
             if not can_retry:
                 hint = f" Retry after {int(wait)} seconds." if wait is not None else ""
                 raise UniFiRateLimitError(f"Site Manager API rate limit reached.{hint}")
-            logger.info("Site Manager rate limit on %s %s; retrying in %.1fs", method, path, wait)
+            logger.info("Site Manager rate limit on %s %s; retrying in %.1fs", method, _log_route(path), wait)
             await asyncio.sleep(wait)
 
     def _url(self, path: str) -> URL:
@@ -227,7 +247,7 @@ class SiteManagerConnectionManager:
         except aiohttp.ClientError as exc:
             # Name the class only: the exception text and its request_info can carry the key.
             failure = f"failed ({type(exc).__name__})"
-        logger.warning("Site Manager request %s %s %s", method, path, failure)
+        logger.warning("Site Manager request %s %s %s", method, _log_route(path), failure)
         raise UniFiConnectionError(f"Site Manager API request {failure}.") from None
 
 
