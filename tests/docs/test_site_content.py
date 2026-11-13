@@ -811,6 +811,14 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             app,
         )
 
+    def test_footers_link_every_published_mcp_server(self):
+        servers = ["Network", "Protect", "Access"] + (["Site Manager"] if SITEMANAGER_RELEASED else [])
+        for path in (Path("docs/index.html"), Path("docs/404.html"), Path("docs/sponsor/index.html")):
+            html = path.read_text(encoding="utf-8")
+            footer = html.split("<h2>MCP servers</h2>", 1)[1].split("</div>", 1)[0]
+            with self.subTest(path=path):
+                self.assertEqual(re.findall(r'<a href="https://pypi\.org/project/[^"]+/">([^<]+)</a>', footer), servers)
+
     def test_app_js_package_lists_include_every_published_python_server(self):
         app = Path("docs/app.js").read_text(encoding="utf-8")
         expected = re.search(r"var EXPECTED_PACKAGE_NAMES = \[(.*?)\];", app, flags=re.DOTALL).group(1)
