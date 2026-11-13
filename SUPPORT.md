@@ -10,7 +10,7 @@ Use the channel that matches what you need:
 | Need | Where to go |
 |------|-------------|
 | Setup help, configuration questions, or troubleshooting | [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions) |
-| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. |
+| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. The Site Manager server has no support bundle: use the manual fields and see [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md#reporting-a-problem). |
 | Feature requests or design discussion | [Open a feature request](https://github.com/sirkirby/unifi-mcp/issues/new/choose) or start a discussion |
 | Security vulnerabilities | [Report privately through GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories) |
 
@@ -23,6 +23,7 @@ Please check these resources first:
 
 - [README.md](README.md) for installation and quick-start guidance
 - [Support bundle guide](docs/support-bundles.md) for privacy-bounded Network, Protect, and Access troubleshooting evidence
+- [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md) for the cloud account server, which has no support bundle
 - [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and test commands
 - [SECURITY.md](SECURITY.md) for the security model and vulnerability reporting
 - Existing [issues](https://github.com/sirkirby/unifi-mcp/issues) and
@@ -33,11 +34,16 @@ SHA, install method, MCP client, operating system, and a reviewed support bundle
 when the server can start. Ordinary diagnostic logs are not automatically safe to
 post publicly; provide manually sanitized logs only when a maintainer asks for them.
 
+For the Site Manager server, include the tool name, the error text, the server
+version and the trace id from Ubiquiti when the error shows one. The trace id is
+safe to share. Never include the Site Manager API key, host or SD-WAN
+configuration ids, site names, MAC addresses or IP addresses.
+
 ## Scope
 
 This project maintains the UniFi MCP servers, shared packages, relay sidecar,
 Cloudflare Worker gateway, API server, and plugin packaging in this repository.
 
-Problems in UniFi controller firmware or upstream client libraries should be
-reported to their maintainers. See [SECURITY.md](SECURITY.md) for the current
+Problems in UniFi controller firmware, Ubiquiti's Site Manager API service, or
+upstream client libraries should be reported to their maintainers. See [SECURITY.md](SECURITY.md) for the current
 in-scope and out-of-scope security boundaries.
