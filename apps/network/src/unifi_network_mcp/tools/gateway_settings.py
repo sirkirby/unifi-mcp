@@ -84,7 +84,7 @@ SECURITY_SENSITIVE_FIELDS: frozenset[str] = frozenset(
     "redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS clamp), connection-tracking ALG "
     "modules (FTP/GRE/H.323/PPTP/SIP/TFTP), hardware offloading, and conntrack timeouts. "
     "Read-only; use unifi_update_gateway_settings to change values.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_gateway_settings() -> Dict[str, Any]:
     """Get the gateway (USG) settings for the current site.

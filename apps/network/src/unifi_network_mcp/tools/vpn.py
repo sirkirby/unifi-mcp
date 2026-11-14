@@ -81,7 +81,7 @@ async def update_vpn_server_alternate_address(
 @server.tool(
     name="unifi_list_vpn_clients",
     description="List all configured VPN clients (Wireguard, OpenVPN, etc).",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_vpn_clients() -> Dict[str, Any]:
     """Implementation for listing VPN clients."""
@@ -105,7 +105,7 @@ async def list_vpn_clients() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_vpn_client_details",
     description="Get details for a specific VPN client by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_vpn_client_details(
     client_id: Annotated[
@@ -228,7 +228,7 @@ async def delete_vpn_client(
 @server.tool(
     name="unifi_list_vpn_servers",
     description="List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_vpn_servers() -> Dict[str, Any]:
     """Implementation for listing VPN servers."""
@@ -252,7 +252,7 @@ async def list_vpn_servers() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_vpn_server_details",
     description="Get details for a specific VPN server by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_vpn_server_details(
     server_id: Annotated[

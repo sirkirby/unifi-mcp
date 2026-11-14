@@ -85,7 +85,7 @@ def _is_blank(profile_id: Optional[str]) -> bool:
         "6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses "
         "include _meta with complete=false because v2-only fields are unavailable."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_alarm_list_profiles() -> Dict[str, Any]:
     """List all arm profiles."""
@@ -118,7 +118,7 @@ async def protect_alarm_list_profiles() -> Dict[str, Any]:
         "timestamp, and any breach info. Use this to check whether the security "
         "system is currently active."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_alarm_get_status() -> Dict[str, Any]:
     """Get the current arm status."""
@@ -268,7 +268,7 @@ async def protect_alarm_disarm(
         "include_schemas is true; the full catalog is large, so filter with search and "
         "ask for schemas only for the entries you will write."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_alarm_get_catalog(
     search: Annotated[
@@ -356,7 +356,7 @@ async def protect_alarm_fire_webhook(
         "enabled, triggers, actions, scope, and stats. Use protect_alarm_get_rule "
         "for a single rule."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_alarm_list_rules() -> Dict[str, Any]:
     """List all alarm rules (version-agnostic; AI alarms included when accessible)."""
@@ -375,7 +375,7 @@ async def protect_alarm_list_rules() -> Dict[str, Any]:
         "Fetches a single UniFi Protect alarm rule by id (normalized: id, title, "
         "enabled, triggers, actions, scope, stats), including AI-powered alarms."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_alarm_get_rule(
     rule_id: Annotated[

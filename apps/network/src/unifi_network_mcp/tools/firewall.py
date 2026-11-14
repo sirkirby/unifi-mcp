@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
         "Set summary=false for the full fw_from_controller().model_dump() shape including "
         "schedule, logging, ip_version, connection_state_type, index, etc."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_firewall_policies(
     search: Annotated[
@@ -104,7 +104,7 @@ async def list_firewall_policies(
 @server.tool(
     name="unifi_get_firewall_policy_details",
     description="Get detailed configuration for a specific firewall policy by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_firewall_policy_details(
     policy_id: Annotated[
@@ -647,7 +647,7 @@ async def update_firewall_policy(
         "other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY) and session credentials. "
         "The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_firewall_policy_ordering(
     source_firewall_zone_id: Annotated[
@@ -805,7 +805,7 @@ async def reorder_firewall_policies(
     description="List controller firewall zones (V2 API). Returned IDs are V2 controller "
     "ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and "
     "network firewall_zone_id.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_firewall_zones() -> Dict[str, Any]:
     try:
@@ -998,7 +998,7 @@ async def delete_firewall_zone(
         "networks and firewall groups, protocol, connection-state matching, "
         "logging, and enabled state."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_legacy_firewall_rules() -> Dict[str, Any]:
     """Lists legacy firewall rules for the current UniFi site."""
@@ -1033,7 +1033,7 @@ async def list_legacy_firewall_rules() -> Dict[str, Any]:
     description="List firewall groups (address and port groups) used as reusable objects in firewall policies. "
     "Address groups contain IP addresses/CIDRs, port groups contain port numbers/ranges. "
     "These are referenced by firewall policies via ip_group_id and port_group_id fields.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_firewall_groups() -> Dict[str, Any]:
     """Lists all firewall groups."""
@@ -1054,7 +1054,7 @@ async def list_firewall_groups() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_firewall_group_details",
     description="Get detailed configuration for a specific firewall group by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_firewall_group_details(
     group_id: Annotated[str, Field(description="The unique identifier (_id) of the firewall group")],

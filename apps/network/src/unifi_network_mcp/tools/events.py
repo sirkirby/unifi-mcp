@@ -54,7 +54,7 @@ def _listener_state(mgr) -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_list_events",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns timestamped event log entries (client connects/disconnects, device "
         "state changes, firmware updates, config changes) sorted newest-first. "
@@ -126,7 +126,7 @@ async def list_events(
 
 @server.tool(
     name="unifi_list_alarms",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns active alarms (security alerts, connectivity issues, firmware warnings). "
         "Each alarm includes type, message, timestamp, and related device/client MAC. "
@@ -174,7 +174,7 @@ async def list_alarms(
         "capacity (buffer_capacity); an empty buffer with attached=false is "
         "not 'no events'."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def unifi_recent_events(
     event_type: Annotated[
@@ -214,7 +214,7 @@ async def unifi_recent_events(
         "occupancy and capacity. Use this to set up "
         "continuous event monitoring."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def unifi_subscribe_events() -> Dict[str, Any]:
     """Return a handle describing how to subscribe to live network events."""
@@ -238,7 +238,7 @@ async def unifi_subscribe_events() -> Dict[str, Any]:
     description="""Get recently observed exact event keys for filtering events.
 
 Use a returned key with the unifi_list_events event_type parameter. Keys are sampled from the 1,000 most recent events within the last 7 days, so event types absent from that sample are not included.""",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_event_types() -> Dict[str, Any]:
     """Get recently observed exact event keys."""

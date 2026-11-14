@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
         "Lists all access policies configured on the Access controller. "
         "Shows policy name, assigned doors, schedules, and user groups."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="policy",
     permission_action="read",
     auth="local_only",
@@ -52,7 +52,7 @@ async def access_list_policies() -> Dict[str, Any]:
         "Returns detailed information for a single access policy including "
         "assigned doors, schedule, user groups, and configuration."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="policy",
     permission_action="read",
     auth="local_only",
@@ -76,7 +76,7 @@ async def access_get_policy(
 @server.tool(
     name="access_list_schedules",
     description="Lists all access schedules configured on the Access controller.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="schedule",
     permission_action="read",
     auth="local_only",
@@ -100,7 +100,7 @@ async def access_list_schedules() -> Dict[str, Any]:
         "name, door_ids, schedule_id, user_group_ids, and enabled. "
         "Requires confirm=true to apply. Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="policy",
     permission_action="update",
     auth="local_only",

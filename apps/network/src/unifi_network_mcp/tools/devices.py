@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
         "Full details and mutations can require session credentials."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_devices(
     device_type: Annotated[
@@ -139,7 +139,7 @@ async def list_devices(
         "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
         "summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs)."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_device_details(
     mac_address: Annotated[
@@ -400,7 +400,7 @@ RADIO_BAND_LABELS = {"ng": "2.4GHz", "na": "5GHz", "6e": "6GHz", "wifi6e": "6GHz
         "Returns per-band config (channel, tx_power, channel width, min_rssi) "
         "and live stats (actual tx_power, channel utilization, client count, retries)."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_device_radio(
     mac_address: Annotated[
@@ -713,7 +713,7 @@ async def trigger_speedtest(
 @server.tool(
     name="unifi_get_speedtest_status",
     description="Check the status of a running speedtest on the gateway.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_speedtest_status(
     gateway_mac: Annotated[str, Field(description="MAC address of the gateway device")],
@@ -743,7 +743,7 @@ async def get_speedtest_status(
         "Filters apply before pagination, limit is at most 500, and pagination metadata includes "
         "total_count, returned_count/count, limit, offset, next_offset, and has_more."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_rogue_aps(
     within_hours: Annotated[
@@ -852,7 +852,7 @@ async def trigger_rf_scan(
         "Trigger a scan first with unifi_trigger_rf_scan if no results are available. "
         "Scans take 5-10 minutes — if spectrum_scanning is true, the scan is still in progress."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_rf_scan_results(
     ap_mac: Annotated[
@@ -884,7 +884,7 @@ async def get_rf_scan_results(
         "Returns per-band channel lists with DFS status and max power. "
         "Useful for planning channel assignments."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_available_channels() -> Dict[str, Any]:
     """List allowed RF channels for the site's regulatory domain."""
@@ -1051,7 +1051,7 @@ async def set_site_leds(
         "so callers see both reported and intended state per outlet. "
         "Returns an error if the device is not a PDU."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_pdu_outlets(
     mac_address: Annotated[

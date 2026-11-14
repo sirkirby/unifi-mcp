@@ -31,7 +31,7 @@ optional limit, offset, case-insensitive search by code or note (including UI
 hyphenated codes), and strict fields projection. Deterministic pagination sorts
 by created_at descending with id descending tie-break for shaped calls;
 unshaped calls preserve controller return order for backward compatibility.""",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_vouchers(
     limit: Annotated[
@@ -124,7 +124,7 @@ async def list_vouchers(
 @server.tool(
     name="unifi_get_voucher_details",
     description="Get detailed information about a specific voucher by its ID",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_voucher_details(
     voucher_id: Annotated[str, Field(description="Unique identifier (_id) of the voucher (from unifi_list_vouchers)")],

@@ -70,7 +70,7 @@ def _default_window(start: Optional[datetime], end: Optional[datetime]) -> tuple
         "fields, when Protect provides them. For real-time buffer events use "
         "protect_recent_events."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_events(
     start: Annotated[
@@ -148,7 +148,7 @@ async def protect_list_events(
         "recognized Known Face and license-plate (LPR) identity fields when "
         "Protect provides them."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_event(
     event_id: Annotated[str, Field(description="Event UUID (from protect_list_events or protect_recent_events)")],
@@ -184,7 +184,7 @@ async def protect_get_event(
         "Thumbnails are generated after an event ends; in-progress events may "
         "not have thumbnails yet. Optionally specify width/height to resize."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_event_thumbnail(
     event_id: Annotated[str, Field(description="Event UUID (from protect_list_events or protect_recent_events)")],
@@ -224,7 +224,7 @@ async def protect_get_event_thumbnail(
         "license-plate (LPR) detections include recognized plate identity fields, "
         "when Protect provides them."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_smart_detections(
     start: Annotated[
@@ -312,7 +312,7 @@ async def protect_list_smart_detections(
         "smart detection events. excludeMotion defaults to true so plain motion "
         "events are filtered out."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_search_detections(
     labels: Annotated[
@@ -392,7 +392,7 @@ async def protect_search_detections(
         "types, event types, etc.) that the 'Find Anything' panel offers. Use the "
         "returned values as labels for protect_search_detections."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_detection_search_labels() -> Dict[str, Any]:
     """List the detection-search filter vocabulary."""
@@ -418,7 +418,7 @@ async def protect_detection_search_labels() -> Dict[str, Any]:
         "when Protect provides them. Use this for real-time monitoring; use "
         "protect_list_events for historical queries."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_recent_events(
     event_type: Annotated[
@@ -503,7 +503,7 @@ async def protect_recent_events(
         "Provides the MCP resource URI for the event stream and guidance on "
         "polling intervals. Use this to set up continuous event monitoring."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_subscribe_events() -> Dict[str, Any]:
     """Return subscription instructions for event streaming."""
@@ -540,7 +540,7 @@ async def protect_subscribe_events() -> Dict[str, Any]:
         "This is the closest equivalent to 'marking as read' in the Protect "
         "system. Requires confirm=True to apply."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="update",
 )

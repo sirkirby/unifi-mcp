@@ -35,7 +35,7 @@ def _as_port_list(value: Optional[int]) -> Optional[List[int]]:
         "pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or "
         "use within_hours. Read-only; one page per call (use page/total_page_count to paginate)."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_traffic_flows(
     within_hours: Annotated[
@@ -113,7 +113,7 @@ async def get_traffic_flows(
         "These IDs are scoped to the V2 traffic-flow tool family — do not pass them to Integration API DPI "
         "tools. Read-only."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_traffic_flow_statistics(
     period: Annotated[str, Field(description="Time window: HOUR, DAY, WEEK, or MONTH")] = "DAY",

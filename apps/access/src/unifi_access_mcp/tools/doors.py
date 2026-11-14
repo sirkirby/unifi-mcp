@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
         "Lists all doors managed by the Access controller with their name, "
         "lock state, and connection status. Use to get an overview of all doors."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="read",
     auth="either",
@@ -60,7 +60,7 @@ async def access_list_doors(
     description=(
         "Returns detailed information for a single door including lock state, configuration, and connected devices."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="read",
     auth="either",
@@ -87,7 +87,7 @@ async def access_get_door(
         "Unlock a door for a specified duration. This is a physical real-world action. "
         "Requires confirm=true to execute. Default duration is 2 seconds."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     permission_category="door",
     permission_action="update",
     auth="either",
@@ -137,7 +137,7 @@ async def access_unlock_door(
         "Lock a door immediately. This is a physical real-world action. "
         "Requires confirm=true to execute. Uses the Access API client when available, with local proxy fallback."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="update",
     auth="either",
@@ -184,7 +184,7 @@ async def access_lock_door(
         "Returns the current lock and position status for a single door. "
         "Lightweight alternative to access_get_door when you only need state info."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="read",
     auth="either",
@@ -211,7 +211,7 @@ async def access_get_door_status(
         "Lists all door groups configured on the Access controller. "
         "Door groups organize doors for policy assignment. Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="read",
     auth="local_only",

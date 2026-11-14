@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
     description=(
         "Lists all access credentials (NFC cards, PINs, mobile credentials) with their type, status, and assigned user."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="credential",
     permission_action="read",
     auth="local_only",
@@ -60,7 +60,7 @@ async def access_list_credentials() -> Dict[str, Any]:
         "Returns detailed information for a single access credential "
         "including type, status, assigned user, and creation date."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="credential",
     permission_action="read",
     auth="local_only",
@@ -92,7 +92,7 @@ async def access_get_credential(
         "and assign it to a user. Requires confirm=true to execute. "
         "Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     permission_category="credential",
     permission_action="create",
     auth="local_only",
@@ -167,7 +167,7 @@ async def access_create_credential(
         "credential from the system. Requires confirm=true to execute. "
         "Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="credential",
     permission_action="delete",
     auth="local_only",

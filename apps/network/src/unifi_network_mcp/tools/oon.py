@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
     description="List OON (Object-Oriented Network) policies. "
     "These policies control internet access schedules (bedtime blackouts), "
     "application blocking (social media, streaming), QoS, and policy-based routing.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_oon_policies() -> Dict[str, Any]:
     """
@@ -61,7 +61,7 @@ async def list_oon_policies() -> Dict[str, Any]:
     name="unifi_get_oon_policy_details",
     description="Get detailed configuration for a specific OON policy by ID. "
     "Returns the full policy object including secure, qos, route sections and targets.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_oon_policy_details(
     policy_id: Annotated[str, Field(description="The unique identifier of the OON policy")],

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
         "Supports filtering by time range, door, user, and result limit. "
         "For real-time buffer events use access_recent_events."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="read",
     auth="local_only",
@@ -94,7 +94,7 @@ async def access_list_events(
         "Returns detailed information for a single access event including "
         "event type, door, user, timestamp, and result."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="read",
     auth="local_only",
@@ -122,7 +122,7 @@ async def access_get_event(
         "Supports filtering by event type and door. "
         "Use for real-time monitoring; use access_list_events for historical queries."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="read",
     auth="either",
@@ -177,7 +177,7 @@ async def access_recent_events(
         "Provides the MCP resource URI for the event stream and guidance on "
         "polling intervals. Use this to set up continuous event monitoring."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="read",
     auth="either",
@@ -212,7 +212,7 @@ async def access_subscribe_events() -> Dict[str, Any]:
         "Shows event counts, breakdowns by type, and trends. Optionally scope to "
         "a single door. Only available via local proxy session."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="event",
     permission_action="read",
     auth="local_only",
