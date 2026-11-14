@@ -75,8 +75,10 @@ async def lookup_by_ip(
     description=(
         "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
         "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
-        "channel, radio. Filter by filter_type (all/wired/wireless), set "
-        "include_offline=true for historical clients. Use search to filter by "
+        "channel, radio. Clients with a DHCP reservation also carry fixed_ip. "
+        "Filter by filter_type (all/wired/wireless), set "
+        "include_offline=true to add offline/historical clients to the connected ones "
+        "(connected clients keep their live status and wireless fields). Use search to filter by "
         "name/hostname/IP/MAC (case-insensitive). For a single client's full raw "
         "object, use unifi_get_client_details. For IP-to-client lookup, use "
         "unifi_lookup_by_ip. Pass an entry's mac to the client tools as "
@@ -111,7 +113,7 @@ async def list_clients(
         Field(
             description=(
                 "Comma-separated list of fields to return per client (default: all). "
-                "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id. "
+                "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. "
                 "Wireless-only: essid, signal_dbm, channel, radio. "
                 "Example: fields='mac,name,ip' returns only those 3 fields."
             )

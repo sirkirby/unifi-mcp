@@ -137,6 +137,7 @@ def shape_client_list(
             if search_lower in (client.get("name") or "").lower()
             or search_lower in (client.get("hostname") or "").lower()
             or search_lower in (client.get("ip") or "").lower()
+            or search_lower in (client.get("last_ip") or "").lower()
             or search_lower in (client.get("mac") or "").lower()
         ]
 
@@ -153,6 +154,7 @@ def shape_client_list(
         "status",
         "last_seen",
         "_id",
+        "fixed_ip",
         "essid",
         "signal_dbm",
         "channel",
@@ -169,6 +171,8 @@ def shape_client_list(
         full_data = client_from_controller(client).model_dump(exclude_none=True)
         full_data["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
         full_data["_id"] = client.get("_id")
+        if client.get("use_fixedip") and client.get("fixed_ip"):
+            full_data["fixed_ip"] = client["fixed_ip"]
         if client.get("source_api") == "integration":
             full_data.update(source_api="integration", integration_id=client["integration_id"])
             full_data.update(is_wired=client.get("is_wired"), is_guest=None)
@@ -251,7 +255,10 @@ def shape_client_details(
                 "vlan": raw.get("vlan"),
                 "use_fixedip": raw.get("use_fixedip", False),
                 "fixed_ip": raw.get("fixed_ip"),
+                "local_dns_record_enabled": raw.get("local_dns_record_enabled", False),
                 "local_dns_record": raw.get("local_dns_record"),
+                "fixed_ap_enabled": raw.get("fixed_ap_enabled", False),
+                "fixed_ap_mac": raw.get("fixed_ap_mac"),
             }
         )
     if (include_all or "wireless" in sections) and not raw.get("is_wired", False):

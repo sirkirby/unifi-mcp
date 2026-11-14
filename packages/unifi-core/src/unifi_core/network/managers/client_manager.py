@@ -59,7 +59,16 @@ class ClientManager:
         application surface.
         """
         if include_offline:
-            return await self.get_all_clients()
+            all_clients = await self.get_all_clients()
+            # /rest/user records carry no live state (is_online, uptime, essid,
+            # signal), so a client that is connected right now would otherwise be
+            # reported offline. Overlay the live /stat/sta record where one exists.
+            try:
+                online_clients = await self.get_clients()
+            except Exception as overlay_e:
+                logger.debug("Live client overlay skipped: %s", type(overlay_e).__name__)
+                return all_clients
+            return self._overlay_live_records(all_clients, online_clients)
         if getattr(self._connection, "has_api_key", False) is True:
             await self._connection.initialize()
             if self._connection.integration_inventory_only:
@@ -135,6 +144,42 @@ class ClientManager:
         except Exception as e:
             logger.error("Error getting all clients: %s", type(e).__name__)
             raise
+
+    @classmethod
+    def _overlay_live_records(cls, all_clients: List[Any], online_clients: List[Any]) -> List[Any]:
+        """Merge live /stat/sta fields over the matching /rest/user records.
+
+        Records without a live counterpart are returned unchanged. Live records
+        missing from the historical list are appended so no connected client is
+        dropped from the combined view.
+        """
+        live_by_mac: dict[str, dict] = {}
+        for client in online_clients:
+            mac = normalize_mac(cls._mac_of(client))
+            raw = cls._raw_of(client)
+            if mac and raw:
+                live_by_mac[mac] = raw
+        if not live_by_mac:
+            return all_clients
+        merged: List[Any] = []
+        for client in all_clients:
+            live = live_by_mac.pop(normalize_mac(cls._mac_of(client)) or "", None)
+            merged.append({**cls._raw_of(client), **live} if live is not None else client)
+        merged.extend(live_by_mac.values())
+        return merged
+
+    @classmethod
+    def _ip_of(cls, c: Any) -> Optional[str]:
+        """Current IP of a client record, falling back to its last known IP.
+
+        /stat/sta reports ``ip``; /rest/user (offline/historical) reports only
+        ``last_ip``.
+        """
+        raw = cls._raw_of(c)
+        if raw:
+            return raw.get("ip") or raw.get("last_ip")
+        ip = getattr(c, "ip", None)
+        return ip if isinstance(ip, str) else None
 
     @staticmethod
     def _mac_of(c: Any) -> Optional[str]:
@@ -552,13 +597,23 @@ class ClientManager:
 
         # Search online clients first to avoid stale IP assignments
         online_clients = await self.get_clients()
-        match: Optional[Client] = next((c for c in online_clients if c.ip == ip_address), None)
+        match: Optional[Client] = next((c for c in online_clients if self._ip_of(c) == ip_address), None)
         if match:
             return match
 
-        # Fallback to all clients (including offline/historical)
+        # Fallback to all clients (including offline/historical). Historical
+        # records report the address as ``last_ip``; when several once held it,
+        # the most recently seen one is the least stale answer.
         all_clients = await self.get_all_clients()
-        return next((c for c in all_clients if c.ip == ip_address), None)
+        candidates = [c for c in all_clients if self._ip_of(c) == ip_address]
+        if not candidates:
+            return None
+
+        def _last_seen(c: Any) -> float:
+            value = self._raw_of(c).get("last_seen")
+            return float(value) if isinstance(value, (int, float)) else 0.0
+
+        return max(candidates, key=_last_seen)
 
     @staticmethod
     def _ip_settings_payload(
