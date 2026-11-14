@@ -118,3 +118,35 @@ def api_server_command() -> list[str]:
     if script.exists():
         return [str(script)]
     return ["uv", "run", "--package", "unifi-api-server", "unifi-api-server"]
+
+
+@pytest.fixture
+def cloud_secrecy_guard(monkeypatch, caplog):
+    """Check actual encrypted blobs and key fragments at each tested egress boundary."""
+    import logging
+
+    from unifi_api.db.crypto import ColumnCipher
+
+    from tests.sitemanager_secrets import KEY, assert_no_cloud_secret
+
+    ciphertexts = []
+    encrypt = ColumnCipher.encrypt
+
+    def record_ciphertext(self, *args, **kwargs):
+        blob = encrypt(self, *args, **kwargs)
+        ciphertexts.append(blob)
+        return blob
+
+    monkeypatch.setattr(ColumnCipher, "encrypt", record_ciphertext)
+    for logger in ("unifi-api", "unifi_api", "unifi_core.sitemanager"):
+        caplog.set_level(logging.DEBUG, logger=logger)
+
+    keys = {KEY}
+
+    def check(value, *, key=KEY, allow_redacted=False):
+        keys.add(key)
+        assert_no_cloud_secret(value, key=key, ciphertexts=ciphertexts, allow_redacted=allow_redacted)
+
+    yield check
+    for key in keys:
+        check(caplog.text, key=key)

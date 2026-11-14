@@ -41,6 +41,7 @@ def _row_to_dict(row: AuditLog) -> dict:
         "ts": row.ts.isoformat(),
         "key_id_prefix": row.key_id_prefix,
         "controller": row.controller,
+        "sitemanager_connection": row.sitemanager_connection,
         "target": row.target,
         "outcome": row.outcome,
         "error_kind": row.error_kind,
@@ -55,13 +56,17 @@ async def write_audit(
     controller: str | None,
     target: str,
     outcome: str,
+    sitemanager_connection: str | None = None,
     error_kind: str | None = None,
     detail: str | None = None,
 ) -> None:
+    if controller is not None and sitemanager_connection is not None:
+        raise ValueError("Audit record must select only one connection kind")
     row = AuditLog(
         ts=datetime.now(timezone.utc),
         key_id_prefix=key_id_prefix,
         controller=controller,
+        sitemanager_connection=sitemanager_connection,
         target=target,
         outcome=outcome,
         error_kind=error_kind,

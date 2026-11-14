@@ -18,6 +18,7 @@ PRODUCTS: tuple[tuple[str, str], ...] = (
     ("network", "unifi_network_mcp"),
     ("protect", "unifi_protect_mcp"),
     ("access", "unifi_access_mcp"),
+    ("sitemanager", "unifi_sitemanager_mcp"),
 )
 SCHEMA_VERSION = 1
 GENERATED_BY = "scripts/generate_api_action_catalog.py"
@@ -79,6 +80,11 @@ def _manager_types(repo_root: Path) -> dict[tuple[str, str], type]:
                     if instruction.opname == "LOAD_DEREF" and instruction.argval in closure
                 )
                 manager_types[(product, manager_attr)] = closure[target_name].cell_contents
+        from unifi_api.services.sitemanager_managers import _build_sitemanager_managers
+
+        manager_types.update(
+            {("sitemanager", name): type(manager) for name, manager in _build_sitemanager_managers(object()).items()}
+        )
         return manager_types
     finally:
         sys.path.remove(str(api_src))
@@ -93,6 +99,12 @@ def _manager_attributes(repo_root: Path) -> dict[str, set[str]]:
 
     managers: dict[str, set[str]] = {}
     for product, _package in PRODUCTS:
+        if product == "sitemanager":
+            path = repo_root / "apps/api/src/unifi_api/services/sitemanager_managers.py"
+            try:
+                tree = ast.parse(path.read_text(), filename=str(path))
+            except (OSError, SyntaxError) as exc:
+                raise CatalogGenerationError(f"cannot parse account manager registry {path}: {exc}") from exc
         function_name = f"_build_{product}_managers"
         function = next(
             (
@@ -383,6 +395,13 @@ def render_catalog(
                     f"has unexpected={sorted(unexpected)} missing={sorted(missing)}; add a tested argument translator"
                 )
 
+        expected_kind = "sitemanager_account" if product == "sitemanager" else "controller"
+        if tool.get("connection_kind", expected_kind) != expected_kind:
+            raise CatalogGenerationError(f"{product}:{name}: mismatched connection_kind")
+        if product == "sitemanager" and (
+            permission_action != "read" or read_only_hint is not True or tool.get("auth_method") != "api_key_only"
+        ):
+            raise CatalogGenerationError(f"{product}:{name}: requires read-only API-key safety metadata")
         category = tool.get("permission_category")
         if not isinstance(category, str) or not category:
             module = path.stem
@@ -400,6 +419,9 @@ def render_catalog(
                 "input_schema": _api_input_schema(tool, product=product, name=name, path=path),
             }
         )
+
+        if product == "sitemanager":
+            actions[-1]["connection_kind"] = "sitemanager_account"
 
     excluded = [
         {"name": name, "product": product, "reason": reason}

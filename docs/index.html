@@ -49,6 +49,7 @@
           {"@type": "SoftwareApplication", "name": "unifi-network-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/network"},
           {"@type": "SoftwareApplication", "name": "unifi-protect-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect"},
           {"@type": "SoftwareApplication", "name": "unifi-access-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/access"},
+          {"@type": "SoftwareApplication", "name": "unifi-sitemanager-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager"},
           {"@type": "SoftwareApplication", "name": "unifi-api-server", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api"},
           {"@type": "SoftwareApplication", "name": "unifi-mcp-relay", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay"},
           {"@type": "SoftwareApplication", "name": "unifi-mcp-worker", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker"}
@@ -73,7 +74,7 @@
         <a href="#products">Products</a><a href="#safety">Safety</a><a href="#install">Install</a>
       </div>
       <div class="nav-actions">
-        <a class="github-link" href="https://github.com/sirkirby/unifi-mcp">GitHub <span data-stars>★ 510</span></a>
+        <a class="github-link" href="https://github.com/sirkirby/unifi-mcp">GitHub <span data-stars>★ 1,062</span></a>
         <a class="sponsor-link" href="sponsor/" aria-label="Sponsor UniFi MCP">
           <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M8 14.25l-.345-.666C3.612 9.73 1 7.197 1 4.25 1 2.178 2.678.5 4.75.5 6.13.5 7.365 1.31 8 2.476 8.635 1.31 9.87.5 11.25.5 13.322.5 15 2.178 15 4.25c0 2.947-2.612 5.48-6.655 9.334L8 14.25z"></path>
@@ -95,7 +96,7 @@
           <a class="button secondary" href="#products">Explore the products</a>
         </div>
         <div class="proof-row" aria-label="Project overview">
-          <div><strong>280+ MCP tools</strong><span>Across Network, Protect, and Access.</span></div>
+          <div><strong>300+ MCP tools</strong><span>Across Network, Protect, Access, and Site Manager.</span></div>
           <div><strong>REST + GraphQL</strong><span>A standalone API for apps and automation.</span></div>
           <div><strong>Local first</strong><span>Optional Cloud Relay for remote MCP access.</span></div>
         </div>
@@ -115,7 +116,7 @@
             <p class="product-number">01</p>
             <div>
               <h3>MCP for agents</h3>
-              <p>Independent servers share a consistent discovery, confirmation, and policy model. Run one or combine all three.</p>
+              <p>Independent servers share a consistent discovery, confirmation, and policy model. Network, Protect, and Access talk to your console; Site Manager reads your whole UI account from Ubiquiti's cloud. Run one or combine them.</p>
             </div>
           </div>
           <div class="server-list">
@@ -131,6 +132,10 @@
               <div><h4>Access <span>Stable</span></h4><p>Doors, visitors, credentials, policies, devices, and activity records.</p></div>
               <div class="server-meta"><strong>37 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/access">unifi-access-mcp</a></div>
             </div>
+            <div class="server-row sitemanager" data-product="sitemanager" data-tool-count="9" data-release="released">
+              <div><h4>Site Manager <span>Beta</span></h4><p>Read-only, account-wide hosts, sites, devices, ISP metrics, and SD-WAN status. Requests go to Ubiquiti's cloud at api.ui.com with one account key.</p></div>
+              <div class="server-meta"><strong>9 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager">unifi-sitemanager-mcp</a></div>
+            </div>
           </div>
         </article>
 
@@ -142,6 +147,7 @@
             </div>
             <ul class="feature-list">
               <li>Typed REST reads across Network, Protect, and Access</li>
+              <li>Optional Site Manager cloud connection for account-wide reads</li>
               <li>Read-only GraphQL over consumer-facing resource shapes</li>
               <li>REST actions for supported controller operations</li>
               <li>SSE streams, scoped API keys, and audit records</li>
@@ -216,7 +222,7 @@
           <p>The tools stay close to real controller capabilities; reusable plugin skills turn them into repeatable workflows.</p>
         </div>
         <div class="outcome-grid">
-          <article><h3>Network operations</h3><p>Inventory, health, policy review, and controlled configuration changes.</p></article>
+          <article><h3>Network operations</h3><p>Inventory, health, policy review, and controlled configuration changes, plus a read-only view of every console on the account.</p></article>
           <article><h3>Protect investigations</h3><p>Event, detection, recording, and incident workflows grounded in controller data.</p></article>
           <article><h3>Access workflows</h3><p>Door, visitor, credential, and activity work with explicit mutation controls.</p></article>
           <article><h3>Cross-product context</h3><p>Join network, camera, and access evidence, with optional remote MCP access.</p></article>
@@ -231,7 +237,7 @@
         <div class="section-intro">
           <p class="kicker">Install</p>
           <h2>Start with the MCP path that fits your client.</h2>
-          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent. Already using the plugins? Read the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md">plugin upgrade guide</a> before updating.</p>
+          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself. You can also hand the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md">agent installation guide</a> to your coding agent. Already using the plugins? Read the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/docs/plugin-upgrade.md">plugin upgrade guide</a> before updating. The Site Manager server reads a whole UI account from Ubiquiti's cloud and needs only its own <a href="https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/configuration.md">Site Manager API key</a>.</p>
         </div>
         <div class="install-card">
           <div class="install-tabs" role="tablist" aria-label="MCP installation methods">
@@ -268,7 +274,10 @@ uvx <span class="value">unifi-network-mcp@latest</span>
 uvx <span class="value">unifi-protect-mcp@latest</span>
 uvx <span class="value">unifi-access-mcp@latest</span>
 
-<span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span></code></pre>
+<span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span>
+
+<span class="comment"># Site Manager reads the cloud account; give it only UNIFI_SITEMANAGER_API_KEY_FILE</span>
+uvx <span class="value">unifi-sitemanager-mcp@latest</span></code></pre>
           </div>
           <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" class="install-panel" data-install-panel="docker" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>
@@ -301,6 +310,7 @@ docker compose up -d</code></pre>
 pipx install <span class="value">unifi-network-mcp</span>
 pipx install <span class="value">unifi-protect-mcp</span>
 pipx install <span class="value">unifi-access-mcp</span>
+pipx install <span class="value">unifi-sitemanager-mcp</span>
 
 <span class="comment"># Then point your MCP client at the binary on PATH</span>
 <span class="command">unifi-network-mcp</span></code></pre>
@@ -319,9 +329,9 @@ pipx install <span class="value">unifi-access-mcp</span>
         <div class="section-intro"><p class="kicker">FAQ</p><h2>Useful context before you connect.</h2></div>
         <div class="faq-list">
           <details open><summary>Is this an official Ubiquiti project?</summary><p>No. UniFi MCP is an independent, community-maintained open-source project and is not affiliated with Ubiquiti.</p></details>
-          <details><summary>Does local use require a cloud service?</summary><p>No. MCP servers and the API can run on your network with local controller access. The Cloud Relay is optional and only needed for remote MCP clients.</p></details>
+          <details><summary>Does local use require a cloud service?</summary><p>No. The Network, Protect, and Access servers and the API can run on your network with local controller access. The Cloud Relay is optional and only needed for remote MCP clients. The Site Manager server is the exception: it always reads Ubiquiti's cloud API at api.ui.com, even when it runs locally, and its key covers the whole UI account.</p></details>
           <details><summary>How are changes kept under control?</summary><p>Confirmation mode previews mutations by default. Operators can add policy gates that prevent create, update, or delete behavior at multiple scopes.</p></details>
-          <details><summary>Which controllers are supported?</summary><p>The project targets supported UniFi Network, Protect, and Access environments, with compatibility varying by product, controller, firmware, and exposed API surface. Check the component README for current requirements.</p></details>
+          <details><summary>Which controllers are supported?</summary><p>The project targets supported UniFi Network, Protect, and Access environments, with compatibility varying by product, controller, firmware, and exposed API surface. The Site Manager server needs no controller access: it reads the consoles on a UI account through Ubiquiti's cloud API. Check the component README for current requirements.</p></details>
           <details><summary>Can I use my own MCP client?</summary><p>Yes. Every server exposes stdio. Optional HTTP transport supports clients that connect through Streamable HTTP or SSE-compatible paths.</p></details>
           <details><summary>How can I contribute?</summary><p>Start with the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/CONTRIBUTING.md">contributor guide</a>, open an issue, or join a discussion. Documentation, compatibility reports, and focused pull requests all help.</p></details>
         </div>
@@ -338,7 +348,7 @@ pipx install <span class="value">unifi-access-mcp</span>
         </a>
         <p>Open-source interfaces for agents and applications working with UniFi infrastructure.</p>
       </div>
-      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li></ul></div>
+      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li><li><a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a></li></ul></div>
       <div><h2>Applications</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API server</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay">Relay sidecar</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker">Worker gateway</a></li></ul></div>
       <div><h2>Project</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/docs">Documentation</a></li><li><a href="https://github.com/sirkirby/unifi-mcp">GitHub</a></li><li><a href="sponsor/">Sponsor</a></li><li><a href="privacy.html">Privacy</a></li><li><a href="llms.txt">llms.txt</a></li></ul></div>
     </div>

@@ -115,7 +115,8 @@ controller or infer write/websocket support from successful reads.
 
 Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authenticated by a Site Manager API key, with its own ID family. Its key and a console's local key are different credentials for different destinations.
 
-- The Site Manager key MUST be read only with `resolve_env("api_key", env_prefix="SITEMANAGER", shared_fallback=False)`. Reading it from `config.yaml`, `CONFIG_PATH`, `UNIFI_API_KEY`, or any shared `UNIFI_*` variable is **banned**.
+- The MCP runtime MUST read the Site Manager key only with `resolve_env("api_key", env_prefix="SITEMANAGER", shared_fallback=False)`. Reading it from `config.yaml`, `CONFIG_PATH`, `UNIFI_API_KEY`, or any shared `UNIFI_*` variable is **banned**.
+- The API server stores its Site Manager key encrypted in its own database and passes it directly to the core constructor. API environment/config fallback and importing the MCP runtime are banned. Its separate account factory owns generation leases; cloud connections never enter the console factory or Controller records.
 - The destination MUST stay the fixed constant. Making it configurable from env or config is **banned**; tests pass `base_url` to the constructor.
 - The HTTP session MUST NOT follow redirects or honor proxy environment variables.
 - Transport exceptions MUST NOT be re-raised, wrapped, chained, or logged: they carry request headers. Raise typed errors built from fixed text, the HTTP status, and the upstream trace id.

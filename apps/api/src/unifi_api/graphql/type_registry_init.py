@@ -792,4 +792,7 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type("access_get_system_info", AccessSystemInfoType, "detail")
     reg.register_tool_type("access_get_health", AccessHealthType, "detail")
 
+    from unifi_api.graphql.types.sitemanager.registration import register_types
+
+    register_types(reg)
     return reg

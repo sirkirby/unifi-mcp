@@ -359,7 +359,7 @@ def test_tracked_plugin_edits_require_bump(repo: Path, stage: bool) -> None:
         versions.check(repo, "base")
 
 
-@pytest.mark.parametrize("product", ["network", "protect", "access"])
+@pytest.mark.parametrize("product", ["network", "protect", "access", "sitemanager"])
 def test_update_pin_keeps_each_product_and_other_arguments(tmp_path: Path, product: str) -> None:
     bundle = tmp_path / f"unifi-{product}"
     for filename in versions.MANIFESTS:
@@ -378,3 +378,97 @@ def test_root_mcp_json_is_rejected(repo: Path) -> None:
     edit(repo, "plugins/unifi-network/.mcp.json", mcpServers={})
     with pytest.raises(ValueError, match="root .mcp.json is unsupported"):
         versions.plugin_state(repo / "plugins/unifi-network")
+
+
+def sitemanager_bundle(root: Path, pin: str) -> Path:
+    bundle = root / "plugins/unifi-sitemanager"
+    for filename in versions.MANIFESTS:
+        write(bundle, filename, {"name": bundle.name, "version": "1.0.0"})
+    servers = {bundle.name: {"command": "uvx", "args": [f"unifi-sitemanager-mcp=={pin}"]}}
+    for filename in (versions.MANIFESTS[0], versions.CODEX_MCP):
+        edit(bundle, filename, mcpServers=servers)
+    return bundle
+
+
+def test_sitemanager_tag_triggers_consolidated_writeback() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/bump-plugin-versions.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))  # PyYAML's YAML 1.1 boolean spelling.
+    assert "sitemanager/v*.*.*" in triggers["push"]["tags"]
+    steps = workflow["jobs"]["bump"]["steps"]
+    assert any('plugin_versions.py sync --releasing "$RELEASE_TAG"' in step.get("run", "") for step in steps)
+
+
+def test_sitemanager_pin_requires_its_own_release_tag(repo: Path) -> None:
+    bundle = sitemanager_bundle(repo, "0.1.0")
+    assert versions.plugin_state(bundle) == ("1.0.0", {"unifi-sitemanager-mcp": "0.1.0"})
+    assert versions.pin_tag("unifi-sitemanager-mcp", "0.1.0") == "sitemanager/v0.1.0"
+    log(repo, "unifi-sitemanager 1.0.0")
+    with pytest.raises(ValueError, match="sitemanager/v0.1.0"):
+        versions.check(repo, "base", "network/v0.1.0")
+    versions.check(repo, "base", "sitemanager/v0.1.0")
+    versions.git(repo, "tag", "sitemanager/v0.1.0")
+    versions.check(repo, "base")
+
+
+def test_sitemanager_bundle_requires_mcp_configs(repo: Path) -> None:
+    write(repo, "plugins/unifi-sitemanager/.claude-plugin/plugin.json", {"version": "1.0.0"})
+    with pytest.raises(ValueError, match="unifi-sitemanager: missing MCP configs"):
+        versions.plugin_state(repo / "plugins/unifi-sitemanager")
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_sitemanager_first_tag_syncs_server_with_or_without_bundle(repo: Path, present: bool) -> None:
+    script = repo / "scripts/generate_server_manifest.py"
+    script.parent.mkdir()
+    script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
+    before_network = versions.plugin_state(repo / "plugins/unifi-network")
+    bundle = repo / "plugins/unifi-sitemanager"
+    if present:
+        sitemanager_bundle(repo, "0.0.0")
+        log(repo, "unifi-sitemanager 1.0.0")
+        versions.git(repo, "add", ".")
+        versions.git(repo, "commit", "-qm", "bundle")
+    before_changelog = (repo / versions.CHANGELOG).read_text()
+    versions.sync(repo, "sitemanager/v0.1.0")
+    server = json.loads((repo / "apps/sitemanager/server.json").read_text())
+    assert server["version"] == "0.1.0"
+    assert server["packages"][0]["version"] == "0.1.0"
+    assert versions.plugin_state(repo / "plugins/unifi-network") == before_network
+    if present:
+        assert versions.plugin_state(bundle) == ("1.1.0", {"unifi-sitemanager-mcp": "0.1.0"})
+        assert versions.changelog_has(repo, "unifi-sitemanager", "1.1.0")
+    else:
+        assert not bundle.exists()
+        assert (repo / versions.CHANGELOG).read_text() == before_changelog
+    before = versions.git(repo, "diff")
+    versions.sync(repo, "sitemanager/v0.1.0")
+    assert versions.git(repo, "diff") == before
+
+
+def test_sitemanager_existing_current_pin_does_not_bump_initial_plugin(repo: Path) -> None:
+    script = repo / "scripts/generate_server_manifest.py"
+    script.parent.mkdir()
+    script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
+    bundle = sitemanager_bundle(repo, "0.1.0")
+    log(repo, "unifi-sitemanager 1.0.0")
+    versions.git(repo, "add", ".")
+    versions.git(repo, "commit", "-qm", "initial bundle")
+    versions.sync(repo, "sitemanager/v0.1.0")
+    assert versions.plugin_state(bundle) == ("1.0.0", {"unifi-sitemanager-mcp": "0.1.0"})
+    versions.sync(repo, "sitemanager/v0.1.1")
+    assert versions.plugin_state(bundle) == ("1.0.1", {"unifi-sitemanager-mcp": "0.1.1"})
+
+
+def test_missing_existing_product_bundle_still_fails(repo: Path) -> None:
+    shutil.rmtree(repo / "plugins/unifi-network")
+    with pytest.raises(ValueError, match="unifi-network: at least one plugin manifest"):
+        versions.sync(repo)
+
+
+def test_sitemanager_present_but_malformed_bundle_is_not_skipped(repo: Path) -> None:
+    (repo / "plugins/unifi-sitemanager").mkdir()
+    script = repo / "scripts/generate_server_manifest.py"
+    script.parent.mkdir()
+    script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
+    with pytest.raises(ValueError, match="unifi-sitemanager: at least one plugin manifest"):
+        versions.sync(repo, "sitemanager/v0.1.0")

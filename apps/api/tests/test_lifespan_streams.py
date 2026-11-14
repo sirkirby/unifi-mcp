@@ -115,3 +115,55 @@ async def test_lifespan_continues_when_one_start_listening_raises(tmp_path, monk
     async with app.router.lifespan_context(app):
         pass
     # No assertion needed beyond that the context manager completed without raising
+
+
+@pytest.mark.asyncio
+async def test_cloud_configuration_starts_no_request_or_event_listener_and_closes_factory(tmp_path, monkeypatch):
+    from unifi_api.db.models import Base
+    from unifi_api.services.sitemanager_connections import create_connection
+    from unifi_core.sitemanager.managers.connection_manager import SiteManagerConnectionManager
+    from unifi_core.sitemanager.models.connections import SiteManagerConnectionCreate
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    construct = MagicMock(side_effect=AssertionError("Cloud construction at startup"))
+    from unifi_api.services import sitemanager_managers
+
+    monkeypatch.setattr(sitemanager_managers, "SiteManagerConnectionManager", construct)
+    request = AsyncMock(side_effect=AssertionError("Cloud request at startup"))
+    monkeypatch.setattr(SiteManagerConnectionManager, "get", request)
+    app = create_app(_cfg(tmp_path))
+    async with app.state.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with app.state.sessionmaker() as session:
+        await create_connection(
+            session,
+            app.state.cipher,
+            SiteManagerConnectionCreate(name="Account", site_manager_api_key="synthetic-cloud-key"),
+        )
+        await session.commit()
+    console_factory = app.state.manager_factory
+    console_factory.get_domain_manager = AsyncMock(side_effect=AssertionError("Cloud treated as console"))
+    close = AsyncMock(wraps=app.state.sitemanager_factory.close)
+    app.state.sitemanager_factory.close = close
+    async with app.router.lifespan_context(app):
+        construct.assert_not_called()
+        request.assert_not_awaited()
+        console_factory.get_domain_manager.assert_not_awaited()
+    close.assert_awaited_once()
+    assert app.state.sitemanager_factory._closed
+
+
+@pytest.mark.asyncio
+async def test_cloud_factory_closes_on_exceptional_lifespan_exit(tmp_path, monkeypatch):
+    from unifi_api.db.models import Base
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app = create_app(_cfg(tmp_path))
+    async with app.state.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    close = AsyncMock(wraps=app.state.sitemanager_factory.close)
+    app.state.sitemanager_factory.close = close
+    with pytest.raises(RuntimeError, match="synthetic-stop"):
+        async with app.router.lifespan_context(app):
+            raise RuntimeError("synthetic-stop")
+    close.assert_awaited_once()

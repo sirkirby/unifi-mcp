@@ -1218,3 +1218,436 @@ def test_gateway_settings_lifecycle_reverts_when_failed_apply_still_landed(monke
     assert checks[0][1:3] == ("lifecycle:apply", False)
     if expect_revert:
         assert checks[-1][1:3] == ("lifecycle:revert", True)
+
+
+# --- Site Manager target ---------------------------------------------------
+
+SITEMANAGER_KEY_SPELLINGS = (
+    "UNIFI_SITEMANAGER_API_KEY",
+    "UNIFI_SITEMANAGER_API_KEY_FILE",
+    "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+)
+SYNTHETIC_KEY = "sm-synthetic-test-key-0000"
+
+
+@pytest.fixture
+def sitemanager_env(monkeypatch):
+    """No Site Manager key in any spelling, no settings file, fresh shared env state."""
+    import live_smoke
+    from unifi_mcp_shared import bootstrap as shared_bootstrap
+
+    for name in (*SITEMANAGER_KEY_SPELLINGS, "UNIFI_SETTINGS_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(shared_bootstrap, "_SETTINGS_REPORT", None)
+    monkeypatch.setattr(shared_bootstrap, "_TRUSTED_VARS", None)
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+
+    def provider_must_not_run(*_args, **_kwargs):
+        raise AssertionError("a key provider was invoked")
+
+    monkeypatch.setattr(
+        shared_bootstrap,
+        "_SECRET_READERS",
+        tuple((suffix, provider_must_not_run) for suffix, _reader in shared_bootstrap._SECRET_READERS),
+    )
+    return shared_bootstrap
+
+
+def _sitemanager_args(tmp_path, **overrides):
+    values = {
+        "server": "sitemanager",
+        "phase": "safe",
+        "report_dir": str(tmp_path),
+        "delay": 0,
+        "tool": [],
+        "include_heavy_reads": False,
+        "interactive_risky": False,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _only_report(tmp_path, server="sitemanager"):
+    reports = list(tmp_path.glob(f"{server}-*.json"))
+    assert len(reports) == 1
+    return json.loads(reports[0].read_text()), reports[0].read_text()
+
+
+def test_sitemanager_is_a_server_target_and_part_of_all():
+    import live_smoke
+
+    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager"]
+    assert live_smoke.SERVER_PACKAGES["sitemanager"] == "unifi-sitemanager-mcp"
+    assert live_smoke.SERVER_CONFIGS["sitemanager"]["prefix"] == "sitemanager"
+    assert live_smoke.SUPPORT_BUNDLE_SERVERS == ("network", "protect", "access")
+
+
+def test_sitemanager_reads_are_exactly_the_nine_read_only_domain_tools():
+    import live_smoke
+    from unifi_sitemanager_mcp.categories import TOOL_MODULE_MAP
+
+    manifest = {tool["name"]: tool for tool in live_smoke.load_manifest("sitemanager")["tools"]}
+    domain = sorted(TOOL_MODULE_MAP)
+    assert len(domain) == 9
+    assert sorted(live_smoke.SITEMANAGER_DOMAIN_READS) == domain
+    assert len(live_smoke.SITEMANAGER_DOMAIN_READS) == 9
+    assert [name for name in domain if manifest[name]["annotations"].get("readOnlyHint") is not True] == []
+
+
+def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
+    import live_smoke
+
+    commands = []
+
+    def fake_run(cmd, cwd, check):
+        commands.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(live_smoke.subprocess, "run", fake_run)
+    args = SimpleNamespace(
+        phase="safe", report_dir="out", delay=0.25, include_heavy_reads=False, interactive_risky=False, tool=[]
+    )
+    assert live_smoke.run_all_servers(args) == 0
+    assert len(commands) == 4
+    script = str(Path(live_smoke.__file__).resolve())
+    for command, (server, package) in zip(
+        commands,
+        [
+            ("network", "unifi-network-mcp"),
+            ("protect", "unifi-protect-mcp"),
+            ("access", "unifi-access-mcp"),
+            ("sitemanager", "unifi-sitemanager-mcp"),
+        ],
+    ):
+        assert command == [
+            "uv", "run", "--package", package, "python", script,
+            "--server", server, "--phase", "safe", "--report-dir", "out", "--delay", "0.25",
+        ]  # fmt: skip
+
+
+def test_absent_key_is_skipped_without_init_provider_or_request(monkeypatch, tmp_path, sitemanager_env):
+    import live_smoke
+
+    def no_import(name):
+        raise AssertionError(f"imported {name}")
+
+    def no_runner(*_args, **_kwargs):
+        raise AssertionError("the server was initialized")
+
+    monkeypatch.setattr(live_smoke.importlib, "import_module", no_import)
+    monkeypatch.setattr(live_smoke, "LiveSmokeRunner", no_runner)
+
+    assert asyncio.run(live_smoke.run_one(_sitemanager_args(tmp_path))) == 0
+
+    report, _text = _only_report(tmp_path)
+    assert report["connected"] is False
+    assert [(r["tool"], r["phase"], r["status"], r["success"]) for r in report["records"]] == [
+        ("__setup__", "setup", "skipped_no_credentials", None)
+    ]
+    assert "not validated" in report["records"][0]["error"]
+
+
+def test_absent_key_cli_exits_zero(monkeypatch, tmp_path, sitemanager_env):
+    import live_smoke
+
+    monkeypatch.setattr(sys, "argv", ["live_smoke.py", "--server", "sitemanager", "--report-dir", str(tmp_path)])
+    monkeypatch.setattr(live_smoke, "LiveSmokeRunner", None)
+    assert live_smoke.main() == 0
+    assert _only_report(tmp_path)[0]["records"][0]["status"] == "skipped_no_credentials"
+
+
+@pytest.mark.parametrize("spelling", SITEMANAGER_KEY_SPELLINGS)
+def test_each_key_spelling_counts_as_configured_without_resolving(monkeypatch, sitemanager_env, spelling):
+    import live_smoke
+
+    monkeypatch.setenv(spelling, "/synthetic/not-read")
+    assert live_smoke.sitemanager_credential_state() == ("present", "")
+
+
+@pytest.mark.parametrize("spelling", [None, *SITEMANAGER_KEY_SPELLINGS])
+def test_presence_check_agrees_with_the_server_resolver(monkeypatch, sitemanager_env, spelling):
+    import live_smoke
+
+    shared_bootstrap = sitemanager_env
+    if spelling:
+        monkeypatch.setenv(spelling, "synthetic-value")
+    state, _reason = live_smoke.sitemanager_credential_state()
+    monkeypatch.setattr(shared_bootstrap, "_TRUSTED_VARS", None)
+    monkeypatch.setattr(
+        shared_bootstrap,
+        "_SECRET_READERS",
+        tuple((suffix, lambda *_a: "resolved") for suffix, _reader in shared_bootstrap._SECRET_READERS),
+    )
+    resolved = shared_bootstrap.resolve_env(
+        "api_key", env_prefix="SITEMANAGER", logger=shared_bootstrap.logging.getLogger("t"), shared_fallback=False
+    )
+    assert state == ("present" if spelling else "absent")
+    assert (resolved is not None) == (spelling is not None)
+
+
+def test_shared_api_key_is_not_a_site_manager_key(monkeypatch, sitemanager_env):
+    import live_smoke
+
+    monkeypatch.setenv("UNIFI_API_KEY", "console-local-synthetic")
+    assert live_smoke.sitemanager_credential_state()[0] == "absent"
+
+
+def test_key_only_in_settings_file_counts_as_configured(monkeypatch, tmp_path, sitemanager_env):
+    import live_smoke
+
+    settings = tmp_path / "settings.env"
+    settings.write_text("UNIFI_SITEMANAGER_API_KEY_FILE=/synthetic/not-read\n")
+    settings.chmod(0o600)
+    # Register the variable with monkeypatch so the value the settings file
+    # applies is removed after the test.
+    monkeypatch.setenv("UNIFI_SITEMANAGER_API_KEY_FILE", "placeholder")
+    monkeypatch.delenv("UNIFI_SITEMANAGER_API_KEY_FILE")
+    monkeypatch.setenv("UNIFI_SETTINGS_FILE", str(settings))
+
+    assert live_smoke.sitemanager_credential_state() == ("present", "")
+
+
+def test_unreadable_settings_file_is_a_failure_not_a_skip(monkeypatch, tmp_path, sitemanager_env):
+    import live_smoke
+
+    monkeypatch.setenv("UNIFI_SETTINGS_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setattr(live_smoke, "LiveSmokeRunner", None)
+
+    assert asyncio.run(live_smoke.run_one(_sitemanager_args(tmp_path))) == 1
+    report, _text = _only_report(tmp_path)
+    assert [(r["status"], r["success"]) for r in report["records"]] == [("failed", False)]
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"UNIFI_SITEMANAGER_API_KEY": SYNTHETIC_KEY, "UNIFI_SITEMANAGER_API_KEY_FILE": "/synthetic/key"},
+        {"UNIFI_SITEMANAGER_API_KEY_FILE": "/synthetic/missing-key-file"},
+    ],
+    ids=["two-forms", "unreadable-file"],
+)
+def test_unresolvable_configured_key_fails_through_the_server_resolver(monkeypatch, tmp_path, env):
+    """Uses the real server import, so the server's own resolver decides."""
+    import live_smoke
+    from unifi_mcp_shared import bootstrap as shared_bootstrap
+
+    for name in (*SITEMANAGER_KEY_SPELLINGS, "UNIFI_SETTINGS_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(shared_bootstrap, "_TRUSTED_VARS", None)
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+    for module in ("unifi_sitemanager_mcp.main", "unifi_sitemanager_mcp.runtime"):
+        monkeypatch.delitem(sys.modules, module, raising=False)
+
+    assert asyncio.run(live_smoke.run_one(_sitemanager_args(tmp_path))) == 1
+
+    report, text = _only_report(tmp_path)
+    assert [(r["tool"], r["status"], r["success"]) for r in report["records"]] == [("__setup__", "failed", False)]
+    assert "could not be resolved" in report["records"][0]["error"]
+    assert SYNTHETIC_KEY not in text
+    assert "Traceback" not in text
+
+
+def _sitemanager_runner(tmp_path, responses, **arg_overrides):
+    import live_smoke
+
+    calls = []
+
+    async def call_tool(name, args):
+        calls.append((name, json.loads(json.dumps(args))))
+        response = responses[name]
+        if isinstance(response, Exception):
+            raise response
+        return json.loads(json.dumps(response))
+
+    runner = live_smoke.LiveSmokeRunner("sitemanager", _sitemanager_args(tmp_path, **arg_overrides))
+    runner.server = SimpleNamespace(call_tool=call_tool)
+    runner.connection_manager = SimpleNamespace(_api_key=SYNTHETIC_KEY)
+    return runner, calls
+
+
+def _ok(data):
+    return {"success": True, "data": data}
+
+
+def _sitemanager_responses(*, configs, sites):
+    return {
+        "sitemanager_list_hosts": _ok({"hosts": [{"id": "host-fixture-1"}], "count": 1, "next_cursor": None}),
+        "sitemanager_list_sites": _ok({"sites": sites, "count": len(sites), "next_cursor": None}),
+        "sitemanager_list_sdwan_configs": _ok({"configs": configs, "count": len(configs)}),
+        "sitemanager_list_devices": _ok({"hosts": [], "host_count": 0, "device_count": 0}),
+        "sitemanager_get_isp_metrics": _ok({"sites": [], "count": 0}),
+        "sitemanager_get_host": _ok({"host": {"id": "host-fixture-1"}}),
+        "sitemanager_get_sdwan_config": _ok({"config": {"id": "config-fixture-1"}}),
+        "sitemanager_get_sdwan_config_status": _ok({"status": {"id": "config-fixture-1"}}),
+        "sitemanager_query_isp_metrics": _ok({"sites": [], "count": 0, "partial": False}),
+    }
+
+
+def test_sitemanager_reads_bounded_pages_and_derives_ids_from_its_own_lists(tmp_path):
+    responses = _sitemanager_responses(
+        configs=[{"id": "config-fixture-1"}],
+        sites=[{"site_id": "site-fixture-1"}, {"site_id": "site-fixture-2", "host_id": "host-fixture-1"}],
+    )
+    runner, calls = _sitemanager_runner(tmp_path, responses)
+    # A console-family id in the shared cache must never be used.
+    runner.cache.remember("unifi_list_devices", {"hosts": [{"id": "console-family-id"}]})
+
+    asyncio.run(runner.run())
+
+    assert calls == [
+        ("sitemanager_list_hosts", {"page_size": 5}),
+        ("sitemanager_list_sites", {"page_size": 5}),
+        ("sitemanager_list_sdwan_configs", {}),
+        ("sitemanager_list_devices", {"page_size": 5}),
+        ("sitemanager_get_isp_metrics", {"metric_type": "5m", "duration": "24h", "period_limit": 1}),
+        ("sitemanager_get_host", {"host_id": "host-fixture-1"}),
+        ("sitemanager_get_sdwan_config", {"config_id": "config-fixture-1"}),
+        ("sitemanager_get_sdwan_config_status", {"config_id": "config-fixture-1"}),
+        (
+            "sitemanager_query_isp_metrics",
+            {
+                "sites": [{"host_id": "host-fixture-1", "site_id": "site-fixture-2"}],
+                "metric_type": "5m",
+                "period_limit": 1,
+            },
+        ),
+    ]
+    assert [(r.tool, r.status) for r in runner.report.records if r.status != "ok"] == []
+    assert len(runner.report.records) == 9
+
+
+def test_sitemanager_without_sdwan_or_usable_site_skips_those_tools(tmp_path):
+    responses = _sitemanager_responses(configs=[], sites=[{"site_id": "site-fixture-1"}])
+    runner, calls = _sitemanager_runner(tmp_path, responses)
+
+    asyncio.run(runner.run())
+
+    called = [name for name, _args in calls]
+    assert len(called) == 6
+    assert "sitemanager_get_sdwan_config" not in called
+    assert "sitemanager_query_isp_metrics" not in called
+    skipped = {r.tool: r.error for r in runner.report.records if r.status == "skipped"}
+    assert skipped == {
+        "sitemanager_get_sdwan_config": "no SD-WAN configuration on the account",
+        "sitemanager_get_sdwan_config_status": "no SD-WAN configuration on the account",
+        "sitemanager_query_isp_metrics": "no site with both a host id and a site id on the account",
+    }
+    assert [r for r in runner.report.records if r.status in {"failed", "exception"}] == []
+
+
+def test_sitemanager_tool_filter_seeds_only_the_needed_list(tmp_path):
+    responses = _sitemanager_responses(configs=[], sites=[])
+    runner, calls = _sitemanager_runner(tmp_path, responses, tool=["sitemanager_get_host"])
+
+    asyncio.run(runner.run())
+
+    assert calls == [
+        ("sitemanager_list_hosts", {"page_size": 5}),
+        ("sitemanager_get_host", {"host_id": "host-fixture-1"}),
+    ]
+    assert [(r.tool, r.phase) for r in runner.report.records] == [
+        ("sitemanager_list_hosts", "seed"),
+        ("sitemanager_get_host", "readonly"),
+    ]
+
+
+@pytest.mark.parametrize("phase", ["preview", "lifecycle", "approved"])
+def test_sitemanager_mutation_phases_run_nothing(tmp_path, phase):
+    runner, calls = _sitemanager_runner(tmp_path, {}, phase=phase)
+    asyncio.run(runner.run())
+    assert calls == []
+    assert runner.report.records == []
+
+
+def test_rejected_key_is_a_failure_and_never_reaches_the_report(tmp_path):
+    import live_smoke
+
+    responses = _sitemanager_responses(configs=[], sites=[])
+    for name in responses:
+        responses[name] = {"success": False, "error": f"Failed to read: HTTP 401 for key {SYNTHETIC_KEY}"}
+    responses["sitemanager_list_sdwan_configs"] = RuntimeError(f"headers {{'X-API-KEY': '{SYNTHETIC_KEY}'}}")
+    runner, _calls = _sitemanager_runner(tmp_path, responses)
+
+    asyncio.run(runner.run())
+
+    statuses = {r.tool: r.status for r in runner.report.records}
+    assert statuses["sitemanager_list_hosts"] == "failed"
+    assert statuses["sitemanager_list_sdwan_configs"] == "exception"
+    assert statuses["sitemanager_get_host"] == "skipped"
+    text = json.dumps(live_smoke.asdict(runner.report))
+    assert SYNTHETIC_KEY not in text
+    assert "X-API-KEY" not in text
+    assert "***REDACTED***" in text
+
+
+def _registration_modules(prefix, runtime):
+    register_tools = AsyncMock()
+    modules = {
+        f"{prefix}.main": SimpleNamespace(_original_tool_decorator=object()),
+        f"{prefix}.runtime": runtime,
+        f"{prefix}.bootstrap": SimpleNamespace(UNIFI_TOOL_REGISTRATION_MODE="eager", logger=object()),
+        f"{prefix}.categories": SimpleNamespace(TOOL_MODULE_MAP={}, setup_lazy_loading=object()),
+        f"{prefix}.jobs": SimpleNamespace(start_async_tool=object(), get_job_status=object()),
+        f"{prefix}.tool_index": SimpleNamespace(tool_index_handler=object(), register_tool=object()),
+        "unifi_mcp_shared.tool_registration": SimpleNamespace(register_tools_for_mode=register_tools),
+    }
+    return modules, register_tools
+
+
+def test_setup_registers_without_support_handler_when_server_has_none(monkeypatch):
+    import live_smoke
+
+    runtime = SimpleNamespace(
+        server=object(), connection_manager=SimpleNamespace(initialize=AsyncMock(return_value=True)), config=object()
+    )
+    modules, register_tools = _registration_modules("unifi_sitemanager_mcp", runtime)
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+    monkeypatch.setattr(live_smoke.importlib, "import_module", modules.__getitem__)
+
+    asyncio.run(live_smoke.LiveSmokeRunner("sitemanager", SimpleNamespace()).setup())
+
+    kwargs = register_tools.await_args.kwargs
+    assert "support_bundle_handler" not in kwargs
+    assert (kwargs["prefix"], kwargs["server_label"]) == ("sitemanager", "UniFi Site Manager")
+
+
+def test_setup_keeps_console_support_handler(monkeypatch):
+    import live_smoke
+
+    generate = object()
+    runtime = SimpleNamespace(
+        server=object(),
+        connection_manager=SimpleNamespace(initialize=AsyncMock(return_value=True)),
+        config=object(),
+        support_bundle_service=SimpleNamespace(generate=generate),
+    )
+    modules, register_tools = _registration_modules("unifi_network_mcp", runtime)
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+    monkeypatch.setattr(live_smoke.importlib, "import_module", modules.__getitem__)
+
+    asyncio.run(live_smoke.LiveSmokeRunner("network", SimpleNamespace()).setup())
+
+    assert register_tools.await_args.kwargs["support_bundle_handler"] is generate
+
+
+def test_support_phase_on_sitemanager_is_unsupported_not_a_bundle(monkeypatch, tmp_path):
+    import live_smoke
+    import support_smoke
+
+    monkeypatch.setattr(
+        sys, "argv", ["live_smoke.py", "--server", "sitemanager", "--phase", "support", "--report-dir", str(tmp_path)]
+    )
+    run = AsyncMock(side_effect=AssertionError("support phase must not run"))
+    monkeypatch.setattr(support_smoke, "run_support_phase", run)
+
+    assert live_smoke.main() == 2
+
+    run.assert_not_awaited()
+    reports = list(tmp_path.glob("support-*.json"))
+    assert len(reports) == 1
+    payload = json.loads(reports[0].read_text())
+    assert (payload["server"], payload["status"], payload["success"]) == ("sitemanager", "unsupported", None)
+    assert "bundle" not in {key for key in payload if key != "reason"}
+    assert support_smoke.PRODUCTS == ("network", "protect", "access")

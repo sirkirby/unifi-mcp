@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
+from unifi_api.graphql.types.sitemanager.registration import REGISTRATIONS
 
 router = APIRouter()
 
@@ -23,6 +24,9 @@ async def get_tools(request: Request) -> dict:
             render_hint = serializer_registry.render_hint_for_tool(tool_name)
         except Exception:
             render_hint = {"kind": "empty"}
+        if entry.connection_kind == "sitemanager_account":
+            projection, kind = request.app.state.type_registry.lookup_tool(tool_name)
+            render_hint = projection.render_hint(kind)
         items.append(
             {
                 "name": tool_name,
@@ -34,6 +38,8 @@ async def get_tools(request: Request) -> dict:
                 "render_hint": render_hint,
             }
         )
+        if entry.connection_kind == "sitemanager_account":
+            items[-1]["connection_kind"] = entry.connection_kind
     return {"items": items}
 
 
@@ -75,6 +81,9 @@ async def get_render_hints(request: Request) -> dict:
             continue
         by_kind.setdefault(kind, {"kind": kind, "tools": [], "resources": []})
         by_kind[kind]["resources"].append({"product": product, "path": resource})
+    for resource, projection, kind in REGISTRATIONS.values():
+        by_kind.setdefault(kind, {"kind": kind, "tools": [], "resources": []})
+        by_kind[kind]["resources"].append({"product": "sitemanager", "path": resource})
     return {"items": list(by_kind.values())}
 
 
@@ -92,6 +101,10 @@ async def get_resources(request: Request) -> dict:
     seen: set[tuple[str, str]] = set()
 
     def _render_hint(product: str, resource: str) -> dict:
+        if product == "sitemanager":
+            for key, projection, kind in REGISTRATIONS.values():
+                if key == resource:
+                    return projection.render_hint(kind)
         try:
             type_class = type_registry.lookup(product, resource)
         except Exception:
@@ -114,7 +127,9 @@ async def get_resources(request: Request) -> dict:
         except Exception:
             return {"kind": "empty"}
 
-    def _path_for(resource: str) -> str:
+    def _path_for(product: str, resource: str) -> str:
+        if product == "sitemanager":
+            return f"/v1/sitemanager/{resource}"
         if "{" in resource:
             base, tmpl = resource.split("/", 1)
             return f"/v1/sites/{{site_id}}/{base}/{tmpl}"
@@ -125,7 +140,7 @@ async def get_resources(request: Request) -> dict:
         items.append(
             {
                 "product": product,
-                "resource_path": _path_for(resource),
+                "resource_path": _path_for(product, resource),
                 "render_hint": _render_hint(product, resource),
             }
         )
@@ -145,7 +160,7 @@ async def get_resources(request: Request) -> dict:
             elif resource == "client_lookup":
                 rest_path = "/v1/sites/{site_id}/lookup-by-ip"
             else:
-                rest_path = _path_for(resource)
+                rest_path = _path_for(product, resource)
             items.append(
                 {
                     "product": product,
@@ -157,8 +172,12 @@ async def get_resources(request: Request) -> dict:
         items.append(
             {
                 "product": product,
-                "resource_path": _path_for(resource),
+                "resource_path": _path_for(product, resource),
                 "render_hint": _render_hint(product, resource),
             }
         )
+    for item in items:
+        if item["product"] == "sitemanager":
+            item["connection_kind"] = "sitemanager_account"
+            item["method"] = "POST" if item["resource_path"].endswith("/isp-metrics/query") else "GET"
     return {"items": items}

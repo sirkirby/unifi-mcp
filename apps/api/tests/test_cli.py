@@ -26,6 +26,7 @@ def test_help_lists_subcommands(api_server_command) -> None:
     assert "serve" in out
     assert "migrate" in out
     assert "keys" in out
+    assert "sitemanager" in out
 
 
 def test_keys_help() -> None:

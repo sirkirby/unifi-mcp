@@ -67,7 +67,7 @@ def build_tool_module_map(
         module_name = f"{tools_package}.{tool_file.stem}"
 
         try:
-            content = tool_file.read_text()
+            content = tool_file.read_text(encoding="utf-8")
 
             # Find tool names matching the configured prefix
             pattern = rf'name\s*=\s*["\']({escaped_prefix}[a-z_]+)["\']'

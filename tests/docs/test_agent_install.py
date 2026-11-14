@@ -21,6 +21,34 @@ def test_readme_agent_prompt_points_to_canonical_guide() -> None:
     assert "explicitly deny create, update, and delete" in readme
 
 
+def test_site_manager_branch_is_key_only_and_cloud_disclosed() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    section = guide.split("## Site Manager (cloud account)", 1)[1].split("\n## ", 1)[0]
+    normalized = " ".join(section.split())
+
+    assert "Ask whether they need Network, Protect, Access, Site Manager" in " ".join(guide.split())
+    assert "`https://api.ui.com`, even over local stdio" in normalized
+    assert "Ask for no host, username, password" in normalized
+    assert "do not ask about write permissions or policy gates" in normalized
+    assert "`UNIFI_SITEMANAGER_API_KEY_FILE`" in section
+    assert "`UNIFI_SITEMANAGER_API_KEY_COMMAND`" in section
+    assert "never offer `UNIFI_API_KEY`" in normalized
+    assert "Do not ask for the key in chat" in normalized
+    assert "--env 'UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key'" in section
+    assert "UNIFI_POLICY_SITEMANAGER" not in guide
+    assert "UNIFI_SITEMANAGER_HOST" not in guide
+
+
+def test_released_site_manager_uses_published_package_and_plugin() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    section = guide.split("## Site Manager (cloud account)", 1)[1].split("\n## ", 1)[0]
+
+    assert "not published yet" not in guide
+    assert "/plugin install unifi-sitemanager@unifi-plugins" in section
+    assert "-- uvx --python-preference system unifi-sitemanager-mcp@latest" in section
+    assert "| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` |" in guide
+
+
 def test_skills_install_examples_are_scoped_to_public_product_trees() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
 

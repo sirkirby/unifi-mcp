@@ -1774,7 +1774,35 @@ def _translate_nat_toggle(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     return (), keyword
 
 
+def _translate_sitemanager_page(args):
+    result = dict(args)
+    if "cursor" in result:
+        result["next_token"] = result.pop("cursor")
+    return (), result
+
+
+def _translate_sitemanager_metrics(args):
+    from unifi_core.sitemanager.models.isp_metrics import SiteManagerMetricsGetInput
+
+    return (), SiteManagerMetricsGetInput.model_validate(args).model_dump(exclude_none=True)
+
+
+def _translate_sitemanager_query(args):
+    from unifi_core.sitemanager.models.isp_metrics import SiteManagerMetricsQueryInput
+
+    return (), SiteManagerMetricsQueryInput.model_validate(args).model_dump(exclude_none=True)
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    "sitemanager_list_hosts": _spec(_translate_sitemanager_page, "page_size", "next_token"),
+    "sitemanager_list_sites": _spec(_translate_sitemanager_page, "page_size", "next_token"),
+    "sitemanager_list_devices": _spec(
+        _translate_sitemanager_page, "host_ids", "updated_since", "page_size", "next_token"
+    ),
+    "sitemanager_get_isp_metrics": _spec(
+        _translate_sitemanager_metrics, "metric_type", "duration", "begin_timestamp", "end_timestamp", "period_limit"
+    ),
+    "sitemanager_query_isp_metrics": _spec(_translate_sitemanager_query, "metric_type", "sites", "period_limit"),
     "unifi_create_nat_rule": _spec(_translate_nat_create, "rule_data"),
     "unifi_update_nat_rule": _spec(_translate_nat_update, "rule_id", "update_data"),
     "unifi_delete_nat_rule": _spec(_translate_nat_id, "rule_id"),

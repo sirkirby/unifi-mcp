@@ -31,10 +31,14 @@ def _read_tools_by_product() -> dict[str, list[str]]:
     """
     reg = ManifestRegistry.load()
     type_registry = build_type_registry()
-    out: dict[str, list[str]] = {"network": [], "protect": [], "access": []}
+    out: dict[str, list[str]] = {"network": [], "protect": [], "access": [], "sitemanager": []}
     for tool_name in reg.all_tools():
         # Read-tool prefix filter — Phase 6 scope is unifi_list_* / unifi_get_* only.
-        if not (tool_name.startswith("unifi_list_") or tool_name.startswith("unifi_get_")):
+        if not (
+            tool_name.startswith("unifi_list_")
+            or tool_name.startswith("unifi_get_")
+            or tool_name.startswith("sitemanager_")
+        ):
             continue
         try:
             entry = reg.resolve(tool_name)
@@ -101,6 +105,16 @@ def test_every_read_tool_has_graphql_field() -> None:
         if product in EXEMPT_PRODUCTS:
             continue
         for tool_name in tools:
+            if product == "sitemanager":
+                from unifi_api.graphql._naming import tool_to_field_path
+
+                field_name = tool_to_field_path(tool_name, product=product).split(".")[-1]
+                account = graphql_schema._schema.query_type.fields["sitemanager"].type
+                while hasattr(account, "of_type"):
+                    account = account.of_type
+                if field_name not in account.fields:
+                    missing.append(f"sitemanager/{tool_name}")
+                continue
             # Loose check: some field whose name reflects the tool exists.
             # The naming-convention gate (Task 13) tightens this to an exact
             # canonical map.

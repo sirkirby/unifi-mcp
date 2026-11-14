@@ -19,6 +19,8 @@ from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.resolvers.access import AccessQuery
 from unifi_api.graphql.resolvers.network import NetworkQuery
 from unifi_api.graphql.resolvers.protect import ProtectQuery
+from unifi_api.graphql.resolvers.sitemanager import SiteManagerQuery
+from unifi_api.graphql.types.sitemanager._base import DESCRIPTION
 
 
 @strawberry.type(description="Service health snapshot — smoke field for the GraphQL endpoint.")
@@ -52,6 +54,10 @@ class Query:
     @strawberry.field(description="Read-only access to UniFi Access resources.")
     def access(self) -> AccessQuery:
         return AccessQuery()
+
+    @strawberry.field(permission_classes=[IsRead], description=DESCRIPTION)
+    def sitemanager(self) -> SiteManagerQuery:
+        return SiteManagerQuery()
 
 
 _logger = logging.getLogger("strawberry.execution")

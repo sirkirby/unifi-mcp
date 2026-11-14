@@ -13,6 +13,14 @@ There are two independent concepts:
 | **Permission Mode** | Whether mutations require a preview-then-confirm step |
 | **Policy Gates** | Hard on/off switches that disable specific actions entirely |
 
+### Site Manager: nothing to gate
+
+The Site Manager server is read-only. Its nine domain tools only read, are annotated `readOnlyHint: true`, and need no permission mode, confirmation, preview token or policy gate; `UNIFI_POLICY_*` variables have no Site Manager actions to act on. What limits it instead is the account behind its API key, which can read every console on the account.
+
+Its dispatch meta-tools carry conservative annotations, because a dispatcher's hint must hold for any tool it could run: `sitemanager_tool_index` and `sitemanager_batch_status` are read-only, while `sitemanager_execute`, `sitemanager_batch` and `sitemanager_load_tools` are not. A client that approves only read-only tools can still call the nine tools directly, which is why the default `lazy` mode lists all nine. See [Site Manager permissions](../apps/sitemanager/docs/permissions.md).
+
+The rest of this page applies to the Network, Protect and Access servers and, where stated, the API server.
+
 ---
 
 ## Permission Mode
@@ -300,6 +308,6 @@ Ensure the variable name matches the old format exactly (`UNIFI_PERMISSIONS_<CAT
 
 ## Related Documentation
 
-- [Configuration Guide](configuration.md)
-- [Security Best Practices](security.md)
+- [Configuration Guide](../apps/network/docs/configuration.md)
+- [Security Policy](../SECURITY.md)
 - [Tool Index API](tool-index.md)

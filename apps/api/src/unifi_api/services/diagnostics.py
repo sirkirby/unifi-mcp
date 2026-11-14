@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from unifi_api.db.models import ApiKey, AuditLog, Controller
+from unifi_api.db.models import ApiKey, AuditLog, Controller, SiteManagerConnection
 
 
 async def collect_diagnostics(
@@ -42,6 +42,7 @@ async def collect_diagnostics(
     api_keys_count = 0
     controllers_count = 0
     audit_rows_count = 0
+    cloud_count = 0
     try:
         db_size = db_path.stat().st_size
     except FileNotFoundError:
@@ -49,6 +50,7 @@ async def collect_diagnostics(
 
     try:
         async with sessionmaker() as session:
+            cloud_count = (await session.execute(select(func.count(SiteManagerConnection.id)))).scalar_one()
             api_keys_count = (await session.execute(select(func.count(ApiKey.id)))).scalar_one()
             controllers_count = (await session.execute(select(func.count(Controller.id)))).scalar_one()
             audit_rows_count = (await session.execute(select(func.count(AuditLog.id)))).scalar_one()
@@ -85,9 +87,11 @@ async def collect_diagnostics(
         "api_keys": api_keys_count,
         "controllers": controllers_count,
         "audit_rows": audit_rows_count,
+        "sitemanager_connections": cloud_count,
     }
 
     return {
+        "sitemanager": {"configured": bool(cloud_count)},
         "service": service,
         "database": database,
         "capability_cache": cap_cache,

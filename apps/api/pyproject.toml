@@ -30,7 +30,8 @@ dependencies = [
     # The Protect alarm trigger/action catalog and webhook firing require Core 0.4.87.
     # INTERNET routes with several clients or a VPN client target, and a bounded
     # connection cache, require Core 0.4.88.
-    "unifi-core[network,protect,access]>=0.4.88,<0.5",
+    # API-managed Site Manager connection inputs require Core 0.4.90.
+    "unifi-core[network,protect,access]>=0.4.90,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.

@@ -130,6 +130,28 @@ async def test_bad_request_includes_bounded_upstream_reason(connection, api):
     assert "x" * 200 in str(raised.value) and "x" * 201 not in str(raised.value)
 
 
+async def test_bad_request_reason_never_carries_the_api_key(connection, api):
+    api.reply("GET", "/v1/hosts", {"message": f"unexpected header value {KEY} in request"}, status=400)
+
+    with pytest.raises(UniFiValidationError) as raised:
+        await connection.get("/v1/hosts")
+
+    assert KEY not in str(raised.value)
+    assert "unexpected header value [redacted] in request" in str(raised.value)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 500])
+async def test_an_echoed_api_key_never_reaches_an_error_through_the_trace_or_code(connection, api, status):
+    api.reply("GET", "/v1/hosts", {"traceId": f"tr-{KEY}", "code": KEY, "message": "nope"}, status=status)
+
+    with pytest.raises(Exception) as raised:
+        await connection.get("/v1/hosts")
+
+    error = raised.value
+    assert KEY not in str(error) and "tr-[redacted]" in str(error)
+    assert KEY not in repr(vars(error))
+
+
 @pytest.mark.parametrize("payload", [["not", "an", "envelope"], {"httpStatusCode": 200}])
 async def test_unreadable_success_body_is_malformed(connection, api, payload):
     api.reply("GET", "/v1/hosts", payload)
@@ -208,3 +230,50 @@ def test_path_segment_refuses_values_that_could_retarget_the_request(value):
     with pytest.raises(UniFiValidationError) as raised:
         path_segment(value, "host")
     assert str(raised.value) == "Invalid host id"
+
+
+LOG_ROUTES = [
+    ("/v1/hosts", "/v1/hosts"),
+    ("/v1/hosts/CALLER-ID-123", "/v1/hosts/{id}"),
+    ("/v1/sites", "/v1/sites"),
+    ("/v1/devices", "/v1/devices"),
+    ("/v1/isp-metrics/1h", "/v1/isp-metrics/{metric_type}"),
+    ("/v1/isp-metrics/5m/query", "/v1/isp-metrics/{metric_type}/query"),
+    ("/v1/sd-wan-configs", "/v1/sd-wan-configs"),
+    ("/v1/sd-wan-configs/CALLER-ID-123", "/v1/sd-wan-configs/{id}"),
+    ("/v1/sd-wan-configs/CALLER-ID-123/status", "/v1/sd-wan-configs/{id}/status"),
+    ("/v1/CALLER-ID-123/unknown", "/{unknown}"),
+]
+
+
+@pytest.mark.parametrize("path,template", LOG_ROUTES)
+async def test_real_transport_failure_logs_only_route_template(path, template, unused_tcp_port, caplog):
+    client = SiteManagerConnectionManager(KEY, base_url=f"http://127.0.0.1:{unused_tcp_port}")
+    try:
+        with pytest.raises(UniFiConnectionError):
+            await client.get(path + "?cursor=CALLER-CURSOR-456")
+        records = [record for record in caplog.records if record.name == cm.__name__]
+        assert len(records) == 1
+        assert records[0].getMessage() == f"Site Manager request GET {template} failed (ClientConnectorError)"
+        assert records[0].exc_info is None
+        assert "CALLER" not in records[0].getMessage() and "?" not in records[0].getMessage()
+        assert KEY not in caplog.text
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize("path,template", LOG_ROUTES)
+async def test_real_rate_limit_retry_logs_only_route_template(path, template, connection, api, caplog):
+    api.reply("GET", path, status=429, headers={"Retry-After": "0"})
+    api.reply("GET", path, {"data": []})
+    with caplog.at_level(logging.INFO, logger=cm.__name__):
+        result = await connection.get(path + "?cursor=CALLER-CURSOR-456")
+    assert result.data == []
+    assert len(api.requests) == 2
+    assert api.requests[0].query == [("cursor", "CALLER-CURSOR-456")]
+    records = [record for record in caplog.records if record.name == cm.__name__]
+    assert len(records) == 1
+    assert records[0].getMessage() == f"Site Manager rate limit on GET {template}; retrying in 0.0s"
+    assert records[0].exc_info is None
+    assert "CALLER" not in records[0].getMessage() and "?" not in records[0].getMessage()
+    assert KEY not in caplog.text

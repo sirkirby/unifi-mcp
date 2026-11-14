@@ -19,6 +19,11 @@ if SPEC is None or SPEC.loader is None:
 stats = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(stats)
 
+# Packages added to the map whose download totals the committed snapshot does not
+# hold yet. The next stats refresh, run once their first release is published,
+# adds them; the snapshot is never edited by hand.
+AWAITING_FIRST_SNAPSHOT = frozenset({"unifi-sitemanager-mcp"})
+
 
 class FixtureClient:
     def __init__(
@@ -58,17 +63,25 @@ class FixtureClient:
 
 
 class CollectorContractTests(unittest.TestCase):
-    def test_package_map_pairs_all_five_distribution_families(self):
+    def test_package_map_pairs_all_six_distribution_families(self):
         self.assertEqual(
             stats.PACKAGE_MAP,
             {
                 "network": ("unifi-network-mcp", "unifi-network-mcp"),
                 "protect": ("unifi-protect-mcp", "unifi-protect-mcp"),
                 "access": ("unifi-access-mcp", "unifi-access-mcp"),
+                "sitemanager": ("unifi-sitemanager-mcp", "unifi-sitemanager-mcp"),
                 "api": ("unifi-api-server", "unifi-api-server"),
                 "relay": ("unifi-mcp-relay", "unifi-mcp-relay"),
             },
         )
+
+    def test_site_validator_expects_the_same_packages_as_the_collector(self):
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        block = app.split("var EXPECTED_PACKAGE_NAMES = [", 1)[1].split("];", 1)[0]
+        expected = sorted(name.strip().strip("'") for name in block.split(",") if name.strip())
+
+        self.assertEqual(expected, sorted(name for name, _ in stats.PACKAGE_MAP.values()))
 
     def test_collect_snapshot_keeps_python_and_container_totals_separate(self):
         client = FixtureClient(
@@ -84,9 +97,9 @@ class CollectorContractTests(unittest.TestCase):
             npm_downloads=834,
         )
         result = stats.collect_snapshot(client, "token", datetime(2026, 7, 10, tzinfo=UTC))
-        self.assertEqual(result["python"]["total"], 5_000)
+        self.assertEqual(result["python"]["total"], 6_000)
         self.assertEqual(result["python"]["period"], "trailing_30_days")
-        self.assertEqual(result["containers"]["total"], 50_000)
+        self.assertEqual(result["containers"]["total"], 60_000)
         self.assertEqual(result["containers"]["period"], "lifetime")
         self.assertEqual(result["community"]["merged_pull_requests"], 1)
         self.assertEqual(result["community"]["contributors"], 1)
@@ -176,11 +189,38 @@ class CollectorContractTests(unittest.TestCase):
         with self.assertRaisesRegex(stats.StatsError, "GitHub stargazers"):
             stats.collect_snapshot(client, "token", datetime(2026, 7, 10, tzinfo=UTC))
 
+    def test_missing_site_manager_totals_abort_collection(self):
+        client = FixtureClient(
+            pypi={name: 1 for name, _ in stats.PACKAGE_MAP.values() if name != "unifi-sitemanager-mcp"},
+            ghcr={name: 1 for _, name in stats.PACKAGE_MAP.values()},
+            stars=0,
+            starred_at=[],
+            pull_requests=[],
+            npm_downloads=0,
+        )
+
+        with self.assertRaisesRegex(stats.StatsError, "PyPI.*unifi-sitemanager-mcp"):
+            stats.collect_snapshot(client, "token", datetime(2026, 7, 10, tzinfo=UTC))
+
+    def test_snapshot_without_site_manager_is_rejected_not_zero_filled(self):
+        snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
+        for section in ("python", "containers"):
+            snapshot[section]["packages"].pop("unifi-sitemanager-mcp", None)
+            snapshot[section]["total"] = sum(snapshot[section]["packages"].values())
+
+        with self.assertRaisesRegex(stats.StatsError, "packages do not match the required package map"):
+            stats.validate_snapshot(snapshot)
+
     def test_committed_snapshot_passes_the_canonical_validator(self):
         snapshot_path = Path("docs/data/project-stats.json")
         snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        held = set(snapshot["python"]["packages"]) | set(snapshot["containers"]["packages"])
+        pending = {name for pair in stats.PACKAGE_MAP.values() for name in pair} - held
 
-        stats.validate_snapshot(snapshot)
+        self.assertLessEqual(pending, AWAITING_FIRST_SNAPSHOT, "snapshot lacks a package that is not awaiting release")
+        package_map = {family: pair for family, pair in stats.PACKAGE_MAP.items() if not set(pair) & pending}
+        with mock.patch.object(stats, "PACKAGE_MAP", package_map):
+            stats.validate_snapshot(snapshot)
 
 
 class FakeResponse:
@@ -432,14 +472,14 @@ class JsonClientTests(unittest.TestCase):
                 ):
                     stats.parse_package_downloads(html, "unifi-network-mcp")
 
-    def test_ghcr_package_totals_fetches_all_five_public_pages_without_auth(self):
-        pages = [f'<span>Total downloads</span><h3 title="{index}">{index}</h3>' for index in range(1, 6)]
+    def test_ghcr_package_totals_fetches_all_six_public_pages_without_auth(self):
+        pages = [f'<span>Total downloads</span><h3 title="{index}">{index}</h3>' for index in range(1, 7)]
         expected_names = [name for _, name in stats.PACKAGE_MAP.values()]
         with mock.patch.object(stats, "request_text", side_effect=pages) as mocked_request:
             result = stats.JsonClient().ghcr_package_totals("secret-token")
 
-        self.assertEqual(result, dict(zip(expected_names, range(1, 6), strict=True)))
-        self.assertEqual(mocked_request.call_count, 5)
+        self.assertEqual(result, dict(zip(expected_names, range(1, 7), strict=True)))
+        self.assertEqual(mocked_request.call_count, 6)
         for call, package_name in zip(mocked_request.call_args_list, expected_names, strict=True):
             request = call.args[0]
             self.assertEqual(

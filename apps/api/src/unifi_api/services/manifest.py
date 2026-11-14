@@ -11,7 +11,7 @@ from unifi_core.auth import AuthMethod
 
 CATALOG_RESOURCE = "action_catalog.json"
 SUPPORTED_SCHEMA_VERSION = 1
-PRODUCTS = frozenset({"network", "protect", "access"})
+PRODUCTS = frozenset({"network", "protect", "access", "sitemanager"})
 MUTATION_ACTIONS = frozenset({"create", "update", "delete"})
 
 
@@ -35,6 +35,7 @@ class ToolEntry:
     permission_action: str = ""
     read_only_hint: bool | None = None
     auth_method: str = "local_only"
+    connection_kind: str = "controller"
     input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
 
     @property
@@ -135,6 +136,14 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             auth_method = AuthMethod(action.get("auth_method", "local_only")).value
         except (ValueError, TypeError):
             raise CatalogLoadError(f"actions[{index}].auth_method is invalid") from None
+        expected_kind = "sitemanager_account" if product == "sitemanager" else "controller"
+        connection_kind = action.get("connection_kind", "controller" if product != "sitemanager" else None)
+        if connection_kind != expected_kind:
+            raise CatalogLoadError(f"actions[{index}].connection_kind does not match product")
+        if product == "sitemanager" and (
+            permission_action != "read" or read_only_hint is not True or auth_method != "api_key_only"
+        ):
+            raise CatalogLoadError(f"actions[{index}] must be a read-only API-key Site Manager operation")
         manager_method = _require_string(action, "manager_method", index)
         input_schema = action.get("input_schema")
         if not isinstance(input_schema, dict):
@@ -152,6 +161,7 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             permission_action=permission_action,
             read_only_hint=read_only_hint,
             auth_method=auth_method,
+            connection_kind=connection_kind,
             manager=manager_attr,
             method=manager_method,
             input_schema=input_schema,

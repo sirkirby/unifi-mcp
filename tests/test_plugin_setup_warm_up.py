@@ -16,7 +16,7 @@ import pytest
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="the fake uvx is a POSIX script")
 
 PLUGINS = Path(__file__).resolve().parents[1] / "plugins"
-PRODUCTS = ("network", "protect", "access")
+PRODUCTS = ("network", "protect", "access", "sitemanager")
 MARKER = "FAKE-SERVER-OUTPUT-MARKER"
 
 # A stand-in for uvx: records how it was started, then behaves as the mode file in its cwd says.
@@ -100,6 +100,8 @@ def test_warm_up_runs_the_codex_launch_command_without_settings(tmp_path, monkey
     monkeypatch.setenv("UNIFI_SETTINGS_FILE", str(tmp_path / "settings.env"))
     monkeypatch.setenv(f"UNIFI_{product.upper()}_HOST", "192.0.2.1")
     monkeypatch.setenv("UNIFI_PASSWORD_COMMAND", "fake-provider")
+    monkeypatch.setenv("UNIFI_SITEMANAGER_API_KEY", "FAKE-cloud-key")
+    monkeypatch.setenv("UNIFI_SITEMANAGER_API_KEY_COMMAND", "fake-provider")
     monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "other-cache"))
 
     note = module.warm_up(root, f"unifi-{product}")
@@ -236,3 +238,40 @@ def test_only_saving_codex_setup_starts_the_server(tmp_path, args) -> None:
 
     assert completed.returncode == 0
     assert not (root / "record.json").exists()
+
+
+def test_cloud_raw_pair_is_refused_without_launching_a_client_or_server(tmp_path) -> None:
+    root = plugin_copy(tmp_path, "sitemanager", "answer")
+    key = b"FAKE-cloud-pair-secret"
+    completed = run_setup(
+        tmp_path, root, "--target", "codex", "--pairs", stdin=b"UNIFI_SITEMANAGER_API_KEY=" + key + b"\0"
+    )
+    assert completed.returncode != 0
+    assert key not in completed.stdout + completed.stderr
+    assert b"Raw credentials cannot be command arguments" in completed.stderr
+    assert not (root / "record.json").exists()
+    assert not (tmp_path / "home/.config/unifi-mcp/sitemanager.env").exists()
+
+
+def test_cloud_codex_setup_uses_stdin_and_never_creates_a_shadow_entry(tmp_path) -> None:
+    root = plugin_copy(tmp_path, "sitemanager", "answer")
+    (tmp_path / "codex").mkdir()
+    config = tmp_path / "codex/config.toml"
+    config.write_text('model = "fixture"\n')
+    key = "FAKE-cloud-stdin-secret"
+    completed = run_setup(
+        tmp_path, root, "--target", "codex", stdin=json.dumps({"UNIFI_SITEMANAGER_API_KEY": key}).encode()
+    )
+    assert completed.returncode == 0
+    assert key.encode() not in completed.stdout + completed.stderr
+    assert config.read_text() == 'model = "fixture"\n'
+    settings = (tmp_path / "home/.config/unifi-mcp/sitemanager.env").read_text()
+    assert [line for line in settings.splitlines() if not line.startswith("#")] == [
+        f'UNIFI_SITEMANAGER_API_KEY="{key}"'
+    ]
+    seen = record(root)
+    assert key not in json.dumps(seen)
+    assert not any(name.startswith("UNIFI_") for name in seen["env"])
+    assert seen["methods"] == ["initialize"]
+    assert seen["stdin_closed"] is True
+    assert not pid_alive(seen["pid"])

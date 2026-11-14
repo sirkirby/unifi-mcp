@@ -1990,6 +1990,11 @@ type Query {
 
   """Read-only access to UniFi Access resources."""
   access: AccessQuery!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  sitemanager: SiteManagerQuery!
 }
 
 """Radio configuration entry on a UniFi device with radios."""
@@ -2100,6 +2105,497 @@ type Sensor {
 """Paginated page of UniFi Protect sensors."""
 type SensorPage {
   items: [Sensor!]!
+  nextCursor: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerHost {
+  """Site Manager host id"""
+  id: String
+
+  """Hardware id"""
+  hardwareId: String
+
+  """Host type, such as console or network-server"""
+  type: String
+
+  """Public IP address"""
+  ipAddress: String
+
+  """Whether the API key's account owns this host"""
+  owner: Boolean
+
+  """Whether the host is blocked"""
+  isBlocked: Boolean
+
+  """When the host was registered"""
+  registrationTime: JSON
+
+  """When the host last connected or disconnected"""
+  lastConnectionStateChange: JSON
+
+  """When the latest cloud backup was taken"""
+  latestBackupTime: JSON
+
+  """Console name"""
+  name: String
+
+  """Console hostname"""
+  hostname: String
+
+  """Connection state, such as connected"""
+  state: String
+
+  """UniFi OS or server version"""
+  osVersion: String
+
+  """Hardware model name"""
+  model: String
+
+  """Hardware short name, such as UDMPROSE"""
+  shortname: String
+
+  """Hardware firmware version"""
+  firmwareVersion: String
+
+  """Console MAC address"""
+  mac: String
+
+  """Console timezone"""
+  timezone: String
+
+  """Update release channel"""
+  releaseChannel: String
+
+  """Applications on the host"""
+  applications: [SiteManagerHostApplication!]!
+
+  """Full state reported by the host; present only when requested"""
+  reportedState: JSON
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerHostApplication {
+  """Application name, such as network or protect"""
+  name: String
+
+  """Application type"""
+  type: String
+
+  """Installed version"""
+  version: String
+
+  """Lifecycle state reported by the console"""
+  state: String
+
+  """Status reported by the application"""
+  status: String
+
+  """Whether the application is installed"""
+  isInstalled: Boolean
+
+  """Whether the application is running"""
+  isRunning: Boolean
+
+  """Whether initial setup is complete"""
+  isConfigured: Boolean
+
+  """Version available as an update, if any"""
+  updateAvailable: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerHostDevices {
+  """Site Manager host id"""
+  hostId: String
+
+  """Host name"""
+  hostName: String
+
+  """When the host last reported its devices"""
+  updatedAt: JSON
+
+  """Devices managed by the host"""
+  devices: [SiteManagerManagedDevice!]!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerHostDevicesPage {
+  items: [SiteManagerHostDevices!]!
+  nextCursor: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerHostPage {
+  items: [SiteManagerHost!]!
+  nextCursor: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerIspMetricPeriod {
+  """Start of the interval"""
+  time: JSON
+
+  """Average latency in milliseconds"""
+  avgLatencyMs: Float
+
+  """Maximum latency in milliseconds"""
+  maxLatencyMs: Float
+
+  """Packet loss as reported by the API"""
+  packetLoss: Float
+
+  """Download throughput in kbps"""
+  downloadKbps: Float
+
+  """Upload throughput in kbps"""
+  uploadKbps: Float
+
+  """Uptime within the interval as reported"""
+  uptime: Float
+
+  """Downtime within the interval as reported"""
+  downtime: Float
+
+  """ISP name"""
+  ispName: String
+
+  """ISP autonomous system number"""
+  ispAsn: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerIspMetricSeries {
+  """Site Manager host id"""
+  hostId: String
+
+  """Site Manager site id"""
+  siteId: String
+
+  """Interval of the series: 5m or 1h"""
+  metricType: String
+
+  """Aggregates over the window"""
+  summary: SiteManagerIspMetricSummary!
+
+  """Most recent periods, oldest first"""
+  periods: [SiteManagerIspMetricPeriod!]!
+
+  """Whether older periods were left out of periods"""
+  periodsTruncated: Boolean!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerIspMetricSummary {
+  """Number of periods in the window"""
+  periodCount: Int!
+
+  """Time of the earliest period"""
+  firstTime: JSON
+
+  """Time of the latest period"""
+  lastTime: JSON
+
+  """Mean of the periods' average latency"""
+  avgLatencyMs: Float
+
+  """Highest latency in the window"""
+  maxLatencyMs: Float
+
+  """Mean packet loss"""
+  avgPacketLoss: Float
+
+  """Mean download throughput in kbps"""
+  avgDownloadKbps: Float
+
+  """Mean upload throughput in kbps"""
+  avgUploadKbps: Float
+
+  """Sum of reported downtime"""
+  totalDowntime: Float
+
+  """Number of periods reporting any downtime"""
+  periodsWithDowntime: Int!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerIspMetrics {
+  items: [SiteManagerIspMetricSeries!]!
+  nextCursor: String
+  count: Int!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerIspMetricsQueryResult {
+  items: [SiteManagerIspMetricSeries!]!
+  nextCursor: String
+  count: Int!
+  partial: Boolean!
+  message: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerManagedDevice {
+  """Site Manager device id"""
+  id: String
+
+  """Device MAC address"""
+  mac: String
+
+  """Device name"""
+  name: String
+
+  """Device model"""
+  model: String
+
+  """Device short name"""
+  shortname: String
+
+  """Device IP address"""
+  ip: String
+
+  """Product line, such as network or protect"""
+  productLine: String
+
+  """Connection status"""
+  status: String
+
+  """Firmware version"""
+  version: String
+
+  """Firmware status, such as upToDate"""
+  firmwareStatus: String
+
+  """Firmware version available as an update"""
+  updateAvailable: String
+
+  """Whether the device is the host console itself"""
+  isConsole: Boolean
+
+  """Whether the device is managed by the host"""
+  isManaged: Boolean
+
+  """When the device last started"""
+  startupTime: JSON
+
+  """When the device was adopted"""
+  adoptionTime: JSON
+
+  """Operator note on the device"""
+  note: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+input SiteManagerMetricsSiteInput {
+  hostId: String!
+  siteId: String!
+  beginTimestamp: String = null
+  endTimestamp: String = null
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerQuery {
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  hosts(pageSize: Int = null, cursor: String = null): SiteManagerHostPage!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  host(hostId: String!, includeReportedState: Boolean! = false): SiteManagerHost!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  sites(pageSize: Int = null, cursor: String = null): SiteManagerSitePage!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  devices(hostIds: [String!] = null, updatedSince: String = null, pageSize: Int = null, cursor: String = null): SiteManagerHostDevicesPage!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  ispMetrics(metricType: String! = "1h", duration: String = null, beginTimestamp: String = null, endTimestamp: String = null, periodLimit: Int! = 12): SiteManagerIspMetrics!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  queryIspMetrics(sites: [SiteManagerMetricsSiteInput!]!, metricType: String! = "1h", periodLimit: Int! = 12): SiteManagerIspMetricsQueryResult!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  sdwanConfigs: SiteManagerSdwanConfigList!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  sdwanConfig(configId: String!): SiteManagerSdwanConfig!
+
+  """
+  A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+  """
+  sdwanConfigStatus(configId: String!): SiteManagerSdwanConfigStatus!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSdwanConfig {
+  """SD-WAN configuration id"""
+  id: String
+
+  """Configuration name"""
+  name: String
+
+  """Topology type"""
+  type: String
+
+  """Topology variant"""
+  variant: String
+
+  """Configuration settings"""
+  settings: JSON!
+
+  """Hub members"""
+  hubs: [JSON!]!
+
+  """Spoke members"""
+  spokes: [JSON!]!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSdwanConfigList {
+  items: [SiteManagerSdwanConfigSummary!]!
+  nextCursor: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSdwanConfigStatus {
+  """SD-WAN configuration id"""
+  id: String
+
+  """Fingerprint of the generated configuration"""
+  fingerprint: String
+
+  """Status of configuration generation"""
+  generateStatus: String
+
+  """When the status was last updated"""
+  updatedAt: JSON
+
+  """When the configuration was generated"""
+  lastGeneratedAt: JSON
+
+  """Configuration-level errors"""
+  errors: [JSON!]!
+
+  """Configuration-level warnings"""
+  warnings: [JSON!]!
+
+  """Per-hub status"""
+  hubs: [JSON!]!
+
+  """Per-spoke status"""
+  spokes: [JSON!]!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSdwanConfigSummary {
+  """SD-WAN configuration id"""
+  id: String
+
+  """Configuration name"""
+  name: String
+
+  """Topology type"""
+  type: String
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSite {
+  """Site Manager site id"""
+  siteId: String
+
+  """Site Manager id of the host running the site"""
+  hostId: String
+
+  """Site name key"""
+  name: String
+
+  """Site display name"""
+  description: String
+
+  """Site timezone"""
+  timezone: String
+
+  """MAC address of the site's gateway"""
+  gatewayMac: String
+
+  """The account's permission on the site"""
+  permission: String
+
+  """Whether the API key's account owns the site"""
+  isOwner: Boolean
+
+  """Device, client and configuration counts"""
+  counts: JSON!
+
+  """Gateway model and threat-inspection state"""
+  gateway: JSON!
+
+  """ISP name and organization"""
+  isp: JSON!
+
+  """WAN uptime percentage"""
+  wanUptimePercent: Float
+
+  """Recent internet issue intervals, most recent API order"""
+  internetIssues: [JSON!]!
+}
+
+"""
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+"""
+type SiteManagerSitePage {
+  items: [SiteManagerSite!]!
   nextCursor: String
 }
 
@@ -2807,3 +3303,22 @@ Read-only access to UniFi Protect resources.
 - `snapshot: Snapshot`  — Capture a JPEG snapshot from a camera (metadata only).
 - `systemInfo: ProtectSystemInfo`  — Get the NVR-level system info snapshot.
 - `viewers: ViewerList`  — List Protect viewers ({viewers, count}).
+
+
+### `query.sitemanager`
+
+
+A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+
+
+**Fields:**
+
+- `devices: SiteManagerHostDevicesPage!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `host: SiteManagerHost!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `hosts: SiteManagerHostPage!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `ispMetrics: SiteManagerIspMetrics!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `queryIspMetrics: SiteManagerIspMetricsQueryResult!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `sdwanConfig: SiteManagerSdwanConfig!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `sdwanConfigStatus: SiteManagerSdwanConfigStatus!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `sdwanConfigs: SiteManagerSdwanConfigList!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
+- `sites: SiteManagerSitePage!`  — A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.

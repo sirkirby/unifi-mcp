@@ -8,6 +8,7 @@ unifi-mcp/
     network/              # UniFi Network MCP server
     protect/              # UniFi Protect MCP server
     access/               # UniFi Access MCP server
+    sitemanager/          # UniFi Site Manager MCP server (Ubiquiti cloud, read-only)
     api/                  # REST + GraphQL API server
     worker/               # Cloudflare Worker gateway + npm CLI
   packages/
@@ -36,8 +37,9 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `incident_evidence.py` | Versioned cross-product incident evidence contract ([details](incident-evidence.md)); Network and Protect normalizers live in `network/` and `protect/` |
 | `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
 | `event_timeline.py` | Legacy timeline shape, with a projection from evidence records |
+| `sitemanager/` | Site Manager cloud client, managers and models; the fixed `https://api.ui.com` origin lives in `sitemanager/managers/connection_manager.py` |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/api`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/api`.
 
 ### unifi-mcp-shared
 
@@ -55,7 +57,7 @@ per connection, so one process can serve clients at either migration state.
 | `config.py` | OmegaConf config loading with env var interpolation |
 | `formatting.py` | Response formatting helpers |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`.
 
 ### apps/network
 
@@ -106,6 +108,18 @@ The UniFi Access MCP server. 37 tools across 7 categories covering doors, polici
 
 **Dual-path auth** is unique to the Access server. The `AccessConnectionManager` maintains two independent sessions: an API key client for read-heavy queries and a proxy session (cookie + CSRF token) for mutations. Each tool declares which auth path it requires.
 
+### apps/sitemanager
+
+The UniFi Site Manager MCP server. 9 read-only domain tools over Ubiquiti's cloud Site Manager API: hosts, sites, devices, ISP metrics, and SD-WAN configurations, plus the five shared meta-tools. It has no writes, no policy gates, no events or MCP resources, and no support-bundle tool.
+
+- `src/unifi_sitemanager_mcp/` -- server code
+  - `tools/` -- tool wrappers; the managers live in `unifi_core.sitemanager`
+  - `config/config.yaml` -- runtime settings only; no credential
+- `tests/` -- unit tests; they pass a loopback `base_url` and never reach the cloud
+- `Dockerfile` -- container build
+
+Unlike the console servers, it has no controller: every request goes to the fixed origin `https://api.ui.com`, which no setting can change. Its one credential, a Site Manager API key, is read only from `UNIFI_SITEMANAGER_API_KEY` or its `_FILE` / `_COMMAND` form, with no fallback to `UNIFI_API_KEY`, shared `UNIFI_*` variables, `config.yaml` or `CONFIG_PATH`. The key reads every console on the account. Its host, site and device IDs belong to their own tool family. It makes no request at startup, and without a key it registers only `sitemanager_setup_status`. HTTP is opt-in on port 3003, and the Cloud Relay does not reach it unless an operator adds it.
+
 ### apps/api
 
 The independent `unifi-api-server` HTTP service for custom applications,
@@ -116,6 +130,8 @@ an administrative control plane. An MCP adapter can expose tools to its clients
 while using the API server as its backend.
 
 The API app and the MCP apps independently consume the manager layer from `unifi-core`; the API does not proxy or require the MCP servers. It is also not part of the Cloud Relay request path.
+
+The API also serves the nine Site Manager reads. The cloud account is one account-level connection, separate from controller records: an administrator adds it, its key is stored encrypted in the API database, and a separate factory builds the Site Manager managers from it. It never reads the MCP server's environment or imports the MCP app. See [Site Manager cloud connection](../apps/api/README.md#site-manager-cloud-connection).
 
 ### packages/unifi-mcp-relay
 
@@ -131,7 +147,7 @@ A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, or `apps/access`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
+The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, `apps/access`, or `apps/sitemanager`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 
@@ -190,7 +206,7 @@ Rules:
 
 ## Adding a New Server
 
-To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/`:
+To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/` for a console product, or `apps/sitemanager/` for a cloud API:
 
 1. **Create app directory:** `apps/<appname>/`
 2. **Create `pyproject.toml`** depending on `unifi-core` and `unifi-mcp-shared`
@@ -207,6 +223,16 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 6. **Add Makefile** targets (test, lint, format, manifest)
 7. **Add to root Makefile** delegation targets
 8. **Add Dockerfile** following the protect/network/access server pattern
+9. **Register the app with the repo's release and check tooling.** Each of these enumerates the servers and is enforced by a test or CI:
+   - Workflows `test-<appname>.yml`, `release-<appname>.yml`, `docker-<appname>.yml` (pass `CORE_VERSION`/`SHARED_VERSION` when the Dockerfile declares them)
+   - `scripts/generate_server_manifest.py` (`APP_CONFIGS`), `scripts/smoke_mcp_metadata.py` (`SERVER_SPECS`, `OFFLINE_SERVER_NAMES`), `scripts/check_pin_alignment.py` (`SECURITY_FLOORS`, `DOWNSTREAM_PACKAGES`, `FLOOR_ONLY_CORE_EXTRAS`), `scripts/generate_release_notes.py` (`APP_CONFIGS`, `PRODUCT_KEYS`, the tag regex)
+   - The icon family and tool prefix in `unifi_mcp_shared/metadata.py`: an unknown icon family fails at startup
+   - Root tests that list servers: `tests/test_server_manifest.py`, `tests/test_smoke_mcp_metadata.py`, `tests/test_package_versions.py`, `tests/test_manifest_permission_coverage.py`, `tests/test_app_tool_index_lookup.py`, `tests/test_http_deployment_defaults.py`
+   - `.github/dependabot.yml` Docker directories, `.myco/myco.yaml` release tags, `uv.lock`
+10. **Use one lowercase token for the app name** (as in `sitemanager`). Scripts derive the directory, Python module, env prefix and plugin name from it, and a hyphen or underscore breaks several of them.
+11. **Commit a placeholder `tools_manifest.json` before the first `make manifest`:** the wheel force-includes it, so the package cannot be installed to generate it otherwise.
+
+`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle.
 
 ## Shared Patterns
 

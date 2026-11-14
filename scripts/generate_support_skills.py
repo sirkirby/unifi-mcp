@@ -19,6 +19,7 @@ class Product:
     setup_skill: str
 
 
+# Only products with a support-bundle tool belong here; Site Manager has none.
 PRODUCTS = (
     Product("network", "Network", "unifi_get_support_bundle", "unifi-network-setup"),
     Product("protect", "Protect", "protect_get_support_bundle", "unifi-protect-setup"),

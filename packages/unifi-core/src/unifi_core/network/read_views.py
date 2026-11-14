@@ -381,6 +381,26 @@ def _device_base(device: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _radio_power_summary(device: dict[str, Any], radio: dict[str, Any]) -> dict[str, Any]:
+    """Transmit-power fields for a compact radio summary.
+
+    ``tx_power`` in ``radio_table`` is the stored custom-mode value: it only
+    takes effect when ``tx_power_mode`` is ``custom`` and otherwise keeps a
+    stale default. Report the mode next to it, plus the power the radio is
+    actually transmitting at (``radio_table_stats``) when the device reports it.
+    """
+    summary: dict[str, Any] = {
+        "tx_power_mode": radio.get("tx_power_mode"),
+        "tx_power": radio.get("tx_power"),
+    }
+    name = radio.get("name")
+    for stats in device.get("radio_table_stats") or []:
+        if name and stats.get("name") == name:
+            summary["current_tx_power"] = stats.get("tx_power")
+            break
+    return summary
+
+
 def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summary: bool) -> None:
     if device.get("source_api") == "integration":
         return
@@ -400,7 +420,11 @@ def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summa
             {
                 "radio_count": len(radio_table),
                 "radios": [
-                    {"band": radio.get("radio"), "channel": radio.get("channel"), "tx_power": radio.get("tx_power")}
+                    {
+                        "band": radio.get("radio"),
+                        "channel": radio.get("channel"),
+                        **_radio_power_summary(device, radio),
+                    }
                     for radio in radio_table
                 ],
                 "vap_count": len(vap_table),
@@ -625,7 +649,7 @@ def shape_device_details(
             {
                 "radio": radio.get("radio"),
                 "channel": normalize_radio_channel(radio.get("channel")),
-                "tx_power": radio.get("tx_power"),
+                **_radio_power_summary(raw, radio),
             }
             for radio in raw["radio_table"]
         ]

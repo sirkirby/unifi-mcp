@@ -65,7 +65,7 @@ def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 288
+    assert len(registry) == 297
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")
@@ -135,3 +135,51 @@ def test_loader_reads_only_the_unifi_api_package(monkeypatch) -> None:
 
     assert len(registry) == 1
     assert requested == ["unifi_api"]
+
+
+def test_account_catalog_requires_all_nine_read_only_api_key_bindings():
+    from tests.sitemanager_data import CASES
+
+    registry = ManifestRegistry.load()
+    cloud = [registry.resolve(name) for name in registry.all_tools() if name.startswith("sitemanager_")]
+    assert len(cloud) == 9
+    assert {entry.name for entry in cloud} == {case[0] for case in CASES}
+    for entry in cloud:
+        assert entry.connection_kind == "sitemanager_account"
+        assert entry.permission_action == "read" and entry.read_only_hint is True
+        assert entry.auth_method == "api_key_only"
+    assert not any("support_bundle" in entry.name or "connection" in entry.name for entry in cloud)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"connection_kind": "controller"},
+        {"connection_kind": None},
+        {"auth_method": "both"},
+        {"permission_action": "update", "read_only_hint": False},
+        {"product": "network"},
+    ],
+)
+def test_mismatched_account_metadata_fails_closed(monkeypatch, change):
+    value = _action(
+        name="sitemanager_list_hosts",
+        product="sitemanager",
+        category="hosts",
+        manager_attr="inventory_manager",
+        manager_method="list_hosts",
+        auth_method="api_key_only",
+        connection_kind="sitemanager_account",
+        **{},
+    )
+    value.update(change)
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(value))
+    with pytest.raises(CatalogLoadError):
+        ManifestRegistry.load()
+
+
+def test_account_connection_kind_cannot_default_to_controller(monkeypatch):
+    value = _action(name="sitemanager_list_hosts", product="sitemanager", auth_method="api_key_only")
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(value))
+    with pytest.raises(CatalogLoadError, match="connection_kind"):
+        ManifestRegistry.load()

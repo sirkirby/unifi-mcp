@@ -113,7 +113,7 @@ def _image_builds() -> list[tuple[Path, Path]]:
 def test_every_image_build_is_found() -> None:
     names = {workflow.name for workflow, _ in _image_builds()}
 
-    for product in ("network", "protect", "access", "api", "relay"):
+    for product in ("network", "protect", "access", "sitemanager", "api", "relay"):
         assert f"docker-{product}.yml" in names
         assert f"release-{product}.yml" in names
 

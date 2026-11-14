@@ -40,7 +40,11 @@ SERVER_PACKAGES = {
     "network": "unifi-network-mcp",
     "protect": "unifi-protect-mcp",
     "access": "unifi-access-mcp",
+    "sitemanager": "unifi-sitemanager-mcp",
 }
+
+# Servers that ship a support-bundle service. Site Manager has none.
+SUPPORT_BUNDLE_SERVERS = ("network", "protect", "access")
 
 
 SERVER_CONFIGS = {
@@ -81,7 +85,49 @@ SERVER_CONFIGS = {
         "server_label": "UniFi Access",
         "close": "close",
     },
+    "sitemanager": {
+        "main": "unifi_sitemanager_mcp.main",
+        "runtime": "unifi_sitemanager_mcp.runtime",
+        "bootstrap": "unifi_sitemanager_mcp.bootstrap",
+        "categories": "unifi_sitemanager_mcp.categories",
+        "jobs": "unifi_sitemanager_mcp.jobs",
+        "tool_index": "unifi_sitemanager_mcp.tool_index",
+        "base_package": "unifi_sitemanager_mcp.tools",
+        "manifest": REPO_ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json",
+        "prefix": "sitemanager",
+        "server_label": "UniFi Site Manager",
+        "close": "close",
+    },
 }
+
+
+# Site Manager reads one cloud account, so every list is one small page and
+# every detail argument comes from that family's own list results.
+SITEMANAGER_KEY_VAR = "UNIFI_SITEMANAGER_API_KEY"
+SITEMANAGER_PAGE_SIZE = 5
+SITEMANAGER_BASE_READS: dict[str, dict[str, Any]] = {
+    "sitemanager_list_hosts": {"page_size": SITEMANAGER_PAGE_SIZE},
+    "sitemanager_list_sites": {"page_size": SITEMANAGER_PAGE_SIZE},
+    "sitemanager_list_sdwan_configs": {},
+    "sitemanager_list_devices": {"page_size": SITEMANAGER_PAGE_SIZE},
+    "sitemanager_get_isp_metrics": {"metric_type": "5m", "duration": "24h", "period_limit": 1},
+}
+# Detail tool -> the read its arguments come from.
+SITEMANAGER_DETAIL_SOURCES = {
+    "sitemanager_get_host": "sitemanager_list_hosts",
+    "sitemanager_get_sdwan_config": "sitemanager_list_sdwan_configs",
+    "sitemanager_get_sdwan_config_status": "sitemanager_list_sdwan_configs",
+    "sitemanager_query_isp_metrics": "sitemanager_list_sites",
+}
+SITEMANAGER_DOMAIN_READS = (*SITEMANAGER_BASE_READS, *SITEMANAGER_DETAIL_SOURCES)
+SITEMANAGER_NO_KEY_REASON = (
+    "No Site Manager API key configured (UNIFI_SITEMANAGER_API_KEY, _FILE or _COMMAND); "
+    "target skipped and not validated"
+)
+
+
+class SiteManagerSetupError(ConnectionError):
+    """Site Manager setup failed; the reason is already recorded in the report."""
 
 
 STREAM_OR_HEAVY_READS = {
@@ -212,7 +258,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run live smoke checks against UniFi MCP tools.")
     parser.add_argument(
         "--server",
-        choices=["network", "protect", "access", "all"],
+        choices=["network", "protect", "access", "sitemanager", "all"],
         required=False,
         help="Required for MCP-direct phases. Ignored for --phase api-actions / api-resources / api-streams.",
     )
@@ -319,6 +365,34 @@ def configure_environment() -> None:
     os.environ["UNIFI_AUTO_CONFIRM"] = "false"
     os.environ["UNIFI_MCP_LOG_LEVEL"] = "WARNING"
     os.environ["UNIFI_MCP_DIAGNOSTICS"] = "false"
+
+
+def sitemanager_credential_state() -> tuple[str, str]:
+    """Whether a Site Manager key is configured, without resolving it.
+
+    Returns ``("absent", reason)``, ``("present", "")`` or ``("failed", reason)``.
+    Call after :func:`configure_environment`. The settings file named by
+    ``UNIFI_SETTINGS_FILE`` is applied first, as the server does, so a key kept
+    only there counts. The spellings checked are exactly those the server's own
+    resolver reads; no value is read and no ``_FILE``/``_COMMAND`` provider is
+    run. Resolving and validating a present key is left to the server.
+    """
+    from unifi_mcp_shared import bootstrap as shared_bootstrap
+
+    shared_bootstrap.load_process_env()
+    spellings = [SITEMANAGER_KEY_VAR] + [
+        f"{SITEMANAGER_KEY_VAR}{suffix}" for suffix, _reader in shared_bootstrap._SECRET_READERS
+    ]
+    if any(os.getenv(name) for name in spellings):
+        return "present", ""
+    settings = shared_bootstrap._SETTINGS_REPORT
+    if settings is not None and settings.state in {"missing", "ignored"}:
+        return (
+            "failed",
+            "UNIFI_SETTINGS_FILE is set but could not be applied, so whether a Site Manager key is "
+            "configured is unknown; fix the settings file",
+        )
+    return "absent", SITEMANAGER_NO_KEY_REASON
 
 
 def required_params(tool: dict[str, Any]) -> list[str]:
@@ -477,8 +551,21 @@ class LiveSmokeRunner:
 
     async def setup(self) -> None:
         configure_environment()
-        main_mod = importlib.import_module(self.config["main"])
-        runtime_mod = importlib.import_module(self.config["runtime"])
+        if self.server_key == "sitemanager":
+            # Importing the server resolves its key with the server's own
+            # resolver, which exits on a key it cannot resolve.
+            try:
+                main_mod = importlib.import_module(self.config["main"])
+                runtime_mod = importlib.import_module(self.config["runtime"])
+            except SystemExit as exc:
+                self.setup_failed(
+                    "Site Manager API key is configured but could not be resolved "
+                    f"(exit code {exc.code}); the server's [credentials] log names the cause"
+                )
+                raise SiteManagerSetupError(self.report.records[-1].error) from None
+        else:
+            main_mod = importlib.import_module(self.config["main"])
+            runtime_mod = importlib.import_module(self.config["runtime"])
         bootstrap_mod = importlib.import_module(self.config["bootstrap"])
         categories_mod = importlib.import_module(self.config["categories"])
         jobs_mod = importlib.import_module(self.config["jobs"])
@@ -516,12 +603,26 @@ class LiveSmokeRunner:
             "base_package": self.config["base_package"],
             "config": runtime_mod.config,
             "logger": bootstrap_mod.logger,
-            "support_bundle_handler": runtime_mod.support_bundle_service.generate,
         }
+        support_service = getattr(runtime_mod, "support_bundle_service", None)
+        if support_service is not None:
+            kwargs["support_bundle_handler"] = support_service.generate
         if self.config.get("prefix"):
             kwargs["prefix"] = self.config["prefix"]
             kwargs["server_label"] = self.config["server_label"]
         await registration_mod.register_tools_for_mode(**kwargs)
+
+    def setup_failed(self, error: str) -> None:
+        self.report.records.append(
+            SmokeRecord(tool="__setup__", phase="setup", status="failed", success=False, error=error)
+        )
+
+    def scrub(self, text: str) -> str:
+        """Remove the Site Manager key from text bound for the report."""
+        if self.server_key != "sitemanager" or not self.connection_manager:
+            return text
+        key = getattr(self.connection_manager, "_api_key", "")
+        return text.replace(key, "***REDACTED***") if key else text
 
     async def close(self) -> None:
         if not self.connection_manager:
@@ -547,8 +648,10 @@ class LiveSmokeRunner:
             record.status = "ok" if record.success is not False else "failed"
             if isinstance(data, dict):
                 if data.get("error"):
-                    record.error = str(data["error"])
+                    record.error = self.scrub(str(data["error"]))
                 record.summary = summarize_payload(data)
+                if "error" in record.summary:
+                    record.summary["error"] = self.scrub(str(record.summary["error"]))
                 self.cache.remember(tool, data)
                 if self.expected_fixture_miss(tool, record.error) or self.expected_known_controller_issue(
                     tool, record.error
@@ -559,7 +662,8 @@ class LiveSmokeRunner:
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.status = "exception"
             record.success = False
-            record.error = str(exc)
+            # Site Manager transport exceptions can carry request headers.
+            record.error = f"unexpected {type(exc).__name__}" if self.server_key == "sitemanager" else str(exc)
         self.report.records.append(record)
         print(f"{self.server_key} {phase} {record.status}: {tool} ({record.duration_ms}ms)", flush=True)
         if self.args.delay:
@@ -602,6 +706,13 @@ class LiveSmokeRunner:
     async def run(self) -> None:
         if self.args.phase == "inventory":
             self.inventory()
+            return
+
+        if self.server_key == "sitemanager":
+            # Every Site Manager tool is read-only: preview, lifecycle and
+            # approved phases have nothing to run.
+            if self.args.phase in ("readonly", "safe"):
+                await self.run_sitemanager_reads()
             return
 
         await self.seed_read_lists()
@@ -698,6 +809,53 @@ class LiveSmokeRunner:
                 self.skip(name, "readonly", reason)
                 continue
             await self.call(name, args, "readonly")
+
+    async def run_sitemanager_reads(self) -> None:
+        """Run the nine Site Manager reads, each once, as bounded single pages."""
+        manifest_by_name = {tool["name"]: tool for tool in self.manifest["tools"]}
+        selected = {tool["name"] for tool in self.selected_tools()}
+        wanted = [name for name in SITEMANAGER_DOMAIN_READS if name in selected]
+        sources = {SITEMANAGER_DETAIL_SOURCES[name] for name in wanted if name in SITEMANAGER_DETAIL_SOURCES}
+        for name in SITEMANAGER_BASE_READS:
+            if name not in wanted and name not in sources:
+                continue
+            if not is_read_only(manifest_by_name.get(name, {})):
+                self.skip(name, "readonly", "not marked read-only in the manifest; not run")
+                continue
+            phase = "readonly" if name in wanted else "seed"
+            await self.call(name, dict(SITEMANAGER_BASE_READS[name]), phase)
+        for name in wanted:
+            if name not in SITEMANAGER_DETAIL_SOURCES:
+                continue
+            if not is_read_only(manifest_by_name.get(name, {})):
+                self.skip(name, "readonly", "not marked read-only in the manifest; not run")
+                continue
+            args, reason = self.sitemanager_detail_args(name)
+            if args is None:
+                self.skip(name, "readonly", reason)
+                continue
+            await self.call(name, args, "readonly")
+
+    def sitemanager_detail_args(self, name: str) -> tuple[dict[str, Any] | None, str]:
+        source = SITEMANAGER_DETAIL_SOURCES[name]
+        result = self.cache.by_tool.get(source)
+        if not isinstance(result, dict) or result.get("success") is not True:
+            return None, f"{source} did not succeed, so no argument could be taken from it"
+        if source == "sitemanager_list_hosts":
+            host_id = self.cache.id_from_tool(source, "hosts", ("id",))
+            if not host_id:
+                return None, "no host on the account"
+            return {"host_id": host_id}, ""
+        if source == "sitemanager_list_sdwan_configs":
+            config_id = self.cache.id_from_tool(source, "configs", ("id",))
+            if not config_id:
+                return None, "no SD-WAN configuration on the account"
+            return {"config_id": config_id}, ""
+        for site in self.cache.items_from_tool(source, "sites"):
+            host_id, site_id = site.get("host_id"), site.get("site_id")
+            if host_id and site_id:
+                return {"sites": [{"host_id": host_id, "site_id": site_id}], "metric_type": "5m", "period_limit": 1}, ""
+        return None, "no site with both a host id and a site id on the account"
 
     async def run_previews(self) -> None:
         for tool in self.selected_tools():
@@ -2184,11 +2342,38 @@ def find_resource_id(data: Any) -> str | None:
     return None
 
 
+def write_setup_report(server_key: str, args: argparse.Namespace, status: str, reason: str) -> Path:
+    """Write a report holding a single setup record, for a target that never started."""
+    started = datetime.now(UTC).isoformat()
+    report = SmokeReport(server=server_key, started_at=started, finished_at=started, connected=False)
+    success = False if status == "failed" else None
+    report.records.append(SmokeRecord(tool="__setup__", phase="setup", status=status, success=success, error=reason))
+    stamp = started.replace(":", "").replace("+0000", "Z")
+    path = REPO_ROOT / args.report_dir / f"{server_key}-{stamp}.json"
+    write_json(path, asdict(report))
+    print(f"{server_key} setup {status}: {reason}", flush=True)
+    print(f"\nReport: {path}", flush=True)
+    return path
+
+
 async def run_one(args: argparse.Namespace) -> int:
+    if args.server == "sitemanager":
+        # Decide before any server import: an absent key is a skip with no
+        # initialization, provider invocation or request.
+        configure_environment()
+        state, reason = sitemanager_credential_state()
+        if state == "absent":
+            write_setup_report(args.server, args, "skipped_no_credentials", reason)
+            return 0
+        if state == "failed":
+            write_setup_report(args.server, args, "failed", reason)
+            return 1
     runner = LiveSmokeRunner(args.server, args)
     try:
         await runner.setup()
         await runner.run()
+    except SiteManagerSetupError:
+        pass  # Recorded as a failed setup record; the report below carries it.
     finally:
         runner.report.finished_at = datetime.now(UTC).isoformat()
         try:
@@ -3759,6 +3944,18 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
+    if args.phase == "support" and args.server not in (*SUPPORT_BUNDLE_SERVERS, "all"):
+        # No support-bundle service exists for this server; never fabricate one.
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        reason = (
+            f"{args.server} has no support-bundle tool; the support phase covers {', '.join(SUPPORT_BUNDLE_SERVERS)}"
+        )
+        write_json(
+            REPO_ROOT / args.report_dir / f"support-{stamp}.json",
+            {"server": args.server, "phase": "support", "status": "unsupported", "success": None, "reason": reason},
+        )
+        print(f"{args.server} support unsupported: {reason}", flush=True)
+        return 2
     if args.phase == "support":
         from support_smoke import run_support_phase
 

@@ -158,3 +158,70 @@ def test_other_product_names_need_that_products_plugin(repo: Path) -> None:
     write(repo, SKILL, "Cross-check with `protect_list_cameras`.\n")
     with pytest.raises(ValueError, match="no unifi-protect plugin pins a protect release"):
         refs.check(repo)
+
+
+@pytest.fixture
+def cloud_repo(repo: Path) -> Path:
+    server = {"unifi-sitemanager": {"args": ["unifi-sitemanager-mcp==0.1.0"]}}
+    write(
+        repo,
+        "plugins/unifi-sitemanager/.claude-plugin/plugin.json",
+        json.dumps({"version": "1.0.0", "mcpServers": server}),
+    )
+    write(repo, "plugins/unifi-sitemanager/.mcp.codex.json", json.dumps({"mcpServers": server}))
+    manifest = json.loads((ROOT / refs.manifest_path("sitemanager")).read_text())
+    write(repo, refs.manifest_path("sitemanager"), json.dumps(manifest))
+    release(repo, "sitemanager/v0.1.0")
+    return repo
+
+
+def test_sitemanager_domain_and_meta_tools_resolve_from_own_pin(cloud_repo: Path) -> None:
+    skill = "plugins/unifi-sitemanager/skills/example/SKILL.md"
+    write(
+        cloud_repo, skill, "`sitemanager_list_hosts`\n" + "\n".join(f"`sitemanager_{name}`" for name in refs.META_TOOLS)
+    )
+    assert refs.check(cloud_repo) == 6
+    assert refs.pinned_tool_count(cloud_repo, "sitemanager") == 9
+
+
+@pytest.mark.parametrize(
+    "name", ["sitemanager_list_hostz", "sitemanager_get_support_bundle", "sitemanager_list_clients"]
+)
+def test_unknown_sitemanager_tool_is_reported(cloud_repo: Path, name: str) -> None:
+    write(cloud_repo, "plugins/unifi-sitemanager/skills/example/SKILL.md", f"Call `{name}`.\n")
+    with pytest.raises(ValueError, match=rf"SKILL.md:1: {name} is not a tool in sitemanager/v0.1.0"):
+        refs.check(cloud_repo)
+
+
+def test_sitemanager_workspace_addition_does_not_override_pin(cloud_repo: Path) -> None:
+    path = refs.manifest_path("sitemanager")
+    data = json.loads((cloud_repo / path).read_text())
+    data["tools"].append({"name": "sitemanager_future_tool"})
+    write(cloud_repo, path, json.dumps(data))
+    write(cloud_repo, SKILL, "Call `sitemanager_future_tool`.\n")
+    with pytest.raises(ValueError, match="sitemanager_future_tool is not a tool in sitemanager/v0.1.0"):
+        refs.check(cloud_repo)
+
+
+def test_sitemanager_reference_needs_its_own_plugin_pin(repo: Path) -> None:
+    write(repo, SKILL, "Call `sitemanager_list_hosts`.\n")
+    with pytest.raises(ValueError, match="no unifi-sitemanager plugin pins a sitemanager release"):
+        refs.check(repo)
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+def test_existing_products_keep_manifest_total_count(monkeypatch, product: str) -> None:
+    manifest = {"tools": [{"name": "domain"}, {"name": "meta"}], "module_map": {"domain": "things"}}
+    monkeypatch.setattr(refs, "pinned_manifest", lambda root, name: ("fixture", manifest))
+    assert refs.pinned_tool_count(ROOT, product) == 2
+
+
+def test_sitemanager_product_bundle_cannot_use_worker_only_tools(cloud_repo: Path) -> None:
+    write(cloud_repo, WORKER_TOOLS, 'const FIXTURE = {\n  name: "sitemanager_fixture_tool",\n};\n')
+    release(cloud_repo, "worker/v1.0.0")
+    write(cloud_repo, "plugins/unifi-sitemanager/skills/example/SKILL.md", "Call `sitemanager_fixture_tool`.\n")
+    with pytest.raises(ValueError, match="sitemanager_fixture_tool is not a tool in sitemanager/v0.1.0"):
+        refs.check(cloud_repo)
+    (cloud_repo / "plugins/unifi-sitemanager/skills/example/SKILL.md").unlink()
+    write(cloud_repo, "plugins/unifi-intelligence/skills/example/SKILL.md", "Call `sitemanager_fixture_tool`.\n")
+    assert refs.check(cloud_repo) == 1

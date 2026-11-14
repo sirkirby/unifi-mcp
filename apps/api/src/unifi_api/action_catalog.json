@@ -2287,6 +2287,250 @@
       }
     },
     {
+      "name": "sitemanager_get_host",
+      "product": "sitemanager",
+      "category": "host",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "get_host",
+      "input_schema": {
+        "properties": {
+          "host_id": {
+            "description": "Site Manager host id, from sitemanager_list_hosts.",
+            "type": "string"
+          },
+          "include_reported_state": {
+            "description": "When true, also returns the host's full reported state. Account data is left out.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_get_isp_metrics",
+      "product": "sitemanager",
+      "category": "isp_metrics",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "isp_metrics_manager",
+      "manager_method": "get_metrics",
+      "input_schema": {
+        "properties": {
+          "begin_timestamp": {
+            "description": "RFC 3339 start of the window. Requires end_timestamp.",
+            "type": "string"
+          },
+          "duration": {
+            "description": "Window ending now: 24h for 5m metrics; 7d or 30d for 1h metrics. Omit for the shortest.",
+            "type": "string"
+          },
+          "end_timestamp": {
+            "description": "RFC 3339 end of the window. Requires begin_timestamp.",
+            "type": "string"
+          },
+          "metric_type": {
+            "description": "Interval of each period: 5m (kept for 24 hours) or 1h (kept for 30 days).",
+            "type": "string"
+          },
+          "period_limit": {
+            "description": "How many of the most recent periods to return per site (0-720). The summary always covers the whole window. Raise it for the full series; 0 returns the summary alone.",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_get_sdwan_config",
+      "product": "sitemanager",
+      "category": "sdwan",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "sdwan_manager",
+      "manager_method": "get_config",
+      "input_schema": {
+        "properties": {
+          "config_id": {
+            "description": "SD-WAN configuration id, from sitemanager_list_sdwan_configs.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_get_sdwan_config_status",
+      "product": "sitemanager",
+      "category": "sdwan",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "sdwan_manager",
+      "manager_method": "get_config_status",
+      "input_schema": {
+        "properties": {
+          "config_id": {
+            "description": "SD-WAN configuration id, from sitemanager_list_sdwan_configs.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_list_devices",
+      "product": "sitemanager",
+      "category": "device",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_devices",
+      "input_schema": {
+        "properties": {
+          "cursor": {
+            "description": "The next_cursor from a previous page. Omit for the first page. A page can hold fewer entries than page_size, even none: keep paging until next_cursor is absent.",
+            "type": "string"
+          },
+          "host_ids": {
+            "description": "Only return devices on these Site Manager host ids (up to 100). Omit for every host.",
+            "type": "array"
+          },
+          "page_size": {
+            "description": "Maximum entries in this page (1-500). Omit for the API default.",
+            "type": "integer"
+          },
+          "updated_since": {
+            "description": "RFC 3339 timestamp; only return hosts whose device list changed after it.",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_list_hosts",
+      "product": "sitemanager",
+      "category": "host",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_hosts",
+      "input_schema": {
+        "properties": {
+          "cursor": {
+            "description": "The next_cursor from a previous page. Omit for the first page. A page can hold fewer entries than page_size, even none: keep paging until next_cursor is absent.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Maximum entries in this page (1-500). Omit for the API default.",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_list_sdwan_configs",
+      "product": "sitemanager",
+      "category": "sdwan",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "sdwan_manager",
+      "manager_method": "list_configs",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_list_sites",
+      "product": "sitemanager",
+      "category": "site",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_sites",
+      "input_schema": {
+        "properties": {
+          "cursor": {
+            "description": "The next_cursor from a previous page. Omit for the first page. A page can hold fewer entries than page_size, even none: keep paging until next_cursor is absent.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Maximum entries in this page (1-500). Omit for the API default.",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
+      "name": "sitemanager_query_isp_metrics",
+      "product": "sitemanager",
+      "category": "isp_metrics",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "isp_metrics_manager",
+      "manager_method": "query_metrics",
+      "input_schema": {
+        "properties": {
+          "metric_type": {
+            "description": "Interval of each period: 5m (kept for 24 hours) or 1h (kept for 30 days).",
+            "type": "string"
+          },
+          "period_limit": {
+            "description": "How many of the most recent periods to return per site (0-720). The summary always covers the whole window. Raise it for the full series; 0 returns the summary alone.",
+            "type": "integer"
+          },
+          "sites": {
+            "description": "1-50 sites. Each entry needs host_id and site_id (Site Manager ids) and may give begin_timestamp and end_timestamp as RFC 3339 strings.",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sites"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "connection_kind": "sitemanager_account"
+    },
+    {
       "name": "unifi_adopt_device",
       "product": "network",
       "category": "devices",

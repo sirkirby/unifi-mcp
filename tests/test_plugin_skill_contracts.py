@@ -23,10 +23,10 @@ if "plugin_tool_refs" not in sys.modules:
     sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_spec.name])
 refs = sys.modules["plugin_tool_refs"]
-TOOL = r"(?:unifi|protect|access)_[a-z][a-z0-9_]+"
+TOOL = r"(?:unifi|protect|access|sitemanager)_[a-z][a-z0-9_]+"
 # These are event/response field names and contract values, not tools (including in generated prose).
 DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
-SERVERS = {"network", "protect", "access", "worker"}
+SERVERS = {"network", "protect", "access", "sitemanager", "worker"}
 TIMELINE_TOOL = "apps/worker/worker/src/location-timeline-tool.json"
 
 
@@ -34,7 +34,7 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
     """Tool input schemas: the server releases plugins pin, or with ``pinned=False`` the workspace servers."""
     result = {}
     # Plugin skills call the server release their plugin pins; repository docs describe the workspace server.
-    for product in ("network", "protect", "access"):
+    for product in ("network", "protect", "access", "sitemanager"):
         manifest = (
             refs.pinned_manifest(ROOT, product)[1]
             if pinned
@@ -207,7 +207,7 @@ OFFER_RULES = (
     "product's own list tool in eager mode.",
 )
 LISTING_TOOL = re.compile(
-    r"\b(?:unifi|protect|access)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
+    r"\b(?:unifi|protect|access|sitemanager)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
 )
 LISTING_OFFER = re.compile(r"\b(?:offer|offers|I can|let me|show)\b[^.]{0,60}\blist\b", re.IGNORECASE)
 
@@ -324,3 +324,40 @@ def test_documented_timeline_signature() -> None:
 def test_legacy_requirement_section_is_rejected(heading: str) -> None:
     text = skills()[0].read_text() + f"\n## {heading}\n\n- Network only; relay is optional.\n"
     assert f"legacy dependency section: {heading}" in structure_errors(text)
+
+
+def test_sitemanager_skill_preserves_cloud_scope_and_bounds() -> None:
+    root = ROOT / "plugins/unifi-sitemanager/skills"
+    main = (root / "unifi-sitemanager/SKILL.md").read_text()
+    setup = " ".join((root / "unifi-sitemanager-setup/SKILL.md").read_text().split())
+    for phrase in (
+        "whole account",
+        "api.ui.com",
+        "read-only",
+        "no writes",
+        "next_cursor",
+        "period_limit",
+        "30 days",
+        "Site Manager tool family",
+        "not interchangeable",
+    ):
+        assert phrase in main
+    for phrase in (
+        "UNIFI_SITEMANAGER_API_KEY_FILE",
+        "UNIFI_SITEMANAGER_API_KEY_COMMAND",
+        "keychain",
+        "stdin",
+        "sitemanager.env",
+        "no MCP client entry",
+        "Never reuse",
+        "not yet measured",
+    ):
+        assert phrase in setup
+    assert "sitemanager_tool_index" in main
+    # The reference documents the release the plugin pins, not the workspace server.
+    manifest = refs.pinned_manifest(ROOT, "sitemanager")[1]
+    names = {tool["name"] for tool in manifest["tools"]}
+    reference = (root / "unifi-sitemanager/references/sitemanager-tools.md").read_text()
+    assert len(manifest["module_map"]) == 9
+    assert names == set(re.findall(r"\bsitemanager_[a-z_]+\b", reference))
+    assert not reference_errors(setup, catalog())

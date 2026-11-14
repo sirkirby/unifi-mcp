@@ -6,6 +6,7 @@ release_provenance:
     - refs/tags/network/v*
     - refs/tags/protect/v*
     - refs/tags/access/v*
+    - refs/tags/sitemanager/v*
     - refs/tags/core/v*
     - refs/tags/shared/v*
     - refs/tags/relay/v*
@@ -31,6 +32,8 @@ release_provenance:
       tag_pattern: refs/tags/protect/v*
     - path_glob: apps/access/
       tag_pattern: refs/tags/access/v*
+    - path_glob: apps/sitemanager/
+      tag_pattern: refs/tags/sitemanager/v*
     - path_glob: apps/api/
       tag_pattern: refs/tags/api/v*
 cortex:

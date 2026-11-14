@@ -21,10 +21,10 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 
 # Monorepo Release Pipeline
 
-The unifi-mcp repo ships seven independently versioned Python packages plus the
+The unifi-mcp repo ships eight independently versioned Python packages plus the
 Node/TypeScript worker app: `unifi-core`
 and `unifi-mcp-shared` live under `packages/`; `unifi-network-mcp`, `unifi-protect-mcp`,
-`unifi-access-mcp`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
+`unifi-access-mcp`, `unifi-sitemanager-mcp`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
 alongside core and shared; `unifi-mcp-worker` lives under `apps/worker/` and publishes to npm.
 Each has its own package identity, tag namespace, publish workflow, and release-notes scope. Getting the release sequence wrong leaves downstream
 packages referencing non-existent PyPI versions or produces contaminated release notes
@@ -52,6 +52,7 @@ that bleed across package boundaries.
 | `unifi-mcp-network` | `apps/network/` | `unifi-network-mcp` | `network/v*` |
 | `unifi-mcp-protect` | `apps/protect/` | `unifi-protect-mcp` | `protect/v*` |
 | `unifi-mcp-access` | `apps/access/` | `unifi-access-mcp` | `access/v*` |
+| `unifi-sitemanager-mcp` | `apps/sitemanager/` | `unifi-sitemanager-mcp` | `sitemanager/v*` |
 | `unifi-api-server` | `apps/api/` | `unifi-api-server` | `api/v*` |
 | `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `unifi-mcp-relay` | `relay/v*` |
 | `unifi-mcp-worker` | `apps/worker/` | `unifi-mcp-worker` (npm, unscoped) | `worker/v*` |
@@ -113,7 +114,7 @@ can lag or overstate changes.
 
 **Standard (recommended):** Tag all packages with code changes PLUS all downstream dependents to ensure they pick up shared library bumps. Use for any bump to `unifi-core` or `unifi-mcp-shared`.
 
-**Full (maximum redundancy):** Tag all seven packages every release. Use for scheduled releases or recovering from a prior broken release sequence.
+**Full (maximum redundancy):** Tag all eight Python packages every release. Use for scheduled releases or recovering from a prior broken release sequence.
 
 **Decision rule:** Default to Minimal. Escalate to Standard when a shared library change requires every dependent to ship a new wheel. Use Full when recovering from a release failure.
 
@@ -161,16 +162,23 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 
 **`unifi-api-server` is a library package**, not an app package. It publishes to PyPI only and has no plugin manifest assets. Expect no writeback on `api/v*` tags.
 
-### App packages (network, protect, access)
+### App packages (network, protect, access, sitemanager)
 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
 - Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
+- `plugins/unifi-sitemanager/.claude-plugin/plugin.json` (once the bundle exists)
 - `apps/*/server.json` (server package version)
 
-**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access).
+**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager).
+
+Site Manager may receive its first `sitemanager/v0.1.0` tag before its plugin bundle exists.
+The sync still regenerates `apps/sitemanager/server.json` and succeeds, skipping only that
+absent bundle. Once present, `plugins/unifi-sitemanager` follows the same pin, independent
+plugin-version and changelog writeback rules. A bundle already pinning the current tag keeps
+its initial plugin version; a later server move bumps it by the usual rules.
 
 ### Version bump selection
 
@@ -191,6 +199,7 @@ Without a per-package `git_describe_command --match` glob, any tag reachable in 
 | network | `network/v*` |
 | protect | `protect/v*` |
 | access | `access/v*` |
+| sitemanager | `sitemanager/v*` |
 | relay | `relay/v*` |
 | unifi-core | `core/v*` |
 | unifi-mcp-shared | `shared/v*` |
@@ -257,7 +266,7 @@ Each mode builds that one wheel, installs it against exactly its declared `unifi
 
 ```bash
 rm -rf /tmp/wheelcheck && mkdir -p /tmp/wheelcheck
-for app in apps/network apps/protect apps/access packages/unifi-mcp-relay; do
+for app in apps/network apps/protect apps/access apps/sitemanager packages/unifi-mcp-relay; do
   echo "=== $app ==="
   uv build --wheel "$app" --out-dir /tmp/wheelcheck/$(basename $app) 2>&1 | tail -2
   whl=$(ls /tmp/wheelcheck/$(basename $app)/*.whl | tail -1)
@@ -278,8 +287,12 @@ packages and the Worker still release only by tag.
 ### Triggers
 
 - **Plugin-only release:** a PR that bumps the plugin version merges to `main`.
-- **Server release:** a Network, Protect or Access tag runs `bump-plugin-versions.yml`,
+- **Server release:** a Network, Protect, Access or Site Manager tag runs `bump-plugin-versions.yml`,
   which moves the server pin and bumps the plugin in one writeback commit.
+
+The writeback is tag-triggered, not gated on the separate PyPI publish job. Verify exact
+PyPI artifact availability before shipping a new bundle or advertising a new pin; a
+successful sync alone does not prove publication succeeded.
 
 ### Clients
 
@@ -402,6 +415,7 @@ release_tags=(
   "network/v${NETWORK_VERSION:?Set NETWORK_VERSION}"
   "protect/v${PROTECT_VERSION:?Set PROTECT_VERSION}"
   "access/v${ACCESS_VERSION:?Set ACCESS_VERSION}"
+  "sitemanager/v${SITEMANAGER_VERSION:?Set SITEMANAGER_VERSION}"
   "api/v${API_VERSION:?Set API_VERSION}"
   "relay/v${RELAY_VERSION:?Set RELAY_VERSION}"
   "worker/v${WORKER_VERSION:?Set WORKER_VERSION}"
@@ -424,8 +438,8 @@ failure.
 
 ### Consolidated plugin-manifest writebacks
 
-`bump-plugin-versions.yml` reads the current release tags and synchronizes all Network, Protect, and
-Access server pins and independently bumps each changed plugin. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
+`bump-plugin-versions.yml` reads the current release tags and synchronizes all Network, Protect, Access and
+Site Manager server pins (when its bundle exists) and independently bumps each changed plugin. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
 cancelled, and the last run writes one commit containing every app version visible at that point.
 Cancelled superseded runs are expected; the final run must succeed.
 
@@ -433,9 +447,9 @@ After a batch containing at least one namespace configured under
 `bump-plugin-versions.yml`'s `on.push.tags`:
 
 1. Wait for the last `bump-plugin-versions.yml` run to complete.
-2. For a batch with Network, Protect, or Access tags, fetch `origin/main`, inspect the consolidated
-   writeback commit, and verify `apps/<app>/server.json` and both MCP configs contain
-   each released server version; existing plugin manifests must agree on the independently bumped
+2. For a batch with Network, Protect, Access or Site Manager tags, fetch `origin/main`, inspect the consolidated
+   writeback commit, and verify `apps/<app>/server.json` and both MCP configs (for bundles
+   that exist) contain each released server version; existing plugin manifests must agree on the independently bumped
    plugin version. Run `make check-plugin-versions` against the parent of the writeback commit.
 3. For a library-only trigger batch containing Core, Shared, or Relay, require the sync run to
    succeed but allow `No version changes to commit`. Inspect a commit only if the run found an
@@ -467,13 +481,17 @@ Open `scripts/generate_release_notes.py` and locate `APP_CONFIGS`. Each entry is
 
 ## Procedure G.5: Pre-Tag Full Release-Wide Smoke Matrix Gate
 
-Even when the merged diff touches only one package (e.g., a Core-only PR), do not tag from that PR's own targeted live validation alone. Run the full release-wide safe-phase smoke matrix across every live-validated surface (network, protect, access, api) before pushing any tag. A single package's isolated pass does not prove the other surfaces still function against the same rebased head — regressions in unrelated surfaces have shipped from Core-only changes that looked locally safe.
+Even when the merged diff touches only one package (e.g., a Core-only PR), do not tag from that PR's own targeted live validation alone. Run the full release-wide safe-phase smoke matrix across every live-validated surface (network, protect, access, sitemanager, api) before pushing any tag. A single package's isolated pass does not prove the other surfaces still function against the same rebased head — regressions in unrelated surfaces have shipped from Core-only changes that looked locally safe.
 
 ```bash
 uv run python scripts/live_smoke.py --server network --phase safe
 uv run python scripts/live_smoke.py --server protect --phase safe
 uv run python scripts/live_smoke.py --server access --phase safe
+uv run python scripts/live_smoke.py --server sitemanager --phase safe
 ```
+
+Site Manager is a key-only cloud smoke target: configure only `UNIFI_SITEMANAGER_API_KEY`;
+no console host, username, password or shared `UNIFI_API_KEY` is required or reused.
 
 All must exit 0 with zero failed/exception records before the first tag in the release is pushed — this is a gate on Procedure F, not just a post-tag check.
 
@@ -484,7 +502,7 @@ After pushing a release batch:
 1. **Check CI concurrently:** Capture every release workflow run and confirm all complete
    successfully. Do not serialize independent workflow watches.
 2. **Verify the final manifest sync when triggered:** If the batch contains a tag namespace listed
-   in `bump-plugin-versions.yml`, confirm its last run succeeded. For Network, Protect, or Access
+   in `bump-plugin-versions.yml`, confirm its last run succeeded. For Network, Protect, Access or Site Manager
    tags, inspect the consolidated commit on `main`; for a Core-, Shared-, or Relay-only trigger,
    accept a successful `No version changes to commit` result. API-only and Worker-only batches skip
    this step because they do not trigger the workflow.
@@ -501,8 +519,9 @@ After pushing a release batch:
    uv run python scripts/live_smoke.py --server network --phase safe
    uv run python scripts/live_smoke.py --server protect --phase safe
    uv run python scripts/live_smoke.py --server access --phase safe
+   uv run python scripts/live_smoke.py --server sitemanager --phase safe
    ```
-   All three must exit 0 with zero failed/exception records. This is the final release validation gate.
+   All four MCP targets must exit 0 with zero failed/exception records. This is the final release validation gate.
    **Do not invoke with bare `python3 scripts/live_smoke.py`** — the system Python lacks the workspace dependencies and the harness will fail at import time.
 7. **Post-publish installed-wheel verification:** After PyPI confirms the new versions, use the
    clean environment from step 5 to verify every released Python distribution. For released server
@@ -545,11 +564,11 @@ Before releasing `packages/unifi-mcp-shared/` or `packages/unifi-core/`, verify 
 
 ### J-1: DI-Only Rule — No Reverse Imports in `unifi-mcp-shared`
 
-Every entrypoint in `packages/unifi-mcp-shared/` must accept app-specific behavior as injected parameters. Direct imports from `unifi_network_mcp`, `unifi_protect_mcp`, or `unifi_access_mcp` inside the shared package create a circular import that breaks all three app servers simultaneously at import time — blast radius is total.
+Every entrypoint in `packages/unifi-mcp-shared/` must accept app-specific behavior as injected parameters. Direct imports from `unifi_network_mcp`, `unifi_protect_mcp`, `unifi_access_mcp`, or `unifi_sitemanager_mcp` inside the shared package create a circular import that breaks all four MCP app servers simultaneously at import time — blast radius is total.
 
 Verify before releasing any shared-package change:
 ```bash
-grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp" packages/unifi-mcp-shared/
+grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp" packages/unifi-mcp-shared/
 ```
 Any match is a release blocker. Replace with an injected parameter or a typed Protocol interface defined within `packages/unifi-mcp-shared/`.
 
@@ -564,7 +583,7 @@ Decision tree for placing new code:
 Import direction must remain strictly left-to-right: `app servers → unifi-mcp-shared → unifi-core`. Verify:
 ```bash
 grep -r "from unifi_mcp_shared\|import unifi_mcp_shared" packages/unifi-core/
-grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp" packages/unifi-mcp-shared/ packages/unifi-core/
+grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp" packages/unifi-mcp-shared/ packages/unifi-core/
 ```
 Both commands must return nothing.
 
@@ -593,7 +612,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **Plugin updates need a version change.** Claude Code and Codex install a merged plugin change only when its manifest version changes. Keep the bump in the same PR as the shipped-file change (Procedure E).
 
-**Malformed git tag — missing 'v' prefix.** A tag like `protect/0.4.2` (no 'v') is syntactically wrong and ignored by hatch-vcs. Validate before pushing: `git tag -l | grep -E 'network|protect|access|relay|core|shared|api' | sort -V` — every line must contain `/v`.
+**Malformed git tag — missing 'v' prefix.** A tag like `protect/0.4.2` (no 'v') is syntactically wrong and ignored by hatch-vcs. Validate before pushing: `git tag -l | grep -E 'network|protect|access|sitemanager|relay|core|shared|api' | sort -V` — every line must contain `/v`.
 
 **PyPI pin masked by workspace source — failure mode the entire CI matrix cannot detect.** Workspace `[tool.uv.sources]` overrides mean `uv lock --check` passes with a stale pin. The pin only fails when pip resolves against PyPI on a user's machine. Run the wheel-metadata check in Procedure D before pushing tags.
 
@@ -605,7 +624,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **Cross-package combined pytest run causes test configuration collision.** Running `uv run pytest packages/ apps/` causes pytest to load conflicting conftest files. Run per-package: `cd apps/network && uv run pytest`. CI workflows are already scoped this way.
 
-**Shared-package import blast radius is total.** A single `from unifi_network_mcp` import inside `packages/unifi-mcp-shared/` breaks all three app servers simultaneously at import time. The `ImportError` traceback names the shared package, masking the root cause. Run the grep from Procedure J-1 before every shared-package release.
+**Shared-package import blast radius is total.** A single `from unifi_network_mcp` import inside `packages/unifi-mcp-shared/` breaks all four MCP app servers simultaneously at import time. The `ImportError` traceback names the shared package, masking the root cause. Run the grep from Procedure J-1 before every shared-package release.
 
 **Relay protocol drift is silent.** The relay implementation files (`packages/unifi-mcp-relay/src/unifi_mcp_relay/discovery.py` and `packages/unifi-mcp-relay/src/unifi_mcp_relay/protocol.py`) have no import from `unifi-mcp-shared` — protocol changes fail silently until a real client exercises the changed path. Manual review on every protocol-touching PR is the only protection (see Procedure J-3).
 

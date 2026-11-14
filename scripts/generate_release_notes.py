@@ -142,6 +142,25 @@ APP_CONFIGS = {
             ),
         ),
     ),
+    "sitemanager": PackageConfig(
+        key="sitemanager",
+        display_name="UniFi Site Manager MCP",
+        pypi_package="unifi-sitemanager-mcp",
+        install_command="uvx unifi-sitemanager-mcp=={version}",
+        path_groups=(
+            PathGroup("Site Manager MCP", ("apps/sitemanager/", "plugins/unifi-sitemanager/")),
+            PathGroup("Shared Libraries", ("packages/unifi-core/", "packages/unifi-mcp-shared/")),
+            PathGroup(
+                "Release Infrastructure",
+                (
+                    ".github/workflows/release-sitemanager.yml",
+                    ".github/workflows/docker-sitemanager.yml",
+                    ".github/workflows/test-sitemanager.yml",
+                    *COMMON_PACKAGE_PATHS,
+                ),
+            ),
+        ),
+    ),
     "core": PackageConfig(
         key="core",
         display_name="UniFi Core",
@@ -208,7 +227,7 @@ APP_CONFIGS = {
 
 PRIMARY_PATTERNS_BY_PACKAGE = {config.key: config.path_groups[0].patterns for config in APP_CONFIGS.values()}
 PACKAGE_KEYWORDS = tuple(APP_CONFIGS)
-PRODUCT_KEYS = ("network", "protect", "access", "relay", "worker")
+PRODUCT_KEYS = ("network", "protect", "access", "sitemanager", "relay", "worker")
 
 
 def run_git(args: list[str]) -> str:
@@ -221,7 +240,7 @@ def parse_release_tag(tag: str) -> ReleaseTag:
     """Parse a package release tag such as ``network/v0.14.12``."""
 
     match = re.match(
-        r"^(?P<key>network|protect|access|core|shared|relay|worker)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$",
+        r"^(?P<key>network|protect|access|sitemanager|core|shared|relay|worker)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$",
         tag,
     )
     if match:

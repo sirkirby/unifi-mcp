@@ -174,8 +174,12 @@ uv run python scripts/live_smoke.py --server protect --phase preview
 # Approved operations — runs all safe lifecycles plus explicitly approved mutations
 uv run python scripts/live_smoke.py --server network --phase approved
 
-# Run all servers at once (requires full .env with Access and Protect creds)
+# Run all servers at once (requires full .env with Access and Protect creds;
+# Site Manager runs last and is skipped when no Site Manager key is set)
 uv run python scripts/live_smoke.py --server all --phase safe
+
+# Site Manager (cloud, key-only) — see Procedure B2
+uv run --all-packages python scripts/live_smoke.py --server sitemanager --phase readonly
 
 # Inventory — prints safety_tier classification for every tool; no live calls
 uv run python scripts/live_smoke.py --server network --phase inventory
@@ -193,6 +197,35 @@ uv run python scripts/live_smoke.py --server network --phase inventory
 
 **Expected output:** The harness streams per-tool status to stdout. A passing run exits with
 a summary count. Any `failed` or `exception` status line requires investigation before merge.
+
+## Procedure B2: Site Manager Target (`--server sitemanager`)
+
+Site Manager talks only to Ubiquiti's cloud with one account-wide key. It has no console
+host, no hardware prerequisite and no support-bundle tool.
+
+- **Key:** `UNIFI_SITEMANAGER_API_KEY`, or its `_FILE` / `_COMMAND` form, in `.env`, the
+  environment, or the settings file named by `UNIFI_SETTINGS_FILE`. Never `UNIFI_API_KEY`:
+  that is a console's local key and the harness does not consider it.
+- **Absent key = skip, not validation.** With none of the three spellings set, the target
+  writes one `__setup__` record with status `skipped_no_credentials` and exits 0. It imports
+  no server, runs no key provider and makes no request. A skip proves nothing about Site
+  Manager; never cite it as live evidence. `--server all` still runs the three console
+  servers as before.
+- **Configured but broken = failure.** Two spellings at once, an unreadable `_FILE`, a failing
+  `_COMMAND` (resolved by the server's own resolver) or a `UNIFI_SETTINGS_FILE` that cannot be
+  applied is a failed setup record and exit 1. A wrong key fails at the first read (401).
+- **What runs:** the nine domain tools, all read-only, each once. Lists are one page of 5;
+  ISP metrics use `5m` over `24h` with one period. Detail arguments come only from Site
+  Manager's own lists: `host_id` from `sitemanager_list_hosts`, `config_id` from
+  `sitemanager_list_sdwan_configs`, the `host_id`/`site_id` pair from `sitemanager_list_sites`.
+  An account with no SD-WAN configuration or no usable site skips that tool with a reason.
+  Never feed it Network, Protect or Access IDs.
+- **Phases:** `readonly` and `safe` run the reads; `preview`, `lifecycle` and `approved` have
+  nothing to run. `--phase support --server sitemanager` writes an `unsupported` report and
+  exits 2; the support phase covers network, protect and access only.
+- **Reports** never carry the key, request headers or a traceback: the key is replaced with
+  `***REDACTED***` in error text and transport exceptions are recorded by class name only.
+- Account-wide reads are an explicit operator run; never run them from setup validation.
 
 ## Procedure C: Human-in-the-Loop Mutation Gate
 

@@ -85,3 +85,40 @@ async def test_catalog_render_hints(tmp_path, monkeypatch) -> None:
     assert "items" in body
     kinds = {item["kind"] for item in body["items"]}
     assert "list" in kinds  # at least one tool uses LIST kind
+
+
+@pytest.mark.asyncio
+async def test_cloud_catalog_paths_methods_hints_and_connection_kind(tmp_path, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    from tests.sitemanager_data import CASES, bootstrap
+
+    app, key, _ = await bootstrap(tmp_path, monkeypatch)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            headers = {"Authorization": f"Bearer {key}"}
+            tools = (await client.get("/v1/catalog/tools", headers=headers)).json()["items"]
+            cloud = [item for item in tools if item["product"] == "sitemanager"]
+            assert len(cloud) == 9
+            assert {item["name"] for item in cloud} == {case[0] for case in CASES}
+            assert all(
+                item["connection_kind"] == "sitemanager_account" and item["render_hint"]["kind"] in {"list", "detail"}
+                for item in cloud
+            )
+            resources = (await client.get("/v1/catalog/resources", headers=headers)).json()["items"]
+            cloud = [item for item in resources if item["product"] == "sitemanager"]
+            assert len(cloud) == 9
+            expected = {
+                (case[1], case[2].replace("synthetic-host", "{host_id}").replace("synthetic-config", "{config_id}"))
+                for case in CASES
+            }
+            assert {(item["method"], item["resource_path"]) for item in cloud} == expected
+            query = next(item for item in cloud if item["method"] == "POST")
+            assert query["render_hint"]["kind"] == "detail"
+            hints = (await client.get("/v1/catalog/render-hints", headers=headers)).json()["items"]
+            cloud_resources = [
+                resource for group in hints for resource in group["resources"] if resource["product"] == "sitemanager"
+            ]
+            assert len(cloud_resources) == 9
+    finally:
+        await app.state.engine.dispose()

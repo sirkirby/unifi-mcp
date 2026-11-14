@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that tool names in shipped plugin files exist in the releases plugins pin.
 
-Every ``unifi_``/``protect_``/``access_`` name in a plugin's files must exist in
+Every ``unifi_``/``protect_``/``access_``/``sitemanager_`` name in a plugin's files must exist in
 the ``tools_manifest.json`` of the server release that the product's plugin pins,
 read from that release tag in git. That is what users actually run. The same
 pinned manifest (:func:`pinned_manifest`) drives the generated plugin tool
@@ -24,15 +24,15 @@ from pathlib import Path
 
 from plugin_versions import git, latest_tag, pin_tag, plugin_state
 
-PREFIXES = {"unifi": "network", "protect": "protect", "access": "access"}
-TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access)_[a-z0-9_]*[a-z0-9](?![\w-])")
+PREFIXES = {"unifi": "network", "protect": "protect", "access": "access", "sitemanager": "sitemanager"}
+TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access|sitemanager)_[a-z0-9_]*[a-z0-9](?![\w-])")
 # Every server registers these meta-tools, whatever its manifest lists.
 META_TOOLS = ("tool_index", "execute", "batch", "batch_status", "load_tools")
 # Prefixed identifiers that are not tools: Access event types and topics, and field names.
 NOT_TOOLS = frozenset({"access_granted", "access_denied", "access_denial", "access_end", "protect_camera_id"})
 WORKER_SOURCE = "apps/worker/worker/src/"
 # A tool definition's name, in a TypeScript object literal or a JSON definition file.
-WORKER_TOOL = re.compile(r'^\s*"?name"?: "((?:unifi|protect|access)_[a-z0-9_]+)",?$', re.MULTILINE)
+WORKER_TOOL = re.compile(r'^\s*"?name"?: "((?:unifi|protect|access|sitemanager)_[a-z0-9_]+)",?$', re.MULTILINE)
 
 
 @dataclass
@@ -82,9 +82,14 @@ def pinned_manifest(root: Path, product: str) -> tuple[str, dict]:
         raise ValueError(f"unifi-{product}: release {tag} has no {path}") from exc
 
 
+def tool_count(manifest: dict, product: str) -> int:
+    """Site Manager counts domain tools; retain the other products' released totals."""
+    return len(manifest["module_map"]) if product == "sitemanager" else len(manifest["tools"])
+
+
 def pinned_tool_count(root: Path, product: str) -> int:
-    """How many tools the server release the product's plugin pins provides (meta-tools excluded)."""
-    return len(pinned_manifest(root, product)[1]["tools"])
+    """The product's published count convention, from its pinned release."""
+    return tool_count(pinned_manifest(root, product)[1], product)
 
 
 def pinned_release(root: Path, product: str) -> Release:

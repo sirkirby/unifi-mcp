@@ -1,0 +1,6 @@
+<article>
+  <h2>Connection probe</h2>
+  <p>{{ 'Connected' if result.ok else 'Probe failed' }}</p>
+  {% if result.error_kind %}<p>{{ result.error_kind }}: {{ result.message }}</p>{% endif %}
+  <p>{{ result.latency_ms }} ms — {{ result.checked_at }}</p>
+</article>

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Generate server.json manifest for MCP Registry submission.
 
-Shared script for all 3 apps. Parameterized by app name.
+Shared script for every app. Parameterized by app name.
 
 Usage:
     python scripts/generate_server_manifest.py --app network [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app protect [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app access [--version X.Y.Z]
+    python scripts/generate_server_manifest.py --app sitemanager [--version X.Y.Z]
 
 Output:
     apps/{app}/server.json — MCP Registry manifest (committed to git)
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).parent.parent if Path(__file__).parent.name == "scripts" else Path(__file__).parent
 
-# Shared env vars (all apps need these)
+# Controller env vars (every app that connects to a console needs these)
 _SHARED_ENV_VARS = [
     {"name": "UNIFI_HOST", "description": "Controller IP/hostname", "isRequired": True},
     {"name": "UNIFI_USERNAME", "description": "Admin username", "isRequired": True, "isSecret": True},
@@ -75,6 +76,23 @@ APP_CONFIGS = {
             },
         ],
     },
+    "sitemanager": {
+        "title": "UniFi Site Manager MCP",
+        "description": "Read hosts, sites, devices, ISP metrics, and SD-WAN status across a UI account via MCP.",
+        # No bare "v" fallback: plain v* tags are Network's legacy releases.
+        "tag_prefixes": ["sitemanager/v"],
+        # This server has no controller host or login, and must never be offered
+        # a console's UNIFI_API_KEY.
+        "controller_env_vars": False,
+        "extra_env_vars": [
+            {
+                "name": "UNIFI_SITEMANAGER_API_KEY",
+                "description": "Site Manager API key from unifi.ui.com > Settings > API Keys",
+                "isRequired": True,
+                "isSecret": True,
+            },
+        ],
+    },
 }
 
 
@@ -113,7 +131,7 @@ def build_server_manifest(app_name: str, version: str) -> dict:
         raise ValueError(f"Unknown app: '{app_name}'. Expected one of: {sorted(APP_CONFIGS.keys())}")
 
     config = APP_CONFIGS[app_name]
-    env_vars = _SHARED_ENV_VARS + config["extra_env_vars"]
+    env_vars = (_SHARED_ENV_VARS if config.get("controller_env_vars", True) else []) + config["extra_env_vars"]
 
     return {
         "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",

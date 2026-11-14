@@ -16,6 +16,7 @@
 - [ ] Network MCP server
 - [ ] Protect MCP server
 - [ ] Access MCP server
+- [ ] Site Manager MCP server
 - [ ] Relay sidecar
 - [ ] Cloudflare Worker / CLI
 - [ ] API server

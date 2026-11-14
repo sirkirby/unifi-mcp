@@ -47,6 +47,40 @@ class SupportBundleDocumentationTests(unittest.TestCase):
         ):
             self.assertIn(phrase, guide)
 
+    def test_site_manager_has_no_support_bundle_and_routes_to_troubleshooting(self) -> None:
+        guide = (ROOT / GUIDE_PATH).read_text()
+        self.assertIn("The Site Manager server has no support-bundle tool", guide)
+        self.assertIn("scoped to the three console servers", guide)
+        self.assertNotIn("sitemanager_get_support_bundle", guide)
+
+        troubleshooting = "apps/sitemanager/docs/troubleshooting.md"
+        self.assertTrue((ROOT / troubleshooting).is_file())
+        for relative in ("SUPPORT.md", "README.md", "CONTRIBUTING.md", "docs/README.md", "docs/support-bundles.md"):
+            text = (ROOT / relative).read_text()
+            with self.subTest(surface=relative):
+                self.assertIn("sitemanager/docs/troubleshooting.md", text)
+                self.assertNotIn("sitemanager_get_support_bundle", text)
+
+        bug_route = next(
+            line for line in (ROOT / "SUPPORT.md").read_text().splitlines() if line.startswith("| Reproducible")
+        )
+        self.assertIn("Site Manager server has no support bundle", bug_route)
+
+        form = yaml.safe_load((ROOT / ".github/ISSUE_TEMPLATE/bug_report.yml").read_text())
+        component = next(item for item in form["body"] if item.get("id") == "component")
+        host = next(item for item in form["body"] if item.get("id") == "controller_host")
+        self.assertIn("Site Manager MCP server", component["attributes"]["options"])
+        self.assertIn("N/A — Site Manager (cloud account)", host["attributes"]["options"])
+        support = next(item for item in form["body"] if item.get("id") == "support_bundle")
+        self.assertIn("Site Manager", support["attributes"]["description"])
+
+        config = yaml.safe_load((ROOT / ".github/ISSUE_TEMPLATE/config.yml").read_text())
+        urls = [link["url"] for link in config["contact_links"]]
+        self.assertIn(
+            "https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/troubleshooting.md",
+            urls,
+        )
+
     def test_all_support_entrypoints_link_to_the_canonical_guide(self) -> None:
         relative_surfaces = (
             "README.md",

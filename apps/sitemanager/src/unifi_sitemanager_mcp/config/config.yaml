@@ -1,0 +1,44 @@
+# The Site Manager API key is not a config value. It is read only from
+# UNIFI_SITEMANAGER_API_KEY (or its _FILE / _COMMAND spellings), never from
+# this file, CONFIG_PATH, or UNIFI_API_KEY. The API destination is fixed.
+unifi: {}
+
+server:
+  host: ${oc.env:UNIFI_MCP_HOST,127.0.0.1}
+  port: ${oc.env:UNIFI_MCP_PORT,3003}
+  log_level: INFO
+
+  # Tool registration mode
+  # Options: eager, lazy, meta_only
+  # - eager: Register all tools immediately
+  # - lazy: Register meta-tools and list the read-only tools directly (default)
+  # - meta_only: Register only meta-tools
+  tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
+
+  # Tool filtering (optional, for eager mode)
+  # enabled_categories: hosts, sites, devices, isp_metrics, sdwan
+  # enabled_tools: specific tool names, e.g. "sitemanager_list_hosts,sitemanager_list_sites"
+  enabled_categories: ${oc.env:UNIFI_ENABLED_CATEGORIES,null}
+  enabled_tools: ${oc.env:UNIFI_ENABLED_TOOLS,null}
+
+  http:
+    enabled: ${oc.env:UNIFI_MCP_HTTP_ENABLED,false}
+    force: ${oc.env:UNIFI_MCP_HTTP_FORCE,false}
+    transport: ${oc.env:UNIFI_MCP_HTTP_TRANSPORT,streamable-http}
+    # Bearer token every HTTP request must carry; empty leaves HTTP unauthenticated.
+    # UNIFI_<SERVER>_MCP_HTTP_AUTH_TOKEN and the _FILE/_COMMAND spellings take precedence.
+    auth_token: ${oc.env:UNIFI_MCP_HTTP_AUTH_TOKEN,""}
+  diagnostics:
+    enabled: ${oc.env:UNIFI_MCP_DIAGNOSTICS,false}
+    log_tool_args: ${oc.env:UNIFI_MCP_DIAG_LOG_TOOL_ARGS,true}
+    log_tool_result: ${oc.env:UNIFI_MCP_DIAG_LOG_TOOL_RESULT,true}
+    max_payload_chars: ${oc.env:UNIFI_MCP_DIAG_MAX_PAYLOAD,2000}
+
+policy:
+  response:
+    redact_sensitive_fields: ${oc.env:UNIFI_SITEMANAGER_REDACT_SENSITIVE_FIELDS,true}
+    mcp_content_mode: ${oc.env:UNIFI_SITEMANAGER_MCP_CONTENT_MODE,adaptive}
+
+sitemanager:
+  # Seconds to wait for one Site Manager API response.
+  timeout_seconds: ${oc.env:UNIFI_SITEMANAGER_TIMEOUT_SECONDS,30}

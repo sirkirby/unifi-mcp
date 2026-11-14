@@ -135,8 +135,53 @@ def test_shape_device_details_normalizes_radio_summary_channel() -> None:
     )
 
     assert result["device"]["radio_summary"] == [
-        {"radio": "ng", "channel": 11, "tx_power": 6},
-        {"radio": "6e", "channel": 0, "tx_power": 21},
+        {"radio": "ng", "channel": 11, "tx_power_mode": None, "tx_power": 6},
+        {"radio": "6e", "channel": 0, "tx_power_mode": None, "tx_power": 21},
+    ]
+
+
+def _ap_with_stale_custom_power() -> dict:
+    """An AP on auto/medium power whose stored custom tx_power is a leftover default."""
+    return {
+        "mac": "aa",
+        "name": "AP",
+        "type": "uap",
+        "state": 1,
+        "radio_table": [
+            {"name": "rai0", "radio": "na", "channel": 116, "tx_power_mode": "auto", "tx_power": 6},
+            {"name": "ra0", "radio": "ng", "channel": 6, "tx_power_mode": "medium", "tx_power": 6},
+            {"name": "wifi2", "radio": "6e", "channel": 37, "tx_power_mode": "custom", "tx_power": 12},
+        ],
+        "radio_table_stats": [
+            {"name": "ra0", "radio": "ng", "channel": 6, "tx_power": 16},
+            {"name": "rai0", "radio": "na", "channel": 116, "tx_power": 25},
+        ],
+    }
+
+
+def test_shape_device_list_radio_summary_separates_configured_from_actual_power() -> None:
+    result = shape_device_list([_ap_with_stale_custom_power()], site="default", include_details=True)
+
+    assert result["devices"][0]["radios"] == [
+        {"band": "na", "channel": 116, "tx_power_mode": "auto", "tx_power": 6, "current_tx_power": 25},
+        {"band": "ng", "channel": 6, "tx_power_mode": "medium", "tx_power": 6, "current_tx_power": 16},
+        {"band": "6e", "channel": 37, "tx_power_mode": "custom", "tx_power": 12},
+    ]
+
+
+def test_shape_device_details_radio_summary_separates_configured_from_actual_power() -> None:
+    result = shape_device_details(
+        SimpleNamespace(raw=_ap_with_stale_custom_power()),
+        site="default",
+        mac_address="aa",
+        include="radios",
+        summary=True,
+    )
+
+    assert result["device"]["radio_summary"] == [
+        {"radio": "na", "channel": 116, "tx_power_mode": "auto", "tx_power": 6, "current_tx_power": 25},
+        {"radio": "ng", "channel": 6, "tx_power_mode": "medium", "tx_power": 6, "current_tx_power": 16},
+        {"radio": "6e", "channel": 37, "tx_power_mode": "custom", "tx_power": 12},
     ]
 
 

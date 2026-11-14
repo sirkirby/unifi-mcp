@@ -75,3 +75,23 @@ def test_protect_skill_explains_unsupported_shape_with_real_tool_and_summary_fal
     assert "Do not request or call this probe in the current release" in text
     assert "resource_shape" not in skill_path("network").read_text()
     assert "resource_shape" not in skill_path("access").read_text()
+
+
+def test_support_generator_excludes_sitemanager(tmp_path, monkeypatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "generate_support_skills", ROOT / "scripts/generate_support_skills.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    assert {product.slug for product in module.PRODUCTS} == {"network", "protect", "access"}
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["generate_support_skills.py"])
+    assert module.main() == 0
+    paths = sorted(tmp_path.rglob("SKILL.md"))
+    assert len(paths) == 3
+    assert not (tmp_path / "plugins/unifi-sitemanager").exists()
+    for path in paths:
+        assert "sitemanager_get_support_bundle" not in path.read_text()

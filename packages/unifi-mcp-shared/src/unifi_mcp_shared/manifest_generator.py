@@ -58,7 +58,7 @@ def _build_module_map(
         module_name = f"{package}.tools.{tool_file.stem}"
 
         try:
-            content = tool_file.read_text()
+            content = tool_file.read_text(encoding="utf-8")
             for tool_name in pattern.findall(content):
                 tool_map[tool_name] = module_name
         except Exception as e:

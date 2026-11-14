@@ -1,0 +1,17 @@
+{% if connection %}
+<article>
+  <h2>{{ connection.name }}</h2>
+  <dl>
+    <dt>Local connection</dt><dd>{{ connection.id }}</dd>
+    <dt>Key configured</dt><dd>{{ connection.key_configured }}</dd>
+    <dt>Revision</dt><dd>{{ connection.revision }}</dd>
+  </dl>
+  <button hx-get="/admin/sitemanager/_edit_form" hx-target="#cloud-form">Edit</button>
+  <button hx-post="/admin/sitemanager/probe" hx-target="#cloud-probe">Probe connection</button>
+  <button hx-post="/admin/sitemanager/delete" hx-target="#cloud-form"
+          hx-confirm="Delete the Site Manager cloud connection?">Delete</button>
+</article>
+{% else %}
+<p>No Site Manager cloud connection configured.</p>
+<button hx-get="/admin/sitemanager/_new_form" hx-target="#cloud-form">Add cloud connection</button>
+{% endif %}

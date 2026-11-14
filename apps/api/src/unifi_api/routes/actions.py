@@ -164,6 +164,19 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
     type_registry = request.app.state.type_registry
     key_prefix = getattr(request.state, "api_key_prefix", "(unknown)")
 
+    if registry.has(tool_name) and registry.resolve(tool_name).connection_kind != "controller":
+        async with sm() as session:
+            await write_audit(
+                session,
+                key_id_prefix=key_prefix,
+                controller=None,
+                target=tool_name,
+                outcome="error",
+                error_kind="account_target_required",
+            )
+            await session.commit()
+        raise HTTPException(status_code=409, detail="Use the Site Manager account action endpoint for this operation.")
+
     if "include_sensitive" in body.args:
         return {"success": False, "error": actions_svc.INCLUDE_SENSITIVE_UNSUPPORTED_ERROR}
 

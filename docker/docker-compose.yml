@@ -56,6 +56,40 @@ services:
     restart: unless-stopped
     container_name: unifi-access-mcp
 
+  # Optional Site Manager server: `docker compose --profile sitemanager up`.
+  # One Site Manager key reads every console on the Ubiquiti account, so this
+  # service is opt-in, is not in the relay's default server list, and receives
+  # only its own key variables -- never the shared env file or console logins.
+  # The key is interpolated from the shell (or `--env-file`), never built into
+  # the image. For _FILE, mount the secret read-only and give its container
+  # path; _COMMAND must name a helper installed in the image.
+  unifi-sitemanager-mcp:
+    build:
+      context: ..
+      dockerfile: apps/sitemanager/Dockerfile
+    environment:
+      - UNIFI_SITEMANAGER_API_KEY=${UNIFI_SITEMANAGER_API_KEY:-}
+      - UNIFI_SITEMANAGER_API_KEY_FILE=${UNIFI_SITEMANAGER_API_KEY_FILE:-}
+      - UNIFI_SITEMANAGER_API_KEY_COMMAND=${UNIFI_SITEMANAGER_API_KEY_COMMAND:-}
+      # Bearer token for the HTTP endpoint, passed through only when set in
+      # the shell. Other containers on the Compose network can reach this
+      # service, so set one before exposing account-wide inventory.
+      - UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN
+      - UNIFI_MCP_HTTP_AUTH_TOKEN
+      - UNIFI_MCP_HTTP_ENABLED=true
+      - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
+      - UNIFI_MCP_HOST=0.0.0.0
+      - UNIFI_MCP_PORT=3003
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE=${UNIFI_MCP_ALLOWED_HOSTS-}
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET=${UNIFI_MCP_ALLOWED_HOSTS+true}
+      - UNIFI_MCP_INTERNAL_ALLOWED_HOSTS=localhost,localhost:3003,127.0.0.1,127.0.0.1:3003,host.docker.internal,host.docker.internal:3003,unifi-sitemanager-mcp,unifi-sitemanager-mcp:3003
+    ports:
+      - "127.0.0.1:3003:3003"
+    restart: unless-stopped
+    container_name: unifi-sitemanager-mcp
+    profiles:
+      - sitemanager
+
   unifi-mcp-relay:
     build:
       context: ..

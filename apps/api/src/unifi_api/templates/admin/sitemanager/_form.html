@@ -1,0 +1,12 @@
+<article>
+<h2>{{ 'Add' if mode == 'new' else 'Edit' }} cloud connection</h2>
+<form hx-post="/admin/sitemanager/{{ 'create' if mode == 'new' else 'update' }}"
+      hx-target="#cloud-form" hx-swap="innerHTML" autocomplete="off">
+  <label>Name <input name="name" value="{{ connection.name if connection else '' }}" maxlength="128" required /></label>
+  <label>Site Manager API key
+    <input type="password" name="site_manager_api_key" value="" autocomplete="new-password" {% if mode == 'new' %}required{% endif %} />
+  </label>
+  {% if mode == 'edit' %}<small>Key configured. Leave blank to preserve the stored key.</small>{% endif %}
+  <button type="submit">Save</button>
+</form>
+</article>

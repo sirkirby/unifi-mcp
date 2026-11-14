@@ -155,3 +155,12 @@ def test_api_image_catalog_fetch_can_read_response_larger_than_default_limit(mon
     assert status == 200
     assert fetched.encode() == body
     assert len(fetched) > 8192
+
+
+def test_api_image_smoke_expects_only_the_unconfigured_cloud_account_503():
+    import api_image_smoke
+
+    unconfigured = '{"detail": {"kind": "sitemanager_not_configured", "message": "x"}}'
+    assert "expected" in api_image_smoke._classify(503, unconfigured)
+    assert api_image_smoke._classify(503, '{"detail": {"kind": "other"}}') == "503 server-error"
+    assert api_image_smoke._classify(503, "not json") == "503 server-error"

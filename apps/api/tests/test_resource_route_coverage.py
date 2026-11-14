@@ -24,6 +24,15 @@ from unifi_api.services.resource_routes import collect_resource_routes, is_read_
 # Tools whose registered route function name doesn't match the default convention
 # (tool name minus product prefix). Populated from the Task 22 audit.
 TOOL_ROUTE_OVERRIDES: dict[str, str] = {
+    "sitemanager_list_hosts": "list_sitemanager_hosts",
+    "sitemanager_get_host": "get_sitemanager_host",
+    "sitemanager_list_sites": "list_sitemanager_sites",
+    "sitemanager_list_devices": "list_sitemanager_devices",
+    "sitemanager_get_isp_metrics": "get_sitemanager_isp_metrics",
+    "sitemanager_query_isp_metrics": "query_sitemanager_isp_metrics",
+    "sitemanager_list_sdwan_configs": "list_sitemanager_sdwan_configs",
+    "sitemanager_get_sdwan_config": "get_sitemanager_sdwan_config",
+    "sitemanager_get_sdwan_config_status": "get_sitemanager_sdwan_config_status",
     # Access — domain-prefixed route functions to disambiguate from network/protect.
     "access_get_activity_summary": "get_access_activity_summary",
     "access_get_health": "get_access_health",
@@ -70,9 +79,20 @@ def test_every_read_tool_has_a_resource_route(tmp_path) -> None:
 
     routes = collect_resource_routes(app)
     route_names = {r.name for r in routes}
+    assert {(r.method, r.path, r.name) for r in routes if r.path.startswith("/v1/sitemanager/")} == {
+        ("GET", "/v1/sitemanager/hosts", "list_sitemanager_hosts"),
+        ("GET", "/v1/sitemanager/hosts/{host_id}", "get_sitemanager_host"),
+        ("GET", "/v1/sitemanager/sites", "list_sitemanager_sites"),
+        ("GET", "/v1/sitemanager/devices", "list_sitemanager_devices"),
+        ("GET", "/v1/sitemanager/isp-metrics", "get_sitemanager_isp_metrics"),
+        ("POST", "/v1/sitemanager/isp-metrics/query", "query_sitemanager_isp_metrics"),
+        ("GET", "/v1/sitemanager/sd-wan-configs", "list_sitemanager_sdwan_configs"),
+        ("GET", "/v1/sitemanager/sd-wan-configs/{config_id}", "get_sitemanager_sdwan_config"),
+        ("GET", "/v1/sitemanager/sd-wan-configs/{config_id}/status", "get_sitemanager_sdwan_config_status"),
+    }
 
     manifest = ManifestRegistry.load()
-    read_tools = [t for t in manifest.all_tools() if is_read_tool(t)]
+    read_tools = [t for t in manifest.all_tools() if is_read_tool(t, manifest.resolve(t))]
 
     missing: list[tuple[str, str | None]] = []
     for tool in read_tools:

@@ -267,6 +267,8 @@ async def dispatch_action(
     resolved catalog entry.
     """
     entry = registry.resolve(tool_name)
+    if entry.connection_kind != "controller":
+        raise CapabilityMismatch("Use the Site Manager account action endpoint for this operation.")
     if entry.product not in controller_products:
         raise CapabilityMismatch(
             f"tool '{tool_name}' requires product '{entry.product}', controller supports {controller_products!r}"

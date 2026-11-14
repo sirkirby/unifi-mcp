@@ -288,3 +288,57 @@ class TestAttribution:
             relevant, prior_emails={"53508749+rmaher001@users.noreply.github.com"}
         )
         assert returning == []
+
+
+def test_sitemanager_tag_parsing() -> None:
+    tag = parse_release_tag("sitemanager/v0.1.0")
+    assert tag == ReleaseTag(tag="sitemanager/v0.1.0", package_key="sitemanager", version="0.1.0")
+    with pytest.raises(ValueError, match="Unsupported release tag"):
+        parse_release_tag("sitemanager/0.1.0")
+
+
+@pytest.mark.parametrize(
+    "path,group",
+    [
+        ("apps/sitemanager/src/unifi_sitemanager_mcp/main.py", "Site Manager MCP"),
+        ("plugins/unifi-sitemanager/skills/unifi-sitemanager/SKILL.md", "Site Manager MCP"),
+        ("packages/unifi-core/src/unifi_core/sitemanager/models/hosts.py", "Shared Libraries"),
+        ("packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py", "Shared Libraries"),
+        (".github/workflows/release-sitemanager.yml", "Release Infrastructure"),
+        ("apps/network/src/unifi_network_mcp/main.py", None),
+        ("plugins/unifi-access/skills/unifi-access/SKILL.md", None),
+        ("apps/sitemanager-other/main.py", None),
+        ("plugins/unifi-sitemanager-other/SKILL.md", None),
+    ],
+)
+def test_sitemanager_release_path_scope(path: str, group: str | None) -> None:
+    classified = classify_commit(
+        CommitInfo(sha="abc123", subject="feat: fixture change", files=(path,)), APP_CONFIGS["sitemanager"]
+    )
+    assert (classified.group_title if classified else None) == group
+
+
+def test_sitemanager_first_release_has_no_previous_tag(monkeypatch) -> None:
+    calls = []
+
+    def fake_git(args):
+        calls.append(args)
+        if args[0] == "tag":
+            assert args == ["tag", "--list", "sitemanager/v*", "--sort=-version:refname"]
+            return "sitemanager/v0.1.0"
+        if args[0] == "log":
+            assert args[-1] == "sitemanager/v0.1.0"
+            return "abc123\0feat(sitemanager): add inventory\0Fixture\0fixture@example.invalid"
+        assert args == ["diff-tree", "--no-commit-id", "--name-only", "-r", "abc123"]
+        return "apps/sitemanager/src/unifi_sitemanager_mcp/main.py"
+
+    monkeypatch.setattr(_mod, "run_git", fake_git)
+    assert _mod.find_previous_tag("sitemanager/v0.1.0", APP_CONFIGS["sitemanager"]) is None
+    notes = _mod.generate_notes("sitemanager/v0.1.0")
+    assert APP_CONFIGS["sitemanager"].display_name == "UniFi Site Manager MCP"
+    assert "uvx unifi-sitemanager-mcp==0.1.0" in notes
+    assert "### Site Manager MCP" in notes
+    assert "feat(sitemanager): add inventory" in notes
+    assert "commits/sitemanager/v0.1.0" in notes
+    assert "compare/" not in notes
+    assert len(calls) == 4

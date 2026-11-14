@@ -9,6 +9,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 [![PyPI - Network](https://img.shields.io/pypi/v/unifi-network-mcp)](https://pypi.org/project/unifi-network-mcp/)
 [![PyPI - Protect](https://img.shields.io/pypi/v/unifi-protect-mcp)](https://pypi.org/project/unifi-protect-mcp/)
 [![PyPI - Access](https://img.shields.io/pypi/v/unifi-access-mcp)](https://pypi.org/project/unifi-access-mcp/)
+[![PyPI - Site Manager](https://img.shields.io/pypi/v/unifi-sitemanager-mcp)](https://pypi.org/project/unifi-sitemanager-mcp/)
 [![PyPI - Relay](https://img.shields.io/pypi/v/unifi-mcp-relay)](https://pypi.org/project/unifi-mcp-relay/)
 [![PyPI - API Server](https://img.shields.io/pypi/v/unifi-api-server)](https://pypi.org/project/unifi-api-server/)
 [![npm - Worker](https://img.shields.io/npm/v/unifi-mcp-worker)](https://www.npmjs.com/package/unifi-mcp-worker)
@@ -22,6 +23,9 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Network](apps/network/) | Stable | 210 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
 | [Protect](apps/protect/) | Stable | 65 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
+| [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
+
+Network, Protect and Access each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
 ## Plugins
 
@@ -32,6 +36,7 @@ Install these from the Claude Code, Codex or OpenClaw marketplace; [Quick Start]
 | `unifi-network` | The Network MCP server, its agent skills and guided setup |
 | `unifi-protect` | The Protect MCP server, its agent skills and guided setup |
 | `unifi-access` | The Access MCP server, its agent skills and guided setup |
+| `unifi-sitemanager` | The Site Manager MCP server for a whole UI account, its agent skills and guided key setup |
 | `unifi-intelligence` | Cross-product investigations that use Network and Protect together, with every claim cited. Incident Investigation runs locally; Security Patrol and Visitor Audit need the [cloud worker](#cloud-relay). It requires the Network and Protect plugins |
 
 The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
@@ -41,6 +46,7 @@ The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
 | What you are building | Use | Why |
 |-----------------------|-----|-----|
 | An AI assistant or another existing MCP client | [Network](apps/network/), [Protect](apps/protect/), or [Access](apps/access/) MCP server | Standard MCP discovery, tool calls, permissions, and confirmation flows |
+| An account-wide view of every console, site and device on a UI account | [Site Manager](apps/sitemanager/) MCP server | Read-only inventory, WAN health and SD-WAN status from Ubiquiti's cloud with one Site Manager API key |
 | A custom application, automation service, code-execution runtime, or MCP adapter | [`unifi-api-server`](apps/api/) | Your code controls call sequencing, data joins, resource limits, and approval flow |
 | Remote access for an MCP client | [Cloud Relay](packages/unifi-mcp-relay/) | Authenticated remote MCP routing without exposing the local servers directly |
 
@@ -69,15 +75,22 @@ queries, SSE streams, scoped API keys and administration, plus a REST action
 endpoint for supported controller operations. It shares `unifi-core` managers
 with the MCP servers but does not proxy or require them.
 
+The API server also serves the nine Site Manager reads once an administrator
+adds one account-level cloud connection. Every API key with the `read` scope
+can then read the whole cloud account; see
+[Site Manager cloud connection](apps/api/README.md#site-manager-cloud-connection).
+
 See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
 
 ## What is this?
 
 UniFi MCP is a collection of [Model Context Protocol](https://modelcontextprotocol.io/) servers that let AI assistants and automation tools interact with Ubiquiti UniFi controllers. Each server targets a specific UniFi application (Network, Protect, Access) and exposes its functionality as MCP tools — queryable, composable, and safe by default.
 
+Those three servers are local-first: they talk directly to your console, and nothing leaves your network unless you add the optional Cloud Relay. The Site Manager server is the exception. Every request it makes goes to Ubiquiti's cloud at `https://api.ui.com`, even when your MCP client runs it locally over stdio. The destination is fixed, and its key reads every console on the account. The Cloud Relay does not include it unless you add it to `UNIFI_RELAY_SERVERS`; a relay token for that location could then read the whole account. See [Site Manager](apps/sitemanager/) and the [privacy policy](PRIVACY.md#site-manager-cloud-requests).
+
 ## MCP HTTP Access
 
-MCP HTTP is unauthenticated by default and intended for trusted local clients. Set `UNIFI_MCP_HTTP_AUTH_TOKEN` to require a static bearer token on every HTTP request ([details](apps/network/docs/transports.md#http-bearer-token)). HTTP is disabled by default; when enabled, packages bind to loopback. Docker Compose enables it on the container network and publishes ports 3000–3002 on host `127.0.0.1`. Use an authenticated TLS proxy or Cloud Relay for remote access, and prevent direct access to the backend. See the [transport security model](SECURITY.md#mcp-transport-trust-boundary) and [HTTP setup and migration](apps/network/docs/transports.md#http-deployment-security).
+MCP HTTP is unauthenticated by default and intended for trusted local clients. Set `UNIFI_MCP_HTTP_AUTH_TOKEN` to require a static bearer token on every HTTP request ([details](apps/network/docs/transports.md#http-bearer-token)). HTTP is disabled by default; when enabled, packages bind to loopback. Docker Compose enables it on the container network and publishes ports 3000–3002 on host `127.0.0.1`; the Site Manager service uses port 3003 and starts only with the opt-in `sitemanager` profile. Use an authenticated TLS proxy or Cloud Relay for remote access, and prevent direct access to the backend. See the [transport security model](SECURITY.md#mcp-transport-trust-boundary) and [HTTP setup and migration](apps/network/docs/transports.md#http-deployment-security).
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
@@ -86,7 +99,7 @@ MCP HTTP is unauthenticated by default and intended for trusted local clients. S
 | `UNIFI_MCP_HTTP_FORCE` | `false` | Allow HTTP outside container PID 1 |
 | `UNIFI_MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Complete accepted Host-header list; Compose separately adds required internal hosts. List each host: the MCP SDK has no wildcard beyond a `:*` port suffix, so an entry with any other `*` (`*`, `*.example.com`) stops the server at startup instead of accepting every host |
 | `UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION` | `true` | Validate Host headers to prevent DNS-rebinding requests |
-| `UNIFI_MCP_HTTP_AUTH_TOKEN` | unset | Require `Authorization: Bearer <token>` on every HTTP request; at least 32 printable ASCII characters. `UNIFI_<NETWORK\|PROTECT\|ACCESS>_MCP_HTTP_AUTH_TOKEN` overrides it per server, and `_FILE`/`_COMMAND` spellings work. Set but empty refuses startup |
+| `UNIFI_MCP_HTTP_AUTH_TOKEN` | unset | Require `Authorization: Bearer <token>` on every HTTP request; at least 32 printable ASCII characters. `UNIFI_<NETWORK\|PROTECT\|ACCESS\|SITEMANAGER>_MCP_HTTP_AUTH_TOKEN` overrides it per server, and `_FILE`/`_COMMAND` spellings work. Set but empty refuses startup |
 
 ## MCP Discovery
 
@@ -100,7 +113,7 @@ For tool results that already provide structured output, `adaptive` response mod
 
 The lazy-loading meta-tools remain content-only; they are not the pre-`2025-06-18` protocol category described above. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
 
-`UNIFI_NETWORK_MCP_CONTENT_MODE`, `UNIFI_PROTECT_MCP_CONTENT_MODE`, and `UNIFI_ACCESS_MCP_CONTENT_MODE` override the global setting for their respective servers. Independently of transport compaction, Network's `unifi_get_dashboard` defaults to `summary=true`, while `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; pass `summary=false` when the full selected data is required.
+`UNIFI_NETWORK_MCP_CONTENT_MODE`, `UNIFI_PROTECT_MCP_CONTENT_MODE`, `UNIFI_ACCESS_MCP_CONTENT_MODE`, and `UNIFI_SITEMANAGER_MCP_CONTENT_MODE` override the global setting for their respective servers. Independently of transport compaction, Network's `unifi_get_dashboard` defaults to `summary=true`, while `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; pass `summary=false` when the full selected data is required.
 
 ## Quick Start
 
@@ -147,6 +160,8 @@ Repeat for Protect or Access if needed:
 /plugin install unifi-access@unifi-plugins
 ```
 
+For an account-wide view from Ubiquiti's cloud, `/plugin install unifi-sitemanager@unifi-plugins`, then run its setup skill to give it a Site Manager API key as a file or command provider. It asks for no console host or login.
+
 For the cross-product skills, `/plugin install unifi-intelligence@unifi-plugins`
 also installs the Network and Protect plugins it needs. Claude Code opens no
 options dialog for plugins it installs as dependencies, so run each product's
@@ -165,7 +180,7 @@ Register the UniFi MCP marketplace, then install the plugins from Codex's `/plug
 codex plugin marketplace add sirkirby/unifi-mcp
 ```
 
-Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. `unifi-intelligence` adds the cross-product skills; Codex does not install plugin dependencies, so install and set up `unifi-network` and `unifi-protect` before it. After installing, ask Codex to run the plugin's setup skill, for example:
+Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, `unifi-access`, or `unifi-sitemanager`. `unifi-intelligence` adds the cross-product skills; Codex does not install plugin dependencies, so install and set up `unifi-network` and `unifi-protect` before it. After installing, ask Codex to run the plugin's setup skill, for example:
 
 > Use the `unifi-network-setup` skill to configure this for Codex.
 
@@ -173,7 +188,9 @@ The setup skill saves your controller settings and credential provider reference
 
 ### UniFi account requirements
 
-The MCP servers authenticate to the local UniFi controller APIs with a local admin/service account. Do not use a Ubiquiti SSO cloud account for MCP setup. For Network MCP today, accounts that require SSO MFA or local 2FA are not supported through configuration; use a dedicated local admin account without MFA for the service account, scoped to the permissions you are comfortable giving the MCP server.
+The Network, Protect and Access servers authenticate to the local UniFi controller APIs with a local admin/service account. Do not use a Ubiquiti SSO cloud account for their setup. For Network MCP today, accounts that require SSO MFA or local 2FA are not supported through configuration; use a dedicated local admin account without MFA for the service account, scoped to the permissions you are comfortable giving the MCP server.
+
+The Site Manager server needs no console account. It uses a Site Manager API key created at [unifi.ui.com](https://unifi.ui.com) under Settings > API Keys, which reads every console the UI account can see.
 
 ### OpenClaw
 
@@ -205,6 +222,7 @@ Run the servers directly:
 uvx unifi-network-mcp@latest
 uvx unifi-protect-mcp@latest
 uvx unifi-access-mcp@latest
+uvx unifi-sitemanager-mcp@latest
 ```
 
 For Claude Desktop, add to your `claude_desktop_config.json`:
@@ -246,6 +264,26 @@ For Claude Desktop, add to your `claude_desktop_config.json`:
 
 > **Tip:** If all servers connect to the same controller, you can use the shared `UNIFI_HOST` / `UNIFI_USERNAME` / `UNIFI_PASSWORD` variables instead of repeating them per server.
 
+### Site Manager
+
+Give the Site Manager server only its own key, in a file only you can read. It takes none of the console variables above:
+
+```jsonc
+{
+  "mcpServers": {
+    "unifi-sitemanager": {
+      "command": "uvx",
+      "args": ["unifi-sitemanager-mcp@latest"],
+      "env": {
+        "UNIFI_SITEMANAGER_API_KEY_FILE": "/Users/you/.config/unifi-mcp/sitemanager-api-key"
+      }
+    }
+  }
+}
+```
+
+It uses stdio by default; HTTP is opt-in on port 3003. See the [Site Manager README](apps/sitemanager/README.md).
+
 ## Usage Examples
 
 Once connected, just ask your AI agent in natural language:
@@ -265,11 +303,15 @@ Once connected, just ask your AI agent in natural language:
 > "Who badged into the office today? Show me a timeline of all door access events"
 > "Create a visitor pass for John Smith with access to the main entrance tomorrow 9-5"
 
+**Site Manager**
+> "List every console on my UniFi account with its OS version and whether it is connected"
+> "Which sites had WAN downtime or high latency in the last 24 hours?"
+
 **UniFi Intelligence** (the `unifi-intelligence` plugin)
 > "Switch `aa:bb:cc:00:10:02` dropped off at 8:45 this morning, New York time. What happened between 8:00 and 9:00?" — cites Network events and mapped Protect camera events with their coverage
 > "Show me everything that happened at the front entrance in the last hour" — needs the [cloud worker](apps/worker/) and [relay](packages/unifi-mcp-relay/)
 
-All mutations use a **preview-then-confirm** flow — you see exactly what will change before anything is applied.
+All mutations use a **preview-then-confirm** flow (Site Manager has none: every one of its tools reads) — you see exactly what will change before anything is applied.
 
 ## Configuration
 
@@ -308,15 +350,17 @@ Each server supports its own prefixed environment variables that take priority o
 
 **Single controller?** Just set the shared `UNIFI_*` variables -- all servers will use them. Server-specific variables are only needed when the servers talk to different controllers or use different credentials.
 
+**Site Manager has no shared fallback.** Its only credential is `UNIFI_SITEMANAGER_API_KEY`, or its `_FILE` / `_COMMAND` form (set exactly one). It never reads `UNIFI_API_KEY`, any other shared `UNIFI_*` variable, `config.yaml` or `CONFIG_PATH`, and it takes no host, username or password. A console key and a Site Manager key reach different places, so neither is ever sent to the other's destination. See [Site Manager configuration](apps/sitemanager/docs/configuration.md).
+
 **Tracing:** Set `OTEL_EXPORTER_OTLP_ENDPOINT` to export the MCP SDK's spans over OTLP, one per MCP message, continuing a trace context passed in the request's `_meta`. The Docker images include the exporter; pip and uvx installs need the `otel` extra (for example `unifi-network-mcp[otel]`). Off by default.
 
-For the full configuration reference including permissions, transports, and advanced options, see the [Network server docs](apps/network/docs/configuration.md), [Protect server docs](apps/protect/docs/configuration.md), or [Access server docs](apps/access/docs/configuration.md).
+For the full configuration reference including permissions, transports, and advanced options, see the [Network server docs](apps/network/docs/configuration.md), [Protect server docs](apps/protect/docs/configuration.md), [Access server docs](apps/access/docs/configuration.md), or [Site Manager server docs](apps/sitemanager/docs/configuration.md).
 
 ## Secret redaction
 
 Tool and API responses redact known controller secret fields by default — Wi-Fi passphrases, VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN `.conf`/`.ovpn` files), API tokens, SNMP community strings, SNMPv3 passwords, device-SSH credentials and the management key, and Access credential token/PIN values come back as `***REDACTED***`. This keeps secrets out of agent context and logs.
 
-When a trusted local administration workflow genuinely needs raw values, disable redaction for that process with `UNIFI_REDACT_SENSITIVE_FIELDS=false` or a server-specific override such as `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false`, or `UNIFI_API_REDACT_SENSITIVE_FIELDS=false`. To keep an existing secret during an update, simply omit the field — do **not** pass the `***REDACTED***` marker back; doing so is rejected so the placeholder can never be written as a real secret. See [`PRIVACY.md`](PRIVACY.md) for the full list of redacted fields.
+When a trusted local administration workflow genuinely needs raw values, disable redaction for that process with `UNIFI_REDACT_SENSITIVE_FIELDS=false` or a server-specific override such as `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_SITEMANAGER_REDACT_SENSITIVE_FIELDS=false`, or `UNIFI_API_REDACT_SENSITIVE_FIELDS=false`. To keep an existing secret during an update, simply omit the field — do **not** pass the `***REDACTED***` marker back; doing so is rejected so the placeholder can never be written as a real secret. See [`PRIVACY.md`](PRIVACY.md) for the full list of redacted fields.
 
 ## Agent Skills
 
@@ -346,6 +390,7 @@ apps/
   network/          # UniFi Network MCP server (stable, 210 tools)
   protect/          # UniFi Protect MCP server (stable, 65 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
+  sitemanager/      # UniFi Site Manager MCP server (beta, cloud, read-only, 9 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/
@@ -380,9 +425,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, including h
 
 ## Support the Project
 
-UniFi MCP is maintained as an independent open-source project. Sponsorship helps cover the ongoing AI costs behind building, testing, and maintaining the project, plus live controller compatibility testing, release maintenance, documentation, and issue triage across the Network, Protect, Access, API, relay, and plugin packages.
+UniFi MCP is maintained as an independent open-source project. Sponsorship helps cover the ongoing AI costs behind building, testing, and maintaining the project, plus live controller compatibility testing, release maintenance, documentation, and issue triage across the Network, Protect, Access, Site Manager, API, relay, and plugin packages.
 
-For a reproducible Network, Protect, or Access MCP problem, if the server can start and register tools, generate and review an optional [sanitized support bundle](docs/support-bundles.md) before opening a public bug report. If it cannot, use the bug report's manual form fields instead. Support bundles are safer than ordinary diagnostic logs but remain sanitized, not anonymous.
+For a reproducible Network, Protect, or Access MCP problem, if the server can start and register tools, generate and review an optional [sanitized support bundle](docs/support-bundles.md) before opening a public bug report. If it cannot, use the bug report's manual form fields instead. The Site Manager server has no support-bundle tool; follow its [troubleshooting guide](apps/sitemanager/docs/troubleshooting.md) and use the manual fields. Support bundles are safer than ordinary diagnostic logs but remain sanitized, not anonymous.
 
 - [Sponsor on GitHub](https://github.com/sponsors/sirkirby)
 - [See what sponsorship funds](https://unifimcp.com/sponsor/)

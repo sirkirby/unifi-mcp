@@ -3,7 +3,7 @@ name: myco:skill-reference-and-manifest-drift-maintenance
 description: |
   Use when adding, changing, or reviewing tool categories, tool parameters,
   or tool docstrings in unifi-mcp apps (apps/access, apps/network,
-  apps/protect) whose behavior surfaces through generated artifacts: each
+  apps/protect, apps/sitemanager) whose behavior surfaces through generated artifacts: each
   app's generated tool manifest (e.g.
   apps/protect/src/unifi_protect_mcp/tools_manifest.json) and the plugin
   skill reference docs with AUTO:tools:<category> marker blocks. Applies
@@ -129,6 +129,30 @@ PR that adds tools but skips the ToC/section/markers entirely will pass
 CI cleanly while leaving the new tools completely undiscoverable in the
 reference doc — the count goes up, but an agent reading the doc body
 never finds them. This must be caught in review, not by the pipeline.
+
+### Site Manager reference and count contract
+
+The fourth MCP app is `apps/sitemanager` (`unifi-sitemanager-mcp`, tag namespace
+`sitemanager/v*`, hatch-vcs `--match sitemanager/v*`). Its plugin reference is
+`plugins/unifi-sitemanager/skills/unifi-sitemanager/references/sitemanager-tools.md`.
+Use the multiword H1 title `# Site Manager Server Tool Reference (9 read-only domain tools, plus 5 meta-tools)`.
+The generator accepts this title and replaces the counts from the pinned manifest:
+domain count is `len(module_map)` (nine initially), and meta count is the remaining
+manifest entries (five initially). The other three products retain their released
+manifest-total count convention unchanged.
+
+In the main `skills/unifi-sitemanager/SKILL.md`, use the same count phrase:
+`It provides 9 read-only domain tools, plus 5 meta-tools`. Name the meta-tools separately:
+`sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`,
+`sitemanager_batch_status`, `sitemanager_load_tools`. Supply paired AUTO markers for
+all five categories: `hosts`, `sites`, `devices`, `isp_metrics`, `sdwan`, plus their
+headings and ToC entries. Reference tables contain the domain tools only.
+
+`generate_support_skills.py` deliberately remains limited to Network, Protect and
+Access: Site Manager has no support-bundle tool. Do not add it to that generator.
+Site Manager releases trigger the same plugin writeback as those three; its first
+tag may precede the bundle, in which case only its server manifest is updated.
+Use the release-pipeline skill for the package map and key-only smoke target.
 
 ## Procedure C: Resolve generated-manifest merge conflicts by regeneration
 
