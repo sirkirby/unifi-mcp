@@ -1,45 +1,47 @@
 {
   "community": {
-    "contributors": 13,
-    "merged_pull_requests": 36,
+    "contributors": 25,
+    "merged_pull_requests": 74,
     "period": "trailing_90_days",
-    "period_end": "2026-07-11T01:59:25Z",
-    "period_start": "2026-04-12T01:59:25Z",
+    "period_end": "2026-11-14T18:33:05Z",
+    "period_start": "2026-08-16T18:33:05Z",
     "source": "https://api.github.com/search/issues"
   },
   "containers": {
     "packages": {
-      "unifi-access-mcp": 9576,
-      "unifi-api-server": 2199,
-      "unifi-mcp-relay": 3978,
-      "unifi-network-mcp": 123970,
-      "unifi-protect-mcp": 60712
+      "unifi-access-mcp": 22719,
+      "unifi-api-server": 6161,
+      "unifi-mcp-relay": 13187,
+      "unifi-network-mcp": 497670,
+      "unifi-protect-mcp": 151271,
+      "unifi-sitemanager-mcp": 10
     },
     "period": "lifetime",
     "source": "https://github.com/sirkirby/unifi-mcp/pkgs/container/",
-    "total": 200435
+    "total": 691018
   },
-  "generated_at": "2026-07-11T01:59:25Z",
+  "generated_at": "2026-11-14T18:33:05Z",
   "github": {
     "source": "https://api.github.com/repos/sirkirby/unifi-mcp",
-    "stars": 510,
-    "stars_added_90_days": 272
+    "stars": 1062,
+    "stars_added_90_days": 377
   },
   "npm": {
     "source": "https://api.npmjs.org/downloads/point/last-month/unifi-mcp-worker",
-    "worker_downloads_30_days": 834
+    "worker_downloads_30_days": 590
   },
   "python": {
     "packages": {
-      "unifi-access-mcp": 2904,
-      "unifi-api-server": 1260,
-      "unifi-mcp-relay": 628,
-      "unifi-network-mcp": 40132,
-      "unifi-protect-mcp": 6970
+      "unifi-access-mcp": 3227,
+      "unifi-api-server": 1235,
+      "unifi-mcp-relay": 409,
+      "unifi-network-mcp": 58295,
+      "unifi-protect-mcp": 8817,
+      "unifi-sitemanager-mcp": 154
     },
     "period": "trailing_30_days",
     "source": "https://pypistats.org/",
-    "total": 51894
+    "total": 72137
   },
   "schema_version": 1
 }
