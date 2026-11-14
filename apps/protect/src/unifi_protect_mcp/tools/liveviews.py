@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
         "settings. Shows name, layout grid size, slot count, camera count, and "
         "whether it is the default or global view."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_liveviews() -> Dict[str, Any]:
     """List all liveviews."""
@@ -67,7 +67,7 @@ async def protect_list_liveviews() -> Dict[str, Any]:
         "uiprotect Python API; this tool validates camera IDs and returns a "
         "preview. Use the Protect web UI to create liveviews."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     permission_category="liveview",
     permission_action="create",
 )
@@ -118,7 +118,7 @@ async def protect_create_liveview(
         "directly supported by the uiprotect Python API; this tool returns "
         "information about the liveview. Use the Protect web UI to delete liveviews."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="liveview",
     permission_action="delete",
 )

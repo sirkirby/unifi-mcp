@@ -62,7 +62,9 @@ def test_every_domain_tool_is_read_only_key_authenticated_and_categorized():
 
     assert len(tools) == 9
     for tool in tools:
-        assert tool["annotations"] == {"readOnlyHint": True, "openWorldHint": False}, tool["name"]
+        assert tool["annotations"] == {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}, tool[
+            "name"
+        ]
         assert tool["auth_method"] == "api_key_only", tool["name"]
         assert tool["permission_action"] == "read", tool["name"]
         assert tool["permission_category"] in SITEMANAGER_CATEGORY_MAP, tool["name"]

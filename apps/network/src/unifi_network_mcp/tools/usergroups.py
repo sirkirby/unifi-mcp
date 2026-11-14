@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 User groups define bandwidth limits that can be applied to clients.
 Each group specifies upload/download speed caps in Kbps.""",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_usergroups() -> Dict[str, Any]:
     """List all user groups."""
@@ -46,7 +46,7 @@ async def list_usergroups() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_usergroup_details",
     description="Get detailed information about a specific user group by its ID",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_usergroup_details(
     group_id: Annotated[

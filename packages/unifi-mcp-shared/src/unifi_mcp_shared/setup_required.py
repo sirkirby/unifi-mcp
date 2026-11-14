@@ -143,7 +143,7 @@ async def serve_setup_required(
             f"Report why the {plugin_name} server has no controller tools, how to configure it and how to "
             "load the new settings. Call this when the server's tools are missing."
         ),
-        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+        annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
     async def setup_status() -> dict[str, Any]:
         return {

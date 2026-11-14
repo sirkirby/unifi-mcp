@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
         "Access Developer API visitor tool family — pass them only to access_get_visitor and "
         "access_delete_visitor; do not pass them to other Access user or credential tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="read",
     auth="api_key_only",
@@ -57,7 +57,7 @@ async def access_list_visitors() -> Dict[str, Any]:
         "from access_list_visitors and is scoped to this visitor tool family — do not pass IDs "
         "from other Access user or credential tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="read",
     auth="api_key_only",
@@ -88,7 +88,7 @@ async def access_get_visitor(
         "the Access Developer API visitor tool family — use it only with access_get_visitor and "
         "access_delete_visitor. Requires a UniFi Access API token and confirm=true to execute."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     permission_category="visitor",
     permission_action="create",
     auth="api_key_only",
@@ -198,7 +198,7 @@ async def access_create_visitor(
         "access_list_visitors and is scoped to this visitor tool family — do not pass IDs from "
         "other Access user or credential tools. Requires an Access API token and confirm=true."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="delete",
     auth="api_key_only",

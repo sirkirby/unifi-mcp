@@ -20,7 +20,7 @@ ConfigId = Annotated[str, Field(description="SD-WAN configuration id, from sitem
         "Lists the SD-WAN configurations on the account behind the Site Manager API key. An account with none "
         "returns an empty list."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="sdwan",
     permission_action="read",
     auth="api_key_only",
@@ -41,7 +41,7 @@ async def sitemanager_list_sdwan_configs() -> Dict[str, Any]:
     name="sitemanager_get_sdwan_config",
     title="Get SD-WAN Config",
     description="Returns one SD-WAN configuration with its settings, hubs and spokes.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="sdwan",
     permission_action="read",
     auth="api_key_only",
@@ -63,7 +63,7 @@ async def sitemanager_get_sdwan_config(config_id: ConfigId) -> Dict[str, Any]:
         "Returns the deployment status of one SD-WAN configuration: generation status, errors and warnings, "
         "and per-hub and per-spoke state."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="sdwan",
     permission_action="read",
     auth="api_key_only",

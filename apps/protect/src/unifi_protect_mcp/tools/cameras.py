@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
         "connection state, recording mode, and whether they are currently recording. "
         "Use to get an overview of all cameras in the system."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_cameras() -> Dict[str, Any]:
     """List all cameras."""
@@ -66,7 +66,7 @@ async def protect_list_cameras() -> Dict[str, Any]:
         "IP address, MAC, mic/speaker settings, IR/HDR mode, stream channels, "
         "smart detection types, and PTZ capability. Use to inspect one camera."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_camera(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
@@ -90,7 +90,7 @@ async def protect_get_camera(
         "returns the image as a base64-encoded string. When False (default), "
         "returns a reference URL. Optionally specify width and height to resize."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_snapshot(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
@@ -147,7 +147,7 @@ async def protect_get_snapshot(
         "(High, Medium, Low). Includes resolution, FPS, and bitrate for each stream. "
         "Use to connect a video player or integration to camera feeds."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_camera_streams(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
@@ -175,7 +175,7 @@ async def protect_get_camera_streams(
         "(person, vehicle, animal, etc.), and zone counts. "
         "For historical events, use the events API tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_camera_analytics(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
@@ -275,7 +275,7 @@ async def protect_update_camera_settings(
         "Enables or disables recording on a camera. When enabled, sets recording "
         "mode to 'always'. When disabled, sets to 'never'. Requires confirm=True to apply."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="camera",
     permission_action="update",
 )
@@ -583,7 +583,7 @@ async def protect_ptz_preset(
         "Reboots a camera. The camera will be temporarily unavailable during reboot. "
         "Requires confirm=True to execute. Use with caution — active recordings will be interrupted."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     permission_category="camera",
     permission_action="update",
 )

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 @server.tool(
     name="unifi_list_qos_rules",
     description="List all QoS rules on the Unifi Network controller for the current site.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_qos_rules() -> Dict[str, Any]:
     """Lists all Quality of Service (QoS) rules configured for the current UniFi site.
@@ -75,7 +75,7 @@ async def list_qos_rules() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_qos_rule_details",
     description="Get details for a specific QoS rule by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_qos_rule_details(
     rule_id: Annotated[str, Field(description="Unique identifier (_id) of the QoS rule (from unifi_list_qos_rules)")],

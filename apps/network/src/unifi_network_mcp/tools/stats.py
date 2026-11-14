@@ -33,7 +33,7 @@ _WINDOW_DESCRIPTION = (
 @server.tool(
     name="unifi_get_network_stats",
     description="Get network statistics from the Unifi Network controller",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_network_stats(
     duration: Annotated[
@@ -102,7 +102,7 @@ async def get_network_stats(
         "a past incident window. Wired clients are not metered per client in this report on current "
         "gateways, so an empty series for a wired client means 'not reported', not 'no traffic'."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_client_stats(
     client_id: Annotated[str, Field(description="Client MAC address or _id (from unifi_list_clients)")],
@@ -172,7 +172,7 @@ async def get_client_stats(
 
 @server.tool(
     name="unifi_get_device_stats",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns historical traffic time-series (rx/tx bytes, client counts) for one "
         "device by MAC or _id. Duration: hourly/daily/weekly/monthly. "
@@ -260,7 +260,7 @@ async def get_device_stats(
         "gateways), so wired clients, cluster nodes included, are absent there. Entries with source='live_counters' are a fallback for controllers without the "
         "report and are cumulative since association, not scoped to the window."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_top_clients(
     duration: Annotated[
@@ -336,7 +336,7 @@ async def get_top_clients(
 @server.tool(
     name="unifi_get_dpi_stats",
     description="Get Deep Packet Inspection (DPI) statistics (applications and categories)",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dpi_stats() -> Dict[str, Any]:
     """Implementation for getting DPI stats."""
@@ -357,7 +357,7 @@ async def get_dpi_stats() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_alerts",
     description="Get recent alerts from the Unifi Network controller",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_alerts(
     limit: Annotated[int, Field(description="Maximum number of alerts to return (default 10)")] = 10,
@@ -387,7 +387,7 @@ async def get_alerts(
 @server.tool(
     name="unifi_get_gateway_stats",
     description="Get gateway WAN/LAN performance history including bandwidth, CPU, and memory utilization.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_gateway_stats(
     duration: Annotated[
@@ -436,7 +436,7 @@ async def get_gateway_stats(
         "On a multi-WAN site each result names its uplink in wan_networkgroup (e.g. WAN, WAN2) and "
         "interface_name; group by it rather than averaging across uplinks."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_speedtest_results(
     duration: Annotated[
@@ -478,7 +478,7 @@ async def get_speedtest_results(
         "Note: requires Traffic Identification to be enabled on the controller, "
         "which is separate from Device Identification."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_site_dpi_traffic(
     group_by: Annotated[
@@ -526,7 +526,7 @@ async def get_site_dpi_traffic(
         "Note: requires Traffic Identification to be enabled on the controller, "
         "which is separate from Device Identification."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_client_dpi_traffic(
     mac_address: Annotated[str, Field(description="Client MAC address")],
@@ -575,7 +575,7 @@ async def get_client_dpi_traffic(
         "category of the v2 system log, where threat blocks are recorded. For other security "
         "event types use unifi_list_events with categories=['SECURITY']."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_ips_events(
     duration: Annotated[
@@ -609,7 +609,7 @@ async def get_ips_events(
         "Returns empty without a guest portal configured. "
         "For WiFi roaming events, use the event log instead."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_client_sessions(
     mac_address: Annotated[
@@ -651,7 +651,7 @@ async def get_client_sessions(
         "Get the pre-aggregated site dashboard. Defaults to a compact summary that omits "
         "high-volume activity/history series; pass summary=false to preserve raw dashboard entries."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dashboard(
     summary: Annotated[
@@ -680,7 +680,7 @@ async def get_dashboard(
 @server.tool(
     name="unifi_get_anomalies",
     description="Get network anomaly detection events.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_anomalies(
     duration: Annotated[
@@ -710,7 +710,7 @@ async def get_anomalies(
         "Get detailed WiFi statistics for a single wireless client including signal, noise, "
         "satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_client_wifi_details(
     mac_address: Annotated[str, Field(description="Client MAC address")],

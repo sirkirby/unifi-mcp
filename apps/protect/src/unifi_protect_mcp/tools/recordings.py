@@ -55,7 +55,7 @@ def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
         "and available recording time range from NVR stats. Pass a camera_id to "
         "check a single camera, or omit for all cameras."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_recording_status(
     camera_id: Annotated[
@@ -87,7 +87,7 @@ async def protect_get_recording_status(
         "Defaults to the last 24 hours if no time range is specified. "
         "Times should be ISO-8601 format (e.g., '2026-03-16T00:00:00Z')."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_recordings(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras) to query recordings for.")],
@@ -128,7 +128,7 @@ async def protect_list_recordings(
         "For timelapse exports, pass fps (4=60x, 8=120x, 20=300x, 40=600x). "
         "Times must be ISO-8601 format (e.g., '2026-03-16T12:00:00Z')."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_export_clip(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras) to export footage from.")],
@@ -190,7 +190,7 @@ async def protect_export_clip(
         "Recording retention is managed automatically by the NVR. This tool returns "
         "information about the limitation and alternative approaches."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="recording",
     permission_action="delete",
 )

@@ -55,7 +55,7 @@ def _error(operation: str, error: Exception) -> Dict[str, Any]:
     ),
     permission_category="nat",
     auth="local_only",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_nat_rules() -> Dict[str, Any]:
     """Return all NAT rules with explicit nulls for unknown fields."""
@@ -81,7 +81,7 @@ async def list_nat_rules() -> Dict[str, Any]:
     ),
     permission_category="nat",
     auth="local_only",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_nat_rule(
     rule_id: Annotated[
