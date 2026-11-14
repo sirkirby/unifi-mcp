@@ -9,7 +9,7 @@ var EXPECTED_PACKAGE_NAMES = [
 
 // Packages too new for the committed stats snapshot. The snapshot stays valid
 // without them; remove a name once a stats refresh has added its totals.
-var AWAITING_FIRST_STATS = ['unifi-sitemanager-mcp'];
+var AWAITING_FIRST_STATS = [];
 
 var copyResetTimers = new WeakMap();
 
