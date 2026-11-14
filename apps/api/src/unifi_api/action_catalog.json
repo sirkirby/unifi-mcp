@@ -5848,7 +5848,7 @@
       "input_schema": {
         "properties": {
           "fields": {
-            "description": "Comma-separated list of fields to return per client (default: all). Available: mac, name, hostname, ip, connection_type, status, last_seen, _id. Wireless-only: essid, signal_dbm, channel, radio. Example: fields='mac,name,ip' returns only those 3 fields.",
+            "description": "Comma-separated list of fields to return per client (default: all). Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. Wireless-only: essid, signal_dbm, channel, radio. Example: fields='mac,name,ip' returns only those 3 fields.",
             "type": "string"
           },
           "filter_type": {
