@@ -67,7 +67,7 @@ class ApiConfig:
 
 def load_config(yaml_path: Path) -> ApiConfig:
     """Load config from YAML, then layer in UNIFI_API_* env overrides."""
-    base = OmegaConf.create(yaml.safe_load(yaml_path.read_text()) or {})
+    base = OmegaConf.create(yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {})
     env_overrides = OmegaConf.create(_extract_env_overrides())
     merged = OmegaConf.merge(base, env_overrides)
     container = OmegaConf.to_container(merged, resolve=True) or {}

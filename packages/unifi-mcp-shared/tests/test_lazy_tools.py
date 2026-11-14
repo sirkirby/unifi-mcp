@@ -92,6 +92,33 @@ async def list_devices():
         finally:
             del sys.modules["fake_tools"]
 
+    def test_scans_tool_files_with_utf8_content(self, tmp_path):
+        """Scans .py files containing non-ASCII UTF-8 characters."""
+        import sys
+
+        tools_dir = tmp_path / "utf8_tools"
+        tools_dir.mkdir()
+        (tools_dir / "__init__.py").write_text("", encoding="utf-8")
+        (tools_dir / "clients.py").write_text(
+            "# Tool module containing UTF-8 characters: \u0081 \u4e00\n"
+            '@server.tool(name="unifi_list_clients")\n'
+            "async def list_clients():\n"
+            '    """List clients."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        fake_pkg = MagicMock()
+        fake_pkg.__path__ = [str(tools_dir)]
+        sys.modules["utf8_tools"] = fake_pkg
+
+        try:
+            result = build_tool_module_map("utf8_tools")
+            assert "unifi_list_clients" in result
+            assert result["unifi_list_clients"] == "utf8_tools.clients"
+        finally:
+            del sys.modules["utf8_tools"]
+
 
 class TestLazyToolLoader:
     """Tests for the LazyToolLoader class."""
