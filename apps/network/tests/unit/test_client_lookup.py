@@ -121,3 +121,32 @@ class TestGetClientByIP:
         result = await client_manager.get_client_by_ip("192.168.1.100")
 
         assert result is online_client
+
+    @pytest.mark.asyncio
+    async def test_lookup_ip_matches_last_ip_of_offline_client(self, client_manager, mock_connection):
+        """Historical /rest/user records report the address as last_ip, not ip."""
+        offline_client = MagicMock()
+        offline_client.mac = "aa:bb:cc:00:00:01"
+        offline_client.raw = {"mac": "aa:bb:cc:00:00:01", "last_ip": "192.0.2.127", "last_seen": 100}
+
+        mock_connection.controller.clients.values.return_value = []
+        mock_connection.controller.clients_all.values.return_value = [offline_client]
+
+        result = await client_manager.get_client_by_ip("192.0.2.127")
+
+        assert result is offline_client
+
+    @pytest.mark.asyncio
+    async def test_lookup_ip_prefers_most_recently_seen_historical_client(self, client_manager, mock_connection):
+        """When several offline clients once held the address, return the freshest."""
+        older = MagicMock()
+        older.raw = {"mac": "aa:bb:cc:00:00:01", "last_ip": "192.0.2.33", "last_seen": 100}
+        newer = MagicMock()
+        newer.raw = {"mac": "aa:bb:cc:00:00:02", "last_ip": "192.0.2.33", "last_seen": 200}
+
+        mock_connection.controller.clients.values.return_value = []
+        mock_connection.controller.clients_all.values.return_value = [older, newer]
+
+        result = await client_manager.get_client_by_ip("192.0.2.33")
+
+        assert result is newer
