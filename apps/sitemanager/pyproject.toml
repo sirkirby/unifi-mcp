@@ -7,7 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     # Isolated API-key lookup, API-key setup guidance and the sitemanager
     # icon family require Shared 0.6.40.
-    "unifi-mcp-shared>=0.6.40,<0.7",
+    # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
+    "unifi-mcp-shared>=0.6.41,<0.7",
     # Key scrubbing in errors and the validated read inputs require Core 0.4.90.
     "unifi-core>=0.4.90,<0.5",
     "mcp[cli]>=2.2.0,<3",

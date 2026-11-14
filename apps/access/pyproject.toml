@@ -8,7 +8,8 @@ dependencies = [
     # The settings-file startup report and setup mode require Shared 0.6.28.
     # The fail-closed import-time tool decorator requires Shared 0.6.34.
     # Keeping an unknown write outcome (mutation_applied: null) in structured responses requires Shared 0.6.35.
-    "unifi-mcp-shared>=0.6.37,<0.7",
+    # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
+    "unifi-mcp-shared>=0.6.41,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
