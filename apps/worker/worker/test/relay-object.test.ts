@@ -343,9 +343,9 @@ describe("MCP handler with relay stub", () => {
 
     // Multi-location should force lazy mode regardless of the mode param
     expect(spyGetToolList).toHaveBeenCalledWith("lazy", FULL_AGENT_SCOPE);
-    expect(response.error).toBeUndefined();
+    expect(response!.error).toBeUndefined();
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     const tools = result.tools as ToolInfo[];
     expect(tools).toHaveLength(3);
     expect(tools.map((t) => t.name)).toContain("unifi_tool_index");
@@ -378,8 +378,8 @@ describe("MCP handler with relay stub", () => {
       "lazy",
     );
 
-    expect(response.error).toBeUndefined();
-    const result = response.result as Record<string, unknown>;
+    expect(response!.error).toBeUndefined();
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     expect(content).toHaveLength(1);
 
@@ -404,7 +404,7 @@ describe("MCP handler with relay stub", () => {
       "lazy",
     );
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     const parsed = JSON.parse(content[0].text as string);
     const tools = parsed.data.tools as Array<Record<string, unknown>>;
@@ -428,7 +428,7 @@ describe("MCP handler with relay stub", () => {
       "lazy",
     );
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     const parsed = JSON.parse(content[0].text as string);
     const tools = parsed.data.tools as Array<Record<string, unknown>>;
@@ -446,7 +446,7 @@ describe("MCP handler with relay stub", () => {
         relay,
         "lazy",
       );
-      const content = (response.result as Record<string, unknown>).content as Array<Record<string, unknown>>;
+      const content = (response!.result as Record<string, unknown>).content as Array<Record<string, unknown>>;
       return JSON.parse(content[0].text as string);
     };
 
@@ -474,7 +474,7 @@ describe("MCP handler with relay stub", () => {
       "lazy",
     );
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     const parsed = JSON.parse(content[0].text as string);
     expect(parsed.data.tools).toHaveLength(1);
@@ -495,8 +495,8 @@ describe("MCP handler with relay stub", () => {
       "lazy",
     );
 
-    expect(response.error).toBeUndefined();
-    const result = response.result as Record<string, unknown>;
+    expect(response!.error).toBeUndefined();
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     const parsed = JSON.parse(content[0].text as string);
     expect(parsed.success).toBe(false);

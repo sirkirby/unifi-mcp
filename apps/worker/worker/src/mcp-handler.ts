@@ -22,11 +22,15 @@ function jsonRpcResult(id: string | number, result: unknown): JsonRpcResponse {
 }
 
 export async function handleMcpRequest(
-  body: JsonRpcRequest,
+  body: JsonRpcRequest | Omit<JsonRpcRequest, "id">,
   stub: RelayStub,
   mode: string,
   scope: AgentScope = FULL_AGENT_SCOPE,
-): Promise<JsonRpcResponse> {
+): Promise<JsonRpcResponse | null> {
+  if (!("id" in body)) {
+    return null;
+  }
+
   const { method, params, id } = body;
 
   if (method === "initialize") {
@@ -40,11 +44,6 @@ export async function handleMcpRequest(
       },
       capabilities: { tools: {} },
     });
-  }
-
-  if (method === "notifications/initialized") {
-    // Notification, no response needed — but we return a result for simplicity
-    return jsonRpcResult(id, {});
   }
 
   if (method === "tools/list") {
