@@ -1565,6 +1565,11 @@ type NetworkQuery {
   mdnsSettings(controller: ID!, site: String! = "default"): MdnsSettings
 
   """
+  Get Teleport VPN settings: enabled state and client address range (subnet_cidr).
+  """
+  teleportSettings(controller: ID!, site: String! = "default"): TeleportSettings
+
+  """
   Get site-wide threat management (IDS/IPS) and traffic identification settings.
   """
   threatManagementSettings(controller: ID!, site: String! = "default"): ThreatManagementSettings
@@ -2708,6 +2713,14 @@ type SystemInfo {
   updateAvailable: Boolean
   cpuPercent: Float
   memoryPercent: Float
+}
+
+"""Teleport VPN settings; only subnet_cidr is writable."""
+type TeleportSettings {
+  enabled: Boolean
+  subnetCidr: String
+  id: ID
+  siteId: String
 }
 
 """

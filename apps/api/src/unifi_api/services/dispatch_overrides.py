@@ -138,6 +138,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_delete_vpn_client": ("vpn_manager", "delete_vpn_client"),
     "unifi_update_vpn_server_state": ("vpn_manager", "update_vpn_server_state"),
     "unifi_update_vpn_server_alternate_address": ("vpn_manager", "update_vpn_server_alternate_address"),
+    # Teleport update previews through prepare_teleport_settings_update first.
+    "unifi_update_teleport_settings": ("vpn_manager", "update_teleport_settings"),
     # Stats: tool combines existence check on client/device with stats fetch.
     "unifi_get_device_stats": ("stats_manager", "get_device_stats_for_identifier"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats_for_identifier"),
@@ -1081,6 +1083,12 @@ def _translate_vpn_alternate_address(args: dict[str, Any]) -> tuple[tuple[Any, .
         "server_id": args["server_id"],
         "update_data": validate_alternate_address_update(args["update_data"]),
     }
+
+
+def _translate_teleport_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.teleport import teleport_to_controller_update
+
+    return (), {"update_data": teleport_to_controller_update({"subnet_cidr": args["subnet_cidr"]})}
 
 
 def _translate_switch_stp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -2098,5 +2106,6 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_update_mdns_settings": _spec(_translate_mdns_update, "update_data"),
     "unifi_update_threat_management_settings": _spec(_translate_threat_management_update, "update_data"),
     "unifi_update_vpn_server_alternate_address": _spec(_translate_vpn_alternate_address, "server_id", "update_data"),
+    "unifi_update_teleport_settings": _spec(_translate_teleport_update, "update_data"),
     "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),
 }

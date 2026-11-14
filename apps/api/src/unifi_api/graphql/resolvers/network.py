@@ -101,6 +101,7 @@ from unifi_api.graphql.types.network.system import (
     SystemInfo,
     TopClient,
 )
+from unifi_api.graphql.types.network.teleport import TeleportSettings
 from unifi_api.graphql.types.network.threat_management import ThreatManagementSettings
 from unifi_api.graphql.types.network.threat_posture import ThreatPosture
 from unifi_api.graphql.types.network.traffic_flow import (
@@ -1274,6 +1275,23 @@ async def _fetch_snmp_settings(
 async def _fetch_mdns_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
     key = f"network/mdns-settings/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "get_mdns_settings")
+
+
+async def _fetch_teleport_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
+    key = f"network/teleport-settings/{controller}/{site}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "vpn_manager",
+                site=site,
+            )
+            return await mgr.get_teleport_settings()
+
+    return await ctx.cache.get_or_fetch(key, _do)
 
 
 async def _fetch_threat_management_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
@@ -3613,6 +3631,22 @@ class NetworkQuery:
         if raw is None:
             return None
         return MdnsSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get Teleport VPN settings: enabled state and client address range (subnet_cidr).",
+    )
+    async def teleport_settings(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> TeleportSettings | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_teleport_settings(ctx, controller, site)
+        if raw is None:
+            return None
+        return TeleportSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

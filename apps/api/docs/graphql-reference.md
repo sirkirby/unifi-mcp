@@ -1576,6 +1576,11 @@ type NetworkQuery {
   mdnsSettings(controller: ID!, site: String! = "default"): MdnsSettings
 
   """
+  Get Teleport VPN settings: enabled state and client address range (subnet_cidr).
+  """
+  teleportSettings(controller: ID!, site: String! = "default"): TeleportSettings
+
+  """
   Get site-wide threat management (IDS/IPS) and traffic identification settings.
   """
   threatManagementSettings(controller: ID!, site: String! = "default"): ThreatManagementSettings
@@ -2721,6 +2726,14 @@ type SystemInfo {
   memoryPercent: Float
 }
 
+"""Teleport VPN settings; only subnet_cidr is writable."""
+type TeleportSettings {
+  enabled: Boolean
+  subnetCidr: String
+  id: ID
+  siteId: String
+}
+
 """
 Site-wide threat management (IDS/IPS) and traffic identification settings.
 """
@@ -3247,6 +3260,7 @@ Read-only access to UniFi Network resources.
 - `switchCapabilities: SwitchCapabilities`  — Get switch capabilities (caps dict + STP / dot1x flags).
 - `switchPorts: SwitchPorts`  — Get the port-override wrapper for a switch (name/model + per-port overrides).
 - `systemInfo: SystemInfo`  — Get controller system info (build, uptime, hardware).
+- `teleportSettings: TeleportSettings`  — Get Teleport VPN settings: enabled state and client address range (subnet_cidr).
 - `threatManagementSettings: ThreatManagementSettings`  — Get site-wide threat management (IDS/IPS) and traffic identification settings.
 - `threatPosture: ThreatPosture`  — Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.

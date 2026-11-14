@@ -1,5 +1,5 @@
 {
-  "count": 210,
+  "count": 212,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -102,6 +102,7 @@
     "unifi_get_switch_capabilities": "unifi_network_mcp.tools.switch",
     "unifi_get_switch_ports": "unifi_network_mcp.tools.switch",
     "unifi_get_system_info": "unifi_network_mcp.tools.system",
+    "unifi_get_teleport_settings": "unifi_network_mcp.tools.vpn",
     "unifi_get_threat_management_settings": "unifi_network_mcp.tools.system",
     "unifi_get_threat_posture": "unifi_network_mcp.tools.system",
     "unifi_get_top_clients": "unifi_network_mcp.tools.stats",
@@ -198,6 +199,7 @@
     "unifi_update_route": "unifi_network_mcp.tools.routing",
     "unifi_update_snmp_settings": "unifi_network_mcp.tools.system",
     "unifi_update_switch_stp": "unifi_network_mcp.tools.switch",
+    "unifi_update_teleport_settings": "unifi_network_mcp.tools.vpn",
     "unifi_update_threat_management_settings": "unifi_network_mcp.tools.system",
     "unifi_update_traffic_route": "unifi_network_mcp.tools.traffic_routes",
     "unifi_update_usergroup": "unifi_network_mcp.tools.usergroups",
@@ -12096,6 +12098,104 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Get the site's Teleport VPN settings: whether Teleport is enabled and its client address range (subnet_cidr, gateway-address form such as '192.168.2.1/24'). The UniFi UI does not show the range; the gateway picks it when Teleport is first enabled.",
+      "name": "unifi_get_teleport_settings",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Teleport Settings"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
       "name": "unifi_get_threat_management_settings",
       "schema": {
@@ -23424,6 +23524,120 @@
         }
       },
       "title": "Update Switch Stp"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Change the Teleport VPN client address range (subnet_cidr), for example to move it off a range that collides with networks remote clients visit. Pass only the fields you want to change \u2014 current values are automatically preserved; subnet_cidr is the only writable field. The value is a private IPv4 gateway address with prefix length (e.g. '10.201.0.1/24', /16 to /29); a range that overlaps any configured network is refused. Teleport stays enabled or disabled as it was. Already-registered clients keep their recorded addresses and may need re-inviting. Requires Network session authentication and confirmation; verifies persistence after applying.",
+      "name": "unifi_update_teleport_settings",
+      "permission_action": "update",
+      "permission_category": "vpn_servers",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "Apply when true; otherwise return a live before/after preview",
+              "type": "boolean"
+            },
+            "subnet_cidr": {
+              "description": "New Teleport client range as a gateway address with prefix length, e.g. '10.201.0.1/24'",
+              "type": "string"
+            }
+          },
+          "required": [
+            "subnet_cidr"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Teleport Settings"
     },
     {
       "annotations": {
