@@ -322,7 +322,8 @@ class StatsManager:
 
         ``MODERN`` (Network 11) keeps history behind ``/v2/api/stats``; a
         controller without that endpoint is legacy. A permission refusal is
-        remembered as such. Other failures are not cached and read as legacy.
+        not cached, so a role change applies on the next call. Other failures
+        are not cached and read as legacy.
         """
         cache_key = "stats_engine_source"
         cached = self._connection.get_cached(cache_key, timeout=3600)
@@ -332,7 +333,7 @@ class StatsManager:
             response = await self._connection.request(stats_series.StatsApiRequest(method="get", path="/source"))
             source = stats_series.source_from_response(response) or _STATS_SOURCE_LEGACY
         except Forbidden:
-            source = _STATS_SOURCE_FORBIDDEN
+            return _STATS_SOURCE_FORBIDDEN
         except Exception as e:
             if response_status(e) != 404:
                 logger.debug("Statistics engine probe failed: %s", type(e).__name__)
