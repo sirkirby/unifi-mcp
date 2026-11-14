@@ -378,6 +378,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     try {
       const mode = this.env.TOOL_REGISTRATION_MODE || "lazy";
       const result = await handleMcpRequest(body, this, mode, scope);
+      if (result === null) {
+        return new Response(null, { status: 202 });
+      }
       return new Response(JSON.stringify(result), {
         headers: { "Content-Type": "application/json" },
       });
