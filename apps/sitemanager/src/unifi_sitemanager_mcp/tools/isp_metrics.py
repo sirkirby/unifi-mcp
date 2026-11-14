@@ -36,7 +36,7 @@ PeriodLimit = Annotated[
         "uptime, downtime and packet loss. Each site gets a summary over the window plus its most recent "
         "periods. Give duration, or begin_timestamp with end_timestamp, not both."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="isp_metrics",
     permission_action="read",
     auth="api_key_only",
@@ -78,7 +78,7 @@ async def sitemanager_get_isp_metrics(
         "changes nothing. Take host_id and site_id from sitemanager_list_sites. partial is true when some "
         "requested sites were left out."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="isp_metrics",
     permission_action="read",
     auth="api_key_only",
