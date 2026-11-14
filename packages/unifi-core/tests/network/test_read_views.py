@@ -368,6 +368,125 @@ async def test_client_manager_include_offline_selects_all_client_path() -> None:
     manager.get_all_clients.assert_awaited_once_with()
 
 
+def _online_connection(online: list) -> MagicMock:
+    connection = MagicMock()
+    connection.has_api_key = False
+    connection.site = "default"
+    connection.ensure_connected = AsyncMock(return_value=True)
+    connection.get_cached = MagicMock(return_value=None)
+    connection.refresh_handler = AsyncMock()
+    connection.controller.clients.values = MagicMock(return_value=online)
+    return connection
+
+
+@pytest.mark.asyncio
+async def test_client_manager_include_offline_keeps_live_state_of_connected_clients() -> None:
+    """A connected client must not turn offline just because history was requested."""
+    live = SimpleNamespace(
+        mac="AA:BB:CC:00:00:01",
+        raw={"mac": "aa:bb:cc:00:00:01", "ip": "192.0.2.10", "uptime": 120, "essid": "Home", "signal": -55},
+    )
+    live_only = {"mac": "aa:bb:cc:00:00:03", "ip": "192.0.2.12", "uptime": 5, "is_wired": True}
+    manager = ClientManager(_online_connection([live, live_only]))
+    manager.get_all_clients = AsyncMock(
+        return_value=[
+            {"mac": "aa:bb:cc:00:00:01", "last_ip": "192.0.2.10", "use_fixedip": True, "fixed_ip": "192.0.2.10"},
+            {"mac": "aa:bb:cc:00:00:02", "last_ip": "192.0.2.11"},
+        ]
+    )
+
+    result = await manager.get_clients(include_offline=True)
+
+    assert result == [
+        {
+            "mac": "aa:bb:cc:00:00:01",
+            "last_ip": "192.0.2.10",
+            "use_fixedip": True,
+            "fixed_ip": "192.0.2.10",
+            "ip": "192.0.2.10",
+            "uptime": 120,
+            "essid": "Home",
+            "signal": -55,
+        },
+        {"mac": "aa:bb:cc:00:00:02", "last_ip": "192.0.2.11"},
+        {"mac": "aa:bb:cc:00:00:03", "ip": "192.0.2.12", "uptime": 5, "is_wired": True},
+    ]
+    shaped = shape_client_list(result, site="default")
+    assert [(c["mac"], c["status"]) for c in shaped["clients"]] == [
+        ("aa:bb:cc:00:00:01", "online"),
+        ("aa:bb:cc:00:00:02", "offline"),
+        ("aa:bb:cc:00:00:03", "online"),
+    ]
+    assert shaped["clients"][0]["essid"] == "Home"
+    assert shaped["clients"][0]["signal_dbm"] == -55
+
+
+@pytest.mark.asyncio
+async def test_client_manager_include_offline_survives_live_fetch_failure() -> None:
+    connection = _online_connection([])
+    connection.ensure_connected = AsyncMock(side_effect=RuntimeError("controller away"))
+    manager = ClientManager(connection)
+    manager.get_all_clients = AsyncMock(return_value=[{"mac": "aa:bb:cc:00:00:02"}])
+
+    result = await manager.get_clients(include_offline=True)
+
+    assert result == [{"mac": "aa:bb:cc:00:00:02"}]
+
+
+def test_shape_client_list_searches_last_ip_of_offline_clients() -> None:
+    clients = [
+        {"mac": "aa", "name": "Printer", "last_ip": "192.0.2.127", "is_wired": False},
+        {"mac": "bb", "name": "Desk", "ip": "192.0.2.3", "is_wired": True},
+    ]
+
+    result = shape_client_list(clients, site="default", search="192.0.2.127")
+
+    assert result["total_count"] == 1
+    assert result["clients"][0]["mac"] == "aa"
+    assert result["clients"][0]["ip"] == "192.0.2.127"
+
+
+def test_shape_client_list_reports_dhcp_reservations_only_when_enabled() -> None:
+    clients = [
+        {"mac": "aa", "ip": "192.0.2.2", "is_wired": True, "use_fixedip": True, "fixed_ip": "192.0.2.2"},
+        {"mac": "bb", "ip": "192.0.2.3", "is_wired": True, "use_fixedip": False, "fixed_ip": "192.0.2.9"},
+        {"mac": "cc", "ip": "192.0.2.4", "is_wired": True},
+    ]
+
+    result = shape_client_list(clients, site="default")
+    projected = shape_client_list(clients, site="default", fields="mac,fixed_ip")
+
+    assert [c.get("fixed_ip") for c in result["clients"]] == ["192.0.2.2", None, None]
+    assert projected["clients"] == [{"mac": "aa", "fixed_ip": "192.0.2.2"}, {"mac": "bb"}, {"mac": "cc"}]
+    assert "unknown_fields" not in projected
+
+
+def test_shape_client_details_summary_reports_whether_local_dns_and_fixed_ap_are_active() -> None:
+    """A stored local_dns_record / fixed_ap_mac is inert until its enabled flag is set."""
+    stored_only = SimpleNamespace(
+        raw={"mac": "aa", "local_dns_record": "nas.example.com", "fixed_ap_mac": "aa:bb:cc:00:00:09"}
+    )
+    active = SimpleNamespace(
+        raw={
+            "mac": "bb",
+            "local_dns_record": "ha.example.com",
+            "local_dns_record_enabled": True,
+            "fixed_ap_enabled": True,
+            "fixed_ap_mac": "aa:bb:cc:00:00:09",
+        }
+    )
+
+    inert = shape_client_details(stored_only, site="default", mac_address="aa", include="network", summary=True)
+    live = shape_client_details(active, site="default", mac_address="bb", include="network", summary=True)
+
+    assert inert["client"]["local_dns_record"] == "nas.example.com"
+    assert inert["client"]["local_dns_record_enabled"] is False
+    assert inert["client"]["fixed_ap_enabled"] is False
+    assert inert["client"]["fixed_ap_mac"] == "aa:bb:cc:00:00:09"
+    assert live["client"]["local_dns_record_enabled"] is True
+    assert live["client"]["fixed_ap_enabled"] is True
+
+
 def test_shape_device_list_last_seen_is_utc_aware() -> None:
     """last_seen must be a timezone-aware UTC ISO string, not the server's local time."""
     device = {"_id": "d1", "mac": "aa", "name": "AP", "type": "uap", "state": 1, "last_seen": 1_700_000_000}
