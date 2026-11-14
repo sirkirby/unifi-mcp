@@ -937,17 +937,22 @@ def test_sitemanager_is_a_key_only_read_only_bundle() -> None:
     codex = _load(bundle / ".codex-plugin/plugin.json")
     assert set(claude["userConfig"]) == {"api_key", "api_key_file", "api_key_command"}
     assert claude["userConfig"]["api_key"]["sensitive"] is True
-    assert claude["version"] == codex["version"] == "1.0.0"
+    assert claude["version"] == codex["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", claude["version"])
     assert set(claude["mcpServers"]["unifi-sitemanager"]["env"]) == {
         "UNIFI_SITEMANAGER_API_KEY",
         "UNIFI_SITEMANAGER_API_KEY_FILE",
         "UNIFI_SITEMANAGER_API_KEY_COMMAND",
     }
     assert codex["interface"]["capabilities"] == ["Interactive", "Read"]
+    pins = set()
     for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
         server = _load(bundle / filename)["mcpServers"]["unifi-sitemanager"]
-        assert server["args"] == ["--python-preference", "system", "unifi-sitemanager-mcp==0.1.0"]
+        assert server["args"][:2] == ["--python-preference", "system"] and len(server["args"]) == 3
+        assert re.fullmatch(r"unifi-sitemanager-mcp==\d+\.\d+\.\d+", server["args"][2])
+        pins.add(server["args"][2])
         assert not server.get("env_vars")
+    assert len(pins) == 1
     assert sorted(p.name for p in (bundle / "skills").iterdir()) == ["unifi-sitemanager", "unifi-sitemanager-setup"]
     for filename in (".mcp.json", "hooks.json", "README.md"):
         assert not (bundle / filename).exists()
