@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 210 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 212 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -202,7 +202,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 - `unifi_update_switch_stp` — Update STP priority and version
 - `unifi_set_jumbo_frames` — Enable/disable jumbo frames
 
-## VPN (8 tools)
+## VPN (10 tools)
 
 - `unifi_list_vpn_clients` — List VPN clients (WireGuard, OpenVPN)
 - `unifi_get_vpn_client_details` — Get client details by ID
@@ -212,6 +212,8 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 - `unifi_get_vpn_server_details` — Get server details by ID
 - `unifi_update_vpn_server_alternate_address` — Preview, then update a WireGuard server’s advertised address with read-back verification
 - `unifi_update_vpn_server_state` — Preview, then enable/disable a VPN server with read-back verification
+- `unifi_get_teleport_settings` — Get Teleport VPN settings: enabled state and client address range
+- `unifi_update_teleport_settings` — Preview, then change the Teleport client address range with overlap check and read-back verification
 
 ## Devices (10 tools)
 

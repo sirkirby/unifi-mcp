@@ -1961,6 +1961,31 @@
         "title": "Detail[SiteManagerSdwanConfigStatusModel]",
         "type": "object"
       },
+      "Detail_TeleportSettingsModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TeleportSettingsModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[TeleportSettingsModel]",
+        "type": "object"
+      },
       "Detail_ThreatManagementSettingsModel_": {
         "additionalProperties": true,
         "properties": {
@@ -10011,6 +10036,57 @@
           }
         },
         "title": "SmartDetectionModel",
+        "type": "object"
+      },
+      "TeleportSettingsModel": {
+        "additionalProperties": true,
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "subnet_cidr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subnet Cidr"
+          }
+        },
+        "title": "TeleportSettingsModel",
         "type": "object"
       },
       "ThreatManagementSettingsModel": {
@@ -24161,6 +24237,66 @@
         "summary": "Get System Info",
         "tags": [
           "network/system"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/teleport-settings": {
+      "get": {
+        "operationId": "get_teleport_settings_v1_sites__site_id__teleport_settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_TeleportSettingsModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Teleport Settings",
+        "tags": [
+          "network/vpn"
         ]
       }
     },

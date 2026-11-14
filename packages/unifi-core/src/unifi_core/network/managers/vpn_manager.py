@@ -19,7 +19,18 @@ from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
-from unifi_core.network.managers.connection_manager import ConnectionManager, controller_error_code, response_status
+from unifi_core.network.managers.connection_manager import (
+    ConnectionManager,
+    SettingsControllerRejection,
+    controller_error_code,
+    response_status,
+)
+from unifi_core.network.models.teleport import (
+    TeleportSettings,
+    teleport_from_controller,
+    teleport_subnet_conflicts,
+    teleport_to_controller_update,
+)
 from unifi_core.network.models.vpn import (
     ALTERNATE_ADDRESS_KEYS,
     VpnAlternateAddressError,
@@ -35,6 +46,8 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_VPN_CONFIGS = "vpn_configs"
 CACHE_PREFIX_NETWORKS = "networks"
+# Same key the generic SystemManager.get_settings cache uses for a section.
+CACHE_PREFIX_SETTINGS = "settings"
 
 
 def classify_vpn_type(purpose: str, vpn_type: str) -> Tuple[bool, bool]:
@@ -435,3 +448,117 @@ class VpnManager:
 
         new_state = not config.get("enabled", True)
         return await self._update_vpn_config(config_id, {"enabled": new_state}, existing=config)
+
+    # ------------------------------------------------------------------
+    # Teleport (site setting, not a networkconf record)
+    # ------------------------------------------------------------------
+
+    async def _fresh_teleport_records(self) -> List[Dict[str, Any]]:
+        """Uncached Teleport setting records, with safe errors."""
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/get/setting/teleport"))
+            records = response.get("data") if isinstance(response, dict) else response
+            if not isinstance(records, list) or not all(isinstance(record, dict) for record in records):
+                raise ValueError("Malformed Teleport settings response")
+            return records
+        except Exception as exc:
+            logger.error("Failed to read Teleport settings: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read Teleport settings") from None
+
+    async def _fresh_teleport_record(self) -> Dict[str, Any]:
+        """The singleton Teleport record; refuses when the site has none or several."""
+        records = await self._fresh_teleport_records()
+        if len(records) != 1 or not isinstance(records[0].get("_id"), str) or not records[0]["_id"]:
+            raise RuntimeError(
+                "No single Teleport settings record on this site; enable Teleport once in the UniFi UI first"
+            )
+        return records[0]
+
+    async def _fresh_network_records(self) -> List[Dict[str, Any]]:
+        """Uncached networkconf records for the Teleport overlap check."""
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/rest/networkconf"))
+            records = response.get("data") if isinstance(response, dict) else response
+            if not isinstance(records, list) or not all(isinstance(record, dict) for record in records):
+                raise ValueError("Malformed network configuration response")
+            return records
+        except Exception as exc:
+            logger.error("Failed to read networks for the Teleport overlap check: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read networks for the Teleport overlap check") from None
+
+    async def get_teleport_settings(self) -> TeleportSettings:
+        """Read the Teleport setting; an empty view when the site has no record yet."""
+        records = await self._fresh_teleport_records()
+        return teleport_from_controller(records[0] if records else None)
+
+    async def prepare_teleport_settings_update(
+        self, update_data: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
+        """Validate an update and return (current view, updates, overlapping network names) without writing."""
+        updates = teleport_to_controller_update(update_data)
+        before = await self._fresh_teleport_record()
+        conflicts = teleport_subnet_conflicts(updates["subnet_cidr"], await self._fresh_network_records())
+        return teleport_from_controller(before).model_dump(), updates, conflicts
+
+    async def update_teleport_settings(self, update_data: Dict[str, Any]) -> WriteVerificationResult:
+        """Write a new Teleport client range into the full record and verify it.
+
+        Refuses a range that overlaps a configured network. Teleport stays in
+        its current enabled state; already-registered clients keep the
+        addresses the controller recorded for them.
+        """
+        operation = "update_teleport_settings"
+        updates = teleport_to_controller_update(update_data)
+        try:
+            session_ready = await self._connection.ensure_session_connected()
+        except Exception as exc:
+            logger.error("Failed to prepare Teleport session: %s", type(exc).__name__)
+            raise RuntimeError("Updating Teleport settings requires Network session authentication") from None
+        if not session_ready:
+            raise RuntimeError("Updating Teleport settings requires Network session authentication")
+
+        before = await self._fresh_teleport_record()
+        public_before = teleport_from_controller(before).model_dump()
+        if before.get("subnet_cidr") == updates["subnet_cidr"]:
+            return noop_write(operation=operation, resource=public_before)
+
+        conflicts = teleport_subnet_conflicts(updates["subnet_cidr"], await self._fresh_network_records())
+        if conflicts:
+            return failed_write(
+                f"Teleport range overlaps configured network(s): {', '.join(conflicts)}",
+                operation=operation,
+                resource=public_before,
+            )
+
+        merged = deepcopy(before)
+        merged.update(updates)
+        cache_key = f"{CACHE_PREFIX_SETTINGS}_teleport_{self._connection.site}"
+        try:
+            await self._connection.request(ApiRequest(method="put", path="/set/setting/teleport", data=merged))
+        except Exception as exc:
+            logger.error("Failed to update Teleport settings: %s", type(exc).__name__)
+            if isinstance(exc, SettingsControllerRejection):
+                return failed_write(f"Controller rejected Teleport settings update ({exc.code})", operation=operation)
+            return failed_write(
+                "Teleport write outcome uncertain; inspect settings before another update",
+                operation=operation,
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+        finally:
+            self._connection._invalidate_cache(cache_key)
+
+        try:
+            after = await self._fresh_teleport_record()
+        except Exception:
+            return failed_write(
+                "Teleport write outcome uncertain; readback failed",
+                operation=operation,
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+
+        # The enabled flag must survive the write unchanged.
+        preserved = {"enabled": before["enabled"]} if "enabled" in before else {}
+        result = verify_write(operation=operation, requested={**updates, **preserved}, before=before, after=after)
+        return replace(result, resource=teleport_from_controller(after).model_dump())

@@ -327,3 +327,93 @@ async def update_vpn_server_state(
     except Exception as e:
         logger.error("Error updating state for VPN server %s: %s", server_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to update state for VPN server {server_id}: {e}"}
+
+
+_TELEPORT_CLIENT_WARNING = (
+    "Teleport clients that are already registered keep the address the controller recorded for them; "
+    "whether they move into the new range on their next connection depends on the controller. "
+    "Re-invite a client if it keeps its old address. Firewall rules or allow-lists that name the "
+    "old range need the new one."
+)
+
+
+@server.tool(
+    name="unifi_get_teleport_settings",
+    auth="local_only",
+    description=(
+        "Get the site's Teleport VPN settings: whether Teleport is enabled and its client address range "
+        "(subnet_cidr, gateway-address form such as '192.168.2.1/24'). The UniFi UI does not show the range; "
+        "the gateway picks it when Teleport is first enabled."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_teleport_settings() -> Dict[str, Any]:
+    """Read the Teleport site setting through the Core manager."""
+    try:
+        settings = await vpn_manager.get_teleport_settings()
+        return {"success": True, "site": vpn_manager._connection.site, "teleport_settings": settings.model_dump()}
+    except Exception as exc:
+        logger.error("Failed to get Teleport settings: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to get Teleport settings"}
+
+
+@server.tool(
+    name="unifi_update_teleport_settings",
+    auth="local_only",
+    description=(
+        "Change the Teleport VPN client address range (subnet_cidr), for example to move it off a range that "
+        "collides with networks remote clients visit. Pass only the fields you want to change — current values "
+        "are automatically preserved; subnet_cidr is the only writable field. The value is a private IPv4 gateway "
+        "address with prefix length (e.g. '10.201.0.1/24', /16 to /29); a range that overlaps any configured "
+        "network is refused. Teleport stays enabled or disabled as it was. Already-registered clients keep their "
+        "recorded addresses and may need re-inviting. Requires Network session authentication and confirmation; "
+        "verifies persistence after applying."
+    ),
+    permission_category="vpn_servers",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def update_teleport_settings(
+    subnet_cidr: Annotated[
+        str,
+        Field(description="New Teleport client range as a gateway address with prefix length, e.g. '10.201.0.1/24'"),
+    ],
+    confirm: Annotated[
+        bool, Field(description="Apply when true; otherwise return a live before/after preview")
+    ] = False,
+) -> Dict[str, Any]:
+    """Preview or apply a Teleport range change through the Core manager."""
+    update_data = {"subnet_cidr": subnet_cidr}
+    try:
+        if not confirm:
+            current, updates, conflicts = await vpn_manager.prepare_teleport_settings_update(update_data)
+            if conflicts:
+                return {
+                    "success": False,
+                    "error": f"Teleport range overlaps configured network(s): {', '.join(conflicts)}",
+                }
+            return update_preview(
+                resource_type="teleport_settings",
+                resource_id=current.get("id") or "teleport",
+                resource_name="Teleport Settings",
+                current_state=current,
+                updates=updates,
+                warnings=[_TELEPORT_CLIENT_WARNING],
+            )
+        result = await vpn_manager.update_teleport_settings(update_data)
+        payload = format_tool_payload(
+            result, site=vpn_manager._connection.site, success_message="Teleport range updated and verified."
+        )
+        if result.success and result.mutation_applied:
+            payload["warnings"] = [_TELEPORT_CLIENT_WARNING]
+        return payload
+    except ValueError as exc:
+        # Validation messages name the broken rule, never the submitted value.
+        return {"success": False, "error": f"Failed to update Teleport settings: {exc}"}
+    except Exception as exc:
+        logger.error("Failed to update Teleport settings: %s", type(exc).__name__)
+        return {
+            "success": False,
+            "error": "Failed to update Teleport settings: check session authentication and that Teleport has been "
+            "enabled once on this site",
+        }
