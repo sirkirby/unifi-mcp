@@ -1,4 +1,4 @@
-# Network Server Tool Reference (210 tools)
+# Network Server Tool Reference (212 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -120,7 +120,7 @@ Always available, regardless of registration mode.
 | `unifi_get_firewall_policy_ordering` | Read | Get user-defined firewall policy ordering for a source/destination firewall zone pair. |
 | `unifi_list_firewall_groups` | Read | List firewall groups (address and port groups) used as reusable objects in firewall policies. |
 | `unifi_list_firewall_policies` | Read | List firewall policies configured on the Unifi Network controller. |
-| `unifi_list_firewall_zones` | Read | List controller firewall zones (V2 API). |
+| `unifi_list_firewall_zones` | Read | List controller firewall zones (V2 API) with the network IDs assigned to each (networks; resolve them with unifi_list_networks). |
 | `unifi_list_legacy_firewall_rules` | Read | List legacy pre-zone-based firewall rules from the UniFi controller. |
 | `unifi_create_firewall_group` | Mutate | Create a new firewall group (address or port group). |
 | `unifi_create_firewall_policy` | Mutate | Create a V2 zone-based firewall policy with schema validation. |
@@ -311,15 +311,17 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## VPN
 
 <!-- AUTO:tools:vpn -->
-8 tools.
+10 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
+| `unifi_get_teleport_settings` | Read | Get the site's Teleport VPN settings: whether Teleport is enabled and its client address range (subnet_cidr, gateway-address form such as... |
 | `unifi_get_vpn_client_details` | Read | Get details for a specific VPN client by ID. |
 | `unifi_get_vpn_server_details` | Read | Get details for a specific VPN server by ID. |
 | `unifi_list_vpn_clients` | Read | List all configured VPN clients (Wireguard, OpenVPN, etc). |
 | `unifi_list_vpn_servers` | Read | List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc). |
 | `unifi_delete_vpn_client` | Mutate | Delete a VPN client configuration by ID. |
+| `unifi_update_teleport_settings` | Mutate | Change the Teleport VPN client address range (subnet_cidr), for example to move it off a range that collides with networks remote clients... |
 | `unifi_update_vpn_client_state` | Mutate | Enable or disable a specific VPN client by ID. |
 | `unifi_update_vpn_server_alternate_address` | Mutate | Update the advertised alternate hostname or IPv4 address for a WireGuard VPN server. |
 | `unifi_update_vpn_server_state` | Mutate | Enable or disable a specific VPN server by ID. |
@@ -526,12 +528,12 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_alerts` | Read | Get recent alerts from the Unifi Network controller |
 | `unifi_get_anomalies` | Read | Get network anomaly detection events. |
 | `unifi_get_client_dpi_traffic` | Read | Get per-client DPI traffic data by application or category. |
-| `unifi_get_client_sessions` | Read | Get client session history. |
+| `unifi_get_client_sessions` | Read | Get client association sessions (connect time, disconnect time, duration, AP), newest first, for one client or all clients. |
 | `unifi_get_client_stats` | Read | Get a client's traffic time-series from the controller's per-client report. |
 | `unifi_get_client_wifi_details` | Read | Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channe... |
 | `unifi_get_dashboard` | Read | Get the pre-aggregated site dashboard. |
 | `unifi_get_device_stats` | Read | Returns historical traffic time-series (rx/tx bytes, client counts) for one device by MAC or _id. |
-| `unifi_get_dpi_stats` | Read | Get Deep Packet Inspection (DPI) statistics (applications and categories) |
+| `unifi_get_dpi_stats` | Read | List the DPI restriction rules (per-application and per-category block or rate-limit rules) and the restriction groups that bundle them. |
 | `unifi_get_gateway_stats` | Read | Get gateway WAN/LAN performance history including bandwidth, CPU, and memory utilization. |
 | `unifi_get_ips_events` | Read | Get IPS/IDS security events (intrusion detection/prevention alerts). |
 | `unifi_get_network_stats` | Read | Get network statistics from the Unifi Network controller |
@@ -591,7 +593,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_autobackup_settings` | Read | Get auto-backup settings (enabled state, schedule, retention count, cloud backup). |
 | `unifi_get_mdns_settings` | Read | Get site-wide mDNS service settings and read-only network scope. |
 | `unifi_get_mgmt_settings` | Read | Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, wh... |
-| `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
+| `unifi_get_network_health` | Read | Returns per-subsystem health for WAN, WWW, LAN, WLAN, and VPN: status, device counts (gateways/switches/APs, adopted, disconnected, pendi... |
 | `unifi_get_site_settings` | Read | Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers. |
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |
 | `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, device and client counts, update availability, and console CPU and memory usage. |

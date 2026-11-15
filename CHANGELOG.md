@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-15 — unifi-network 1.10.0
+
+- Pins `unifi-network-mcp` [0.46.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.46.0).
+
+
 ## 2026-11-15 — unifi-network 1.9.6
 
 - The firewall-manager skill looks up DPI category IDs with `unifi_list_dpi_categories`; `unifi_get_dpi_stats` returns restriction rules, not categories. The firewall-auditor skill and the tool reference describe `unifi_get_dpi_stats` the same way.
