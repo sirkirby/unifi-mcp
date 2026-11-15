@@ -162,7 +162,7 @@ def fixed_manifest_reader(path: Path) -> Callable[[], Mapping[str, Any]]:
     """Build a reader for one package-owned manifest path."""
 
     def read() -> Mapping[str, Any]:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
         return value if isinstance(value, Mapping) else {}
 
     return read

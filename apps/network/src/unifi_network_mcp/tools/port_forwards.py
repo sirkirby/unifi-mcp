@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)  # Changed logger name for consistency
 @server.tool(
     name="unifi_list_port_forwards",
     description="List all port forwarding rules on your Unifi Network controller.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_port_forwards() -> Dict[str, Any]:  # Removed context, adjusted return type
     """List all port forwarding rules configured on the UniFi Network controller.
@@ -92,7 +92,7 @@ async def list_port_forwards() -> Dict[str, Any]:  # Removed context, adjusted r
 @server.tool(
     name="unifi_get_port_forward",
     description="Get a specific port forwarding rule by ID from your Unifi Network controller.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_port_forward(
     port_forward_id: Annotated[

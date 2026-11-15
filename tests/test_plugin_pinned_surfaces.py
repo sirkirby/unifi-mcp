@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -165,6 +166,17 @@ def test_a_missing_pinned_tag_is_reported_not_replaced_by_the_workspace(repo: Pa
         generator.run(repo, check_mode=True)
 
 
+def _sitemanager_pin_tag() -> str:
+    """The release tag the shipped bundle pins, which moves with every server release."""
+    args = json.loads((ROOT / "plugins/unifi-sitemanager/.mcp.codex.json").read_text())["mcpServers"][
+        "unifi-sitemanager"
+    ]["args"]
+    return "sitemanager/v" + args[-1].removeprefix("unifi-sitemanager-mcp==")
+
+
+SITEMANAGER_TAG = _sitemanager_pin_tag()
+
+
 @pytest.fixture
 def sitemanager_repo(tmp_path: Path) -> Path:
     """A tagged first cloud release, with workspace-only drift after the tag."""
@@ -185,7 +197,7 @@ def sitemanager_repo(tmp_path: Path) -> Path:
     path = "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json"
     source = json.loads((ROOT / path).read_text())
     write(tmp_path, path, json.dumps(source))
-    release(tmp_path, "sitemanager/v0.1.0")
+    release(tmp_path, SITEMANAGER_TAG)
     source["tools"].append({"name": "sitemanager_fixture_future", "schema": {"input": {"properties": {}}}})
     write(tmp_path, path, json.dumps(source))
     return tmp_path
@@ -193,7 +205,7 @@ def sitemanager_repo(tmp_path: Path) -> Path:
 
 def test_sitemanager_pinned_surface_has_nine_domain_tools_and_five_meta_tools(sitemanager_repo: Path) -> None:
     tag, pinned = refs.pinned_manifest(sitemanager_repo, "sitemanager")
-    assert tag == "sitemanager/v0.1.0"
+    assert tag == SITEMANAGER_TAG
     domain = set(pinned["module_map"])
     names = {tool["name"] for tool in pinned["tools"]}
     assert len(domain) == 9
@@ -225,6 +237,6 @@ def test_sitemanager_reference_generator_handles_multiword_title(sitemanager_rep
 
 
 def test_sitemanager_missing_release_tag_never_uses_workspace(sitemanager_repo: Path) -> None:
-    git(sitemanager_repo, "tag", "-d", "sitemanager/v0.1.0")
-    with pytest.raises(ValueError, match=r"pinned release tag sitemanager/v0\.1\.0 is missing; fetch tags"):
+    git(sitemanager_repo, "tag", "-d", SITEMANAGER_TAG)
+    with pytest.raises(ValueError, match=f"pinned release tag {re.escape(SITEMANAGER_TAG)} is missing; fetch tags"):
         refs.pinned_manifest(sitemanager_repo, "sitemanager")

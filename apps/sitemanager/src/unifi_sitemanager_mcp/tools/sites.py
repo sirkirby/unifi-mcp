@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
         "client counts, ISP details and WAN health. Returns one page; pass next_cursor back as cursor for more. These IDs are "
         "scoped to the Site Manager tool family — do not pass them to Network, Protect, or Access tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="site",
     permission_action="read",
     auth="api_key_only",

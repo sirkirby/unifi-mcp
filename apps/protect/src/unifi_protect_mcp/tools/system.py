@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
         "Returns NVR model, firmware version, uptime, storage usage, and connected device counts. "
         "Use for basic 'is the NVR healthy?' checks and capacity overview."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_system_info() -> Dict[str, Any]:
     """Get Protect NVR system information."""
@@ -50,7 +50,7 @@ async def protect_get_system_info() -> Dict[str, Any]:
         "Returns NVR health summary including CPU load and temperature, memory usage, "
         "and storage utilization. Use to diagnose performance issues or storage pressure."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_health() -> Dict[str, Any]:
     """Get Protect NVR health metrics."""
@@ -70,7 +70,7 @@ async def protect_get_health() -> Dict[str, Any]:
         "Lists all connected Protect viewers (e.g., UP-Viewer, Viewport) with their "
         "connection state, firmware version, and assigned liveview."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_list_viewers() -> Dict[str, Any]:
     """List connected Protect viewers."""
@@ -150,7 +150,7 @@ async def protect_update_viewer(
         "(cameras, lights, sensors, viewers, chimes, bridges, doorlocks). "
         "Use to check whether any device needs a firmware update."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def protect_get_firmware_status() -> Dict[str, Any]:
     """Get firmware status for NVR and devices."""

@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 @server.tool(
     name="unifi_lookup_by_ip",
     description="Quick IP-to-client lookup. Returns essential fields (hostname, name, mac, is_online, last_seen) to minimize token usage.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def lookup_by_ip(
     ip_address: Annotated[str, Field(description="IPv4 address to look up (e.g., '192.168.1.100')")],
@@ -75,8 +75,10 @@ async def lookup_by_ip(
     description=(
         "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
         "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
-        "channel, radio. Filter by filter_type (all/wired/wireless), set "
-        "include_offline=true for historical clients. Use search to filter by "
+        "channel, radio. Clients with a DHCP reservation also carry fixed_ip. "
+        "Filter by filter_type (all/wired/wireless), set "
+        "include_offline=true to add offline/historical clients to the connected ones "
+        "(connected clients keep their live status and wireless fields). Use search to filter by "
         "name/hostname/IP/MAC (case-insensitive). For a single client's full raw "
         "object, use unifi_get_client_details. For IP-to-client lookup, use "
         "unifi_lookup_by_ip. Pass an entry's mac to the client tools as "
@@ -90,7 +92,7 @@ async def lookup_by_ip(
         "include_offline=true requires session credentials for historical inventory. "
         "Full details and mutations can require session credentials."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_clients(
     filter_type: Annotated[
@@ -111,7 +113,7 @@ async def list_clients(
         Field(
             description=(
                 "Comma-separated list of fields to return per client (default: all). "
-                "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id. "
+                "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. "
                 "Wireless-only: essid, signal_dbm, channel, radio. "
                 "Example: fields='mac,name,ip' returns only those 3 fields."
             )
@@ -144,7 +146,7 @@ async def list_clients(
         "trim to selected sections via include (basic, network, wireless, traffic, "
         "fingerprint, all). For a summary of all clients, use unifi_list_clients."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_client_details(
     mac_address: Annotated[
@@ -191,7 +193,7 @@ async def get_client_details(
         "mac, hostname, name, last_seen, blocked. Pass an entry's mac to "
         "unifi_unblock_client as mac_address."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_blocked_clients() -> Dict[str, Any]:
     """Implementation for listing blocked clients."""

@@ -157,6 +157,15 @@ async def test_forbidden_engine_and_empty_report_is_an_error_not_an_empty_succes
         await manager.get_gateway_stats(duration_hours=1)
 
 
+@pytest.mark.asyncio
+async def test_forbidden_probe_is_not_cached_so_a_granted_role_applies_on_the_next_call() -> None:
+    manager, connection = _manager({"/source": Forbidden("403"), "/stat/report/": []})
+
+    with pytest.raises(RequestError, match="Full Admin"):
+        await manager.get_network_stats(duration_hours=1)
+    connection._update_cache.assert_not_called()
+
+
 # --- modern reads ---------------------------------------------------------------------
 
 

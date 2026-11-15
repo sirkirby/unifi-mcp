@@ -47,6 +47,10 @@ export default {
         return new Response("Unauthorized", { status: 401 });
       }
 
+      if (doResponse.status === 202) {
+        return new Response(null, { status: 202, headers: corsHeaders(request, env) });
+      }
+
       const result = await doResponse.json();
       return jsonResponse(result, request, env, doResponse.status);
     }

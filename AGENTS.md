@@ -62,7 +62,7 @@ All state-changing tools MUST implement preview-then-confirm:
 ### MCP Tool Annotations
 
 All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
-- Read-only: `readOnlyHint=True, openWorldHint=False`
+- Read-only: `readOnlyHint=True, idempotentHint=True, openWorldHint=False`
 - Mutating: `readOnlyHint=False, destructiveHint=<bool>, idempotentHint=<bool>, openWorldHint=False`
 - `destructiveHint=True` for delete, block, reboot, revoke operations
 - `idempotentHint=True` for update/rename (same args = same result)

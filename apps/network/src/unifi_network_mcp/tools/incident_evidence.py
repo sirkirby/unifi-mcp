@@ -35,7 +35,7 @@ _OPERATION = "Failed to collect incident evidence"
 
 @server.tool(
     name="unifi_get_incident_evidence",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Collects bounded, read-only Network event evidence for one incident window. Returns a "
         "unifi-incident-evidence-view by default: every source's coverage, failures and budget usage "

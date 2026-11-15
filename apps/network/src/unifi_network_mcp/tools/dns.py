@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
     name="unifi_list_dns_records",
     description="List all static DNS records configured on the controller. "
     "Returns hostname, value, record type, enabled state, and TTL for each record.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dns_records() -> Dict[str, Any]:
     """List all static DNS records."""
@@ -57,7 +57,7 @@ async def list_dns_records() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_dns_record_details",
     description="Get details for a specific DNS record by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dns_record_details(
     record_id: Annotated[str, Field(description="The unique identifier (_id) of the DNS record")],

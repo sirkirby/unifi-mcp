@@ -25,11 +25,11 @@ describe("initialize", () => {
     const stub = mockStub();
     const response = await handleMcpRequest(req("initialize"), stub, "lazy");
 
-    expect(response.jsonrpc).toBe("2.0");
-    expect(response.id).toBe(1);
-    expect(response.error).toBeUndefined();
+    expect(response!.jsonrpc).toBe("2.0");
+    expect(response!.id).toBe(1);
+    expect(response!.error).toBeUndefined();
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     expect(result.protocolVersion).toBe("2025-03-26");
     const serverInfo = result.serverInfo as Record<string, unknown>;
     expect(serverInfo.name).toBe("unifi-mcp-relay");
@@ -49,15 +49,19 @@ describe("initialize", () => {
 // ---------------------------------------------------------------------------
 // notifications/initialized
 // ---------------------------------------------------------------------------
-describe("notifications/initialized", () => {
-  it("returns empty result without calling stub", async () => {
+describe("notifications", () => {
+  it.each(["notifications/initialized", "notifications/cancelled", "notifications/roots/list_changed", "notifications/unknown", "tools/call"])("returns null for idless %s without calling the relay", async (method) => {
     const stub = mockStub();
-    const response = await handleMcpRequest(req("notifications/initialized"), stub, "lazy");
-
-    expect(response.error).toBeUndefined();
-    expect(response.result).toEqual({});
+    const body = { jsonrpc: "2.0" as const, method, params: { requestId: 42, reason: "User cancelled", name: "list_clients" } };
+    expect(await handleMcpRequest(body, stub, "lazy")).toBeNull();
     expect(stub.getToolList).not.toHaveBeenCalled();
     expect(stub.handleToolCall).not.toHaveBeenCalled();
+    expect(stub.isMultiLocation).not.toHaveBeenCalled();
+  });
+
+  it("responds to an unknown request with id zero", async () => {
+    const response = await handleMcpRequest({ ...req("notifications/unknown"), id: 0 }, mockStub(), "lazy");
+    expect(response).toMatchObject({ id: 0, error: { code: -32601 } });
   });
 });
 
@@ -79,9 +83,9 @@ describe("tools/list", () => {
     expect(stub.isMultiLocation).toHaveBeenCalled();
     expect(stub.getToolList).toHaveBeenCalledWith("eager", FULL_AGENT_SCOPE);
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     expect(result.tools).toEqual(tools);
-    expect(response.error).toBeUndefined();
+    expect(response!.error).toBeUndefined();
   });
 
   it("forces lazy mode when multi-location regardless of mode param", async () => {
@@ -123,9 +127,9 @@ describe("tools/call", () => {
     );
 
     expect(stub.handleToolCall).toHaveBeenCalledWith("list_clients", { site: "default" }, FULL_AGENT_SCOPE);
-    expect(response.error).toBeUndefined();
+    expect(response!.error).toBeUndefined();
 
-    const result = response.result as Record<string, unknown>;
+    const result = response!.result as Record<string, unknown>;
     const content = result.content as Array<Record<string, unknown>>;
     expect(content).toHaveLength(1);
     expect(content[0].type).toBe("text");
@@ -167,8 +171,8 @@ describe("tools/call", () => {
       "lazy",
     );
 
-    expect(response.result).toBeUndefined();
-    const error = response.error as Record<string, unknown>;
+    expect(response!.result).toBeUndefined();
+    const error = response!.error as Record<string, unknown>;
     expect(error.code).toBe(-32000);
     expect(error.message).toBe("Controller unreachable");
   });
@@ -184,7 +188,7 @@ describe("tools/call", () => {
       "lazy",
     );
 
-    const error = response.error as Record<string, unknown>;
+    const error = response!.error as Record<string, unknown>;
     expect(error.code).toBe(-32000);
     expect(error.message).toBe("Unknown error");
   });
@@ -198,8 +202,8 @@ describe("tools/call", () => {
       "lazy",
     );
 
-    expect(response.result).toBeUndefined();
-    const error = response.error as Record<string, unknown>;
+    expect(response!.result).toBeUndefined();
+    const error = response!.error as Record<string, unknown>;
     expect(error.code).toBe(-32602);
     expect(error.message).toBe("Missing tool name");
     expect(stub.handleToolCall).not.toHaveBeenCalled();
@@ -210,7 +214,7 @@ describe("tools/call", () => {
 
     const response = await handleMcpRequest(req("tools/call"), stub, "lazy");
 
-    const error = response.error as Record<string, unknown>;
+    const error = response!.error as Record<string, unknown>;
     expect(error.code).toBe(-32602);
     expect(error.message).toBe("Missing tool name");
   });
@@ -225,8 +229,8 @@ describe("unknown method", () => {
 
     const response = await handleMcpRequest(req("resources/list"), stub, "lazy");
 
-    expect(response.result).toBeUndefined();
-    const error = response.error as Record<string, unknown>;
+    expect(response!.result).toBeUndefined();
+    const error = response!.error as Record<string, unknown>;
     expect(error.code).toBe(-32601);
     expect((error.message as string)).toContain("resources/list");
   });

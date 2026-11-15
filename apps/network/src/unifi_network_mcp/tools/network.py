@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
         "Full details and mutations can require session credentials."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_networks(
     search: Annotated[
@@ -159,7 +159,7 @@ async def list_networks(
         "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
         "summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_network_details(
     network_id: Annotated[str, Field(description="Unique identifier (_id) of the network (from unifi_list_networks)")],
@@ -743,7 +743,7 @@ async def create_network(
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
         "Full details and mutations can require session credentials."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_wlans(
     search: Annotated[
@@ -806,7 +806,7 @@ async def list_wlans(
 @server.tool(
     name="unifi_get_wlan_details",
     description="Get details for a specific WLAN by ID.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_wlan_details(
     wlan_id: Annotated[str, Field(description="Unique identifier (_id) of the WLAN/SSID (from unifi_list_wlans)")],
@@ -1238,7 +1238,7 @@ async def toggle_wlan(
         "AP groups control which access points broadcast which SSIDs. "
         "Returns group names, IDs, and associated AP/WLAN memberships."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_ap_groups() -> Dict[str, Any]:
     """List all AP groups."""
@@ -1259,7 +1259,7 @@ async def list_ap_groups() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_ap_group_details",
     description="Get details of a specific AP group by ID, including member APs and WLANs.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_ap_group_details(
     group_id: Annotated[str, Field(description="Unique identifier of the AP group (from unifi_list_ap_groups)")],

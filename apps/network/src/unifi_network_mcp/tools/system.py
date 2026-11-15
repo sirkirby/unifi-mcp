@@ -43,7 +43,7 @@ logger.info("System tools module loaded, server instance: %s", server)
     name="unifi_get_mdns_settings",
     auth="local_only",
     description="Get site-wide mDNS service settings and read-only network scope.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_mdns_settings() -> Dict[str, Any]:
     try:
@@ -177,7 +177,7 @@ async def update_threat_management_settings(
     name="unifi_get_threat_management_settings",
     auth="local_only",
     description="Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_threat_management_settings() -> Dict[str, Any]:
     """Get site-wide threat management (IDS/IPS) and traffic identification settings."""
@@ -204,7 +204,7 @@ async def get_threat_management_settings() -> Dict[str, Any]:
         "Requires Network session credentials. Counts and timestamps may be unknown (null); timestamps are milliseconds. "
         "Gateway device IDs are scoped to the legacy Network device family, not public Integration API device UUIDs."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
     """Read site CyberSecure summary and gateway signature status."""
@@ -223,7 +223,7 @@ async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_system_info",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns controller version, uptime, hostname, device and client counts, update availability, "
         "and console CPU and memory usage. "
@@ -250,7 +250,7 @@ async def get_system_info() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_network_health",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with "
         "status, number of gateways/switches/APs, and active user counts. "
@@ -283,7 +283,7 @@ async def get_network_health() -> Dict[str, Any]:
     name="unifi_get_site_settings",
     description="Get current site settings: site identity, regulatory country code, timezone, "
     "connectivity monitor (enabled, uplink type) and NTP servers.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_site_settings() -> Dict[str, Any]:
     """Implementation for getting site settings."""
@@ -320,7 +320,7 @@ def _error_detail(exc: BaseException) -> str:
     description="Get current SNMP settings for the site: v1/v2c enabled state and community string, "
     "SNMPv3 enabled state and user name. The two services are independent flags on one record. "
     "The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_snmp_settings() -> Dict[str, Any]:
     """Implementation for getting SNMP settings."""
@@ -440,7 +440,7 @@ async def update_snmp_settings(
     description="Get the site's device management (mgmt) settings, read-only: device SSH state and user name, "
     "password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API "
     "token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_mgmt_settings() -> Dict[str, Any]:
     """Implementation for getting device management settings.
@@ -464,7 +464,7 @@ async def get_mgmt_settings() -> Dict[str, Any]:
 @server.tool(
     name="unifi_list_backups",
     description="List available backups on the controller. Returns filename, datetime, size, and version for each backup.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_backups() -> Dict[str, Any]:
     """List available backups."""
@@ -559,7 +559,7 @@ async def delete_backup(
 @server.tool(
     name="unifi_get_autobackup_settings",
     description="Get auto-backup settings (enabled state, schedule, retention count, cloud backup).",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_autobackup_settings() -> Dict[str, Any]:
     """Get auto-backup configuration."""

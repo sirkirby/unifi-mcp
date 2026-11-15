@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
         "next_cursor back as cursor for more. These IDs are scoped to the Site Manager tool family — do not pass them to "
         "Network, Protect, or Access tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="host",
     permission_action="read",
     auth="api_key_only",
@@ -50,7 +50,7 @@ async def sitemanager_list_hosts(page_size: PageSize = None, cursor: Cursor = No
         "reports (large). These IDs are scoped to the Site Manager tool family — do not pass them to "
         "Network, Protect, or Access tools."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="host",
     permission_action="read",
     auth="api_key_only",

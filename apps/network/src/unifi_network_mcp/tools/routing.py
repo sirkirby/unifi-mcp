@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 Returns route names, destination networks, next-hop addresses, and status.
 These are manually configured routes, not dynamic or system routes.""",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_routes() -> Dict[str, Any]:
     """List all user-defined static routes."""
@@ -55,7 +55,7 @@ This shows the actual routing table state on the gateway device.
 
 Note: This endpoint may not be available on all controller versions.
 Returns empty list if unavailable.""",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_active_routes() -> Dict[str, Any]:
     """List all active routes from the routing table."""
@@ -76,7 +76,7 @@ async def list_active_routes() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_route_details",
     description="Get detailed information about a specific static route by its ID",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_route_details(
     route_id: Annotated[str, Field(description="Unique identifier (_id) of the static route (from unifi_list_routes)")],

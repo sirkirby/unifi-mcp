@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
     description="List all Dynamic DNS provider entries configured on the controller. "
     "Returns hostname, service/provider, WAN interface, login, and options for each entry. "
     "The provider password/token is redacted.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dynamic_dns() -> Dict[str, Any]:
     """List all Dynamic DNS entries."""
@@ -65,7 +65,7 @@ async def list_dynamic_dns() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_dynamic_dns_entry_details",
     description="Get details for a specific Dynamic DNS entry by ID. The provider password/token is redacted.",
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dynamic_dns_entry_details(
     entry_id: Annotated[str, Field(description="The unique identifier (_id) of the Dynamic DNS entry")],
