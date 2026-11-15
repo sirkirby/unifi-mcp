@@ -84,7 +84,7 @@ async def test_device_stats_summary_totals_its_rows(controller_type, report, row
         patch("unifi_network_mcp.tools.stats.stats_manager", manager),
         patch("unifi_network_mcp.tools.stats.device_manager") as device_manager,
     ):
-        device_manager.get_device_by_identifier = AsyncMock(return_value=device)
+        device_manager.get_device_details = AsyncMock(return_value=device)
         from unifi_network_mcp.tools.stats import get_device_stats
 
         result = await get_device_stats(device_id="aa:bb:cc:00:00:01")
