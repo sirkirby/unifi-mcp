@@ -884,6 +884,16 @@ def shape_network_details(
     return response
 
 
+def _wlan_security_details(wlan: dict[str, Any]) -> dict[str, Any]:
+    """The fields that tell WPA2, WPA2/WPA3 and WPA3 apart, and the bands an SSID is on.
+
+    ``security`` is ``wpapsk`` for all three personal modes. Only fields the
+    controller reported are returned, so an unknown value is never shown as false.
+    """
+    fields = ("wpa_mode", "wpa3_support", "wpa3_transition", "wlan_bands")
+    return {field: wlan[field] for field in fields if wlan.get(field) is not None}
+
+
 def shape_wlan_list(
     wlans: list[Any],
     *,
@@ -907,6 +917,7 @@ def shape_wlan_list(
             "name": wlan.get("name"),
             "enabled": wlan.get("enabled"),
             "security": wlan.get("security"),
+            **_wlan_security_details(wlan),
             "network_id": wlan.get("networkconf_id"),
             "usergroup_id": wlan.get("usergroup_id"),
             **(

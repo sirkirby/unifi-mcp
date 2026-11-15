@@ -802,7 +802,8 @@ async def reorder_firewall_policies(
 
 @server.tool(
     name="unifi_list_firewall_zones",
-    description="List controller firewall zones (V2 API). Returned IDs are V2 controller "
+    description="List controller firewall zones (V2 API) with the network IDs assigned to each "
+    "(networks; resolve them with unifi_list_networks). Returned IDs are V2 controller "
     "ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and "
     "network firewall_zone_id.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
