@@ -831,14 +831,17 @@ def _failover_gateway() -> dict:
     }
 
 
-def test_shape_device_list_reports_a_gateway_at_its_lan_address() -> None:
+def test_shape_device_list_reports_a_gateway_lan_address_beside_its_ip() -> None:
     gateway = _failover_gateway()
 
     listed = shape_device_list([gateway], site="default")["devices"][0]
-    assert listed["ip"] == "192.168.1.1"
+    assert (listed["ip"], listed["lan_ip"]) == ("203.0.113.5", "192.168.1.1")
 
     details = shape_device_details(gateway, site="default", mac_address=gateway["mac"], include="basic", summary=True)
-    assert details["device"]["ip"] == "192.168.1.1"
+    assert (details["device"]["ip"], details["device"]["lan_ip"]) == ("203.0.113.5", "192.168.1.1")
+
+    projected = shape_device_list([gateway], site="default", fields="name,lan_ip")["devices"][0]
+    assert projected == {"name": gateway["name"], "lan_ip": "192.168.1.1"}
 
     for term in ("192.168.1.1", "203.0.113.5"):
         assert shape_device_list([gateway], site="default", search=term)["count"] == 1
@@ -846,7 +849,9 @@ def test_shape_device_list_reports_a_gateway_at_its_lan_address() -> None:
 
 def test_shape_device_list_keeps_ip_for_devices_without_a_lan_address() -> None:
     switch = {"mac": "aa:bb:cc:00:00:10", "type": "usw", "ip": "192.168.1.2"}
-    assert shape_device_list([switch], site="default")["devices"][0]["ip"] == "192.168.1.2"
+    listed = shape_device_list([switch], site="default")["devices"][0]
+    assert listed["ip"] == "192.168.1.2"
+    assert "lan_ip" not in listed
 
 
 def test_shape_device_list_summarises_every_gateway_uplink() -> None:

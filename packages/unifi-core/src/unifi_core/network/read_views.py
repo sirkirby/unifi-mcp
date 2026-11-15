@@ -112,14 +112,6 @@ def _wan_keys(device: dict[str, Any]) -> list[str]:
     return sorted({"wan1", "wan2"} | extra, key=lambda key: int(key[3:]))
 
 
-def _device_ip(device: dict[str, Any]) -> Any:
-    """The address a device is managed on.
-
-    A gateway's ``ip`` is its active WAN address; its LAN address is ``lan_ip``.
-    """
-    return device.get("lan_ip") or device.get("ip", "")
-
-
 def get_wifi_bands(device: dict[str, Any]) -> list[str]:
     """Return stable display names for active radios."""
     bands = set()
@@ -392,7 +384,10 @@ def _device_base(device: dict[str, Any]) -> dict[str, Any]:
         "model": device.get("model", ""),
         "type": device.get("type", ""),
         "device_category": classify_device(device),
-        "ip": _device_ip(device),
+        "ip": device.get("ip", ""),
+        # A gateway's ip is the address the controller reports, its active
+        # WAN; lan_ip is the address it serves the LAN on.
+        **({"lan_ip": device["lan_ip"]} if device.get("lan_ip") else {}),
         "status": state_map.get(state, f"unknown_state ({state})"),
         "uptime": str(timedelta(seconds=device.get("uptime", 0))) if device.get("uptime") else "N/A",
         "last_seen": datetime.fromtimestamp(device.get("last_seen", 0), tz=timezone.utc).isoformat()
@@ -526,7 +521,7 @@ def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summa
 
 
 DEVICE_LIST_FIELDS = frozenset(
-    "mac name model type device_category ip status uptime last_seen firmware upgradable adopted "
+    "mac name model type device_category ip lan_ip status uptime last_seen firmware upgradable adopted "
     "connection_network uplink load_avg_1 mem_pct model_eol _id source_api integration_id "
     "serial hw_revision model_display clients radio_count radios vap_count wifi_bands experience_score "
     "num_clients total_ports ports_up ports_poe_enabled poe_power poe_voltage wan1_ip wan1_up wan2_ip "
@@ -645,7 +640,8 @@ def shape_device_details(
                 "name": raw.get("name", raw.get("model", "Unknown")),
                 "model": raw.get("model"),
                 "type": raw.get("type"),
-                "ip": raw.get("lan_ip") or raw.get("ip"),
+                "ip": raw.get("ip"),
+                **({"lan_ip": raw["lan_ip"]} if raw.get("lan_ip") else {}),
                 "status": state_map.get(state, f"unknown ({state})"),
                 "uptime": str(timedelta(seconds=raw.get("uptime", 0))) if raw.get("uptime") else None,
                 "firmware": raw.get("version"),
