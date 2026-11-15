@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiounifi.errors import Forbidden, RequestError
 from aiounifi.models.api import ApiRequest, ApiRequestV2
@@ -369,9 +370,38 @@ class StatsManager:
         rows = await self._series_site_rows(
             schema, start_ms, end_ms, device_mac=device_mac, client_mac=client_mac, projection=projection
         )
+        tz = await self._site_timezone() if rows and granularity in ("daily", "monthly") else timezone.utc
         return stats_series.legacy_rows(
-            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested
+            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested, tz=tz
         )
+
+    async def _site_timezone(self) -> tzinfo:
+        """The site's time zone (site settings, locale section), where daily and monthly buckets begin.
+
+        Falls back to UTC when the setting cannot be read or names a zone
+        this host does not know; a failed read is not cached.
+        """
+        cache_key = f"stats_site_timezone_{self._connection.site}"
+        name = self._connection.get_cached(cache_key, timeout=3600)
+        if name is None:
+            try:
+                response = await self._connection.request(ApiRequest(method="get", path="/get/setting/locale"))
+            except Exception as e:
+                logger.debug("Site time zone read failed; daily buckets use UTC: %s", type(e).__name__)
+                return timezone.utc
+            records = response if isinstance(response, list) else [response]
+            name = next(
+                (r["timezone"] for r in records if isinstance(r, dict) and isinstance(r.get("timezone"), str)),
+                "",
+            )
+            self._connection._update_cache(cache_key, name, timeout=3600)
+        if not name:
+            return timezone.utc
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as e:
+            logger.debug("Site time zone is unknown to this host; daily buckets use UTC: %s", type(e).__name__)
+            return timezone.utc
 
     async def _series_site_rows(
         self,
@@ -583,7 +613,7 @@ class StatsManager:
         end_ms: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id client identifier before fetching stats."""
-        client = await self._client_manager.get_client_details(client_id, existence_only=True)
+        client = await self._client_manager.get_client_by_identifier(client_id, existence_only=True)
         raw = client.raw if hasattr(client, "raw") else client
         client_mac = raw.get("mac", client_id)
         return await self.get_client_stats(
@@ -695,7 +725,7 @@ class StatsManager:
         granularity: str = "hourly",
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id device identifier and select its report family."""
-        device = await DeviceManager(self._connection).get_device_details(device_id)
+        device = await DeviceManager(self._connection).get_device_by_identifier(device_id)
         raw = device.raw if hasattr(device, "raw") else device
         device_mac = raw.get("mac", device_id)
         device_type = raw.get("type", "unknown")
@@ -878,7 +908,10 @@ class StatsManager:
     async def get_dpi_stats(
         self,
     ) -> Dict[str, List[Any]]:  # Return List[DPIRestrictionApp/Group]
-        """Get Deep Packet Inspection (DPI) statistics."""
+        """DPI restriction rules (``rest/dpiapp``) and groups (``rest/dpigroup``).
+
+        Configuration, not traffic; ``get_site_dpi_traffic`` reads DPI statistics.
+        """
         cache_key = f"{CACHE_PREFIX_STATS_DPI}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=900)  # 15 minute cache
         if cached_data is not None:
@@ -1296,7 +1329,11 @@ class StatsManager:
         duration_hours: int = 24,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
-        """Get client session history.
+        """Get client association sessions, newest first.
+
+        Legacy ``/stat/session`` takes its ``start``/``end`` window in epoch
+        seconds, unlike ``/stat/report/*``, which takes milliseconds; a
+        millisecond window lies far in the future and matches nothing.
 
         Args:
             client_mac: Optional MAC address to filter sessions for a specific client.
@@ -1311,8 +1348,8 @@ class StatsManager:
             return cached_data
 
         try:
-            start_time = int((datetime.now() - timedelta(hours=duration_hours)).timestamp() * 1000)
-            end_time = int(datetime.now().timestamp() * 1000)
+            end_time = int(datetime.now().timestamp())
+            start_time = end_time - int(duration_hours) * 3600
 
             endpoint = "/stat/session"
             payload: Dict[str, Any] = {
@@ -1320,6 +1357,7 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
                 "_limit": limit,
+                "_sort": "-assoc_time",
             }
             if client_mac:
                 payload["mac"] = client_mac

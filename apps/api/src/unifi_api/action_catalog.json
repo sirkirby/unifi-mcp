@@ -4442,7 +4442,7 @@
       "input_schema": {
         "properties": {
           "duration": {
-            "description": "Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
+            "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
           },
           "limit": {

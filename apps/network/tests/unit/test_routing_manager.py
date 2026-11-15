@@ -99,6 +99,78 @@ class TestRoutingManager:
             await routing_manager.get_active_routes()
 
     @pytest.mark.asyncio
+    async def test_get_active_routes_reads_v2_table_when_legacy_is_empty(self, routing_manager, mock_connection):
+        """Newer controllers answer /stat/routing with no rows and serve the table from V2 /routes."""
+        v2_table = {
+            "truncated": False,
+            "items": [
+                {
+                    "destination": "0.0.0.0/0",
+                    "distance": 200,
+                    "origin": "DHCP",
+                    "type": "unicast",
+                    "nexthops": [
+                        {"gateway": "203.0.113.1", "interface": "net-wan", "in_use": True, "weight": 1},
+                        {"gateway": "203.0.113.2", "interface": "net-wan2", "in_use": False, "weight": 1},
+                    ],
+                },
+                {
+                    "destination": "192.168.1.0/24",
+                    "origin": "Kernel",
+                    "type": "unicast",
+                    "nexthops": [{"interface": "net-lan", "in_use": True, "weight": 1}],
+                },
+                {"destination": "0.0.0.0/0", "origin": "PBR", "type": "blackhole", "nexthops": [{"in_use": True}]},
+            ],
+        }
+        mock_connection.request.side_effect = [[], v2_table]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert [call.args[0].path for call in mock_connection.request.call_args_list] == ["/stat/routing", "/routes"]
+        assert routes == [
+            {
+                "pfx": "0.0.0.0/0",
+                "nh": [{"via": "203.0.113.1", "intf": "net-wan"}],
+                "metric": 200,
+                "origin": "DHCP",
+                "route_type": "unicast",
+            },
+            {
+                "pfx": "192.168.1.0/24",
+                "nh": [{"via": None, "intf": "net-lan"}],
+                "metric": None,
+                "origin": "Kernel",
+                "route_type": "unicast",
+            },
+            {
+                "pfx": "0.0.0.0/0",
+                "nh": [{"via": None, "intf": None}],
+                "metric": None,
+                "origin": "PBR",
+                "route_type": "blackhole",
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_stays_empty_without_a_v2_table(self, routing_manager, mock_connection):
+        """An empty legacy table is still an empty result when V2 /routes is missing."""
+        mock_connection.request.side_effect = [[], Exception("404 from /routes")]
+
+        assert await routing_manager.get_active_routes() == []
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_reads_v2_table_when_legacy_is_missing(self, routing_manager, mock_connection):
+        mock_connection.request.side_effect = [
+            Exception("404 Not Found"),
+            {"items": [{"destination": "10.0.0.0/8", "nexthops": []}]},
+        ]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert routes == [{"pfx": "10.0.0.0/8", "nh": [], "metric": None}]
+
+    @pytest.mark.asyncio
     async def test_get_route_details_found(self, routing_manager, mock_connection):
         """Test get_route_details returns route when found."""
         mock_routes = [
@@ -267,3 +339,55 @@ class TestRoutingManager:
 
         with pytest.raises(Exception, match="API error"):
             await routing_manager.update_route(route_id="r1", name="New")
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_unwraps_a_v2_table_returned_inside_a_list(self, routing_manager, mock_connection):
+        """The connection layer can return the V2 table object as the only element of a list."""
+        mock_connection.request.side_effect = [
+            [],
+            [
+                {
+                    "truncated": False,
+                    "items": [
+                        {
+                            "destination": "192.168.1.0/24",
+                            "origin": "Kernel",
+                            "type": "unicast",
+                            "nexthops": [{"interface": "net-lan", "in_use": True}],
+                        }
+                    ],
+                }
+            ],
+        ]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert routes == [
+            {
+                "pfx": "192.168.1.0/24",
+                "nh": [{"via": None, "intf": "net-lan"}],
+                "metric": None,
+                "origin": "Kernel",
+                "route_type": "unicast",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_lists_no_next_hop_when_none_is_in_use(self, routing_manager, mock_connection):
+        """A standby route is not shown as active through a hop the gateway is not using."""
+        mock_connection.request.side_effect = [
+            [],
+            {
+                "items": [
+                    {
+                        "destination": "0.0.0.0/0",
+                        "distance": 210,
+                        "nexthops": [{"gateway": "203.0.113.2", "interface": "net-wan2", "in_use": False}],
+                    }
+                ]
+            },
+        ]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert routes == [{"pfx": "0.0.0.0/0", "nh": [], "metric": 210}]

@@ -12,9 +12,17 @@ the ``or "" `` fallback only on missing keys, not on present-but-falsy values.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+import logging
+from typing import Any, Awaitable, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiConnectionError,
+    UniFiMalformedResponseError,
+    UniFiOperationError,
+    UniFiPermissionError,
+)
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -28,6 +36,63 @@ from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 from unifi_api.services.pydantic_models import Page
 
 router = APIRouter()
+logger = logging.getLogger("unifi-api")
+
+# An upstream failure of the integration API, by exception class. The API's
+# own 401 means the caller's bearer key failed, so a key the controller
+# rejects is a 502 (as the Site Manager routes answer an upstream auth
+# failure); a key without permission is a 403, as the Protect alarm-profile
+# route answers an upstream permission refusal. Fixed text only: the
+# exception's message is never rendered.
+_DPI_UPSTREAM_FAILURES: tuple[tuple[type[Exception], int, str, str], ...] = (
+    (
+        UniFiAuthError,
+        502,
+        "api_key_rejected",
+        "The controller rejected this controller's API token. Replace it with a valid Network API key "
+        "via PATCH /v1/controllers/{id} (or the Controllers tab in the admin UI).",
+    ),
+    (
+        UniFiPermissionError,
+        403,
+        "api_key_forbidden",
+        "The controller's API token lacks permission to read the DPI catalog.",
+    ),
+    (
+        UniFiMalformedResponseError,
+        502,
+        "dpi_upstream_error",
+        "The controller's integration API answered with a response the DPI catalog cannot read.",
+    ),
+    (
+        UniFiOperationError,
+        502,
+        "dpi_upstream_error",
+        "The controller's integration API did not return the DPI catalog. "
+        "Check that this controller serves the integration API.",
+    ),
+    (
+        UniFiConnectionError,
+        502,
+        "dpi_upstream_error",
+        "The controller's integration API could not be reached or its certificate was not trusted.",
+    ),
+)
+
+
+async def _dpi_lookup(call: Awaitable[Any], controller_id: str) -> Any:
+    """Await a DpiManager read, answering an upstream failure with a structured error."""
+    try:
+        return await call
+    except Exception as exc:
+        for error_type, status, kind, hint in _DPI_UPSTREAM_FAILURES:
+            if isinstance(exc, error_type):
+                logger.warning("DPI catalog read failed: %s", type(exc).__name__)
+                raise HTTPException(
+                    status_code=status,
+                    detail={"kind": kind, "controller": controller_id, "hint": hint},
+                ) from None
+        raise
 
 
 def _require_dpi_auth(cm: Any, controller_id: str) -> None:
@@ -36,10 +101,8 @@ def _require_dpi_auth(cm: Any, controller_id: str) -> None:
     DPI lookups go through UniFi's integration API which requires a
     bearer API key separate from the session-based auth used for
     everything else. The api_token field on the controller record carries
-    it; when unset, the manager's `_request_integration_api` returns None
-    and the manager normalizes that to an empty wrapper — which would
-    silently look like 'no DPI apps found' rather than a configuration
-    issue. Surface the actual cause instead.
+    it; when unset, the manager raises an auth error with fixed text. This
+    check answers first with a structured 501 a REST client can act on.
     """
     auth = getattr(cm, "unifi_auth", None)
     if auth is None or not auth.has_api_key:
@@ -118,7 +181,7 @@ async def list_dpi_applications(
         _require_dpi_auth(cm, controller.id)
         # Manager returns the integration-API wrapper. Ask for a wide page so
         # cursor-based pagination on the client side has the full set.
-        result = await mgr.get_dpi_applications(limit=2500, offset=0)
+        result = await _dpi_lookup(mgr.get_dpi_applications(limit=2500, offset=0), controller.id)
 
     items_raw = _unwrap(result)
     cursor_obj = _decode_cursor(cursor)
@@ -172,7 +235,7 @@ async def list_dpi_categories(
         )
         cm = await factory.get_connection_manager(session, controller.id, "network", site=site_id)
         _require_dpi_auth(cm, controller.id)
-        result = await mgr.get_dpi_categories(limit=500, offset=0)
+        result = await _dpi_lookup(mgr.get_dpi_categories(limit=500, offset=0), controller.id)
 
     items_raw = _unwrap(result)
     cursor_obj = _decode_cursor(cursor)

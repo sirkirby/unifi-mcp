@@ -1048,15 +1048,26 @@ def validate_group_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _zone_networks(raw: Any) -> Optional[List[Any]]:
+    """A zone's network IDs, or ``None`` when the record has no membership list."""
+    for key in ("networks", "network_ids"):
+        value = _get(raw, key)
+        if isinstance(value, list):
+            return list(value)
+    return None
+
+
 def firewall_zone_from_controller(raw: Any) -> FirewallZone:
-    """Build a FirewallZone from a controller API response dict."""
-    networks = _get(raw, "networks") or _get(raw, "network_ids") or []
-    if not isinstance(networks, list):
-        networks = []
+    """Build a FirewallZone from a controller API response dict.
+
+    ``networks`` is left unset when the record carries no membership list, so
+    an unknown membership is omitted rather than reported as an empty zone.
+    """
+    networks = _zone_networks(raw)
     return FirewallZone(
         id=_get(raw, "_id") or _get(raw, "id"),
         name=_get(raw, "name"),
-        networks=list(networks),
+        networks=networks,
         default_policy=_get(raw, "default_policy") or _get(raw, "default_action"),
     )
 

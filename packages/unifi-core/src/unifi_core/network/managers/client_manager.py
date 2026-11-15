@@ -7,7 +7,7 @@ from aiounifi.models.api import ApiRequest
 from aiounifi.models.client import Client
 
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
-from unifi_core.mac import canonical_mac, mac_equal, normalize_mac
+from unifi_core.mac import canonical_mac, looks_like_mac, mac_equal, normalize_mac
 from unifi_core.network.managers.connection_manager import (
     REST_USER_ROW_CAP,
     ConnectionManager,
@@ -313,6 +313,39 @@ class ClientManager:
         if not hasattr(single, "raw") or not isinstance(getattr(single, "raw", None), dict):
             return SimpleNamespace(mac=self._mac_of(single), raw=single_raw)
         return single
+
+    async def get_client_by_identifier(self, identifier: str, *, existence_only: bool = False) -> Any:
+        """Get a client by MAC address or by the ``_id`` the client list reports.
+
+        A MAC-shaped identifier takes :meth:`get_client_details` unchanged.
+        Anything else is matched exactly against the ``_id`` of the online
+        (/stat/sta) and user-table (/rest/user) records, the two sources the
+        client list draws its ``_id`` from, and the match is then looked up by
+        its MAC, so both forms return the same merged record.
+
+        Raises:
+            UniFiNotFoundError: No client has this MAC or ``_id``; the error
+                names the identifier as given.
+            Original underlying exception: Both list endpoints failed, so
+                whether the ``_id`` exists could not be determined.
+        """
+        if looks_like_mac(identifier):
+            return await self.get_client_details(identifier, existence_only=existence_only)
+        list_errors: List[Exception] = []
+        for source in (self.get_clients, self.get_all_clients):
+            try:
+                records = await source()
+            except Exception as e:
+                list_errors.append(e)
+                logger.debug("Client list fetch failed during identifier resolution: %s", type(e).__name__)
+                continue
+            for record in records:
+                raw = self._raw_of(record)
+                if raw.get("_id") == identifier and raw.get("mac"):
+                    return await self.get_client_details(raw["mac"], existence_only=existence_only)
+        if len(list_errors) == 2:
+            raise list_errors[0]
+        raise UniFiNotFoundError("client", identifier)
 
     async def _get_user_by_mac(self, path_mac: str) -> Optional[dict]:
         """Fetch one user-table record via GET /stat/user/<mac>, or ``None`` for an empty list.

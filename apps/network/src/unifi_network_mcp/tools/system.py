@@ -252,10 +252,11 @@ async def get_system_info() -> Dict[str, Any]:
     name="unifi_get_network_health",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
-        "Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with "
-        "status, number of gateways/switches/APs, and active user counts. "
-        "Use to check WAN connectivity, see how many devices are online per subsystem, "
-        "or detect degraded network segments. "
+        "Returns per-subsystem health for WAN, WWW, LAN, WLAN, and VPN: status, device counts "
+        "(gateways/switches/APs, adopted, disconnected, pending), active user counts, and "
+        "WAN/WWW details (WAN IP, ISP, latency, drops, last speed test). Use to check WAN "
+        "connectivity or find which segment is degraded. Fields the controller does not "
+        "report are omitted; a limited admin role may get no VPN details. "
         "For controller-level info (version, uptime), use unifi_get_system_info."
     ),
 )
@@ -268,7 +269,7 @@ async def get_network_health() -> Dict[str, Any]:
     try:
         health = await system_manager.get_network_health()
         subsystems = health if isinstance(health, list) else [health]
-        shaped = [network_health_from_controller(s).model_dump(exclude_none=False) for s in subsystems]
+        shaped = [network_health_from_controller(s).model_dump(exclude_none=True) for s in subsystems]
         return {
             "success": True,
             "site": system_manager._connection.site,
@@ -573,7 +574,7 @@ async def get_autobackup_settings() -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error("Error getting auto-backup settings: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to get auto-backup settings: {type(e).__name__}"}
+        return {"success": False, "error": f"Failed to get auto-backup settings: {e}"}
 
 
 @server.tool(
@@ -612,7 +613,7 @@ async def update_autobackup_settings(
             current = await system_manager.get_autobackup_settings()
         except Exception as e:
             logger.error("Error preparing auto-backup settings preview: %s", type(e).__name__)
-            return {"success": False, "error": f"Failed to prepare auto-backup settings preview: {type(e).__name__}"}
+            return {"success": False, "error": f"Failed to prepare auto-backup settings preview: {e}"}
         return update_preview(
             resource_type="autobackup_settings",
             resource_id="super_mgmt",
@@ -632,4 +633,4 @@ async def update_autobackup_settings(
         return {"success": False, "error": "Failed to update auto-backup settings."}
     except Exception as e:
         logger.error("Error updating auto-backup settings: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to update auto-backup settings: {type(e).__name__}"}
+        return {"success": False, "error": f"Failed to update auto-backup settings: {e}"}

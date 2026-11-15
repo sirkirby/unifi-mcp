@@ -21,11 +21,15 @@ fixes the bucket size: HOUR and DAY return 5-minute points, WEEK hourly
 points and MONTH 8-hour points. Points outside the
 window are dropped, and a granularity finer than the period's buckets
 yields the period's buckets.
+
+Daily and monthly rows are cut at midnight in the site's time zone, as the
+legacy reports are, not at UTC midnight. A point counts toward the bucket
+its start falls in.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from aiounifi.models.api import ApiRequestV2
@@ -95,18 +99,25 @@ def series_rows(response: Any, *, site_id: Optional[str] = None) -> List[Dict[st
 
 
 def _reducer(field: str) -> Callable[[List[float]], float]:
-    """How points of one metric combine into a coarser bucket."""
+    """How points of one metric combine into a coarser bucket.
+
+    The engine spreads counters across its points, so byte and packet points
+    carry fractions; their sums are rounded to the whole numbers the legacy
+    reports hold.
+    """
     if field.endswith(("Bytes", "Packets")):
-        return sum
+        return lambda values: round(sum(values))
     if field.startswith("max") or field.startswith("distinct") or field.endswith("S"):
         return max
     return lambda values: sum(values) / len(values)
 
 
-def _bucket_start(timestamp: int, granularity: str) -> int:
-    if granularity == "monthly":
-        moment = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
-        return int(datetime(moment.year, moment.month, 1, tzinfo=timezone.utc).timestamp() * 1000)
+def _bucket_start(timestamp: int, granularity: str, tz: tzinfo = timezone.utc) -> int:
+    """The start of the bucket holding ``timestamp``; days and months begin at midnight in ``tz``."""
+    if granularity in ("daily", "monthly"):
+        moment = datetime.fromtimestamp(timestamp / 1000, tz=tz)
+        day = 1 if granularity == "monthly" else moment.day
+        return int(datetime(moment.year, moment.month, day, tzinfo=tz).timestamp() * 1000)
     size = _BUCKET_MS[granularity]
     return timestamp - timestamp % size
 
@@ -136,13 +147,15 @@ def legacy_rows(
     end_ms: int,
     granularity: str,
     nested: Optional[Tuple[str, str]] = None,
+    tz: tzinfo = timezone.utc,
 ) -> Dict[int, Dict[str, Any]]:
     """Fold series points into legacy report rows, keyed by bucket start.
 
     ``fields`` maps series metric names to legacy report names. ``nested``
     names a nested group and its key (``("byRadioBand", "radioBand")``),
     whose metrics become ``<key value>-<legacy name>``, as the legacy AP
-    report spells per-band counters (``ng-num_sta``).
+    report spells per-band counters (``ng-num_sta``). ``tz`` is the site's
+    time zone, where daily and monthly buckets begin.
     """
     collected: Dict[int, Dict[str, Tuple[str, List[float]]]] = {}
     for row in rows:
@@ -150,7 +163,7 @@ def legacy_rows(
             timestamp = point.get("timestamp") if isinstance(point, dict) else None
             if not isinstance(timestamp, int) or not start_ms <= timestamp < end_ms:
                 continue
-            bucket = collected.setdefault(_bucket_start(timestamp, granularity), {})
+            bucket = collected.setdefault(_bucket_start(timestamp, granularity, tz), {})
             for target, source, value in _point_values(point, fields, nested):
                 bucket.setdefault(target, (source, []))[1].append(value)
     folded: Dict[int, Dict[str, Any]] = {}

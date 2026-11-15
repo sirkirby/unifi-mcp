@@ -124,9 +124,7 @@ async def get_client_stats(
     """Implementation for getting client stats."""
     try:
         duration_hours = _duration_hours(duration)
-        client_details = await client_manager.get_client_details(client_id)
-        if not client_details:
-            return {"success": False, "error": f"Client '{client_id}' not found"}
+        client_details = await client_manager.get_client_by_identifier(client_id)
 
         # Support aiounifi Client objects as well as dicts
         client_raw = client_details.raw if hasattr(client_details, "raw") else client_details
@@ -198,9 +196,7 @@ async def get_device_stats(
     """Implementation for getting device stats."""
     try:
         duration_hours = _duration_hours(duration)
-        device_details = await device_manager.get_device_details(device_id)
-        if not device_details:
-            return {"success": False, "error": f"Device '{device_id}' not found"}
+        device_details = await device_manager.get_device_by_identifier(device_id)
 
         device_raw = device_details.raw if hasattr(device_details, "raw") else device_details
         device_name = device_raw.get("name") or device_raw.get("model", "Unknown")
@@ -335,11 +331,16 @@ async def get_top_clients(
 
 @server.tool(
     name="unifi_get_dpi_stats",
-    description="Get Deep Packet Inspection (DPI) statistics (applications and categories)",
+    description=(
+        "List the DPI restriction rules (per-application and per-category block or rate-limit rules) "
+        "and the restriction groups that bundle them. Despite the name, this is configuration, not "
+        "traffic: for DPI statistics use unifi_get_site_dpi_traffic or unifi_get_client_dpi_traffic; "
+        "for application and category IDs use unifi_list_dpi_applications / unifi_list_dpi_categories."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dpi_stats() -> Dict[str, Any]:
-    """Implementation for getting DPI stats."""
+    """List DPI restriction rules and groups (``rest/dpiapp``, ``rest/dpigroup``)."""
     try:
         dpi_stats_result = await stats_manager.get_dpi_stats()
         shaped = dpi_stats_from_controller(dpi_stats_result)
@@ -604,10 +605,9 @@ async def get_ips_events(
 @server.tool(
     name="unifi_get_client_sessions",
     description=(
-        "Get client session history. Note: this endpoint tracks hotspot/captive portal "
-        "authorization sessions, not general WiFi connect/disconnect events. "
-        "Returns empty without a guest portal configured. "
-        "For WiFi roaming events, use the event log instead."
+        "Get client association sessions (connect time, disconnect time, duration, AP), "
+        "newest first, for one client or all clients. "
+        "For individual connect, disconnect and roaming events, use the event log instead."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -618,7 +618,7 @@ async def get_client_sessions(
     ] = None,
     duration: Annotated[
         str,
-        Field(description="Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)"),
+        Field(description="Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)"),
     ] = "daily",
     limit: Annotated[int, Field(description="Maximum number of sessions to return (default 50)")] = 50,
 ) -> Dict[str, Any]:

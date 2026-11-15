@@ -56,14 +56,14 @@ async def test_toggle_qos_rule_enabled_defaults_missing_state_to_enabled() -> No
 @pytest.mark.asyncio
 async def test_client_stats_bridge_resolves_controller_id_to_mac() -> None:
     client_manager = MagicMock()
-    client_manager.get_client_details = AsyncMock(return_value=MagicMock(raw={"mac": "aa:bb:cc:dd:ee:ff"}))
+    client_manager.get_client_by_identifier = AsyncMock(return_value=MagicMock(raw={"mac": "aa:bb:cc:dd:ee:ff"}))
     manager = StatsManager(MagicMock(), client_manager)
     manager.get_client_stats = AsyncMock(return_value=[{"rx_bytes": 1}])
 
     result = await manager.get_client_stats_for_identifier("client-object-id", duration_hours=24)
 
     assert result == [{"rx_bytes": 1}]
-    client_manager.get_client_details.assert_awaited_once_with("client-object-id", existence_only=True)
+    client_manager.get_client_by_identifier.assert_awaited_once_with("client-object-id", existence_only=True)
     manager.get_client_stats.assert_awaited_once_with(
         "aa:bb:cc:dd:ee:ff", duration_hours=24, granularity="hourly", start_ms=None, end_ms=None
     )
@@ -73,7 +73,7 @@ async def test_client_stats_bridge_resolves_controller_id_to_mac() -> None:
 @pytest.mark.parametrize("device_type", ["ugw", "udm", "uxg"])
 async def test_device_stats_bridge_routes_gateways_to_the_gateway_report(monkeypatch, device_type) -> None:
     device_manager = MagicMock()
-    device_manager.get_device_details = AsyncMock(
+    device_manager.get_device_by_identifier = AsyncMock(
         return_value=MagicMock(raw={"mac": "11:22:33:44:55:66", "type": device_type})
     )
     monkeypatch.setattr(
@@ -91,7 +91,7 @@ async def test_device_stats_bridge_routes_gateways_to_the_gateway_report(monkeyp
 @pytest.mark.asyncio
 async def test_device_stats_bridge_resolves_identifier_and_report_family(monkeypatch) -> None:
     device_manager = MagicMock()
-    device_manager.get_device_details = AsyncMock(
+    device_manager.get_device_by_identifier = AsyncMock(
         return_value=MagicMock(raw={"mac": "11:22:33:44:55:66", "type": "uap"})
     )
     monkeypatch.setattr(
@@ -104,7 +104,7 @@ async def test_device_stats_bridge_resolves_identifier_and_report_family(monkeyp
     result = await manager.get_device_stats_for_identifier("device-object-id", duration_hours=168)
 
     assert result == [{"num_sta": 2}]
-    device_manager.get_device_details.assert_awaited_once_with("device-object-id")
+    device_manager.get_device_by_identifier.assert_awaited_once_with("device-object-id")
     manager.get_device_stats.assert_awaited_once_with(
         "11:22:33:44:55:66",
         duration_hours=168,

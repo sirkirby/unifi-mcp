@@ -215,6 +215,28 @@
             ],
             "title": "Interface"
           },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "route_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Type"
+          },
           "target_subnet": {
             "anyOf": [
               {
@@ -23546,7 +23568,7 @@
     },
     "/v1/sites/{site_id}/stats/dpi": {
       "get": {
-        "description": "DETAIL kind currently; manager method is stats_manager.get_dpi_stats.",
+        "description": "DPI restriction rules and groups (configuration, not traffic); stats_manager.get_dpi_stats.",
         "operationId": "get_dpi_stats_v1_sites__site_id__stats_dpi_get",
         "parameters": [
           {

@@ -828,7 +828,7 @@ class TestFirewallZoneFromController:
             ),
             ({"_id": "zone-2", "network_ids": ["net-x"]}, {"networks": ["net-x"]}),
             ({"_id": "zone-3", "default_action": "BLOCK"}, {"default_policy": "BLOCK"}),
-            ({}, {"id": None, "networks": []}),
+            ({}, {"id": None, "networks": None}),
         ],
         ids=[
             "full_dict",

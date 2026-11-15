@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from unifi_core.network.managers.client_manager import ClientManager
 from unifi_core.network.read_views import (
+    classify_device,
     shape_alerts,
     shape_client_details,
     shape_client_list,
@@ -808,3 +809,115 @@ def test_device_projection_preserves_public_inventory_provenance_and_unknown_val
     assert result["devices"] == [{"mac": "aa", "uptime": None}]
     assert result["_meta"]["source_api"] == "integration"
     assert result["_meta"]["complete"] is False
+
+
+def test_classify_device_treats_modems_as_wan_devices() -> None:
+    assert classify_device({"type": "uci"}) == "wan"
+    assert classify_device({"type": "umbb", "model": "UMBBE630"}) == "wan"
+
+
+def _failover_gateway() -> dict:
+    """A gateway whose ``ip`` is its WAN address and whose failover modem is ``wan3``."""
+    return {
+        "mac": "aa:bb:cc:00:00:20",
+        "name": "Gateway",
+        "type": "udm",
+        "state": 1,
+        "ip": "203.0.113.5",
+        "lan_ip": "192.168.1.1",
+        "wan1": {"ip": "203.0.113.5", "up": True},
+        "wan3": {"ip": "100.64.0.4", "up": True, "type": "wireless_5g"},
+        "wan_magic_subscription": {"active": False},
+    }
+
+
+def test_shape_device_list_reports_a_gateway_lan_address_beside_its_ip() -> None:
+    gateway = _failover_gateway()
+
+    listed = shape_device_list([gateway], site="default")["devices"][0]
+    assert (listed["ip"], listed["lan_ip"]) == ("203.0.113.5", "192.168.1.1")
+
+    details = shape_device_details(gateway, site="default", mac_address=gateway["mac"], include="basic", summary=True)
+    assert (details["device"]["ip"], details["device"]["lan_ip"]) == ("203.0.113.5", "192.168.1.1")
+
+    projected = shape_device_list([gateway], site="default", fields="name,lan_ip")["devices"][0]
+    assert projected == {"name": gateway["name"], "lan_ip": "192.168.1.1"}
+
+    for term in ("192.168.1.1", "203.0.113.5"):
+        assert shape_device_list([gateway], site="default", search=term)["count"] == 1
+
+
+def test_shape_device_list_keeps_ip_for_devices_without_a_lan_address() -> None:
+    switch = {"mac": "aa:bb:cc:00:00:10", "type": "usw", "ip": "192.168.1.2"}
+    listed = shape_device_list([switch], site="default")["devices"][0]
+    assert listed["ip"] == "192.168.1.2"
+    assert "lan_ip" not in listed
+
+
+def test_shape_device_list_summarises_every_gateway_uplink() -> None:
+    gateway = _failover_gateway()
+
+    summary = shape_device_list([gateway], site="default", include_details=True)["devices"][0]
+    assert (summary["wan1_ip"], summary["wan1_up"]) == ("203.0.113.5", True)
+    assert (summary["wan2_ip"], summary["wan2_up"]) == (None, None)
+    assert (summary["wan3_ip"], summary["wan3_up"]) == ("100.64.0.4", True)
+    assert "wan_magic_subscription_ip" not in summary
+
+    raw = shape_device_list([gateway], site="default", include_details=True, summary=False)["devices"][0]
+    assert raw["wan2"] == {}
+    assert raw["wan3"] == gateway["wan3"]
+
+
+def test_device_projection_accepts_further_gateway_uplinks() -> None:
+    result = shape_device_list(
+        [_failover_gateway()], site="default", include_details=True, fields="name,wan3_ip,wan3_up"
+    )
+    assert result["devices"] == [{"name": "Gateway", "wan3_ip": "100.64.0.4", "wan3_up": True}]
+
+    rejected = shape_device_list([], site="default", fields="wan0_ip")
+    assert rejected["success"] is False
+
+
+def test_shape_wlan_list_tells_wpa2_wpa3_modes_and_bands_apart() -> None:
+    wlans = [
+        {
+            "_id": "w1",
+            "name": "IoT",
+            "security": "wpapsk",
+            "wpa_mode": "wpa2",
+            "wpa3_support": False,
+            "wlan_bands": ["2g"],
+        },
+        {
+            "_id": "w2",
+            "name": "Main",
+            "security": "wpapsk",
+            "wpa_mode": "wpa2",
+            "wpa3_support": True,
+            "wpa3_transition": True,
+            "wlan_bands": ["2g", "5g"],
+        },
+        {"_id": "w3", "name": "Open", "security": "open"},
+    ]
+
+    iot, main, open_wlan = shape_wlan_list(wlans, site="default")["wlans"]
+
+    assert (iot["wpa3_support"], iot["wlan_bands"]) == (False, ["2g"])
+    assert "wpa3_transition" not in iot
+    assert (main["wpa3_support"], main["wpa3_transition"], main["wlan_bands"]) == (True, True, ["2g", "5g"])
+    assert not {"wpa_mode", "wpa3_support", "wpa3_transition", "wlan_bands"} & open_wlan.keys()
+
+
+def test_zone_without_membership_list_omits_networks():
+    """A zone record with no membership list reports none, not an empty zone."""
+    from unifi_core.network.models.firewall import firewall_zone_from_controller
+
+    unknown = firewall_zone_from_controller({"_id": "z1", "name": "Internal"}).model_dump(exclude_none=True)
+    empty = firewall_zone_from_controller({"_id": "z2", "name": "Dmz", "network_ids": []}).model_dump(exclude_none=True)
+    member = firewall_zone_from_controller({"_id": "z3", "name": "Lan", "network_ids": ["n1"]}).model_dump(
+        exclude_none=True
+    )
+
+    assert "networks" not in unknown
+    assert empty["networks"] == []
+    assert member["networks"] == ["n1"]

@@ -617,7 +617,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ### "Who's eating all the bandwidth?"
 1. `unifi_get_top_clients` → find the top bandwidth consumers
 2. `unifi_get_client_details(mac_address="...")` → identify the device
-3. `unifi_get_dpi_stats` → see what application categories are using bandwidth
+3. `unifi_get_site_dpi_traffic` → see what applications and categories are using bandwidth
 
 ### "Client can't connect to WiFi"
 1. `unifi_list_clients` → see if client appears at all

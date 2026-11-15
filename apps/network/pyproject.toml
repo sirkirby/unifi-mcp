@@ -41,7 +41,10 @@ dependencies = [
     # INTERNET routes with several clients or a VPN client target, and a bounded
     # connection cache, require Core 0.4.88.
     # Live state in offline-inclusive client lists, last_ip lookups and radio tx power summaries require Core 0.4.91.
-    "unifi-core[network]>=0.4.91,<0.5",
+    # Stats lookups by _id, client sessions, Teleport settings, V2 active routes,
+    # zone membership, address-free controller errors, local-midnight stats
+    # buckets, complete network health and keyless DPI catalog errors require Core 0.4.93.
+    "unifi-core[network]>=0.4.93,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

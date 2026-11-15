@@ -3405,7 +3405,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="DPI stats catalog (applications + categories).",
+        description="DPI restriction rules (applications) and groups (categories); not traffic.",
     )
     async def dpi_stats(
         self,

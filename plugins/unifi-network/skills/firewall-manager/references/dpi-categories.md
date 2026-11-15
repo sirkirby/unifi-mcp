@@ -2,7 +2,7 @@
 
 Deep Packet Inspection (DPI) allows the UniFi controller to identify and classify traffic by application or service, independent of port number. Firewall rules can target DPI categories to block or shape specific applications.
 
-> **Important:** DPI category IDs are controller-specific and may vary across firmware versions. This document lists common category and application names. Call `unifi_get_dpi_stats` to discover the exact category IDs available on the user's controller before creating DPI-based rules.
+> **Important:** DPI category IDs are controller-specific and may vary across firmware versions. This document lists common category and application names. Call `unifi_list_dpi_categories` (and `unifi_list_dpi_applications`; both need a Network API key) to discover the exact IDs available on the user's controller before creating DPI-based rules.
 
 ---
 
@@ -12,7 +12,7 @@ DPI rules inspect the traffic payload (Layer 7) to identify the application. Thi
 
 **Important:** The V2 zone-based firewall surface (`unifi_create_firewall_policy`) does **not** accept a `dpi_category_id` field — its source/destination are strictly zone- + IP/network/object-based. For DPI-category-based filtering, use the content-filter or traffic-rule tooling that supports DPI:
 
-1. Call `unifi_get_dpi_stats` to get the list of available categories and their IDs on this controller.
+1. Call `unifi_list_dpi_categories` to get the list of available categories and their IDs on this controller.
 2. Find the category ID for the application you want to block.
 3. Apply the category via `unifi_update_content_filter` (DPI-aware content filtering profile) or the appropriate traffic-rule tool.
 
@@ -116,14 +116,11 @@ Using a group is preferred over listing individual applications — it catches n
 Controller firmware determines which DPI signatures are available. Always confirm before building rules:
 
 ```
-Tool: unifi_get_dpi_stats
+Tool: unifi_list_dpi_categories      → each category's `id` and `name`
+Tool: unifi_list_dpi_applications    → each application's compound `id`, `name` and `category_id`
 ```
 
-The response includes:
-- `category_id` — the numeric ID to use in rules
-- `name` — human-readable category name
-- `app_id` — (if supported) application-level ID for finer control
-- `bytes` / `tx_bytes` / `rx_bytes` — current traffic stats per category
+Both read the integration API and need a Network API key. For which applications are actually carrying traffic, use `unifi_get_site_dpi_traffic`. `unifi_get_dpi_stats` lists the DPI restriction rules already configured, not the catalog.
 
 If a specific application is not listed, block by category group or consider port-based rules as a fallback.
 

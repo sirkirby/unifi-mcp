@@ -6,7 +6,7 @@ Manages static route operations for advanced routing configuration.
 import logging
 from typing import Any, Dict, List, Optional
 
-from aiounifi.models.api import ApiRequest
+from aiounifi.models.api import ApiRequest, ApiRequestV2
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
@@ -15,6 +15,26 @@ from unifi_core.request_paths import object_id
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_ROUTES = "routes"
+
+
+def _legacy_active_route(route: Dict[str, Any]) -> Dict[str, Any]:
+    """Express a V2 ``/routes`` row in the ``/stat/routing`` row shape.
+
+    V2 names the outbound interface by network ID, not by interface name, and
+    lists every candidate next hop; only the ones in use are kept, so a route
+    with no hop in use has an empty ``nh``.
+    """
+    nexthops = [hop for hop in route.get("nexthops") or [] if isinstance(hop, dict)]
+    in_use = [hop for hop in nexthops if hop.get("in_use")]
+    row: Dict[str, Any] = {
+        "pfx": route.get("destination"),
+        "nh": [{"via": hop.get("gateway"), "intf": hop.get("interface")} for hop in in_use],
+        "metric": route.get("distance"),
+    }
+    for source, target in (("origin", "origin"), ("type", "route_type")):
+        if route.get(source) is not None:
+            row[target] = route[source]
+    return row
 
 
 class RoutingManager:
@@ -62,18 +82,20 @@ class RoutingManager:
     async def get_active_routes(self) -> List[Dict[str, Any]]:
         """Get all active routes (including system routes) from the device.
 
-        Note: This uses an undocumented /stat/routing endpoint that may not
-        be available on all controller versions. Falls back gracefully to
-        returning an empty list if the endpoint doesn't exist.
+        Reads the undocumented ``/stat/routing`` endpoint first. Newer
+        controllers still answer it, with an empty list, and serve the table
+        from the V2 ``/routes`` endpoint instead, so that is read when the
+        legacy endpoint has no rows or is missing. V2 rows are returned in the
+        legacy row shape (``pfx``, ``nh``, ``metric``).
 
         Returns:
-            List of active route objects from the routing table, or empty
-            list if the endpoint is unavailable.
+            List of active route objects from the routing table; empty when
+            neither endpoint reports any.
         """
+        legacy_error: Optional[Exception] = None
+        routes: List[Dict[str, Any]] = []
         try:
-            api_request = ApiRequest(method="get", path="/stat/routing")
-            response = await self._connection.request(api_request)
-
+            response = await self._connection.request(ApiRequest(method="get", path="/stat/routing"))
             routes = (
                 response
                 if isinstance(response, list)
@@ -81,15 +103,29 @@ class RoutingManager:
                 if isinstance(response, dict)
                 else []
             )
-
-            return routes
         except Exception as e:
+            legacy_error = e
             # This endpoint may not exist on all controllers
             if "404" in str(e) or "Not Found" in str(e):
                 logger.debug("Active routes endpoint /stat/routing not available on this controller")
-            else:
-                logger.error("Error getting active routes: %s", e)
-            raise
+        if routes:
+            return routes
+
+        try:
+            response = await self._connection.request(ApiRequestV2(method="get", path="/routes"))
+        except Exception as e:
+            logger.debug("V2 routing table /routes not available (%s)", type(e).__name__)
+            if legacy_error is not None:
+                logger.error("Error getting active routes: %s", legacy_error)
+                raise legacy_error
+            return routes
+        # The table arrives as {"items": [...], "truncated": ...}; the
+        # connection layer can hand that object back wrapped in a list.
+        if isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict):
+            if "items" in response[0]:
+                response = response[0]
+        items = response.get("items", []) if isinstance(response, dict) else response
+        return [_legacy_active_route(item) for item in items or [] if isinstance(item, dict)]
 
     async def get_route_details(self, route_id: str) -> Dict[str, Any]:
         """Get details for a specific route by ID.

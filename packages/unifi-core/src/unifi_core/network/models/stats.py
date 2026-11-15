@@ -4,7 +4,7 @@ Mirrors the Strawberry types in
 ``unifi_api.graphql.types.network.stat``:
 
 - ``StatPoint`` — single timeseries point {ts: <ms>, ...metrics}
-- ``DpiStats``  — wrapper shape {applications: [...], categories: [...]}
+- ``DpiStats``  — DPI restriction rules and groups {applications: [...], categories: [...]}
 
 Both classes are read-only. StatPoint covers all time-series stats endpoints
 (network_stats, gateway_stats, device_stats, client_stats). DpiStats wraps
@@ -81,21 +81,22 @@ def stat_point_from_controller(point: Any) -> StatPoint:
 
 
 class DpiStats(BaseModel):
-    """DPI stats wrapper: applications + categories arrays.
+    """DPI restriction configuration: rules + the groups that bundle them.
 
-    Each sub-row is a passthrough dict (unstructured — the controller's DPI
-    catalogs vary by firmware). The applications and categories lists carry
-    raw dicts from the controller.
+    Each sub-row is a passthrough dict (unstructured — the shape varies by
+    firmware). The keys keep their historical names: ``applications`` holds
+    the restriction rules and ``categories`` the restriction groups. Neither
+    is traffic data.
     """
 
     applications: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="DPI application entries (raw controller dicts)",
+        description="DPI restriction rules (rest/dpiapp): the apps/categories each blocks or rate-limits",
         json_schema_extra={"mutable": False},
     )
     categories: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="DPI category entries (raw controller dicts)",
+        description="DPI restriction groups (rest/dpigroup) that bundle restriction rules",
         json_schema_extra={"mutable": False},
     )
 

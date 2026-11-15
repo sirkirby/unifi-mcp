@@ -71,6 +71,52 @@ async def test_network_health_preserves_vpn_diagnostics(monkeypatch):
     assert result["site"] == "default"
     for key, value in vpn.items():
         assert result["health_summary"][0][key] == value
-    assert result["health_summary"][1]["site_to_site_num_active"] is None
-    assert result["health_summary"][1]["site_to_site_enabled"] is None
+    assert result["health_summary"][1] == {"subsystem": "wan", "status": "ok"}
     mgr.get_network_health.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_network_health_reports_device_counts_and_wan_details(monkeypatch):
+    from unifi_network_mcp.tools import system
+
+    wan = {
+        "subsystem": "wan",
+        "status": "ok",
+        "num_gw": 1,
+        "num_adopted": 1,
+        "num_disconnected": 0,
+        "num_pending": 0,
+        "wan_ip": "203.0.113.10",
+        "gateways": ["203.0.113.1"],
+        "isp_name": "Example ISP",
+        "rx_bytes-r": 1200.5,
+    }
+    www = {"subsystem": "www", "status": "ok", "latency": 14, "uptime": 86400, "drops": 2, "xput_up": 41.2}
+    lan = {"subsystem": "lan", "status": "error", "num_sw": 4, "num_adopted": 4, "num_disconnected": 1}
+    wlan = {"subsystem": "wlan", "status": "ok", "num_ap": 6, "num_pending": 1, "num_user": 40}
+    # A limited admin role gets the vpn entry without its detail keys.
+    vpn = {"subsystem": "vpn", "status": "error"}
+    mgr = MagicMock()
+    mgr._connection.site = "default"
+    mgr.get_network_health = AsyncMock(return_value=[wan, www, lan, wlan, vpn])
+    monkeypatch.setattr(system, "system_manager", mgr)
+
+    result = await system.get_network_health()
+
+    by_name = {entry["subsystem"]: entry for entry in result["health_summary"]}
+    assert by_name["wan"] == {
+        "subsystem": "wan",
+        "status": "ok",
+        "num_gw": 1,
+        "num_adopted": 1,
+        "num_disconnected": 0,
+        "num_pending": 0,
+        "wan_ip": "203.0.113.10",
+        "gateways": ["203.0.113.1"],
+        "isp_name": "Example ISP",
+        "rx_bytes_per_sec": 1200.5,
+    }
+    assert by_name["www"] == {**www, "xput_up": 41.2}
+    assert (by_name["lan"]["num_sw"], by_name["lan"]["num_disconnected"]) == (4, 1)
+    assert (by_name["wlan"]["num_ap"], by_name["wlan"]["num_pending"]) == (6, 1)
+    assert by_name["vpn"] == {"subsystem": "vpn", "status": "error"}

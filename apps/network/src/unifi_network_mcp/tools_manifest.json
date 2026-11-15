@@ -7568,13 +7568,13 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get client session history. Note: this endpoint tracks hotspot/captive portal authorization sessions, not general WiFi connect/disconnect events. Returns empty without a guest portal configured. For WiFi roaming events, use the event log instead.",
+      "description": "Get client association sessions (connect time, disconnect time, duration, AP), newest first, for one client or all clients. For individual connect, disconnect and roaming events, use the event log instead.",
       "name": "unifi_get_client_sessions",
       "schema": {
         "input": {
           "properties": {
             "duration": {
-              "description": "Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
+              "description": "Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)",
               "type": "string"
             },
             "limit": {
@@ -8571,7 +8571,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get Deep Packet Inspection (DPI) statistics (applications and categories)",
+      "description": "List the DPI restriction rules (per-application and per-category block or rate-limit rules) and the restriction groups that bundle them. Despite the name, this is configuration, not traffic: for DPI statistics use unifi_get_site_dpi_traffic or unifi_get_client_dpi_traffic; for application and category IDs use unifi_list_dpi_applications / unifi_list_dpi_categories.",
       "name": "unifi_get_dpi_stats",
       "schema": {
         "input": {
@@ -10196,7 +10196,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Returns per-subsystem health status for WAN, LAN, WLAN, and VPN \u2014 each with status, number of gateways/switches/APs, and active user counts. Use to check WAN connectivity, see how many devices are online per subsystem, or detect degraded network segments. For controller-level info (version, uptime), use unifi_get_system_info.",
+      "description": "Returns per-subsystem health for WAN, WWW, LAN, WLAN, and VPN: status, device counts (gateways/switches/APs, adopted, disconnected, pending), active user counts, and WAN/WWW details (WAN IP, ISP, latency, drops, last speed test). Use to check WAN connectivity or find which segment is degraded. Fields the controller does not report are omitted; a limited admin role may get no VPN details. For controller-level info (version, uptime), use unifi_get_system_info.",
       "name": "unifi_get_network_health",
       "schema": {
         "input": {
@@ -13615,7 +13615,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nNote: This endpoint may not be available on all controller versions.\nReturns empty list if unavailable.",
+      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nEach route has target_subnet, gateway, interface and distance. Controllers that serve\nthe table from the V2 API also report origin (Kernel, Static, DHCP, PBR) and route_type\n(unicast, blackhole), and name the interface by network ID (resolve it with\nunifi_list_networks) instead of by interface name.\n\nNote: Returns an empty list if the controller exposes no routing table.",
       "name": "unifi_list_active_routes",
       "schema": {
         "input": {
@@ -14536,7 +14536,7 @@
         "readOnlyHint": true
       },
       "auth_method": "either",
-      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries (per radio: tx_power_mode, the stored custom-mode tx_power that applies only when the mode is 'custom', and current_tx_power, the power actually in use); set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2). Pass an entry's MAC to the device tools as mac_address (unifi_get_device_details, unifi_reboot_device, unifi_rename_device, unifi_upgrade_device, unifi_get_switch_ports, unifi_get_port_stats, unifi_set_switch_port_profile, unifi_locate_device, ...). RF scan tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results) use ap_mac for the access point to scan from. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
+      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu, or wan for a cable or cellular modem), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. A gateway's ip is the address the controller reports (its active WAN) and lan_ip its LAN address; include_details adds wan1_ip, wan2_ip and any further wanN_ip. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries (per radio: tx_power_mode, the stored custom-mode tx_power that applies only when the mode is 'custom', and current_tx_power, the power actually in use); set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2). Pass an entry's MAC to the device tools as mac_address (unifi_get_device_details, unifi_reboot_device, unifi_rename_device, unifi_upgrade_device, unifi_get_switch_ports, unifi_get_port_stats, unifi_set_switch_port_profile, unifi_locate_device, ...). RF scan tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results) use ap_mac for the access point to scan from. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_devices",
       "schema": {
         "input": {
@@ -15429,7 +15429,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "List controller firewall zones (V2 API). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
+      "description": "List controller firewall zones (V2 API) with the network IDs assigned to each (networks; resolve them with unifi_list_networks). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
       "name": "unifi_list_firewall_zones",
       "schema": {
         "input": {
@@ -16979,7 +16979,7 @@
         "readOnlyHint": true
       },
       "auth_method": "either",
-      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25). API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
+      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25). security is 'wpapsk' for every personal mode: read wpa3_support and wpa3_transition to tell WPA2 (no WPA3 support), WPA2/WPA3 (support with transition) and WPA3-only apart. wlan_bands lists the bands the SSID is broadcast on. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_wlans",
       "schema": {
         "input": {

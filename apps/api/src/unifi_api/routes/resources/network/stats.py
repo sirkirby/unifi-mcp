@@ -286,7 +286,7 @@ async def get_dpi_stats(
     limit: int = Query(50, ge=1, le=500),
     cursor: str | None = Query(None),
 ) -> dict:
-    """DETAIL kind currently; manager method is stats_manager.get_dpi_stats."""
+    """DPI restriction rules and groups (configuration, not traffic); stats_manager.get_dpi_stats."""
     require_capability(controller, "network")
     factory = request.app.state.manager_factory
     sm = request.app.state.sessionmaker

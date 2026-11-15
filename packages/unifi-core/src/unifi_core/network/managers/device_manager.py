@@ -6,7 +6,7 @@ from aiounifi.models.api import ApiRequest
 from aiounifi.models.device import Device
 
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.mac import mac_equal, normalize_mac
+from unifi_core.mac import looks_like_mac, mac_equal, normalize_mac
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.devices import normalize_radio_channel, normalize_radio_ht
 from unifi_core.request_paths import object_id
@@ -70,6 +70,26 @@ class DeviceManager:
         if device is None:
             raise UniFiNotFoundError("device", device_mac)
         return device
+
+    async def get_device_by_identifier(self, identifier: str) -> Device:
+        """Get a device by MAC address or by the ``_id`` the device list reports.
+
+        A MAC-shaped identifier takes :meth:`get_device_details` unchanged.
+        Anything else is matched exactly against each listed device's ``_id``
+        (an ObjectId, or a UUID on Network 11) and then looked up by that
+        device's MAC, so both forms return the same record.
+
+        Raises:
+            UniFiNotFoundError: No device has this MAC or ``_id``; the error
+                names the identifier as given.
+        """
+        if looks_like_mac(identifier):
+            return await self.get_device_details(identifier)
+        for device in await self.get_devices():
+            raw = getattr(device, "raw", device)
+            if isinstance(raw, dict) and raw.get("_id") == identifier and raw.get("mac"):
+                return await self.get_device_details(raw["mac"])
+        raise UniFiNotFoundError("device", identifier)
 
     async def reboot_device(self, device_mac: str) -> bool:
         """Reboot a device by MAC address.

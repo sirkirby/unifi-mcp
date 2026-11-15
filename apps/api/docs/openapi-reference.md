@@ -1005,7 +1005,7 @@ TIMESERIES; calls stats_manager.get_device_stats (PR4).
 ### `GET /v1/sites/{site_id}/stats/dpi` — Get Dpi Stats
 
 
-DETAIL kind currently; manager method is stats_manager.get_dpi_stats.
+DPI restriction rules and groups (configuration, not traffic); stats_manager.get_dpi_stats.
 
 
 **Parameters:**
