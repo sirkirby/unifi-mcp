@@ -198,6 +198,8 @@ type ActiveRoute {
   gateway: String
   interface: String
   distance: Int
+  origin: String
+  routeType: String
 }
 
 """Paginated page of active kernel routes."""
