@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiounifi.errors import Forbidden, RequestError
 from aiounifi.models.api import ApiRequest, ApiRequestV2
@@ -369,9 +370,38 @@ class StatsManager:
         rows = await self._series_site_rows(
             schema, start_ms, end_ms, device_mac=device_mac, client_mac=client_mac, projection=projection
         )
+        tz = await self._site_timezone() if rows and granularity in ("daily", "monthly") else timezone.utc
         return stats_series.legacy_rows(
-            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested
+            rows, fields, start_ms=start_ms, end_ms=end_ms, granularity=granularity, nested=nested, tz=tz
         )
+
+    async def _site_timezone(self) -> tzinfo:
+        """The site's time zone (site settings, locale section), where daily and monthly buckets begin.
+
+        Falls back to UTC when the setting cannot be read or names a zone
+        this host does not know; a failed read is not cached.
+        """
+        cache_key = f"stats_site_timezone_{self._connection.site}"
+        name = self._connection.get_cached(cache_key, timeout=3600)
+        if name is None:
+            try:
+                response = await self._connection.request(ApiRequest(method="get", path="/get/setting/locale"))
+            except Exception as e:
+                logger.debug("Site time zone read failed; daily buckets use UTC: %s", type(e).__name__)
+                return timezone.utc
+            records = response if isinstance(response, list) else [response]
+            name = next(
+                (r["timezone"] for r in records if isinstance(r, dict) and isinstance(r.get("timezone"), str)),
+                "",
+            )
+            self._connection._update_cache(cache_key, name, timeout=3600)
+        if not name:
+            return timezone.utc
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as e:
+            logger.debug("Site time zone is unknown to this host; daily buckets use UTC: %s", type(e).__name__)
+            return timezone.utc
 
     async def _series_site_rows(
         self,

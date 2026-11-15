@@ -325,6 +325,33 @@ class TestNetworkHealthFromController:
         assert result[field] == value
         assert result["status"] == "error"
 
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            (
+                {"subsystem": "wlan", "num_ap": 6, "num_adopted": 6, "num_disconnected": 0, "num_pending": 1},
+                {"num_ap": 6, "num_adopted": 6, "num_disconnected": 0, "num_pending": 1, "num_gw": None},
+            ),
+            ({"subsystem": "lan", "num_sw": 4, "num_disabled": 1}, {"num_sw": 4, "num_disabled": 1}),
+            (
+                {"subsystem": "wan", "num_gw": 1, "wan_ip": "203.0.113.10", "isp_name": "Example ISP"},
+                {"num_gw": 1, "wan_ip": "203.0.113.10", "isp_name": "Example ISP"},
+            ),
+            (
+                {"subsystem": "wan", "gateways": ["203.0.113.1", None, 7, "198.51.100.1"]},
+                {"gateways": ["203.0.113.1", "198.51.100.1"]},
+            ),
+            ({"subsystem": "wan", "gateways": "203.0.113.1"}, {"gateways": None}),
+            (
+                {"subsystem": "www", "latency": 12.5, "uptime": 0, "drops": 0, "xput_up": 41.2, "xput_down": 940},
+                {"latency": 12.5, "uptime": 0, "drops": 0, "xput_up": 41.2, "xput_down": 940},
+            ),
+        ],
+        ids=["wlan_counts", "lan_counts", "wan_details", "gateway_addresses_only", "gateways_not_a_list", "www"],
+    )
+    def test_device_counts_and_wan_details(self, raw, expected) -> None:
+        assert_fields(network_health_from_controller(raw), expected)
+
     def test_missing_vpn_diagnostics_remain_unknown(self) -> None:
         result = network_health_from_controller({"subsystem": "vpn"}).model_dump(exclude_none=False)
         assert result["site_to_site_num_active"] is None

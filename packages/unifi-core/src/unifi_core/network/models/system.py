@@ -482,6 +482,81 @@ class NetworkHealth(BaseModel):
         description="Current transmit rate on this subsystem in bytes per second (not a total)",
         json_schema_extra={"mutable": False},
     )
+    num_gw: Optional[int] = Field(
+        default=None,
+        description="Gateways on this subsystem (wan)",
+        json_schema_extra={"mutable": False},
+    )
+    num_sw: Optional[int] = Field(
+        default=None,
+        description="Switches on this subsystem (lan)",
+        json_schema_extra={"mutable": False},
+    )
+    num_ap: Optional[int] = Field(
+        default=None,
+        description="Access points on this subsystem (wlan)",
+        json_schema_extra={"mutable": False},
+    )
+    num_adopted: Optional[int] = Field(
+        default=None,
+        description="Adopted devices on this subsystem",
+        json_schema_extra={"mutable": False},
+    )
+    num_disconnected: Optional[int] = Field(
+        default=None,
+        description="Adopted devices on this subsystem that are disconnected; nonzero explains a non-ok status",
+        json_schema_extra={"mutable": False},
+    )
+    num_pending: Optional[int] = Field(
+        default=None,
+        description="Devices on this subsystem waiting for adoption",
+        json_schema_extra={"mutable": False},
+    )
+    num_disabled: Optional[int] = Field(
+        default=None,
+        description="Disabled devices on this subsystem",
+        json_schema_extra={"mutable": False},
+    )
+    wan_ip: Optional[str] = Field(
+        default=None,
+        description="The gateway's WAN IP address (wan)",
+        json_schema_extra={"mutable": False},
+    )
+    gateways: Optional[List[str]] = Field(
+        default=None,
+        description="Upstream gateway addresses the WAN uses (wan)",
+        json_schema_extra={"mutable": False},
+    )
+    isp_name: Optional[str] = Field(
+        default=None,
+        description="Internet provider name, when the controller identifies it (wan)",
+        json_schema_extra={"mutable": False},
+    )
+    latency: Optional[float] = Field(
+        default=None,
+        description="Internet latency in milliseconds from the controller's monitor (www)",
+        json_schema_extra={"mutable": False},
+    )
+    uptime: Optional[int] = Field(
+        default=None,
+        description="Seconds the internet connection has been up (www)",
+        json_schema_extra={"mutable": False},
+    )
+    drops: Optional[int] = Field(
+        default=None,
+        description="Internet connection drops the controller counted (www)",
+        json_schema_extra={"mutable": False},
+    )
+    xput_up: Optional[float] = Field(
+        default=None,
+        description="Upload throughput of the last speed test in Mbps (www)",
+        json_schema_extra={"mutable": False},
+    )
+    xput_down: Optional[float] = Field(
+        default=None,
+        description="Download throughput of the last speed test in Mbps (www)",
+        json_schema_extra={"mutable": False},
+    )
     site_to_site_enabled: Optional[bool] = Field(
         default=None,
         description="Whether site-to-site VPN is enabled; false explains absent site-to-site counters",
@@ -542,6 +617,7 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
     """Build a NetworkHealth from a single subsystem dict."""
     if not isinstance(raw, dict):
         return NetworkHealth()
+    gateways = raw.get("gateways")
     return NetworkHealth(
         subsystem=_get(raw, "subsystem"),
         status=_get(raw, "status"),
@@ -554,6 +630,21 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         tx_bytes=_get(raw, "tx_bytes"),
         rx_bytes_per_sec=_get(raw, "rx_bytes-r"),
         tx_bytes_per_sec=_get(raw, "tx_bytes-r"),
+        num_gw=_get(raw, "num_gw"),
+        num_sw=_get(raw, "num_sw"),
+        num_ap=_get(raw, "num_ap"),
+        num_adopted=_get(raw, "num_adopted"),
+        num_disconnected=_get(raw, "num_disconnected"),
+        num_pending=_get(raw, "num_pending"),
+        num_disabled=_get(raw, "num_disabled"),
+        wan_ip=_get(raw, "wan_ip"),
+        gateways=[g for g in gateways if isinstance(g, str)] if isinstance(gateways, list) else None,
+        isp_name=_get(raw, "isp_name"),
+        latency=_get(raw, "latency"),
+        uptime=_get(raw, "uptime"),
+        drops=_get(raw, "drops"),
+        xput_up=_get(raw, "xput_up"),
+        xput_down=_get(raw, "xput_down"),
         site_to_site_enabled=_as_bool(raw.get("site_to_site_enabled")),
         site_to_site_num_active=_get(raw, "site_to_site_num_active"),
         site_to_site_num_inactive=_get(raw, "site_to_site_num_inactive"),
