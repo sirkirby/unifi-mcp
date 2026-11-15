@@ -45,6 +45,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "devices", "DeviceRadio"),
     ("network", "system", "SnmpSettings"),
     ("network", "mdns", "MdnsSettings"),
+    ("network", "teleport", "TeleportSettings"),
     ("network", "threat_management", "ThreatManagementSettings"),
     ("network", "system", "MgmtSettings"),
     ("network", "system", "AutoBackupSettings"),

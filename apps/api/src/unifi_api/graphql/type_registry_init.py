@@ -215,6 +215,7 @@ from unifi_api.graphql.types.network.system import (
 from unifi_api.graphql.types.network.system import (
     TopClient as NetworkTopClientType,
 )
+from unifi_api.graphql.types.network.teleport import TeleportSettings as NetworkTeleportSettingsType
 from unifi_api.graphql.types.network.threat_management import (
     ThreatManagementSettings as NetworkThreatManagementSettingsType,
 )
@@ -567,6 +568,7 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type("unifi_get_site_settings", NetworkSiteSettingsType, "detail")
     reg.register_tool_type("unifi_get_snmp_settings", NetworkSnmpSettingsType, "detail")
     reg.register_tool_type("unifi_get_mdns_settings", NetworkMdnsSettingsType, "detail")
+    reg.register_tool_type("unifi_get_teleport_settings", NetworkTeleportSettingsType, "detail")
     reg.register_tool_type(
         "unifi_get_threat_management_settings",
         NetworkThreatManagementSettingsType,

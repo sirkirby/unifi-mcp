@@ -1549,6 +1549,17 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 
 ## network/vpn
 
+### `GET /v1/sites/{site_id}/teleport-settings` — Get Teleport Settings
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_TeleportSettingsModel_`
+
 ### `GET /v1/sites/{site_id}/vpn-clients` — List Vpn Clients
 
 

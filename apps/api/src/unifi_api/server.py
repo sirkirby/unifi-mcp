@@ -167,6 +167,7 @@ from unifi_api.routes.resources.network import (
 from unifi_api.routes.resources.network import (
     system as net_system_routes,
 )
+from unifi_api.routes.resources.network import teleport as net_teleport_routes
 from unifi_api.routes.resources.network import threat_management as net_threat_management_routes
 from unifi_api.routes.resources.network import threat_posture as net_threat_posture_routes
 from unifi_api.routes.resources.network import (
@@ -575,6 +576,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_vouchers_routes,
         net_snmp_routes,
         net_mdns_routes,
+        net_teleport_routes,
         net_mgmt_routes,
         net_threat_management_routes,
         net_threat_posture_routes,

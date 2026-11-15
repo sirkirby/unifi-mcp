@@ -5364,6 +5364,21 @@
       }
     },
     {
+      "name": "unifi_get_teleport_settings",
+      "product": "network",
+      "category": "vpn",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "vpn_manager",
+      "manager_method": "get_teleport_settings",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_threat_management_settings",
       "product": "network",
       "category": "system",
@@ -8217,6 +8232,29 @@
         },
         "required": [
           "mac_address"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_update_teleport_settings",
+      "product": "network",
+      "category": "vpn_servers",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "vpn_manager",
+      "manager_method": "update_teleport_settings",
+      "input_schema": {
+        "properties": {
+          "subnet_cidr": {
+            "description": "New Teleport client range as a gateway address with prefix length, e.g. '10.201.0.1/24'",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subnet_cidr"
         ],
         "type": "object",
         "additionalProperties": false
