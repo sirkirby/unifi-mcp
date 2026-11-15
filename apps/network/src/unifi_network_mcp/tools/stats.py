@@ -124,9 +124,7 @@ async def get_client_stats(
     """Implementation for getting client stats."""
     try:
         duration_hours = _duration_hours(duration)
-        client_details = await client_manager.get_client_details(client_id)
-        if not client_details:
-            return {"success": False, "error": f"Client '{client_id}' not found"}
+        client_details = await client_manager.get_client_by_identifier(client_id)
 
         # Support aiounifi Client objects as well as dicts
         client_raw = client_details.raw if hasattr(client_details, "raw") else client_details
@@ -198,9 +196,7 @@ async def get_device_stats(
     """Implementation for getting device stats."""
     try:
         duration_hours = _duration_hours(duration)
-        device_details = await device_manager.get_device_details(device_id)
-        if not device_details:
-            return {"success": False, "error": f"Device '{device_id}' not found"}
+        device_details = await device_manager.get_device_by_identifier(device_id)
 
         device_raw = device_details.raw if hasattr(device_details, "raw") else device_details
         device_name = device_raw.get("name") or device_raw.get("model", "Unknown")

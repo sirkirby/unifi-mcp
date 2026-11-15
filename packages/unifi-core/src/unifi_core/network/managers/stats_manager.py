@@ -583,7 +583,7 @@ class StatsManager:
         end_ms: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id client identifier before fetching stats."""
-        client = await self._client_manager.get_client_details(client_id, existence_only=True)
+        client = await self._client_manager.get_client_by_identifier(client_id, existence_only=True)
         raw = client.raw if hasattr(client, "raw") else client
         client_mac = raw.get("mac", client_id)
         return await self.get_client_stats(
@@ -695,7 +695,7 @@ class StatsManager:
         granularity: str = "hourly",
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id device identifier and select its report family."""
-        device = await DeviceManager(self._connection).get_device_details(device_id)
+        device = await DeviceManager(self._connection).get_device_by_identifier(device_id)
         raw = device.raw if hasattr(device, "raw") else device
         device_mac = raw.get("mac", device_id)
         device_type = raw.get("type", "unknown")
