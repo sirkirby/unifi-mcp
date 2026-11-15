@@ -38,10 +38,13 @@ logger = logging.getLogger(__name__)
     auth="either",
     description=(
         "Returns adopted device inventory with MAC, name, model, IP, firmware version, "
-        "uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), "
+        "uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu, or wan for a "
+        "cable or cellular modem), "
         "upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. "
         "Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). "
         "Note: device_type=ap correctly excludes USP Smart Power strips. "
+        "A gateway's ip is its LAN address; its WAN addresses are wan1_ip, wan2_ip and any further wanN_ip "
+        "under include_details. "
         "Use search to filter by name, IP, or MAC (case-insensitive). "
         "Set include_details=true for additional per-device fields: by default (summary=true) "
         "compressed radio/port summaries (per radio: tx_power_mode, the stored custom-mode tx_power that "

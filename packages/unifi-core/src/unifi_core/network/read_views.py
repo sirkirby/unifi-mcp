@@ -9,6 +9,7 @@ public contract; they perform no controller I/O and import no app packages.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -93,9 +94,30 @@ def classify_device(device: dict[str, Any]) -> str:
         return "switch"
     if device_type[:3] in ("ugw", "udm", "uxg"):
         return "gateway"
-    if device_type == "uci":
+    if device_type in ("uci", "umbb"):
         return "wan"
     return "unknown"
+
+
+_WAN_KEY = re.compile(r"wan[1-9]\d*")
+
+
+def _wan_keys(device: dict[str, Any]) -> list[str]:
+    """``wan1`` and ``wan2``, then every further ``wanN`` uplink the gateway reports, in order.
+
+    Gateways number their uplinks sparsely: a failover modem can be ``wan3``
+    with no ``wan2`` configured, so the numbered keys are read from the device.
+    """
+    extra = {key for key, value in device.items() if _WAN_KEY.fullmatch(key) and isinstance(value, dict)}
+    return sorted({"wan1", "wan2"} | extra, key=lambda key: int(key[3:]))
+
+
+def _device_ip(device: dict[str, Any]) -> Any:
+    """The address a device is managed on.
+
+    A gateway's ``ip`` is its active WAN address; its LAN address is ``lan_ip``.
+    """
+    return device.get("lan_ip") or device.get("ip", "")
 
 
 def get_wifi_bands(device: dict[str, Any]) -> list[str]:
@@ -370,7 +392,7 @@ def _device_base(device: dict[str, Any]) -> dict[str, Any]:
         "model": device.get("model", ""),
         "type": device.get("type", ""),
         "device_category": classify_device(device),
-        "ip": device.get("ip", ""),
+        "ip": _device_ip(device),
         "status": state_map.get(state, f"unknown_state ({state})"),
         "uptime": str(timedelta(seconds=device.get("uptime", 0))) if device.get("uptime") else "N/A",
         "last_seen": datetime.fromtimestamp(device.get("last_seen", 0), tz=timezone.utc).isoformat()
@@ -454,15 +476,13 @@ def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summa
         )
     elif summary and category == "gateway":
         network_table = device.get("network_table", [])
-        wan1 = device.get("wan1", {})
-        wan2 = device.get("wan2", {})
         system_stats = device.get("system-stats", {})
+        for key in _wan_keys(device):
+            wan = device.get(key) or {}
+            target[f"{key}_ip"] = wan.get("ip") if wan else None
+            target[f"{key}_up"] = wan.get("up", False) if wan else None
         target.update(
             {
-                "wan1_ip": wan1.get("ip") if wan1 else None,
-                "wan1_up": wan1.get("up", False) if wan1 else None,
-                "wan2_ip": wan2.get("ip") if wan2 else None,
-                "wan2_up": wan2.get("up", False) if wan2 else None,
                 "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
                 "network_count": len(network_table),
                 "cpu_usage": system_stats.get("cpu"),
@@ -494,10 +514,9 @@ def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summa
             }
         )
     elif not summary and category == "gateway":
+        target.update({key: device.get(key, {}) for key in _wan_keys(device)})
         target.update(
             {
-                "wan1": device.get("wan1", {}),
-                "wan2": device.get("wan2", {}),
                 "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
                 "network_table": device.get("network_table", []),
                 "system_stats": device.get("system-stats", {}),
@@ -516,6 +535,9 @@ DEVICE_LIST_FIELDS = frozenset(
 )
 
 
+_WAN_FIELD = re.compile(r"wan[1-9]\d*(_ip|_up)?")
+
+
 def shape_device_list(
     devices: list[Any],
     *,
@@ -532,10 +554,12 @@ def shape_device_list(
     if fields is not None and not isinstance(fields, str):
         return {"success": False, "error": "Invalid fields: expected a comma-separated string."}
     requested_fields = {field.strip() for field in (fields or "").split(",") if field.strip()}
-    if requested_fields - DEVICE_LIST_FIELDS:
+    if any(field not in DEVICE_LIST_FIELDS and not _WAN_FIELD.fullmatch(field) for field in requested_fields):
         return {
             "success": False,
-            "error": "Unknown device projection field. Supported fields: " + ", ".join(sorted(DEVICE_LIST_FIELDS)),
+            "error": "Unknown device projection field. Supported fields: "
+            + ", ".join(sorted(DEVICE_LIST_FIELDS))
+            + ". Further gateway uplinks follow the same pattern (wan3, wan3_ip, wan3_up).",
         }
     if error := invalid_filter("device_type", device_type, DEVICE_TYPE_FILTERS) or invalid_filter(
         "status", status, DEVICE_STATUS_FILTERS
@@ -554,6 +578,7 @@ def shape_device_list(
             for device in devices_raw
             if search_lower in (device.get("name") or "").lower()
             or search_lower in (device.get("ip") or "").lower()
+            or search_lower in (device.get("lan_ip") or "").lower()
             or search_lower in (device.get("mac") or "").lower()
         ]
     total_count = len(devices_raw)
@@ -620,7 +645,7 @@ def shape_device_details(
                 "name": raw.get("name", raw.get("model", "Unknown")),
                 "model": raw.get("model"),
                 "type": raw.get("type"),
-                "ip": raw.get("ip"),
+                "ip": raw.get("lan_ip") or raw.get("ip"),
                 "status": state_map.get(state, f"unknown ({state})"),
                 "uptime": str(timedelta(seconds=raw.get("uptime", 0))) if raw.get("uptime") else None,
                 "firmware": raw.get("version"),
