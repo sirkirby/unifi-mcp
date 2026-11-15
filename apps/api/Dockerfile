@@ -3,7 +3,7 @@
 # ============================================================================
 # Builder stage — install dependencies into an isolated venv
 # ============================================================================
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /build
 
@@ -41,7 +41,7 @@ RUN uv sync --frozen --no-dev --package unifi-api-server
 # ============================================================================
 # Runtime stage — slim image with just the venv + app source
 # ============================================================================
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # curl is needed for the HEALTHCHECK; ca-certificates for HTTPS to controllers
 RUN apt-get update \
