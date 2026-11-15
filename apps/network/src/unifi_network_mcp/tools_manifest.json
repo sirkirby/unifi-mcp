@@ -8569,7 +8569,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Get Deep Packet Inspection (DPI) statistics (applications and categories)",
+      "description": "List the DPI restriction rules (per-application and per-category block or rate-limit rules) and the restriction groups that bundle them. Despite the name, this is configuration, not traffic: for DPI statistics use unifi_get_site_dpi_traffic or unifi_get_client_dpi_traffic; for application and category IDs use unifi_list_dpi_applications / unifi_list_dpi_categories.",
       "name": "unifi_get_dpi_stats",
       "schema": {
         "input": {

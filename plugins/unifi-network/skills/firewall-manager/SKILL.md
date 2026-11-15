@@ -186,7 +186,7 @@ Read the diff. If it does not match the change you intended (e.g., extra uninten
 ### "Block [app/service] on [network/VLAN]"
 
 1. Snapshot (Step 2).
-2. Identify the DPI category from `references/dpi-categories.md`, then confirm the ID with `unifi_get_dpi_stats`.
+2. Identify the DPI category from `references/dpi-categories.md`, then confirm the ID with `unifi_list_dpi_categories`.
 3. If a template matches (e.g., `block-bittorrent`), use it (Step 3).
 4. Otherwise: gather zone + network IDs, build a V2 payload with `action="REJECT"` per `references/firewall-schema.md`.
 5. Preview → confirm → execute.

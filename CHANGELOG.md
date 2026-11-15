@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-15 — unifi-network 1.9.6
+
+- The firewall-manager skill looks up DPI category IDs with `unifi_list_dpi_categories`; `unifi_get_dpi_stats` returns restriction rules, not categories. The firewall-auditor skill and the tool reference describe `unifi_get_dpi_stats` the same way.
+
+
 ## 2026-11-14 — unifi-network 1.9.5, unifi-protect 1.6.2, unifi-access 1.4.2, unifi-sitemanager 1.0.2
 
 - Pins `unifi-network-mcp` [0.45.2](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.45.2), `unifi-protect-mcp` [0.13.1](https://github.com/sirkirby/unifi-mcp/releases/tag/protect/v0.13.1), `unifi-access-mcp` [0.9.1](https://github.com/sirkirby/unifi-mcp/releases/tag/access/v0.9.1) and `unifi-sitemanager-mcp` [0.1.2](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.1.2).

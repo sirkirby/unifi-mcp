@@ -283,7 +283,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 - `unifi_get_client_stats` — Per-client traffic time-series with upload/download totals; optional absolute `start`/`end` window
 - `unifi_get_device_stats` — Per-device traffic time-series
 - `unifi_get_top_clients` — Clients ranked by traffic inside a window (`duration` or `start`/`end`), sortable by upload or download
-- `unifi_get_dpi_stats` — Deep Packet Inspection statistics
+- `unifi_get_dpi_stats` — DPI restriction rules and groups (configuration; for DPI traffic see `unifi_get_site_dpi_traffic`)
 - `unifi_get_alerts` — Recent alerts
 
 ## DNS Records (5 tools)

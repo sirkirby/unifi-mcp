@@ -18,6 +18,7 @@ class TestDpiManager:
         conn.site = "default"
         conn.host = "192.0.2.1"
         conn.port = 443
+        conn.tls_env_prefix = "NETWORK"
         conn.get_cached = MagicMock(return_value=None)
         conn._update_cache = MagicMock()
         return conn
@@ -54,12 +55,13 @@ class TestDpiManager:
     # ---- get_dpi_applications ----
 
     @pytest.mark.asyncio
-    async def test_get_dpi_applications_no_api_key(self, dpi_manager_no_key):
-        """Test get_dpi_applications returns empty when no API key."""
-        result = await dpi_manager_no_key.get_dpi_applications()
+    async def test_get_dpi_applications_no_api_key(self, dpi_manager_no_key, mock_connection):
+        """A missing key is an error, not an empty catalog."""
+        from unifi_core.exceptions import UniFiAuthError
 
-        assert result["data"] == []
-        assert result["totalCount"] == 0
+        with pytest.raises(UniFiAuthError, match="UNIFI_NETWORK_API_KEY"):
+            await dpi_manager_no_key.get_dpi_applications()
+        mock_connection._update_cache.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_dpi_applications_uses_cache(self, dpi_manager, mock_connection):
@@ -97,12 +99,13 @@ class TestDpiManager:
     # ---- get_dpi_categories ----
 
     @pytest.mark.asyncio
-    async def test_get_dpi_categories_no_api_key(self, dpi_manager_no_key):
-        """Test get_dpi_categories returns empty when no API key."""
-        result = await dpi_manager_no_key.get_dpi_categories()
+    async def test_get_dpi_categories_no_api_key(self, dpi_manager_no_key, mock_connection):
+        """A missing key is an error, not an empty catalog."""
+        from unifi_core.exceptions import UniFiAuthError
 
-        assert result["data"] == []
-        assert result["totalCount"] == 0
+        with pytest.raises(UniFiAuthError, match="UNIFI_NETWORK_API_KEY"):
+            await dpi_manager_no_key.get_dpi_categories()
+        mock_connection._update_cache.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_dpi_categories_uses_cache(self, dpi_manager, mock_connection):
@@ -141,10 +144,22 @@ class TestDpiManager:
         mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_request_integration_api_non_200_returns_none(self, dpi_manager, mock_auth):
-        """Test _request_integration_api returns None on non-200 response."""
+    @pytest.mark.parametrize(
+        ("status", "error_name", "phrase"),
+        [
+            (401, "UniFiAuthError", "rejected the configured API key"),
+            (403, "UniFiPermissionError", "lacks permission"),
+            (404, "UniFiOperationError", "does not serve"),
+            (500, "UniFiOperationError", "(HTTP 500)."),
+        ],
+    )
+    async def test_request_integration_api_non_200_raises(self, dpi_manager, mock_auth, status, error_name, phrase):
+        """A non-200 answer raises with fixed text instead of reading as an empty catalog."""
+        import unifi_core.exceptions as exceptions
+
         mock_resp = AsyncMock()
-        mock_resp.status = 401
+        mock_resp.status = status
+        mock_resp.text = AsyncMock(return_value="controller-only body 192.0.2.1")
 
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -156,13 +171,54 @@ class TestDpiManager:
 
         mock_auth.get_api_key_session.return_value = mock_session
 
-        result = await dpi_manager._request_integration_api("/v1/dpi/applications")
+        with pytest.raises(getattr(exceptions, error_name)) as excinfo:
+            await dpi_manager._request_integration_api("/v1/dpi/applications")
 
-        assert result is None
+        text = str(excinfo.value)
+        assert text.startswith(f"DPI catalog request failed (HTTP {status}).")
+        assert phrase in text
+        assert "192.0.2.1" not in text and "/proxy/" not in text
+        mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_request_integration_api_no_key_returns_none(self, dpi_manager_no_key):
-        """Test _request_integration_api returns None when no API key configured."""
-        result = await dpi_manager_no_key._request_integration_api("/v1/dpi/applications")
+    async def test_request_integration_api_non_object_body_raises(self, dpi_manager, mock_auth):
+        from unifi_core.exceptions import UniFiMalformedResponseError
 
-        assert result is None
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value=["not", "an", "object"])
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_ctx)
+        mock_session.close = AsyncMock()
+        mock_auth.get_api_key_session.return_value = mock_session
+
+        with pytest.raises(UniFiMalformedResponseError):
+            await dpi_manager._request_integration_api("/v1/dpi/applications")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("prefix", "names_variables"),
+        [("NETWORK", True), (None, False)],
+    )
+    async def test_missing_key_message_names_the_setting_only_for_its_reader(
+        self, mock_connection, mock_auth_no_key, prefix, names_variables
+    ):
+        """The MCP server reads UNIFI_* variables; the API server, which shares
+        this manager, keeps the key on the controller record."""
+        from unifi_core.exceptions import UniFiAuthError
+        from unifi_core.network.managers.dpi_manager import DpiManager
+
+        mock_connection.tls_env_prefix = prefix
+        manager = DpiManager(mock_connection, mock_auth_no_key)
+
+        with pytest.raises(UniFiAuthError) as excinfo:
+            await manager._request_integration_api("/v1/dpi/applications")
+
+        text = str(excinfo.value)
+        assert "Network API key" in text and "Settings → Control Plane → Integrations" in text
+        assert ("UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY)" in text) is names_variables
+        assert "UNIFI_" in text if names_variables else "controller's configuration" in text
+        assert "192.0.2.1" not in text

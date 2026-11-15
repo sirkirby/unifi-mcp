@@ -90,7 +90,7 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
         # DpiManager takes (cm, auth). The connection manager carries a
         # UniFiAuth instance (see _construct_connection_manager); when no
         # API token is configured for the controller, the auth is unset
-        # internally and DpiManager returns None with a clear log line.
+        # internally and DpiManager raises with fixed text naming the setting.
         "dpi_manager": lambda cm: DpiManager(cm, getattr(cm, "unifi_auth", None)),
         "dynamic_dns_manager": lambda cm: DynamicDnsManager(cm),
         "event_manager": lambda cm: EventManager(cm),

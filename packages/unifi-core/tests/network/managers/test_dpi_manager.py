@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from unifi_core.exceptions import UniFiAuthError, UniFiOperationError
 from unifi_core.network.managers.dpi_manager import DpiManager
 
 
@@ -66,7 +67,7 @@ async def test_full_catalog_does_not_cache_incomplete_application_pages(manager,
     async def fake_request(path, params=None):
         if params["offset"] == "0":
             return {"data": [{"id": 1, "name": "First"}], "totalCount": 2, "offset": 0}
-        return None
+        raise UniFiOperationError("DPI catalog request failed (HTTP 500).")
 
     with (
         patch.object(manager, "_request_integration_api", side_effect=fake_request),
@@ -84,7 +85,7 @@ async def test_full_catalog_does_not_cache_incomplete_category_pages(manager, co
             return {"data": [{"id": 1, "name": "First"}], "totalCount": 1, "offset": 0}
         if params["offset"] == "0":
             return {"data": [{"id": 4, "name": "Media"}], "totalCount": 2, "offset": 0}
-        return None
+        raise UniFiOperationError("DPI catalog request failed (HTTP 500).")
 
     with (
         patch.object(manager, "_request_integration_api", side_effect=fake_request),
@@ -177,3 +178,17 @@ async def test_integration_request_propagates_tls_verification(connection, auth,
     assert session.get.call_args.kwargs["allow_redirects"] is False
     auth.get_api_key_session.assert_awaited_once_with("https://192.168.1.1:443")
     session.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_full_catalog_first_page_failure_keeps_its_reason(connection):
+    """Without a key the catalogue fails with the configuration reason, uncached."""
+    no_key = MagicMock()
+    no_key.has_api_key = False
+    connection.tls_env_prefix = None
+    manager = DpiManager(connection, no_key)
+
+    with pytest.raises(UniFiAuthError, match="Network API key"):
+        await manager.get_full_dpi_catalog()
+
+    connection._update_cache.assert_not_called()

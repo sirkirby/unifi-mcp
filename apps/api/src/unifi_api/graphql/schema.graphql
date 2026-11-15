@@ -736,7 +736,9 @@ type DpiCategoryPage {
   nextCursor: String
 }
 
-"""DPI stats wrapper: applications + categories arrays."""
+"""
+DPI restriction rules (applications) and groups (categories); not traffic.
+"""
 type DpiStats {
   applications: JSON!
   categories: JSON!
@@ -1536,7 +1538,9 @@ type NetworkQuery {
   """Site-wide DPI traffic breakdown."""
   siteDpiTraffic(controller: ID!, site: String! = "default"): [StatPoint!]!
 
-  """DPI stats catalog (applications + categories)."""
+  """
+  DPI restriction rules (applications) and groups (categories); not traffic.
+  """
   dpiStats(controller: ID!, site: String! = "default"): DpiStats
 
   """List recent controller events (paginated)."""

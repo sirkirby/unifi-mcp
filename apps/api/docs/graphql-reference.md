@@ -747,7 +747,9 @@ type DpiCategoryPage {
   nextCursor: String
 }
 
-"""DPI stats wrapper: applications + categories arrays."""
+"""
+DPI restriction rules (applications) and groups (categories); not traffic.
+"""
 type DpiStats {
   applications: JSON!
   categories: JSON!
@@ -1547,7 +1549,9 @@ type NetworkQuery {
   """Site-wide DPI traffic breakdown."""
   siteDpiTraffic(controller: ID!, site: String! = "default"): [StatPoint!]!
 
-  """DPI stats catalog (applications + categories)."""
+  """
+  DPI restriction rules (applications) and groups (categories); not traffic.
+  """
   dpiStats(controller: ID!, site: String! = "default"): DpiStats
 
   """List recent controller events (paginated)."""
@@ -3202,7 +3206,7 @@ Read-only access to UniFi Network resources.
 - `dnsRecords: DnsRecordPage!`  — List static DNS records on the given controller/site (paginated).
 - `dpiApplications: DpiApplicationPage!`  — List DPI applications (paginated).
 - `dpiCategories: DpiCategoryPage!`  — List DPI categories (paginated).
-- `dpiStats: DpiStats`  — DPI stats catalog (applications + categories).
+- `dpiStats: DpiStats`  — DPI restriction rules (applications) and groups (categories); not traffic.
 - `dynamicDns: DynamicDnsPage!`  — List Dynamic DNS provider entries on the given controller/site (paginated).
 - `dynamicDnsEntry: DynamicDns`  — Look up a single Dynamic DNS entry by id.
 - `eventLog: EventLogPage!`  — List recent controller events (paginated).
