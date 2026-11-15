@@ -13514,7 +13514,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nNote: This endpoint may not be available on all controller versions.\nReturns empty list if unavailable.",
+      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nEach route has target_subnet, gateway, interface and distance. Controllers that serve\nthe table from the V2 API also report origin (Kernel, Static, DHCP, PBR) and route_type\n(unicast, blackhole), and name the interface by network ID (resolve it with\nunifi_list_networks) instead of by interface name.\n\nNote: Returns an empty list if the controller exposes no routing table.",
       "name": "unifi_list_active_routes",
       "schema": {
         "input": {

@@ -53,8 +53,12 @@ async def list_routes() -> Dict[str, Any]:
 Includes both user-defined and system routes currently in effect.
 This shows the actual routing table state on the gateway device.
 
-Note: This endpoint may not be available on all controller versions.
-Returns empty list if unavailable.""",
+Each route has target_subnet, gateway, interface and distance. Controllers that serve
+the table from the V2 API also report origin (Kernel, Static, DHCP, PBR) and route_type
+(unicast, blackhole), and name the interface by network ID (resolve it with
+unifi_list_networks) instead of by interface name.
+
+Note: Returns an empty list if the controller exposes no routing table.""",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_active_routes() -> Dict[str, Any]:
