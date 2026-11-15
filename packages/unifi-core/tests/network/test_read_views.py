@@ -808,3 +808,33 @@ def test_device_projection_preserves_public_inventory_provenance_and_unknown_val
     assert result["devices"] == [{"mac": "aa", "uptime": None}]
     assert result["_meta"]["source_api"] == "integration"
     assert result["_meta"]["complete"] is False
+
+
+def test_shape_wlan_list_tells_wpa2_wpa3_modes_and_bands_apart() -> None:
+    wlans = [
+        {
+            "_id": "w1",
+            "name": "IoT",
+            "security": "wpapsk",
+            "wpa_mode": "wpa2",
+            "wpa3_support": False,
+            "wlan_bands": ["2g"],
+        },
+        {
+            "_id": "w2",
+            "name": "Main",
+            "security": "wpapsk",
+            "wpa_mode": "wpa2",
+            "wpa3_support": True,
+            "wpa3_transition": True,
+            "wlan_bands": ["2g", "5g"],
+        },
+        {"_id": "w3", "name": "Open", "security": "open"},
+    ]
+
+    iot, main, open_wlan = shape_wlan_list(wlans, site="default")["wlans"]
+
+    assert (iot["wpa3_support"], iot["wlan_bands"]) == (False, ["2g"])
+    assert "wpa3_transition" not in iot
+    assert (main["wpa3_support"], main["wpa3_transition"], main["wlan_bands"]) == (True, True, ["2g", "5g"])
+    assert not {"wpa_mode", "wpa3_support", "wpa3_transition", "wlan_bands"} & open_wlan.keys()
