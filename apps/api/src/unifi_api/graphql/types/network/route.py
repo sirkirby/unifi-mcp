@@ -88,6 +88,8 @@ class ActiveRoute:
     gateway: str | None
     interface: str | None
     distance: int | None
+    origin: str | None
+    route_type: str | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -109,6 +111,8 @@ class ActiveRoute:
             gateway=first_nh.get("via") or _get(obj, "gateway") or _get(obj, "nexthop"),
             interface=first_nh.get("intf") or _get(obj, "interface") or _get(obj, "intf"),
             distance=_get(obj, "metric") or _get(obj, "distance"),
+            origin=_get(obj, "origin"),
+            route_type=_get(obj, "route_type"),
         )
 
     def to_dict(self) -> dict:

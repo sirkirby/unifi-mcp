@@ -13514,7 +13514,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nNote: This endpoint may not be available on all controller versions.\nReturns empty list if unavailable.",
+      "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nEach route has target_subnet, gateway, interface and distance. Controllers that serve\nthe table from the V2 API also report origin (Kernel, Static, DHCP, PBR) and route_type\n(unicast, blackhole), and name the interface by network ID (resolve it with\nunifi_list_networks) instead of by interface name.\n\nNote: Returns an empty list if the controller exposes no routing table.",
       "name": "unifi_list_active_routes",
       "schema": {
         "input": {
@@ -15328,7 +15328,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "List controller firewall zones (V2 API). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
+      "description": "List controller firewall zones (V2 API) with the network IDs assigned to each (networks; resolve them with unifi_list_networks). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
       "name": "unifi_list_firewall_zones",
       "schema": {
         "input": {
@@ -16878,7 +16878,7 @@
         "readOnlyHint": true
       },
       "auth_method": "either",
-      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25). API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
+      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25). security is 'wpapsk' for every personal mode: read wpa3_support and wpa3_transition to tell WPA2 (no WPA3 support), WPA2/WPA3 (support with transition) and WPA3-only apart. wlan_bands lists the bands the SSID is broadcast on. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_wlans",
       "schema": {
         "input": {

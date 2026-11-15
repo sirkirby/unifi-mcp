@@ -807,14 +807,16 @@ class TestGetFirewallZones:
     @pytest.mark.asyncio
     async def test_zone_matrix_primary_strips_data_matrix(self, firewall_manager, mock_connection):
         """Primary /firewall/zone-matrix succeeds; the per-zone `data` matrix is stripped."""
-        mock_connection.request = AsyncMock(return_value=copy.deepcopy(SAMPLE_ZONE_MATRIX_RESPONSE))
+        mock_connection.request = AsyncMock(
+            side_effect=[copy.deepcopy(SAMPLE_ZONE_MATRIX_RESPONSE), Exception("404 from /firewall/zone")]
+        )
 
         zones = await firewall_manager.get_firewall_zones()
 
-        # Only the primary endpoint should have been called.
-        assert mock_connection.request.call_count == 1
-        api_request = mock_connection.request.call_args[0][0]
-        assert api_request.path == "/firewall/zone-matrix"
+        # The matrix lists the zones; the membership lookup is best effort.
+        paths = [call.args[0].path for call in mock_connection.request.call_args_list]
+        assert paths == ["/firewall/zone-matrix", "/firewall/zone"]
+        assert all("network_ids" not in zone for zone in zones)
 
         # Metadata preserved; matrix stripped.
         assert len(zones) == 2
@@ -823,6 +825,26 @@ class TestGetFirewallZones:
         assert zones[0]["zone_key"] == "internal"
         assert "data" not in zones[0]
         assert "data" not in zones[1]
+
+    @pytest.mark.asyncio
+    async def test_zone_matrix_listing_gains_network_membership(self, firewall_manager, mock_connection):
+        """The matrix omits zone membership, so network_ids come from /firewall/zone."""
+        full_zones = [
+            {"_id": "zone-internal", "name": "Internal", "external_id": "uuid-1", "network_ids": ["net-lan"]},
+            {
+                "_id": "zone-external",
+                "name": "External",
+                "external_id": "uuid-2",
+                "network_ids": ["net-wan", "net-lte"],
+            },
+        ]
+        mock_connection.request = AsyncMock(side_effect=[copy.deepcopy(SAMPLE_ZONE_MATRIX_RESPONSE), full_zones])
+
+        zones = await firewall_manager.get_firewall_zones()
+
+        assert [zone["network_ids"] for zone in zones] == [["net-lan"], ["net-wan", "net-lte"]]
+        # Only the membership is merged in; the listing keeps the matrix shape.
+        assert all("external_id" not in zone and "data" not in zone for zone in zones)
 
     @pytest.mark.asyncio
     async def test_falls_back_to_legacy_zones_on_primary_failure(self, firewall_manager, mock_connection):

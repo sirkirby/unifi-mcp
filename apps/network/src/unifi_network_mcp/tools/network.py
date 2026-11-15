@@ -737,7 +737,10 @@ async def create_network(
     auth="either",
     description=(
         "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\n"
-        "Filters: search (SSID name substring), enabled_only, limit (default 25)."
+        "Filters: search (SSID name substring), enabled_only, limit (default 25). "
+        "security is 'wpapsk' for every personal mode: read wpa3_support and wpa3_transition "
+        "to tell WPA2 (no WPA3 support), WPA2/WPA3 (support with transition) and WPA3-only apart. "
+        "wlan_bands lists the bands the SSID is broadcast on."
         " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
         "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "

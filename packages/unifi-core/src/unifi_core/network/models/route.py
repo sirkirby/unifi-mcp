@@ -172,7 +172,8 @@ class ActiveRoute(BaseModel):
     ``/stat/routing`` rows. ``target_subnet`` is the natural primary key
     since active routes have no stable id.
     The controller returns next-hop info under the nested ``nh`` list of
-    ``{via, intf}`` dicts; this model flattens the first entry.
+    ``{via, intf}`` dicts; this model flattens the first entry. Rows read
+    from the V2 ``/routes`` table name the interface by network ID.
     """
 
     target_subnet: Optional[str] = Field(
@@ -193,6 +194,16 @@ class ActiveRoute(BaseModel):
     distance: Optional[int] = Field(
         default=None,
         description="Route metric",
+        json_schema_extra={"mutable": False},
+    )
+    origin: Optional[str] = Field(
+        default=None,
+        description="What installed the route (e.g. Kernel, Static, DHCP, PBR), when the controller reports it",
+        json_schema_extra={"mutable": False},
+    )
+    route_type: Optional[str] = Field(
+        default=None,
+        description="Kernel route type (e.g. unicast, blackhole), when the controller reports it",
         json_schema_extra={"mutable": False},
     )
 
@@ -223,4 +234,6 @@ def active_route_from_controller(raw: Any) -> ActiveRoute:
         gateway=first_nh.get("via") or _get(raw, "gateway", "nexthop"),
         interface=first_nh.get("intf") or _get(raw, "interface", "intf"),
         distance=_get(raw, "metric", "distance"),
+        origin=_get(raw, "origin"),
+        route_type=_get(raw, "route_type"),
     )

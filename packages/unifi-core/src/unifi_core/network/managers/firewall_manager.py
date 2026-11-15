@@ -1019,10 +1019,12 @@ class FirewallManager:
             # zone metadata plus an inter-zone policy-count matrix).
             # Older firmware exposed a flat list at /firewall/zones; try that
             # as a fallback so this works across versions.
+            from_matrix = True
             try:
                 api_request = ApiRequestV2(method="get", path="/firewall/zone-matrix")
                 resp = await self._connection.request(api_request)
             except Exception as primary_exc:
+                from_matrix = False
                 logger.debug(
                     "Primary /firewall/zone-matrix failed (%s), falling back to /firewall/zones",
                     primary_exc,
@@ -1036,11 +1038,31 @@ class FirewallManager:
             # so drop the matrix field if present. The matrix is still
             # available via a dedicated tool if needed.
             data = [{k: v for k, v in zone.items() if k != "data"} if isinstance(zone, dict) else zone for zone in data]
+            if from_matrix:
+                await self._add_zone_network_ids(data)
             self._connection._update_cache(cache_key, data)
             return data
         except Exception as e:
             logger.error("Error fetching firewall zones: %s", e, exc_info=True)
             raise
+
+    async def _add_zone_network_ids(self, zones: List[Any]) -> None:
+        """Add each zone's ``network_ids`` to a ``/firewall/zone-matrix`` listing.
+
+        The matrix carries no zone membership; ``/firewall/zone`` does. A
+        controller that cannot serve the membership still lists its zones.
+        """
+        try:
+            full_zones = await self._get_v2_zones_full()
+        except Exception as exc:
+            logger.debug("Firewall zone membership unavailable (%s)", type(exc).__name__)
+            return
+        network_ids = {
+            zone.get("_id"): zone["network_ids"] for zone in full_zones if isinstance(zone.get("network_ids"), list)
+        }
+        for zone in zones:
+            if isinstance(zone, dict) and "network_ids" not in zone and zone.get("_id") in network_ids:
+                zone["network_ids"] = list(network_ids[zone["_id"]])
 
     # ---- Firewall Zone CRUD (integration API) ----
 
