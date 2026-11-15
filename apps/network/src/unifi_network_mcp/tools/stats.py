@@ -331,11 +331,16 @@ async def get_top_clients(
 
 @server.tool(
     name="unifi_get_dpi_stats",
-    description="Get Deep Packet Inspection (DPI) statistics (applications and categories)",
+    description=(
+        "List the DPI restriction rules (per-application and per-category block or rate-limit rules) "
+        "and the restriction groups that bundle them. Despite the name, this is configuration, not "
+        "traffic: for DPI statistics use unifi_get_site_dpi_traffic or unifi_get_client_dpi_traffic; "
+        "for application and category IDs use unifi_list_dpi_applications / unifi_list_dpi_categories."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_dpi_stats() -> Dict[str, Any]:
-    """Implementation for getting DPI stats."""
+    """List DPI restriction rules and groups (``rest/dpiapp``, ``rest/dpigroup``)."""
     try:
         dpi_stats_result = await stats_manager.get_dpi_stats()
         shaped = dpi_stats_from_controller(dpi_stats_result)

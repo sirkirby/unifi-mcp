@@ -139,7 +139,7 @@ Always discover IDs at runtime. Never hardcode.
 | `unifi_list_networks` | Network IDs, names, VLAN IDs |
 | `unifi_list_firewall_groups` | IP group / port group IDs |
 | `unifi_list_firewall_policies` | Existing policy IDs and structure (use for examples) |
-| `unifi_get_dpi_stats` | Available DPI categories on this controller |
+| `unifi_list_dpi_categories` | Available DPI categories on this controller (needs a Network API key) |
 
 ---
 
@@ -302,4 +302,4 @@ Before creating policies, use these tools to gather required IDs:
 | `unifi_list_firewall_policies` | Existing policy IDs and structure |
 | `unifi_list_firewall_groups` | IP group and port group IDs |
 | `unifi_list_clients` | Connected client MACs and hostnames |
-| `unifi_get_dpi_stats` | Available DPI categories on this controller |
+| `unifi_list_dpi_categories` | Available DPI categories on this controller (needs a Network API key) |

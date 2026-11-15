@@ -64,7 +64,7 @@ class StatPoint:
         return {"ts": self.ts, **self._metrics}
 
 
-@strawberry.type(description="DPI stats wrapper: applications + categories arrays.")
+@strawberry.type(description="DPI restriction rules (applications) and groups (categories); not traffic.")
 class DpiStats:
     # Wrapper-dict shape; each sub-row is a passthrough dict (unstructured —
     # the controller's DPI catalogs vary by firmware so we don't tighten the

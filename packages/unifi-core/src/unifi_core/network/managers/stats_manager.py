@@ -908,7 +908,10 @@ class StatsManager:
     async def get_dpi_stats(
         self,
     ) -> Dict[str, List[Any]]:  # Return List[DPIRestrictionApp/Group]
-        """Get Deep Packet Inspection (DPI) statistics."""
+        """DPI restriction rules (``rest/dpiapp``) and groups (``rest/dpigroup``).
+
+        Configuration, not traffic; ``get_site_dpi_traffic`` reads DPI statistics.
+        """
         cache_key = f"{CACHE_PREFIX_STATS_DPI}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=900)  # 15 minute cache
         if cached_data is not None:

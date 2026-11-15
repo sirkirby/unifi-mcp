@@ -60,7 +60,7 @@ Dispatch these tool calls in **a single batch** (multiple tool uses in one assis
 - `unifi_list_networks`
 - `unifi_list_firewall_groups`
 - `unifi_list_devices`
-- `unifi_get_dpi_stats` *(optional but useful for HYG-05 / EGR-03 context)*
+- `unifi_get_dpi_stats` — DPI restriction rules *(optional but useful for HYG-05 / EGR-03 context)*
 
 If a required tool returns `success=false`, stop scoring and report the unavailable source in Coverage and Limitations. Optional DPI failure limits only the affected benchmarks. Do not turn missing evidence into a passing benchmark.
 
