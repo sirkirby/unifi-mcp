@@ -838,3 +838,18 @@ def test_shape_wlan_list_tells_wpa2_wpa3_modes_and_bands_apart() -> None:
     assert "wpa3_transition" not in iot
     assert (main["wpa3_support"], main["wpa3_transition"], main["wlan_bands"]) == (True, True, ["2g", "5g"])
     assert not {"wpa_mode", "wpa3_support", "wpa3_transition", "wlan_bands"} & open_wlan.keys()
+
+
+def test_zone_without_membership_list_omits_networks():
+    """A zone record with no membership list reports none, not an empty zone."""
+    from unifi_core.network.models.firewall import firewall_zone_from_controller
+
+    unknown = firewall_zone_from_controller({"_id": "z1", "name": "Internal"}).model_dump(exclude_none=True)
+    empty = firewall_zone_from_controller({"_id": "z2", "name": "Dmz", "network_ids": []}).model_dump(exclude_none=True)
+    member = firewall_zone_from_controller({"_id": "z3", "name": "Lan", "network_ids": ["n1"]}).model_dump(
+        exclude_none=True
+    )
+
+    assert "networks" not in unknown
+    assert empty["networks"] == []
+    assert member["networks"] == ["n1"]
