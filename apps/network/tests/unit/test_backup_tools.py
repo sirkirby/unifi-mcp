@@ -531,3 +531,52 @@ class TestMgmtTools:
 
         assert result["success"] is False
         assert result["error"] == "Failed to get management settings: controller unreachable"
+
+
+class TestAutoBackupErrors:
+    """A failed auto-backup read says why, through the real transport."""
+
+    @staticmethod
+    def _system_manager(error):
+        from unifi_core.network.managers.connection_manager import ConnectionManager
+        from unifi_core.network.managers.system_manager import SystemManager
+
+        class _Session:
+            closed = False
+
+            async def close(self):
+                return None
+
+        controller = MagicMock()
+        controller.connectivity.config.session = _Session()
+        controller.connectivity.is_unifi_os = True
+
+        async def _request(_api_request):
+            raise error
+
+        controller.request = _request
+        connection = ConnectionManager("controller-host-sentinel.example", "admin", "secret")
+        connection.controller = controller
+        connection._aiohttp_session = controller.connectivity.config.session
+        connection._initialized = True
+        return SystemManager(connection)
+
+    @pytest.mark.asyncio
+    async def test_permission_failure_is_distinguishable_from_an_outage(self, monkeypatch):
+        from aiounifi.errors import Forbidden
+
+        from unifi_network_mcp.tools import system
+
+        url = "https://controller-host-sentinel.example:443/proxy/network/api/s/default/get/setting/super_mgmt"
+        monkeypatch.setattr(
+            system, "system_manager", self._system_manager(Forbidden(f"Call {url} received 403 Forbidden"))
+        )
+
+        result = await system.get_autobackup_settings()
+
+        assert result["success"] is False
+        assert result["error"].startswith(
+            "Failed to get auto-backup settings: Controller settings request failed (Forbidden, HTTP 403)."
+        )
+        assert "Full Admin" in result["error"]
+        assert "controller-host-sentinel" not in result["error"]
