@@ -125,8 +125,6 @@ async def get_client_stats(
     try:
         duration_hours = _duration_hours(duration)
         client_details = await client_manager.get_client_details(client_id)
-        if not client_details:
-            return {"success": False, "error": f"Client '{client_id}' not found"}
 
         # Support aiounifi Client objects as well as dicts
         client_raw = client_details.raw if hasattr(client_details, "raw") else client_details
@@ -199,8 +197,6 @@ async def get_device_stats(
     try:
         duration_hours = _duration_hours(duration)
         device_details = await device_manager.get_device_details(device_id)
-        if not device_details:
-            return {"success": False, "error": f"Device '{device_id}' not found"}
 
         device_raw = device_details.raw if hasattr(device_details, "raw") else device_details
         device_name = device_raw.get("name") or device_raw.get("model", "Unknown")
@@ -604,10 +600,9 @@ async def get_ips_events(
 @server.tool(
     name="unifi_get_client_sessions",
     description=(
-        "Get client session history. Note: this endpoint tracks hotspot/captive portal "
-        "authorization sessions, not general WiFi connect/disconnect events. "
-        "Returns empty without a guest portal configured. "
-        "For WiFi roaming events, use the event log instead."
+        "Get client association sessions (connect time, disconnect time, duration, AP), "
+        "newest first, for one client or all clients. "
+        "For individual connect, disconnect and roaming events, use the event log instead."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -618,7 +613,7 @@ async def get_client_sessions(
     ] = None,
     duration: Annotated[
         str,
-        Field(description="Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)"),
+        Field(description="Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)"),
     ] = "daily",
     limit: Annotated[int, Field(description="Maximum number of sessions to return (default 50)")] = 50,
 ) -> Dict[str, Any]:

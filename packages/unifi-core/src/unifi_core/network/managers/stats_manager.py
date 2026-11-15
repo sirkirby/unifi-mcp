@@ -583,7 +583,7 @@ class StatsManager:
         end_ms: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id client identifier before fetching stats."""
-        client = await self._client_manager.get_client_details(client_id, existence_only=True)
+        client = await self._client_manager.get_client_by_identifier(client_id, existence_only=True)
         raw = client.raw if hasattr(client, "raw") else client
         client_mac = raw.get("mac", client_id)
         return await self.get_client_stats(
@@ -695,7 +695,7 @@ class StatsManager:
         granularity: str = "hourly",
     ) -> List[Dict[str, Any]]:
         """Resolve a public MAC-or-id device identifier and select its report family."""
-        device = await DeviceManager(self._connection).get_device_details(device_id)
+        device = await DeviceManager(self._connection).get_device_by_identifier(device_id)
         raw = device.raw if hasattr(device, "raw") else device
         device_mac = raw.get("mac", device_id)
         device_type = raw.get("type", "unknown")
@@ -1296,7 +1296,11 @@ class StatsManager:
         duration_hours: int = 24,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
-        """Get client session history.
+        """Get client association sessions, newest first.
+
+        Legacy ``/stat/session`` takes its ``start``/``end`` window in epoch
+        seconds, unlike ``/stat/report/*``, which takes milliseconds; a
+        millisecond window lies far in the future and matches nothing.
 
         Args:
             client_mac: Optional MAC address to filter sessions for a specific client.
@@ -1311,8 +1315,8 @@ class StatsManager:
             return cached_data
 
         try:
-            start_time = int((datetime.now() - timedelta(hours=duration_hours)).timestamp() * 1000)
-            end_time = int(datetime.now().timestamp() * 1000)
+            end_time = int(datetime.now().timestamp())
+            start_time = end_time - int(duration_hours) * 3600
 
             endpoint = "/stat/session"
             payload: Dict[str, Any] = {
@@ -1320,6 +1324,7 @@ class StatsManager:
                 "start": start_time,
                 "end": end_time,
                 "_limit": limit,
+                "_sort": "-assoc_time",
             }
             if client_mac:
                 payload["mac"] = client_mac

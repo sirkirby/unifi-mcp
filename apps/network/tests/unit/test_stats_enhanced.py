@@ -4,6 +4,7 @@ Tests granularity support, new report endpoints, live stat endpoints,
 and device command methods (speedtest).
 """
 
+import time
 from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
@@ -133,6 +134,23 @@ class TestStatsManagerEnhanced:
         call_args = mock_connection.request.call_args
         api_request = call_args[0][0]
         assert "mac" not in api_request.data
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("duration_hours", [1, 24, 168])
+    async def test_get_client_sessions_sends_its_window_in_epoch_seconds(
+        self, stats_manager, mock_connection, duration_hours
+    ):
+        """/stat/session takes seconds; a millisecond window lies in the future and matches nothing."""
+        mock_connection.request.return_value = []
+
+        before = time.time()
+        await stats_manager.get_client_sessions(duration_hours=duration_hours)
+        after = time.time()
+
+        data = mock_connection.request.call_args[0][0].data
+        assert before - 1 <= data["end"] <= after + 1
+        assert data["end"] - data["start"] == duration_hours * 3600
+        assert data["_sort"] == "-assoc_time"
 
     # ---- IPS events ----
 
