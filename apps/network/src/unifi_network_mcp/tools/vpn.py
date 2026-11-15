@@ -345,7 +345,7 @@ _TELEPORT_CLIENT_WARNING = (
         "(subnet_cidr, gateway-address form such as '192.168.2.1/24'). The UniFi UI does not show the range; "
         "the gateway picks it when Teleport is first enabled."
     ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_teleport_settings() -> Dict[str, Any]:
     """Read the Teleport site setting through the Core manager."""
@@ -392,6 +392,16 @@ async def update_teleport_settings(
                     "success": False,
                     "error": f"Teleport range overlaps configured network(s): {', '.join(conflicts)}",
                 }
+            if current.get("subnet_cidr") == updates["subnet_cidr"]:
+                preview = update_preview(
+                    resource_type="teleport_settings",
+                    resource_id=current.get("id") or "teleport",
+                    resource_name="Teleport Settings",
+                    current_state=current,
+                    updates=updates,
+                )
+                preview["message"] = "Teleport already uses this range; confirming changes nothing."
+                return preview
             return update_preview(
                 resource_type="teleport_settings",
                 resource_id=current.get("id") or "teleport",

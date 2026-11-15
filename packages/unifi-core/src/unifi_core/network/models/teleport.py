@@ -118,26 +118,51 @@ def teleport_to_controller_update(fields: dict[str, Any]) -> dict[str, Any]:
     return {"subnet_cidr": validate_teleport_subnet(fields["subnet_cidr"])}
 
 
-def teleport_subnet_conflicts(subnet_cidr: str, networks: list[dict[str, Any]]) -> list[str]:
-    """Names of configured networks whose ``ip_subnet`` overlaps ``subnet_cidr``.
+# networkconf keys that hold an IPv4 range a Teleport range must not overlap.
+# ``ip_subnet`` is the LAN/VLAN range and, on current controllers, a VPN
+# server's client range; older VPN server records keep that range under the
+# type-specific keys (the VPN model falls back to them the same way). The remote
+# keys hold the far-side networks of a site-to-site VPN, as a list.
+_RANGE_KEYS = ("ip_subnet", "wireguard_server_subnet", "openvpn_server_subnet")
+_REMOTE_RANGE_KEYS = ("remote_subnets", "remote_site_subnets")
 
-    Covers every networkconf record that carries an IPv4 ``ip_subnet``: LANs,
-    VLANs and the other VPN servers' client ranges. Unparseable subnets are
+
+def _record_ranges(record: dict[str, Any]) -> list[ipaddress.IPv4Network]:
+    values: list[Any] = []
+    for key in _RANGE_KEYS + _REMOTE_RANGE_KEYS:
+        value = record.get(key)
+        if isinstance(value, list):
+            values.extend(value)
+        elif value is not None:
+            values.append(value)
+    ranges: list[ipaddress.IPv4Network] = []
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            ranges.append(ipaddress.IPv4Interface(value.strip()).network)
+        except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, ValueError):
+            continue
+    return ranges
+
+
+def teleport_subnet_conflicts(subnet_cidr: str, networks: list[dict[str, Any]]) -> list[str]:
+    """Names of configured networks with an IPv4 range that overlaps ``subnet_cidr``.
+
+    Every networkconf record is checked against each range it carries:
+    ``ip_subnet`` (LANs, VLANs and VPN server client ranges), the older
+    ``wireguard_server_subnet`` / ``openvpn_server_subnet`` keys some VPN
+    servers still use, and a site-to-site VPN's remote networks
+    (``remote_subnets`` / ``remote_site_subnets``). A record is named once
+    however many of its ranges overlap. IPv6 and unparseable values are
     skipped, not treated as conflicts.
     """
     wanted = ipaddress.IPv4Interface(subnet_cidr).network
-    conflicts: list[str] = []
+    conflicts: set[str] = set()
     for record in networks:
         if not isinstance(record, dict):
             continue
-        subnet = record.get("ip_subnet")
-        if not isinstance(subnet, str) or not subnet:
-            continue
-        try:
-            existing = ipaddress.IPv4Interface(subnet).network
-        except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, ValueError):
-            continue
-        if wanted.overlaps(existing):
+        if any(wanted.overlaps(existing) for existing in _record_ranges(record)):
             name = record.get("name")
-            conflicts.append(name if isinstance(name, str) and name else str(record.get("_id", "unnamed network")))
+            conflicts.add(name if isinstance(name, str) and name else str(record.get("_id", "unnamed network")))
     return sorted(conflicts)

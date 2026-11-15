@@ -12243,6 +12243,7 @@
     },
     {
       "annotations": {
+        "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": true
       },

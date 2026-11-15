@@ -494,11 +494,18 @@ class VpnManager:
     async def prepare_teleport_settings_update(
         self, update_data: Dict[str, Any]
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
-        """Validate an update and return (current view, updates, overlapping network names) without writing."""
+        """Validate an update and return (current view, updates, overlapping network names) without writing.
+
+        An unchanged range reports no conflicts and skips the network read,
+        as ``update_teleport_settings`` treats it as a no-op.
+        """
         updates = teleport_to_controller_update(update_data)
         before = await self._fresh_teleport_record()
+        current = teleport_from_controller(before).model_dump()
+        if before.get("subnet_cidr") == updates["subnet_cidr"]:
+            return current, updates, []
         conflicts = teleport_subnet_conflicts(updates["subnet_cidr"], await self._fresh_network_records())
-        return teleport_from_controller(before).model_dump(), updates, conflicts
+        return current, updates, conflicts
 
     async def update_teleport_settings(self, update_data: Dict[str, Any]) -> WriteVerificationResult:
         """Write a new Teleport client range into the full record and verify it.

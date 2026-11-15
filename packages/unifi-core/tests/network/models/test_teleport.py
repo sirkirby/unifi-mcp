@@ -115,6 +115,42 @@ def test_overlap_check_covers_lans_and_vpn_ranges():
     assert teleport_subnet_conflicts("10.0.0.1/8", NETWORKS) == ["Default", "Guests", "WireGuard"]
 
 
+def test_overlap_check_covers_legacy_vpn_and_site_to_site_keys():
+    networks = [
+        {"_id": "w", "name": "Old WireGuard", "purpose": "remote-user-vpn", "wireguard_server_subnet": "10.130.0.1/24"},
+        {"_id": "o", "name": "Old OpenVPN", "purpose": "remote-user-vpn", "openvpn_server_subnet": "10.140.0.1/24"},
+        {
+            "_id": "s",
+            "name": "Branch office",
+            "purpose": "site-vpn",
+            "remote_subnets": ["10.150.0.0/24", "fd00:150::/64", "garbage"],
+        },
+        {"_id": "r", "name": "Warehouse", "purpose": "site-vpn", "remote_site_subnets": ["10.160.0.0/16"]},
+        {
+            "_id": "d",
+            "name": "Dual",
+            "purpose": "remote-user-vpn",
+            "ip_subnet": "10.170.0.1/24",
+            "wireguard_server_subnet": "10.170.0.1/24",
+        },
+        {"_id": "e", "name": "Empty", "purpose": "site-vpn", "remote_subnets": [], "remote_site_subnets": None},
+    ]
+    assert teleport_subnet_conflicts("10.201.0.1/24", networks) == []
+    assert teleport_subnet_conflicts("10.130.0.1/24", networks) == ["Old WireGuard"]
+    assert teleport_subnet_conflicts("10.140.0.1/25", networks) == ["Old OpenVPN"]
+    assert teleport_subnet_conflicts("10.150.0.1/24", networks) == ["Branch office"]
+    assert teleport_subnet_conflicts("10.160.9.1/24", networks) == ["Warehouse"]
+    # A record is named once even when several of its ranges overlap.
+    assert teleport_subnet_conflicts("10.170.0.1/24", networks) == ["Dual"]
+    assert teleport_subnet_conflicts("10.128.0.1/10", networks) == [
+        "Branch office",
+        "Dual",
+        "Old OpenVPN",
+        "Old WireGuard",
+        "Warehouse",
+    ]
+
+
 def manager_and_connection(responses):
     conn = MagicMock()
     conn.site = "default"
@@ -147,6 +183,15 @@ async def test_prepare_reports_conflicts_without_writing():
     assert updates == {"subnet_cidr": "10.100.9.1/24"}
     assert conflicts == ["Default"]
     assert [call.args[0].method for call in conn.request.call_args_list] == ["get", "get"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_of_current_range_skips_overlap_read():
+    manager, conn = manager_and_connection([[deepcopy(RECORD)]])
+    current, updates, conflicts = await manager.prepare_teleport_settings_update({"subnet_cidr": "192.168.2.1/24"})
+    assert current["subnet_cidr"] == updates["subnet_cidr"] == "192.168.2.1/24"
+    assert conflicts == []
+    assert conn.request.await_count == 1
 
 
 @pytest.mark.asyncio

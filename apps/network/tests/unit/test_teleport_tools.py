@@ -69,6 +69,22 @@ async def test_preview_does_not_write(manager):
 
 
 @pytest.mark.asyncio
+async def test_preview_of_current_range_says_nothing_changes(manager):
+    from unifi_network_mcp.tools.vpn import update_teleport_settings
+
+    manager.prepare_teleport_settings_update.return_value = (
+        CURRENT.model_dump(),
+        {"subnet_cidr": "192.168.2.1/24"},
+        [],
+    )
+    preview = await update_teleport_settings("192.168.2.1/24")
+    assert preview["requires_confirmation"] is True
+    assert preview["message"] == "Teleport already uses this range; confirming changes nothing."
+    assert "warnings" not in preview
+    manager.update_teleport_settings.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_preview_refuses_overlap(manager):
     from unifi_network_mcp.tools.vpn import update_teleport_settings
 

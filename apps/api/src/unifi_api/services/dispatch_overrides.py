@@ -138,7 +138,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_delete_vpn_client": ("vpn_manager", "delete_vpn_client"),
     "unifi_update_vpn_server_state": ("vpn_manager", "update_vpn_server_state"),
     "unifi_update_vpn_server_alternate_address": ("vpn_manager", "update_vpn_server_alternate_address"),
-    # Teleport update previews through prepare_teleport_settings_update first.
+    # Teleport: the API preview only validates the range through the translator;
+    # the live read and overlap check run on confirm, inside update_teleport_settings.
     "unifi_update_teleport_settings": ("vpn_manager", "update_teleport_settings"),
     # Stats: tool combines existence check on client/device with stats fetch.
     "unifi_get_device_stats": ("stats_manager", "get_device_stats_for_identifier"),
