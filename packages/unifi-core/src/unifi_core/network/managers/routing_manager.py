@@ -21,10 +21,11 @@ def _legacy_active_route(route: Dict[str, Any]) -> Dict[str, Any]:
     """Express a V2 ``/routes`` row in the ``/stat/routing`` row shape.
 
     V2 names the outbound interface by network ID, not by interface name, and
-    lists every candidate next hop; only the ones in use are kept.
+    lists every candidate next hop; only the ones in use are kept, so a route
+    with no hop in use has an empty ``nh``.
     """
     nexthops = [hop for hop in route.get("nexthops") or [] if isinstance(hop, dict)]
-    in_use = [hop for hop in nexthops if hop.get("in_use")] or nexthops
+    in_use = [hop for hop in nexthops if hop.get("in_use")]
     row: Dict[str, Any] = {
         "pfx": route.get("destination"),
         "nh": [{"via": hop.get("gateway"), "intf": hop.get("interface")} for hop in in_use],
@@ -107,8 +108,6 @@ class RoutingManager:
             # This endpoint may not exist on all controllers
             if "404" in str(e) or "Not Found" in str(e):
                 logger.debug("Active routes endpoint /stat/routing not available on this controller")
-            else:
-                logger.error("Error getting active routes: %s", e)
         if routes:
             return routes
 
@@ -117,8 +116,14 @@ class RoutingManager:
         except Exception as e:
             logger.debug("V2 routing table /routes not available (%s)", type(e).__name__)
             if legacy_error is not None:
+                logger.error("Error getting active routes: %s", legacy_error)
                 raise legacy_error
             return routes
+        # The table arrives as {"items": [...], "truncated": ...}; the
+        # connection layer can hand that object back wrapped in a list.
+        if isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict):
+            if "items" in response[0]:
+                response = response[0]
         items = response.get("items", []) if isinstance(response, dict) else response
         return [_legacy_active_route(item) for item in items or [] if isinstance(item, dict)]
 

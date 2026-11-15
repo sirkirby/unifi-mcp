@@ -339,3 +339,55 @@ class TestRoutingManager:
 
         with pytest.raises(Exception, match="API error"):
             await routing_manager.update_route(route_id="r1", name="New")
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_unwraps_a_v2_table_returned_inside_a_list(self, routing_manager, mock_connection):
+        """The connection layer can return the V2 table object as the only element of a list."""
+        mock_connection.request.side_effect = [
+            [],
+            [
+                {
+                    "truncated": False,
+                    "items": [
+                        {
+                            "destination": "192.168.1.0/24",
+                            "origin": "Kernel",
+                            "type": "unicast",
+                            "nexthops": [{"interface": "net-lan", "in_use": True}],
+                        }
+                    ],
+                }
+            ],
+        ]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert routes == [
+            {
+                "pfx": "192.168.1.0/24",
+                "nh": [{"via": None, "intf": "net-lan"}],
+                "metric": None,
+                "origin": "Kernel",
+                "route_type": "unicast",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_active_routes_lists_no_next_hop_when_none_is_in_use(self, routing_manager, mock_connection):
+        """A standby route is not shown as active through a hop the gateway is not using."""
+        mock_connection.request.side_effect = [
+            [],
+            {
+                "items": [
+                    {
+                        "destination": "0.0.0.0/0",
+                        "distance": 210,
+                        "nexthops": [{"gateway": "203.0.113.2", "interface": "net-wan2", "in_use": False}],
+                    }
+                ]
+            },
+        ]
+
+        routes = await routing_manager.get_active_routes()
+
+        assert routes == [{"pfx": "0.0.0.0/0", "nh": [], "metric": 210}]
