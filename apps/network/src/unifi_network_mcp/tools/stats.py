@@ -600,10 +600,9 @@ async def get_ips_events(
 @server.tool(
     name="unifi_get_client_sessions",
     description=(
-        "Get client session history. Note: this endpoint tracks hotspot/captive portal "
-        "authorization sessions, not general WiFi connect/disconnect events. "
-        "Returns empty without a guest portal configured. "
-        "For WiFi roaming events, use the event log instead."
+        "Get client association sessions (connect time, disconnect time, duration, AP), "
+        "newest first, for one client or all clients. "
+        "For individual connect, disconnect and roaming events, use the event log instead."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -614,7 +613,7 @@ async def get_client_sessions(
     ] = None,
     duration: Annotated[
         str,
-        Field(description="Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)"),
+        Field(description="Time period: 'hourly' (1h), 'daily' (24h, default), 'weekly' (7d), or 'monthly' (30d)"),
     ] = "daily",
     limit: Annotated[int, Field(description="Maximum number of sessions to return (default 50)")] = 50,
 ) -> Dict[str, Any]:

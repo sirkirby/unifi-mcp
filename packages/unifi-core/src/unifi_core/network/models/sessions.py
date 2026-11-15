@@ -3,7 +3,7 @@
 Mirrors the Strawberry types in
 ``unifi_api.graphql.types.network.session``:
 
-- ``ClientSession``    — get_client_sessions (hotspot/captive portal sessions)
+- ``ClientSession``    — get_client_sessions (client association sessions)
 - ``ClientWifiDetails`` — get_client_wifi_details (current WiFi parameters)
 
 Both classes are read-only (no create/update/delete tools).
@@ -43,7 +43,7 @@ def _get(obj: Any, *keys: str, default: Any = None) -> Any:
 
 
 class ClientSession(BaseModel):
-    """Historical client association session entry (hotspot/captive portal)."""
+    """Historical client association session entry."""
 
     mac: Optional[str] = Field(
         default=None,
