@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 from urllib.parse import quote
 
@@ -357,53 +357,99 @@ def _updated_copy(mapping: Mapping, values: Mapping) -> Any:
     return copied
 
 
-def _scrub_any(value: Any, ordered: list[tuple[str, bool]], marker: str) -> Any:
-    """Scrub strings; redact mappings by key and scrub inside them; recurse into sequences.
+def _rewrite_any(value: Any, text_fn: Callable[[str], str], *, redact_keys: bool) -> Any:
+    """Apply ``text_fn`` to every string inside ``value``, keeping container types.
 
-    ``marker`` applies to free text. A whole value under a sensitive key always
-    becomes ``REDACTED``: that is the marker the write-back guards
+    With ``redact_keys``, a whole value under a sensitive key becomes
+    ``REDACTED`` instead: that is the marker the write-back guards
     (``redaction_marker_paths``) recognise, and a payload value carrying any
     other marker would sail past them into a controller write.
     """
     if isinstance(value, str):
-        return _scrub_text(value, ordered, marker)
+        return text_fn(value)
     if isinstance(value, Mapping):
-        scrubbed = {
-            key: REDACTED if _is_secret_entry(key, item) else _scrub_any(item, ordered, marker)
+        rewritten = {
+            key: (
+                REDACTED
+                if redact_keys and _is_secret_entry(key, item)
+                else _rewrite_any(item, text_fn, redact_keys=redact_keys)
+            )
             for key, item in value.items()
         }
         # Keep the mapping type: aiohttp's headers are a case-insensitive
         # multidict, and a plain dict would silently lose that. A read-only
         # proxy is rebuilt from a mutable copy of itself, which is the only
         # thing its constructor accepts.
-        for rebuild in (lambda: type(value)(_updated_copy(value, scrubbed)), lambda: type(value)(scrubbed)):
+        for rebuild in (lambda: type(value)(_updated_copy(value, rewritten)), lambda: type(value)(rewritten)):
             try:
                 return rebuild()
             except Exception:  # noqa: BLE001 - any mapping we cannot rebuild degrades to a dict
                 continue
-        return scrubbed
+        return rewritten
     if isinstance(value, tuple):
-        items = [_scrub_any(item, ordered, marker) for item in value]
+        items = [_rewrite_any(item, text_fn, redact_keys=redact_keys) for item in value]
         # aiohttp raises with a NamedTuple (``RequestInfo``) in ``args``; a bare
         # tuple rebuild would silently strip the type.
         return type(value)(*items) if hasattr(value, "_fields") else tuple(items)
     if type(value).__module__ == "yarl" or type(value).__name__ == "URL":
         # A URL renders its userinfo and query percent-encoded, and
-        # ``ClientResponseError.__str__`` prints it. Rebuild from the scrubbed
+        # ``ClientResponseError.__str__`` prints it. Rebuild from the rewritten
         # text rather than leave the object untouched.
         try:
-            return type(value)(_scrub_text(str(value), ordered, marker), encoded=True)
+            return type(value)(text_fn(str(value)), encoded=True)
         except Exception:
-            return _scrub_text(str(value), ordered, marker)
+            return text_fn(str(value))
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
-        return [_scrub_any(item, ordered, marker) for item in value]
+        return [_rewrite_any(item, text_fn, redact_keys=redact_keys) for item in value]
     if isinstance(value, (bytes, bytearray)):
         # A raw body kept as bytes is text to whoever renders it. latin-1
         # round-trips every byte, so a body that is not valid UTF-8 keeps its
         # bytes instead of being replaced away.
-        scrubbed = _scrub_text(value.decode("latin-1"), ordered, marker).encode("latin-1", "replace")
-        return bytearray(scrubbed) if isinstance(value, bytearray) else scrubbed
+        rewritten_bytes = text_fn(value.decode("latin-1")).encode("latin-1", "replace")
+        return bytearray(rewritten_bytes) if isinstance(value, bytearray) else rewritten_bytes
     return value
+
+
+def _scrub_any(value: Any, ordered: list[tuple[str, bool]], marker: str) -> Any:
+    """Scrub strings; redact mappings by key and scrub inside them; recurse into sequences.
+
+    ``marker`` applies to free text; a whole value under a sensitive key always
+    becomes ``REDACTED`` (see ``_rewrite_any``).
+    """
+    return _rewrite_any(value, lambda text: _scrub_text(text, ordered, marker), redact_keys=True)
+
+
+def _rewrite_exception(error: BaseException, text_fn: Callable[[str], str], *, redact_keys: bool) -> BaseException:
+    """Apply ``text_fn`` throughout ``error`` and its cause chain, in place.
+
+    Rewrites ``args``, the common message attributes, the structured attributes
+    an exception renders from instead of ``args``, and PEP 678 notes, then
+    follows ``__cause__``/``__context__``.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        current.args = tuple(_rewrite_any(arg, text_fn, redact_keys=redact_keys) for arg in current.args)
+        for attr in _EXCEPTION_MESSAGE_ATTRS:
+            value = getattr(current, attr, None)
+            if isinstance(value, str):
+                try:
+                    setattr(current, attr, text_fn(value))
+                except (AttributeError, TypeError):
+                    pass  # read-only property; ``args`` above already carries the rewritten text
+        for attr in _EXCEPTION_STRUCTURED_ATTRS:
+            value = getattr(current, attr, None)
+            if value is not None:
+                try:
+                    setattr(current, attr, _rewrite_any(value, text_fn, redact_keys=redact_keys))
+                except (AttributeError, TypeError):
+                    pass  # read-only attribute
+        notes = getattr(current, "__notes__", None)
+        if isinstance(notes, list):
+            current.__notes__ = [_rewrite_any(note, text_fn, redact_keys=redact_keys) for note in notes]
+        current = current.__cause__ if current.__cause__ is not None else current.__context__
+    return error
 
 
 def scrub_secret_values(
@@ -449,27 +495,71 @@ def sanitize_exception(
     ordered = _ordered_secrets(secrets, boundary)
     if not ordered:
         return error
-    seen: set[int] = set()
-    current: BaseException | None = error
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        current.args = tuple(_scrub_any(arg, ordered, marker) for arg in current.args)
-        for attr in _EXCEPTION_MESSAGE_ATTRS:
-            value = getattr(current, attr, None)
-            if isinstance(value, str):
-                try:
-                    setattr(current, attr, _scrub_text(value, ordered, marker))
-                except (AttributeError, TypeError):
-                    pass  # read-only property; ``args`` above already carries the scrubbed text
-        for attr in _EXCEPTION_STRUCTURED_ATTRS:
-            value = getattr(current, attr, None)
-            if value is not None:
-                try:
-                    setattr(current, attr, _scrub_any(value, ordered, marker))
-                except (AttributeError, TypeError):
-                    pass  # read-only attribute
-        notes = getattr(current, "__notes__", None)
-        if isinstance(notes, list):
-            current.__notes__ = [_scrub_any(note, ordered, marker) for note in notes]
-        current = current.__cause__ if current.__cause__ is not None else current.__context__
-    return error
+    return _rewrite_exception(error, lambda text: _scrub_text(text, ordered, marker), redact_keys=True)
+
+
+# The origin of an absolute URL: scheme, any userinfo, host and port. aiounifi
+# quotes the full request URL in its errors ("Call <url> received 403
+# Forbidden", "Error requesting data from <url>: ...") and aiohttp renders it
+# from ``request_info``. The host run admits ``<`` and ``>`` so userinfo that
+# a credential pass already masked (``https://<mask>:<mask>@host``) goes with
+# the origin.
+_URL_ORIGIN_RE = re.compile(r"\b(?:https?|wss?)://[^/\s'\"?#]+", re.IGNORECASE)
+
+# What a removed origin or host reads as when no path follows it. It holds no
+# whitespace, so a "Call <url> received <status>" message keeps its shape.
+CONTROLLER_PLACEHOLDER = "<controller>"
+
+
+def strip_url_origins(text: str, hosts: Iterable[str] = ()) -> str:
+    """Remove every URL origin, and each of ``hosts`` written bare, from ``text``.
+
+    ``https://host:443/proxy/network/api`` becomes ``/proxy/network/api``: the
+    path says what failed, the origin only says where the controller lives. An
+    origin with no path after it, and a bare host (aiohttp writes "Cannot
+    connect to host <host>:<port>"), become ``CONTROLLER_PLACEHOLDER``. Hosts
+    are matched case-insensitively on hostname boundaries.
+    """
+    if not text:
+        return text
+    if "://" in text:
+        text = _URL_ORIGIN_RE.sub(
+            lambda m: "" if m.string.startswith("/", m.end()) else CONTROLLER_PLACEHOLDER,
+            text,
+        )
+    for host in _bare_hosts(hosts):
+        if host.lower() in text.lower():
+            text = re.sub(
+                rf"(?<![\w.-]){re.escape(host)}(?![\w-]|\.[\w-])",
+                CONTROLLER_PLACEHOLDER,
+                text,
+                flags=re.IGNORECASE,
+            )
+    return text
+
+
+def _bare_hosts(hosts: Iterable[str]) -> list[str]:
+    """Hostnames from configured hosts, which may carry a scheme, port or path."""
+    bare: set[str] = set()
+    for host in hosts:
+        if not isinstance(host, str):
+            continue
+        value = host.strip()
+        if "://" in value:
+            value = value.split("://", 1)[1]
+        value = value.split("/", 1)[0].rsplit("@", 1)[-1]
+        if not value.startswith("[") and value.count(":") == 1:
+            value = value.split(":", 1)[0]
+        if value:
+            bare.add(value)
+    return sorted(bare, key=len, reverse=True)
+
+
+def strip_exception_url_origins(error: BaseException, hosts: Iterable[str] = ()) -> BaseException:
+    """Remove URL origins and ``hosts`` from ``error`` in place and return it.
+
+    Covers the same places ``sanitize_exception`` does, cause chain included,
+    and keeps the exception type and identity.
+    """
+    host_list = list(hosts)
+    return _rewrite_exception(error, lambda text: strip_url_origins(text, host_list), redact_keys=False)

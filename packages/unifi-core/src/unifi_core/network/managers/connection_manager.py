@@ -27,7 +27,13 @@ from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
-from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
+from unifi_core.redaction import (
+    collect_secret_values,
+    sanitize_exception,
+    scrub_secret_values,
+    strip_exception_url_origins,
+    strip_url_origins,
+)
 from unifi_core.request_budget import (
     RequestBudgetSpent,
     charge_request,
@@ -112,6 +118,15 @@ _UNREACHABLE_REQUEST_PREFIX = "Error requesting data from "
 # body may contain any digits and are never consulted.
 _RESPONSE_STATUS_RE = re.compile(r"^Call \S+ received (\d{3})(?!\d)")
 
+# aiounifi raises ``Forbidden`` for every 403 and its text names only the path,
+# so a caller cannot tell a missing role from an outage. Fixed text: it never
+# quotes the controller.
+_FORBIDDEN_HINT = (
+    "The Network account lacks permission for this operation; "
+    "some operations, such as backups, need the Full Admin role."
+)
+_SETTINGS_PATH_PREFIXES = ("/get/setting/", "/set/setting/")
+
 
 class SettingsControllerRejection(RequestError):
     """Safe settings failure carrying only a validated controller error code."""
@@ -134,6 +149,31 @@ def response_status(exc: BaseException) -> Optional[int]:
         return None
     match = _RESPONSE_STATUS_RE.match(str(exc))
     return int(match.group(1)) if match else None
+
+
+def _reported_status(exc: BaseException) -> Optional[int]:
+    """The HTTP status an aiounifi error reports in its own message, else ``None``.
+
+    Wider than :func:`response_status`, which keeps its ``ResponseError``-only
+    contract for callers: ``Forbidden`` is always 403, and the 502/503 classes
+    (``RequestError`` subclasses) carry the same ``Call <url> received <status>``
+    message.
+    """
+    if isinstance(exc, Forbidden):
+        return 403
+    if not isinstance(exc, AiounifiException):
+        return None
+    match = _RESPONSE_STATUS_RE.match(str(exc))
+    return int(match.group(1)) if match else None
+
+
+def _add_forbidden_hint(error: BaseException) -> None:
+    """Append the fixed permission hint to a 403's message, in place and once."""
+    message = error.args[0] if error.args else ""
+    if not isinstance(message, str) or _FORBIDDEN_HINT in message:
+        return
+    head = message.rstrip().rstrip(".") or "HTTP 403"
+    error.args = (f"{head}. {_FORBIDDEN_HINT}", *error.args[1:])
 
 
 def controller_error_code(exc: BaseException) -> Optional[str]:
@@ -617,7 +657,14 @@ class ConnectionManager:
             rules.update(extra_secrets)
         else:
             rules.update(dict.fromkeys(extra_secrets, False))
-        return scrub_secret_values(mask_macs(text), rules, marker=_CREDENTIAL_MASK)
+        return strip_url_origins(
+            scrub_secret_values(mask_macs(text), rules, marker=_CREDENTIAL_MASK),
+            self._controller_hosts(),
+        )
+
+    def _controller_hosts(self) -> tuple[str, ...]:
+        """The configured controller address, as error text may quote it bare."""
+        return (self.host,) if isinstance(self.host, str) and self.host else ()
 
     def _scrub_error(self, error: BaseException, api_request: Any = None) -> set[str]:
         """Strip credential values out of ``error`` in place before it is logged or re-raised.
@@ -629,11 +676,15 @@ class ConnectionManager:
         key in the request payload, following the exception's cause chain, and
         marks them the way this manager's own credential masking does.
 
-        MAC addresses are masked as well. Returns the secret set so the log sink
-        can scrub the text it is about
+        MAC addresses are masked as well, and the controller's address is
+        removed: aiounifi quotes the full request URL, so ``scheme://host:port``
+        is dropped and the path kept. A 403 gains a fixed permission hint.
+        Returns the secret set so the log sink can scrub the text it is about
         to write: an exception whose ``__str__`` ignores ``args`` (pydantic's
         ValidationError) passes through the rewrite untouched.
         """
+        # Classified before the rewrite, like every other status read here.
+        forbidden = _reported_status(error) == 403
         secrets = self._secret_rules(api_request)
         sanitize_exception(error, secrets, marker=_CREDENTIAL_MASK)
         # A MAC is not a secret-keyed value, so credential scrubbing leaves it in
@@ -641,6 +692,12 @@ class ConnectionManager:
         # client-targeting policy, ACL rule, block and rename. The log sink already
         # masks the text it writes; this brings the re-raised exception in line.
         mask_exception_macs(error)
+        # After the credential pass, never before: a submitted value can itself
+        # be a URL, and stripping its origin first would leave the rest of it
+        # unrecognisable to the secret match.
+        strip_exception_url_origins(error, self._controller_hosts())
+        if forbidden:
+            _add_forbidden_hint(error)
         return secrets
 
     def _secret_rules(self, api_request: Any = None) -> dict[str, bool]:
@@ -1634,12 +1691,21 @@ class ConnectionManager:
         except Exception as error:
             if isinstance(error, (SettingsControllerRejection, CertificateVerificationError)):
                 raise
-            if api_request.path.startswith(("/get/setting/", "/set/setting/")):
+            if api_request.path.startswith(_SETTINGS_PATH_PREFIXES):
                 # Domain managers and tools may log the returned error and its
                 # traceback. An opaque exception cannot reliably be rewritten,
                 # so expose a new safe error without its original cause/context.
-                raise RequestError(f"Controller settings request failed ({type(error).__name__}).") from None
+                # Only the class, the status and fixed text survive.
+                raise RequestError(self._settings_failure_message(error)) from None
             raise
+
+    @staticmethod
+    def _settings_failure_message(error: BaseException) -> str:
+        """Fixed settings-failure text: exception class, HTTP status when known, 403 hint."""
+        status = _reported_status(error)
+        detail = type(error).__name__ if status is None else f"{type(error).__name__}, HTTP {status}"
+        message = f"Controller settings request failed ({detail})."
+        return f"{message} {_FORBIDDEN_HINT}" if status == 403 else message
 
     async def _request_with_reauthentication(self, api_request: ApiRequest | ApiRequestV2) -> Any:
         """Make a request to the controller API, re-authenticating once on LoginRequired."""
@@ -1739,7 +1805,7 @@ class ConnectionManager:
                     if isinstance(retry_e, LoginRequired):
                         self._block_automatic_reconnect(retry_e)
                         await self._discard_connection()
-                    if retry_code is not None and api_request.path.startswith(("/get/setting/", "/set/setting/")):
+                    if retry_code is not None and api_request.path.startswith(_SETTINGS_PATH_PREFIXES):
                         safe_rejection = SettingsControllerRejection(retry_code)
                     else:
                         raise retry_e from None
@@ -1813,7 +1879,7 @@ class ConnectionManager:
                     )
             except Exception:
                 pass
-            if code is not None and api_request.path.startswith(("/get/setting/", "/set/setting/")):
+            if code is not None and api_request.path.startswith(_SETTINGS_PATH_PREFIXES):
                 safe_rejection = SettingsControllerRejection(code)
             else:
                 raise
