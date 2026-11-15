@@ -4,7 +4,10 @@ Provides read-only access to the DPI application and category database
 via the official UniFi integration API. Applications are identified by
 compound IDs: (category_id << 16) | app_id.
 
-Requires an API key (UNIFI_API_KEY or UNIFI_NETWORK_API_KEY).
+Requires an API key (UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP
+server; the controller's API token for the API server). Without one, or on
+any non-200 answer, requests raise with fixed text rather than returning an
+empty catalog.
 
 API endpoints (official integration API):
   GET /proxy/network/integration/v1/dpi/applications  (paginated; maximum
@@ -21,6 +24,12 @@ from typing import Any, Dict, Optional
 import aiohttp
 
 from unifi_core.auth import UniFiAuth
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiMalformedResponseError,
+    UniFiOperationError,
+    UniFiPermissionError,
+)
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.tls import CertificateVerificationError, certificate_failure, is_certificate_error
 
@@ -31,6 +40,38 @@ CACHE_PREFIX_DPI_CATEGORIES = "dpi_categories"
 CACHE_PREFIX_DPI_CATALOG = "dpi_catalog"
 _DPI_CATALOG_CACHE_TTL = 900
 _DPI_CATALOG_PAGE_SIZE = 200
+
+
+_KEY_SOURCE = "Settings → Control Plane → Integrations"
+
+
+def _missing_key_message(env_prefix: str | None) -> str:
+    """Fixed text naming the setting that enables the DPI catalog.
+
+    The ``UNIFI_*`` variables are named only for a caller that reads them
+    (``env_prefix`` set by an MCP server); the API server keeps the key on the
+    controller record instead.
+    """
+    if isinstance(env_prefix, str) and env_prefix:
+        where = f"set UNIFI_{env_prefix}_API_KEY (or UNIFI_API_KEY) in the server environment"
+    else:
+        where = "add it to this controller's configuration"
+    return (
+        "The DPI catalog is read through the UniFi integration API, which needs a Network API key, "
+        f"and none is configured. Create one on the controller ({_KEY_SOURCE}) and {where}."
+    )
+
+
+def _status_error(status: int) -> Exception:
+    """Fixed text for a non-200 integration-API answer; never quotes the response or URL."""
+    prefix = f"DPI catalog request failed (HTTP {status})."
+    if status == 401:
+        return UniFiAuthError(f"{prefix} The controller rejected the configured API key.")
+    if status == 403:
+        return UniFiPermissionError(f"{prefix} The API key lacks permission to read the DPI catalog.")
+    if status == 404:
+        return UniFiOperationError(f"{prefix} This controller does not serve the integration DPI endpoint.")
+    return UniFiOperationError(prefix)
 
 
 def _parse_non_negative_integer(value: Any) -> int | None:
@@ -49,7 +90,7 @@ class DpiManager:
         self._connection = connection_manager
         self._auth = auth
 
-    async def _request_integration_api(self, path: str, params: Optional[Dict] = None) -> Optional[Dict]:
+    async def _request_integration_api(self, path: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """Make a request to the official integration API using the shared auth module.
 
         Args:
@@ -57,16 +98,20 @@ class DpiManager:
             params: Optional query parameters
 
         Returns:
-            Response dict, or None on failure.
+            The decoded response object.
+
+        Raises:
+            UniFiAuthError: no API key is configured, or the controller rejected it.
+            UniFiPermissionError / UniFiOperationError: any other non-200 answer.
+            UniFiMalformedResponseError: the answer is not a JSON object.
+
+        An empty catalog is never substituted for a failure: callers would
+        report "no DPI applications" for what is a configuration problem.
         """
         if self._auth is None or not self._auth.has_api_key:
-            logger.error(
-                "DPI integration API requires an API key. "
-                "Configure the controller with an API token (Settings → "
-                "Control Plane → Integrations) or set UNIFI_API_KEY / "
-                "UNIFI_NETWORK_API_KEY in the network MCP environment."
-            )
-            return None
+            message = _missing_key_message(self._connection.tls_env_prefix)
+            logger.warning("%s", message)
+            raise UniFiAuthError(message)
 
         base_url = f"https://{self._connection.host}:{self._connection.port}"
         url = f"{base_url}/proxy/network/integration{path}"
@@ -82,13 +127,17 @@ class DpiManager:
                     timeout=aiohttp.ClientTimeout(total=10),
                     allow_redirects=False,
                 ) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-                    else:
+                    if resp.status != 200:
                         logger.error("Integration API returned %s for %s", resp.status, path)
-                        return None
+                        raise _status_error(resp.status)
+                    body = await resp.json()
+                    if not isinstance(body, dict):
+                        raise UniFiMalformedResponseError("DPI catalog response was not a JSON object.")
+                    return body
             finally:
                 await session.close()
+        except (UniFiAuthError, UniFiPermissionError, UniFiOperationError, UniFiMalformedResponseError):
+            raise
         except Exception as e:
             if not is_certificate_error(e):
                 logger.error("Error calling integration API %s: %s", path, e)
@@ -136,9 +185,6 @@ class DpiManager:
         params = {"limit": str(fetch_limit), "offset": str(fetch_offset)}
         result = await self._request_integration_api("/v1/dpi/applications", params)
 
-        if result is None:
-            return {"data": [], "totalCount": 0, "offset": offset, "limit": limit}
-
         # Client-side search filtering (API doesn't support text search)
         if search and result.get("data"):
             search_lower = search.lower()
@@ -163,14 +209,16 @@ class DpiManager:
         total_count: int | None = None
 
         while total_count is None or len(entries) < total_count:
-            page = await self._request_integration_api(
-                path,
-                {"limit": str(_DPI_CATALOG_PAGE_SIZE), "offset": str(offset)},
-            )
-            if page is None:
+            try:
+                page = await self._request_integration_api(
+                    path,
+                    {"limit": str(_DPI_CATALOG_PAGE_SIZE), "offset": str(offset)},
+                )
+            except Exception:
                 if offset == 0:
-                    raise RuntimeError(f"failed to fetch DPI {resource} catalogue")
-                raise RuntimeError(f"incomplete DPI {resource} catalogue")
+                    # The first page's error says why (missing key, status, TLS).
+                    raise
+                raise RuntimeError(f"incomplete DPI {resource} catalogue") from None
 
             page_entries = list(page.get("data") or [])
             raw_total = page.get("totalCount")
@@ -238,9 +286,6 @@ class DpiManager:
 
         params = {"limit": str(limit), "offset": str(offset)}
         result = await self._request_integration_api("/v1/dpi/categories", params)
-
-        if result is None:
-            return {"data": [], "totalCount": 0, "offset": offset, "limit": limit}
 
         self._connection._update_cache(cache_key, result)
         return result

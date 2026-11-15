@@ -36,10 +36,8 @@ def _require_dpi_auth(cm: Any, controller_id: str) -> None:
     DPI lookups go through UniFi's integration API which requires a
     bearer API key separate from the session-based auth used for
     everything else. The api_token field on the controller record carries
-    it; when unset, the manager's `_request_integration_api` returns None
-    and the manager normalizes that to an empty wrapper — which would
-    silently look like 'no DPI apps found' rather than a configuration
-    issue. Surface the actual cause instead.
+    it; when unset, the manager raises an auth error with fixed text. This
+    check answers first with a structured 501 a REST client can act on.
     """
     auth = getattr(cm, "unifi_auth", None)
     if auth is None or not auth.has_api_key:
