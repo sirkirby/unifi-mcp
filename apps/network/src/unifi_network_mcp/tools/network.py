@@ -23,7 +23,11 @@ from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
-from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION, validate_wan_dns_state
+from unifi_core.network.models.networks import (
+    MDNS_ENABLED_DESCRIPTION,
+    validate_ipv6_subnet_state,
+    validate_wan_dns_state,
+)
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
 from unifi_core.network.models.vpn import is_vpn_network
@@ -465,6 +469,7 @@ async def update_network(
         return {"success": False, "error": "Network not found"}
     try:
         validate_wan_dns_state(current, validated_data)
+        validate_ipv6_subnet_state(current, validated_data)
     except ValueError as e:
         return {"success": False, "error": str(e)}
 

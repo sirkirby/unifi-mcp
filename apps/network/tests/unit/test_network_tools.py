@@ -969,3 +969,40 @@ class TestUpdateNetworkIpv6Subnet:
         assert result["success"] is False
         assert "only be set when 'ipv6_interface_type' is 'static'" in result["error"]
         mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stored_type", ["pd", "none", None])
+    async def test_ipv6_subnet_alone_is_rejected_for_stored_non_static_network(self, stored_type):
+        stored = {**SAMPLE_NETWORK, "ipv6_interface_type": stored_type}
+        if stored_type is None:
+            stored.pop("ipv6_interface_type")
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=stored)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001", update_data={"ipv6_subnet": "fd00:0:0:50::1/64"}, confirm=True
+            )
+
+        assert result["success"] is False
+        assert "effective 'ipv6_interface_type' is 'static'" in result["error"]
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ipv6_subnet_alone_is_accepted_for_stored_static_network(self):
+        stored = {**SAMPLE_NETWORK, "ipv6_interface_type": "static"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=stored)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001", update_data={"ipv6_subnet": "fd00:0:0:50::1/64"}, confirm=False
+            )
+
+        assert result["success"] is True, result
+        assert result["requires_confirmation"] is True
+        mock_mgr.update_network.assert_not_called()

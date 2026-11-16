@@ -754,6 +754,21 @@ def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> 
         raise ValueError("The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'.")
 
 
+def validate_ipv6_subnet_state(current: Dict[str, Any], updates: Dict[str, Any]) -> None:
+    """Reject ``ipv6_subnet`` when the effective ``ipv6_interface_type`` is not ``static``.
+
+    The effective type is the one in ``updates`` if present, otherwise the stored
+    one from ``current``. A stored network without the key counts as non-static.
+    """
+    if "ipv6_subnet" not in updates:
+        return
+    if updates.get("ipv6_interface_type", current.get("ipv6_interface_type")) != "static":
+        raise ValueError(
+            "'ipv6_subnet' can only be set when the effective 'ipv6_interface_type' is 'static'. "
+            "Set 'ipv6_interface_type' to 'static' in the same update."
+        )
+
+
 def is_hotspot_zone(zone: Mapping[str, Any]) -> bool:
     """Whether a V2 firewall-zone record is the built-in Hotspot zone.
 

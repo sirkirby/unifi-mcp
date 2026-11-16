@@ -14,6 +14,7 @@ from unifi_core.network.models.networks import (
     to_guest_create_wire,
     validate_create,
     validate_guest_create_fields,
+    validate_ipv6_subnet_state,
     validate_update,
     validate_wan_dns_state,
 )
@@ -539,6 +540,31 @@ class TestLanIpv6Fields:
     def test_validate_update_accepts_ipv6_subnet_without_explicit_type(self) -> None:
         """Only an explicitly set type is checked; the effective type is not visible in a single call."""
         assert validate_update({"ipv6_subnet": "fd00:0:0:50::1/64"}) == {"ipv6_subnet": "fd00:0:0:50::1/64"}
+
+    @pytest.mark.parametrize("current", [{"ipv6_interface_type": "pd"}, {"ipv6_interface_type": "none"}, {}])
+    def test_ipv6_subnet_alone_is_rejected_for_stored_non_static_type(self, current: dict) -> None:
+        with pytest.raises(ValueError, match="effective 'ipv6_interface_type' is 'static'") as error:
+            validate_ipv6_subnet_state(current, {"ipv6_subnet": "fd00:0:0:50::1/64"})
+        assert "fd00" not in str(error.value)
+
+    def test_ipv6_subnet_alone_is_accepted_for_stored_static_type(self) -> None:
+        validate_ipv6_subnet_state({"ipv6_interface_type": "static"}, {"ipv6_subnet": "fd00:0:0:50::1/64"})
+
+    def test_ipv6_subnet_with_static_type_in_same_update_overrides_stored_type(self) -> None:
+        validate_ipv6_subnet_state(
+            {"ipv6_interface_type": "pd"},
+            {"ipv6_interface_type": "static", "ipv6_subnet": "fd00:0:0:50::1/64"},
+        )
+
+    def test_ipv6_subnet_with_non_static_type_in_same_update_is_rejected_over_stored_static(self) -> None:
+        with pytest.raises(ValueError, match="effective 'ipv6_interface_type' is 'static'"):
+            validate_ipv6_subnet_state(
+                {"ipv6_interface_type": "static"},
+                {"ipv6_interface_type": "pd", "ipv6_subnet": "fd00:0:0:50::1/64"},
+            )
+
+    def test_update_without_ipv6_subnet_is_not_checked_against_stored_type(self) -> None:
+        validate_ipv6_subnet_state({"ipv6_interface_type": "pd"}, {"name": "Renamed"})
 
     def test_validate_create_accepts_and_normalizes_ipv6_subnet(self) -> None:
         payload = validate_create(
