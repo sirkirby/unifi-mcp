@@ -113,6 +113,7 @@ class Network:
     wan_ipv6_dns2: str | None
     # LAN-side IPv6 (per-network)
     ipv6_interface_type: str | None
+    ipv6_subnet: str | None
     ipv6_aliases: list[str] | None
     ipv6_ra_enabled: bool | None
     ipv6_ra_priority: str | None
@@ -229,6 +230,7 @@ class Network:
             wan_ipv6_dns1=raw.get("wan_ipv6_dns1"),
             wan_ipv6_dns2=raw.get("wan_ipv6_dns2"),
             ipv6_interface_type=raw.get("ipv6_interface_type"),
+            ipv6_subnet=raw.get("ipv6_subnet"),
             ipv6_aliases=raw.get("ipv6_aliases"),
             ipv6_ra_enabled=raw.get("ipv6_ra_enabled"),
             ipv6_ra_priority=raw.get("ipv6_ra_priority"),

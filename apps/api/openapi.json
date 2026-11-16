@@ -5523,6 +5523,17 @@
             ],
             "title": "Ipv6 Setting Preference"
           },
+          "ipv6_subnet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Subnet"
+          },
           "ipv6_wan_delegation_type": {
             "anyOf": [
               {

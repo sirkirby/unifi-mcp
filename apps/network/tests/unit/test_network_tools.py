@@ -279,6 +279,28 @@ class TestGetNetworkDetailsWanSummary:
         assert "dhcpd_enabled" not in result["details"]
 
 
+class TestGetNetworkDetailsIpv6Summary:
+    """LAN IPv6 fields in get_network_details summary mode."""
+
+    @pytest.mark.asyncio
+    async def test_ipv6_summary_section_includes_ipv6_subnet(self):
+        static_network = {
+            **SAMPLE_NETWORK,
+            "ipv6_interface_type": "static",
+            "ipv6_subnet": "fd00:0:0:50::1/64",
+        }
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=static_network)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import get_network_details
+
+            result = await get_network_details(network_id="net001", summary=True, include="ipv6")
+
+        assert result["success"] is True
+        assert result["details"]["ipv6_subnet"] == "fd00:0:0:50::1/64"
+
+
 class TestUpdateNetworkWanFields:
     """WAN field updates + connectivity-loss warnings in the confirm-preview."""
 
@@ -895,3 +917,55 @@ class TestUpdateNetworkIpv6Preview:
 
         warnings = result.get("warnings") or []
         assert not any("delegated prefix" in w for w in warnings), result
+
+
+class TestUpdateNetworkIpv6Subnet:
+    """A static LAN IPv6 interface carries its gateway address and prefix in ipv6_subnet."""
+
+    @pytest.mark.asyncio
+    async def test_preview_accepts_ipv6_subnet_with_static_interface(self):
+        update_data = {"ipv6_interface_type": "static", "ipv6_subnet": "fd00:0:0:50::1/64"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="net001", update_data=update_data, confirm=False)
+
+        assert result["success"] is True, result
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["proposed"]["ipv6_subnet"] == "fd00:0:0:50::1/64"
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_ipv6_subnet_is_rejected(self):
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="net001", update_data={"ipv6_subnet": "not-a-cidr"}, confirm=True)
+
+        assert result["success"] is False
+        assert "'ipv6_subnet' must be a valid IPv6 CIDR" in result["error"]
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_static_interface_type_with_ipv6_subnet_is_rejected(self):
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001",
+                update_data={"ipv6_interface_type": "pd", "ipv6_subnet": "fd00:0:0:50::1/64"},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "only be set when 'ipv6_interface_type' is 'static'" in result["error"]
+        mock_mgr.update_network.assert_not_called()

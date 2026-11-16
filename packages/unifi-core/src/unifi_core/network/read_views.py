@@ -844,6 +844,7 @@ def shape_network_details(
     if include_all or "ipv6" in sections:
         for key in (
             "ipv6_interface_type",
+            "ipv6_subnet",
             "ipv6_aliases",
             "ipv6_pd_interface",
             "ipv6_pd_prefixid",

@@ -428,6 +428,7 @@ class TestLanIpv6Fields:
 
     LAN_IPV6_FIELDS = (
         "ipv6_interface_type",
+        "ipv6_subnet",
         "ipv6_aliases",
         "ipv6_ra_priority",
         "ipv6_ra_preferred_lifetime",
@@ -454,6 +455,7 @@ class TestLanIpv6Fields:
             {
                 "_id": "net-v6",
                 "ipv6_interface_type": "pd",
+                "ipv6_subnet": "fd00:0:0:50::1/64",
                 "ipv6_aliases": ["fd00:0:0:50::1/64"],
                 "ipv6_ra_priority": "high",
                 "ipv6_ra_preferred_lifetime": 14400,
@@ -470,6 +472,7 @@ class TestLanIpv6Fields:
             }
         )
         assert network.ipv6_interface_type == "pd"
+        assert network.ipv6_subnet == "fd00:0:0:50::1/64"
         assert network.ipv6_aliases == ["fd00:0:0:50::1/64"]
         assert network.ipv6_ra_priority == "high"
         assert network.ipv6_ra_preferred_lifetime == 14400
@@ -491,6 +494,80 @@ class TestLanIpv6Fields:
     def test_validate_update_accepts_ipv6_aliases(self) -> None:
         """The public validator no longer rejects it as an unknown field."""
         assert validate_update({"ipv6_aliases": ["fd00:0:0:50::1/64"]}) == {"ipv6_aliases": ["fd00:0:0:50::1/64"]}
+
+    def test_validate_update_accepts_static_ipv6_subnet(self) -> None:
+        """Static LAN IPv6 needs its gateway address and prefix length."""
+        assert validate_update({"ipv6_interface_type": "static", "ipv6_subnet": "fd00:0:0:50::1/64"}) == {
+            "ipv6_interface_type": "static",
+            "ipv6_subnet": "fd00:0:0:50::1/64",
+        }
+
+    def test_validate_update_normalizes_ipv6_subnet(self) -> None:
+        """A non-canonical value is sent to the controller in canonical form."""
+        assert validate_update({"ipv6_interface_type": "static", "ipv6_subnet": "FD00:0:0:50:0:0:0:1/64"}) == {
+            "ipv6_interface_type": "static",
+            "ipv6_subnet": "fd00:0:0:50::1/64",
+        }
+
+    @pytest.mark.parametrize(
+        ("value", "rule"),
+        [
+            ("not-a-cidr", "valid IPv6 CIDR"),
+            ("fd00:0:0:50::1", "valid IPv6 CIDR"),
+            ("10.0.0.1/24", "valid IPv6 CIDR"),
+            ("fd00:0:0:50::1/129", "valid IPv6 CIDR"),
+            ("fd00:0:0:50::1/0", "prefix length must be between /1 and /127"),
+            ("fd00:0:0:50::1/128", "prefix length must be between /1 and /127"),
+            ("fd00:0:0:50::/64", "not the network address"),
+            ("fe80::1%eth0/64", "scope ID"),
+            ("fe80::1/64", "non-link-local"),
+            ("ff02::1/64", "non-link-local"),
+            ("::1/64", "non-link-local"),
+            ("::/64", "not the network address"),
+        ],
+    )
+    def test_validate_update_rejects_invalid_ipv6_subnet(self, value: str, rule: str) -> None:
+        with pytest.raises(ValueError, match=rf"'ipv6_subnet'.*{rule}") as error:
+            validate_update({"ipv6_interface_type": "static", "ipv6_subnet": value})
+        assert value not in str(error.value)
+
+    @pytest.mark.parametrize("interface_type", ["pd", "none"])
+    def test_validate_update_rejects_ipv6_subnet_with_non_static_type(self, interface_type: str) -> None:
+        with pytest.raises(ValueError, match="only be set when 'ipv6_interface_type' is 'static'"):
+            validate_update({"ipv6_interface_type": interface_type, "ipv6_subnet": "fd00:0:0:50::1/64"})
+
+    def test_validate_update_accepts_ipv6_subnet_without_explicit_type(self) -> None:
+        """Only an explicitly set type is checked; the effective type is not visible in a single call."""
+        assert validate_update({"ipv6_subnet": "fd00:0:0:50::1/64"}) == {"ipv6_subnet": "fd00:0:0:50::1/64"}
+
+    def test_validate_create_accepts_and_normalizes_ipv6_subnet(self) -> None:
+        payload = validate_create(
+            {
+                "name": "Lab",
+                "purpose": "corporate",
+                "ip_subnet": "10.0.0.1/24",
+                "dhcpd_start": "10.0.0.10",
+                "dhcpd_stop": "10.0.0.100",
+                "ipv6_interface_type": "static",
+                "ipv6_subnet": "FD00:0:0:50:0:0:0:1/64",
+            }
+        )
+        assert payload["ipv6_interface_type"] == "static"
+        assert payload["ipv6_subnet"] == "fd00:0:0:50::1/64"
+
+    def test_validate_create_rejects_ipv6_subnet_with_non_static_type(self) -> None:
+        with pytest.raises(ValueError, match="only be set when 'ipv6_interface_type' is 'static'"):
+            validate_create(
+                {
+                    "name": "Lab",
+                    "purpose": "corporate",
+                    "ip_subnet": "10.0.0.1/24",
+                    "dhcpd_start": "10.0.0.10",
+                    "dhcpd_stop": "10.0.0.100",
+                    "ipv6_interface_type": "pd",
+                    "ipv6_subnet": "fd00:0:0:50::1/64",
+                }
+            )
 
     def test_lan_ipv6_bool_false_preserved(self) -> None:
         result = to_controller_update({"ipv6_pd_auto_prefixid_enabled": False, "dhcpdv6_enabled": False})
