@@ -765,7 +765,7 @@ def validate_ipv6_subnet_state(current: Dict[str, Any], updates: Dict[str, Any])
     if updates.get("ipv6_interface_type", current.get("ipv6_interface_type")) != "static":
         raise ValueError(
             "'ipv6_subnet' can only be set when the effective 'ipv6_interface_type' is 'static'. "
-            "Set 'ipv6_interface_type' to 'static' in the same update."
+            "Set 'ipv6_interface_type' to 'static' in the same request."
         )
 
 
@@ -851,6 +851,7 @@ def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     _normalize_vlan_payload(payload)
     payload.setdefault("enabled", True)
     validate_wan_dns_state({}, payload)
+    validate_ipv6_subnet_state({}, payload)
     return payload
 
 

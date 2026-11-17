@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -563,3 +565,60 @@ def strip_exception_url_origins(error: BaseException, hosts: Iterable[str] = ())
     """
     host_list = list(hosts)
     return _rewrite_exception(error, lambda text: strip_url_origins(text, host_list), redact_keys=False)
+
+
+def append_exception_hint(error: BaseException, hint: str) -> BaseException:
+    """Append fixed ``hint`` to ``error``'s message in place, once, and return it.
+
+    Only a string message is extended; the exception keeps its type, its
+    other arguments and its identity, so ``except`` clauses and status
+    parsing that read the start of the message keep working.
+    """
+    message = error.args[0] if error.args else ""
+    if not isinstance(message, str) or hint in message:
+        return error
+    head = message.rstrip().rstrip(".")
+    error.args = (f"{head}. {hint}" if head else hint, *error.args[1:])
+    return error
+
+
+def strip_origins_from_methods(
+    target: Any,
+    names: Iterable[str],
+    hosts: Iterable[str] = (),
+    *,
+    on_error: Callable[[BaseException], None] | None = None,
+) -> None:
+    """Wrap ``target``'s coroutine methods so what they raise carries no URL origin.
+
+    For an SDK client whose every request passes through a few methods: each
+    named coroutine method is replaced on the instance by one that strips URL
+    origins and ``hosts`` from the raised exception (cause chain included),
+    lets ``on_error`` annotate it, and re-raises the same object. The class,
+    the identity and the traceback are kept. A missing or non-coroutine
+    attribute is left alone.
+    """
+    host_list = list(hosts)
+    for name in names:
+        original = getattr(target, name, None)
+        if original is None or not inspect.iscoroutinefunction(original):
+            continue
+        setattr(target, name, _origin_stripping(original, host_list, on_error))
+
+
+def _origin_stripping(
+    original: Callable[..., Any],
+    hosts: list[str],
+    on_error: Callable[[BaseException], None] | None,
+) -> Callable[..., Any]:
+    @functools.wraps(original)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await original(*args, **kwargs)
+        except Exception as error:
+            strip_exception_url_origins(error, hosts)
+            if on_error is not None:
+                on_error(error)
+            raise
+
+    return wrapper

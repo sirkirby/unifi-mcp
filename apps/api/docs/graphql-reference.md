@@ -650,6 +650,7 @@ type DeviceRadio {
   minRssi: Int
   assistedRoamingEnabled: Boolean
   antennaGain: Int
+  antennaId: Int
   vwireEnabled: Boolean
   sensLevelEnabled: Boolean
   sensLevel: Int
@@ -2020,6 +2021,9 @@ type RadioEntry {
   currentChannel: Int
   currentTxPower: Int
   numSta: Int
+
+  """Selected antenna id from the device's antenna_table, when it has one."""
+  antennaId: Int
 }
 
 """A UniFi Protect recording window for a camera."""

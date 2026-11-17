@@ -25,6 +25,7 @@ from unifi_core.connection_failure import ControllerConnectionFailed, connection
 from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
+from unifi_core.redaction import append_exception_hint, strip_origins_from_methods
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
     ConnectivityProbe,
@@ -81,6 +82,25 @@ _RECONNECT_BLOCK_MAX_SECONDS = 900.0
 # uiprotect reports a rate-limited login as NvrError with the status in its
 # message ("... - Status: 429 - Reason: ...").
 _RATE_LIMITED_STATUS_RE = re.compile(r"Status: 429(?!\d)")
+
+
+# A 403 from uiprotect names only the request; the caller cannot tell a missing
+# role from an outage. Fixed text: it never quotes the controller.
+_FORBIDDEN_HINT = (
+    "The Protect account lacks permission for this operation; changes need a role with "
+    "Full Management of Protect, and console-level APIs such as the Alarm Manager need SuperAdmin."
+)
+
+# Every uiprotect request, bootstrap and model save included, passes through
+# these client methods: ``request`` raises transport failures as "Error
+# requesting data from <host>", ``_raise_for_status`` raises status failures
+# quoting the absolute request URL.
+_SDK_REQUEST_METHODS = ("request", "_raise_for_status")
+
+
+def _hint_forbidden(error: BaseException) -> None:
+    if isinstance(error, NotAuthorized) and nvr_status(error) == 403:
+        append_exception_hint(error, _FORBIDDEN_HINT)
 
 
 def _is_terminal_auth_error(error: BaseException) -> bool:
@@ -360,6 +380,9 @@ class ProtectConnectionManager:
                 if name in tls_options:
                     await tls_options[name].close()
             raise
+        # Tools return the SDK's error text to callers; keep the controller's
+        # address out of it and keep the path, the status and the class.
+        strip_origins_from_methods(client, _SDK_REQUEST_METHODS, (self.host,), on_error=_hint_forbidden)
         # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
         try:
             await client.update()

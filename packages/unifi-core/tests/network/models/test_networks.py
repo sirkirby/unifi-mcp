@@ -547,6 +547,34 @@ class TestLanIpv6Fields:
             validate_ipv6_subnet_state(current, {"ipv6_subnet": "fd00:0:0:50::1/64"})
         assert "fd00" not in str(error.value)
 
+    def test_validate_create_rejects_ipv6_subnet_without_static_type(self) -> None:
+        """A create preview must refuse what the create itself would refuse."""
+        with pytest.raises(ValueError, match="effective 'ipv6_interface_type' is 'static'") as error:
+            validate_create(
+                {
+                    "name": "Lab",
+                    "purpose": "corporate",
+                    "ip_subnet": "10.0.99.1/24",
+                    "dhcpd_enabled": False,
+                    "ipv6_subnet": "fd00:0:0:99::1/64",
+                }
+            )
+        assert "fd00" not in str(error.value)
+        assert "same update" not in str(error.value)
+
+    def test_validate_create_accepts_ipv6_subnet_with_static_type(self) -> None:
+        payload = validate_create(
+            {
+                "name": "Lab",
+                "purpose": "corporate",
+                "ip_subnet": "10.0.99.1/24",
+                "dhcpd_enabled": False,
+                "ipv6_interface_type": "static",
+                "ipv6_subnet": "FD00:0:0:99:0:0:0:1/64",
+            }
+        )
+        assert payload["ipv6_subnet"] == "fd00:0:0:99::1/64"
+
     def test_ipv6_subnet_alone_is_accepted_for_stored_static_type(self) -> None:
         validate_ipv6_subnet_state({"ipv6_interface_type": "static"}, {"ipv6_subnet": "fd00:0:0:50::1/64"})
 

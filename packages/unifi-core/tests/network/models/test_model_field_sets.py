@@ -51,6 +51,7 @@ from unifi_core.network.models import (
                 "min_rssi",
                 "assisted_roaming_enabled",
                 "antenna_gain",
+                "antenna_id",
                 "vwire_enabled",
                 "sens_level_enabled",
                 "sens_level",

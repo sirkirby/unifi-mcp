@@ -607,7 +607,7 @@ class TestInitialize:
             assert await cm_dual.initialize() is False
 
         error = cm_dual.last_connection_error
-        assert error.startswith("Could not connect to UniFi Access at 192.0.2.1")
+        assert error.startswith("Could not connect to UniFi Access (tried ")
         assert "API key on port 12445" in error
         assert "username/password on port 443" in error
         assert "reachable" in error and "credentials" not in error
@@ -858,9 +858,7 @@ class TestDeveloperRequest:
         with pytest.raises(UniFiConnectionError) as excinfo:
             await cm_api_only.developer_request("GET", "visitors/v1", operation="Get visitor")
 
-        assert str(excinfo.value) == (
-            "Get visitor failed: timed out after 10s GET https://192.0.2.1:12445/api/v1/developer/visitors/v1"
-        )
+        assert str(excinfo.value) == ("Get visitor failed: timed out after 10s GET /api/v1/developer/visitors/v1")
 
     def test_has_api_key_reports_configuration(self, cm_api_only, cm_proxy_only):
         assert cm_api_only.has_api_key is True

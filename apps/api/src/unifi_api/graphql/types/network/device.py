@@ -182,6 +182,9 @@ class RadioEntry:
     current_channel: int | None
     current_tx_power: int | None
     num_sta: int | None
+    antenna_id: int | None = strawberry.field(
+        default=None, description="Selected antenna id from the device's antenna_table, when it has one."
+    )
 
     @classmethod
     def from_manager_output(cls, r: Any) -> "RadioEntry":
@@ -195,6 +198,7 @@ class RadioEntry:
             current_channel=normalize_radio_channel(_get(r, "current_channel")),
             current_tx_power=_get(r, "current_tx_power"),
             num_sta=_get(r, "num_sta"),
+            antenna_id=_get(r, "antenna_id"),
         )
 
     def to_dict(self) -> dict:
@@ -226,6 +230,7 @@ class DeviceRadio:
     min_rssi: int | None
     assisted_roaming_enabled: bool | None
     antenna_gain: int | None
+    antenna_id: int | None
     vwire_enabled: bool | None
     sens_level_enabled: bool | None
     sens_level: int | None
@@ -250,6 +255,7 @@ class DeviceRadio:
             min_rssi=None,
             assisted_roaming_enabled=None,
             antenna_gain=None,
+            antenna_id=None,
             vwire_enabled=None,
             sens_level_enabled=None,
             sens_level=None,
