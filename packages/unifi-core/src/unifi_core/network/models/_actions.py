@@ -192,6 +192,27 @@ class SetDeviceLedInput(BaseModel):
     led_state: str = Field(description="LED override state: 'on', 'off', or 'default'")
 
 
+class SetDeviceIpSettingsInput(BaseModel):
+    """Input for ``unifi_set_device_ip_settings``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    device_mac: str = Field(description="MAC address of the device (from unifi_list_devices)")
+    mode: Literal["dhcp", "static"] = Field(description="'dhcp', or 'static' to give the device a fixed address")
+    ip: Optional[str] = Field(default=None, description="Static IPv4 address (static mode)")
+    netmask: Optional[str] = Field(default=None, description="Netmask, dotted or prefix length (static mode)")
+    gateway: Optional[str] = Field(default=None, description="Default gateway, inside the ip's subnet (static mode)")
+    dns1: Optional[str] = Field(default=None, description="Primary DNS server; '' clears it (static mode)")
+    dns2: Optional[str] = Field(default=None, description="Secondary DNS server; '' clears it (static mode)")
+
+    @field_validator("device_mac")
+    @classmethod
+    def validate_mac(cls, value: str) -> str:
+        if not looks_like_mac(value):
+            raise ValueError("must be a valid MAC address")
+        return value
+
+
 class SetDeviceOutdoorModeInput(BaseModel):
     """Input for ``unifi_set_device_outdoor_mode``."""
 
