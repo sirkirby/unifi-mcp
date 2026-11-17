@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 212 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 213 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -215,12 +215,13 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 - `unifi_get_teleport_settings` — Get Teleport VPN settings: enabled state and client address range
 - `unifi_update_teleport_settings` — Preview, then change the Teleport client address range with overlap check and read-back verification
 
-## Devices (10 tools)
+## Devices (11 tools)
 
 - `unifi_list_devices` — List all adopted devices
 - `unifi_get_device_details` — Get full device object by MAC
 - `unifi_get_device_radio` — Get radio config and stats for a device with radios
-- `unifi_update_device_radio` — Update radio settings (TX power, channel, width)
+- `unifi_update_device_radio` — Update radio settings (TX power, channel, width, antenna selection)
+- `unifi_set_device_outdoor_mode` — Preview, then set an AP's outdoor mode override (default/on/off), which decides its allowed channels
 - `unifi_reboot_device` — Reboot a device by MAC
 - `unifi_rename_device` — Rename a device by MAC
 - `unifi_adopt_device` — Adopt a pending device
