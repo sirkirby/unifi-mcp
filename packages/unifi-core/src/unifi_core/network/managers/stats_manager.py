@@ -73,6 +73,8 @@ _SERIES_AP = {
 }
 _SERIES_GATEWAY_WAN = {"rxBytes": "wan-rx_bytes", "txBytes": "wan-tx_bytes"}
 _SERIES_GATEWAY_SYSTEM = {"avgCpuUtilizationPct": "cpu", "avgMemoryUtilizationPct": "mem"}
+# A gateway's port series leaves out its WAN ports, so its port traffic is the LAN side.
+_SERIES_GATEWAY_LAN = {"rxBytes": "lan-rx_bytes", "txBytes": "lan-tx_bytes"}
 _SERIES_DEVICE_TRAFFIC = {"rxBytes": "rx_bytes", "txBytes": "tx_bytes"}
 _SERIES_DEVICE_CLIENTS = {"distinctClientCount": "num_sta"}
 # Client series count from the client's side; the legacy report counts from
@@ -469,10 +471,13 @@ class StatsManager:
         wan = await self._series(
             "wanBySiteByDevice", _SERIES_GATEWAY_WAN, start_ms, end_ms, granularity, device_mac=gateway_mac
         )
+        lan = await self._series(
+            "portTrafficBySiteByDevice", _SERIES_GATEWAY_LAN, start_ms, end_ms, granularity, device_mac=gateway_mac
+        )
         system = await self._series(
             "systemBySiteByDevice", _SERIES_GATEWAY_SYSTEM, start_ms, end_ms, granularity, device_mac=gateway_mac
         )
-        return _with_traffic_totals(stats_series.merge_rows(wan, system, extra={"gw": gateway_mac}), "wan")
+        return _with_traffic_totals(stats_series.merge_rows(wan, lan, system, extra={"gw": gateway_mac}), "wan")
 
     async def _series_device_rows(
         self, device_mac: str, device_type: str, start_ms: int, end_ms: int, granularity: str

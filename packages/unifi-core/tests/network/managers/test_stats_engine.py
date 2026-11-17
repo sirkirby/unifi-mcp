@@ -244,6 +244,8 @@ async def test_gateway_stats_read_the_gateway_device_series() -> None:
     def series(path: str):
         if "schema=wanBySiteByDevice" in path:
             return [{"siteId": SITE, "deviceMac": GW_MAC, "series": _points(END - HOUR, 2, rxBytes=7, txBytes=3)}]
+        if "schema=portTrafficBySiteByDevice" in path:
+            return [{"siteId": SITE, "deviceMac": GW_MAC, "series": _points(END - HOUR, 2, rxBytes=50, txBytes=40)}]
         return [{"siteId": SITE, "deviceMac": GW_MAC, "series": _points(END - HOUR, 2, avgCpuUtilizationPct=20)}]
 
     manager, connection = _manager({"/source": ["MODERN"], "/recent/series": series})
@@ -258,6 +260,8 @@ async def test_gateway_stats_read_the_gateway_device_series() -> None:
             "gw": GW_MAC,
             "wan-rx_bytes": 14,
             "wan-tx_bytes": 6,
+            "lan-rx_bytes": 100,
+            "lan-tx_bytes": 80,
             "cpu": 20,
             "rx_bytes": 14,
             "tx_bytes": 6,

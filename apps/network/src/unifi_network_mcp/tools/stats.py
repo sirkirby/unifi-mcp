@@ -410,6 +410,9 @@ async def get_gateway_stats(
             "total_wan_rx_bytes": sum(int(e.get("wan-rx_bytes", 0) or 0) for e in stats),
             "total_wan_tx_bytes": sum(int(e.get("wan-tx_bytes", 0) or 0) for e in stats),
         }
+        if any("lan-rx_bytes" in e or "lan-tx_bytes" in e for e in stats):
+            summary["total_lan_rx_bytes"] = sum(int(e.get("lan-rx_bytes", 0) or 0) for e in stats)
+            summary["total_lan_tx_bytes"] = sum(int(e.get("lan-tx_bytes", 0) or 0) for e in stats)
         cpu_vals = [e.get("cpu") for e in stats if e.get("cpu") is not None]
         if cpu_vals:
             summary["avg_cpu_pct"] = round(sum(cpu_vals) / len(cpu_vals), 1)

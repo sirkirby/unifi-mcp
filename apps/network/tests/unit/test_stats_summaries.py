@@ -93,3 +93,33 @@ async def test_device_stats_summary_totals_its_rows(controller_type, report, row
     assert report in [call[0][0].path for call in connection.request.call_args_list]
     summary = result["summary"]
     assert (summary["total_rx_bytes"], summary["total_tx_bytes"], summary["total_bytes"]) == totals
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("rows", "wan_totals", "lan_totals"),
+    [
+        (
+            [
+                {"time": 1, "wan-rx_bytes": 100.0, "wan-tx_bytes": 20.0, "lan-rx_bytes": 500.0, "lan-tx_bytes": 400.0},
+                {"time": 2, "wan-rx_bytes": 10.0, "wan-tx_bytes": 2.0, "lan-rx_bytes": 50.0, "lan-tx_bytes": 40.0},
+            ],
+            (110, 22),
+            (550, 440),
+        ),
+        ([{"time": 1, "wan-rx_bytes": 100.0, "wan-tx_bytes": 20.0}], (100, 20), None),
+    ],
+)
+async def test_gateway_stats_summary_totals_lan_traffic_only_when_reported(rows, wan_totals, lan_totals):
+    manager, _ = _legacy_stats_manager(rows)
+    with patch("unifi_network_mcp.tools.stats.stats_manager", manager):
+        from unifi_network_mcp.tools.stats import get_gateway_stats
+
+        result = await get_gateway_stats(duration="daily", granularity="hourly")
+
+    summary = result["summary"]
+    assert (summary["total_wan_rx_bytes"], summary["total_wan_tx_bytes"]) == wan_totals
+    if lan_totals is None:
+        assert "total_lan_rx_bytes" not in summary and "total_lan_tx_bytes" not in summary
+    else:
+        assert (summary["total_lan_rx_bytes"], summary["total_lan_tx_bytes"]) == lan_totals
