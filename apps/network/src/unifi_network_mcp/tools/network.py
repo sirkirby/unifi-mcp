@@ -23,7 +23,11 @@ from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
-from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION, validate_wan_dns_state
+from unifi_core.network.models.networks import (
+    MDNS_ENABLED_DESCRIPTION,
+    validate_ipv6_subnet_state,
+    validate_wan_dns_state,
+)
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
 from unifi_core.network.models.vpn import is_vpn_network
@@ -297,6 +301,7 @@ VPN_FIREWALL_ZONE_WARNING = (
     "ipv6_wan_delegation_type ('none'/'pd'/'single_network'/'static'), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "LAN IPv6 (per-network): ipv6_interface_type ('none'/'static'/'pd'), "
+    "ipv6_subnet (str, static only: gateway address/prefix CIDR, e.g. 'fd00:0:0:50::1/64'), "
     "ipv6_aliases (list of CIDR strings, 'Additional IPs' — replaces the whole list), "
     "ipv6_ra_enabled (bool), ipv6_ra_priority ('high'/'medium'/'low'), ipv6_ra_preferred_lifetime (int seconds), "
     "ipv6_client_address_assignment ('slaac'/'dhcpv6'), ipv6_pd_interface (str), ipv6_pd_prefixid (hex str), "
@@ -404,6 +409,8 @@ async def update_network(
             - wan_ipv6_dns2 (string): Secondary WAN IPv6 DNS server.
             LAN IPv6 fields (per-network; independent of the WAN uplink fields above):
             - ipv6_interface_type (string): LAN IPv6 mode: 'none', 'static', or 'pd'.
+            - ipv6_subnet (string): For 'static' mode, the gateway's IPv6 address and prefix
+              length in CIDR form (e.g. 'fd00:0:0:50::1/64').
             - ipv6_aliases (list of strings): Additional IPv6 prefixes on this network
               ('Additional IPs'), e.g. a ULA alongside a delegated prefix. Replaces the
               whole list — pass every prefix you want to keep.
@@ -462,6 +469,7 @@ async def update_network(
         return {"success": False, "error": "Network not found"}
     try:
         validate_wan_dns_state(current, validated_data)
+        validate_ipv6_subnet_state(current, validated_data)
     except ValueError as e:
         return {"success": False, "error": str(e)}
 
