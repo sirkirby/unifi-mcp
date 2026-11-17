@@ -6759,6 +6759,54 @@
       }
     },
     {
+      "name": "unifi_set_device_ip_settings",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "device_manager",
+      "manager_method": "set_device_ip_settings",
+      "input_schema": {
+        "properties": {
+          "dns1": {
+            "description": "Primary DNS server; '' clears it",
+            "type": "string"
+          },
+          "dns2": {
+            "description": "Secondary DNS server; '' clears it",
+            "type": "string"
+          },
+          "gateway": {
+            "description": "Default gateway, inside the ip's subnet. Required when switching from DHCP",
+            "type": "string"
+          },
+          "ip": {
+            "description": "Static IPv4 address. Required when switching from DHCP; must not be another device's",
+            "type": "string"
+          },
+          "mac_address": {
+            "description": "MAC address of the device (from unifi_list_devices)",
+            "type": "string"
+          },
+          "mode": {
+            "description": "'dhcp', or 'static' to give the device a fixed address",
+            "type": "string"
+          },
+          "netmask": {
+            "description": "Netmask, dotted (255.255.255.0) or prefix length (24). Required when switching from DHCP",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mac_address",
+          "mode"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_set_device_led",
       "product": "network",
       "category": "devices",

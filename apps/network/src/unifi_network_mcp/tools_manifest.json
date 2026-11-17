@@ -1,5 +1,5 @@
 {
-  "count": 213,
+  "count": 214,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -159,6 +159,7 @@
     "unifi_revoke_voucher": "unifi_network_mcp.tools.hotspot",
     "unifi_set_client_fixed_ap": "unifi_network_mcp.tools.clients",
     "unifi_set_client_ip_settings": "unifi_network_mcp.tools.clients",
+    "unifi_set_device_ip_settings": "unifi_network_mcp.tools.devices",
     "unifi_set_device_led": "unifi_network_mcp.tools.devices",
     "unifi_set_device_outdoor_mode": "unifi_network_mcp.tools.devices",
     "unifi_set_jumbo_frames": "unifi_network_mcp.tools.switch",
@@ -18437,6 +18438,145 @@
         }
       },
       "title": "Set Client IP Settings"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Set an adopted device's IP settings: DHCP, or a static address with netmask, gateway and DNS. Static mode keeps current values for fields not given. Gateways are refused; their addresses come from the network settings. Requires confirmation; the preview shows the current settings.",
+      "name": "unifi_set_device_ip_settings",
+      "permission_action": "update",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the change. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "dns1": {
+              "description": "Primary DNS server; '' clears it",
+              "type": "string"
+            },
+            "dns2": {
+              "description": "Secondary DNS server; '' clears it",
+              "type": "string"
+            },
+            "gateway": {
+              "description": "Default gateway, inside the ip's subnet. Required when switching from DHCP",
+              "type": "string"
+            },
+            "ip": {
+              "description": "Static IPv4 address. Required when switching from DHCP; must not be another device's",
+              "type": "string"
+            },
+            "mac_address": {
+              "description": "MAC address of the device (from unifi_list_devices)",
+              "type": "string"
+            },
+            "mode": {
+              "description": "'dhcp', or 'static' to give the device a fixed address",
+              "type": "string"
+            },
+            "netmask": {
+              "description": "Netmask, dotted (255.255.255.0) or prefix length (24). Required when switching from DHCP",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mac_address",
+            "mode"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Set Device IP Settings"
     },
     {
       "annotations": {

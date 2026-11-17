@@ -132,6 +132,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_device_radio": ("device_manager", "update_device_radio"),
     # The outdoor-mode preview reads the current value first.
     "unifi_set_device_outdoor_mode": ("device_manager", "set_device_outdoor_mode"),
+    # The IP-settings preview reads the current settings first.
+    "unifi_set_device_ip_settings": ("device_manager", "set_device_ip_settings"),
     # PDU and port-forward updates both pre-fetch current state for preview.
     "unifi_set_outlet_state": ("device_manager", "set_outlet_state"),
     "unifi_update_port_forward": ("firewall_manager", "update_port_forward"),
@@ -1455,6 +1457,17 @@ def _translate_device_outdoor_mode(args: dict[str, Any]) -> tuple[tuple[Any, ...
     return (), {"device_mac": validated.device_mac, "mode": validated.mode}
 
 
+_DEVICE_IP_FIELDS = ("ip", "netmask", "gateway", "dns1", "dns2")
+
+
+def _translate_device_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models._actions import SetDeviceIpSettingsInput
+
+    fields = {key: args[key] for key in _DEVICE_IP_FIELDS if args.get(key) is not None}
+    validated = SetDeviceIpSettingsInput(device_mac=args["mac_address"], mode=args["mode"], **fields)
+    return (), {"device_mac": validated.device_mac, "mode": validated.mode, **fields}
+
+
 def _snapshot_direct_result(args: dict[str, Any]) -> tuple[bool, Any]:
     if args.get("include_image", False):
         return False, None
@@ -2089,6 +2102,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_update_wlan": _spec(_translate_wlan_update, "wlan_id", "update_data"),
     "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
     "unifi_set_device_outdoor_mode": _spec(_translate_device_outdoor_mode, "device_mac", "mode"),
+    "unifi_set_device_ip_settings": _spec(_translate_device_ip_settings, "device_mac", "mode", *_DEVICE_IP_FIELDS),
     "unifi_locate_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "enabled"),
     "unifi_force_provision_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
     "unifi_toggle_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "disabled"),

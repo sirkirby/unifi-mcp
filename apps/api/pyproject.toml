@@ -36,8 +36,8 @@ dependencies = [
     # zone membership, address-free controller errors, local-midnight stats
     # buckets, complete network health and keyless DPI catalog errors require Core 0.4.93.
     # Static LAN IPv6 subnets, AP antenna selection and outdoor mode, and address-free
-    # Protect and Access errors require Core 0.4.94.
-    "unifi-core[network,protect,access]>=0.4.94,<0.5",
+    # Protect and Access errors require Core 0.4.94. Device IP settings require Core 0.4.96.
+    "unifi-core[network,protect,access]>=0.4.96,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.

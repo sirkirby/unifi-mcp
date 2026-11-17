@@ -18,6 +18,7 @@ from unifi_core.network.models._actions import (
     LocateDeviceInput,
     RebootDeviceInput,
     RenameDeviceInput,
+    SetDeviceIpSettingsInput,
     SetDeviceLedInput,
     SetDeviceOutdoorModeInput,
     SetOutletStateInput,
@@ -1053,6 +1054,91 @@ async def set_device_outdoor_mode(
     except Exception as e:
         logger.error("Error setting outdoor mode on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set outdoor mode on {mac_address}: {e}"}
+
+
+@server.tool(
+    name="unifi_set_device_ip_settings",
+    description=(
+        "Set an adopted device's IP settings: DHCP, or a static address with netmask, gateway and DNS. "
+        "Static mode keeps current values for fields not given. Gateways are refused; their addresses "
+        "come from the network settings. Requires confirmation; the preview shows the current settings."
+    ),
+    permission_category="devices",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def set_device_ip_settings(
+    mac_address: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
+    mode: Annotated[
+        Literal["dhcp", "static"],
+        Field(description="'dhcp', or 'static' to give the device a fixed address"),
+    ],
+    ip: Annotated[
+        Optional[str],
+        Field(description="Static IPv4 address. Required when switching from DHCP; must not be another device's"),
+    ] = None,
+    netmask: Annotated[
+        Optional[str],
+        Field(description="Netmask, dotted (255.255.255.0) or prefix length (24). Required when switching from DHCP"),
+    ] = None,
+    gateway: Annotated[
+        Optional[str],
+        Field(description="Default gateway, inside the ip's subnet. Required when switching from DHCP"),
+    ] = None,
+    dns1: Annotated[Optional[str], Field(description="Primary DNS server; '' clears it")] = None,
+    dns2: Annotated[Optional[str], Field(description="Secondary DNS server; '' clears it")] = None,
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the change. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Set a device's IP settings."""
+    fields = {
+        key: value
+        for key, value in {"ip": ip, "netmask": netmask, "gateway": gateway, "dns1": dns1, "dns2": dns2}.items()
+        if value is not None
+    }
+    try:
+        SetDeviceIpSettingsInput(device_mac=mac_address, mode=mode, **fields)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
+        if not confirm:
+            change = await device_manager.preview_device_ip_settings(mac_address, mode, **fields)
+            unchanged = change["unchanged"]
+            warnings = None
+            if not unchanged:
+                warnings = [
+                    "A wrong static address can leave the device unreachable until it is reset."
+                    if mode == "static"
+                    else "The device takes its address from DHCP; unifi_list_devices shows it once it reconnects.",
+                    "The device re-provisions and may drop off the network briefly.",
+                ]
+                new_ip = change["requested"].get("ip")
+                if new_ip and new_ip != change.get("ip"):
+                    warnings.append(f"The device moves to {new_ip}; from there it must still reach the controller.")
+            preview = update_preview(
+                resource_type="device_ip_settings",
+                resource_id=mac_address,
+                resource_name=change.get("name") or mac_address,
+                current_state=change["current"],
+                updates=change["requested"],
+                warnings=warnings,
+            )
+            preview["current_address"] = change.get("ip")
+            if unchanged:
+                preview["message"] = "IP settings are already as requested; confirming changes nothing."
+            return preview
+        success = await device_manager.set_device_ip_settings(mac_address, mode, **fields)
+        if success:
+            return {"success": True, "message": f"IP settings set to {mode} on device '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set IP settings on '{mac_address}'."}
+    except (UniFiNotFoundError, UniFiValidationError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error setting IP settings on [redacted]: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to set IP settings on {mac_address}: {e}"}
 
 
 @server.tool(
