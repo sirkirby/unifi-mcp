@@ -1,4 +1,4 @@
-# Network Server Tool Reference (212 tools)
+# Network Server Tool Reference (213 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -74,7 +74,7 @@ Always available, regardless of registration mode.
 ## Devices
 
 <!-- AUTO:tools:devices -->
-21 tools.
+22 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -92,6 +92,7 @@ Always available, regardless of registration mode.
 | `unifi_reboot_device` | Mutate | Reboot a specific device by MAC address |
 | `unifi_rename_device` | Mutate | Rename a device in the Unifi Network controller by MAC address |
 | `unifi_set_device_led` | Mutate | Set the LED override state on a specific device. |
+| `unifi_set_device_outdoor_mode` | Mutate | Set an access point's outdoor mode override, which decides the channels it may use (in ETSI countries outdoor APs may not use 5 GHz chann... |
 | `unifi_set_outlet_state` | Mutate | Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi Smart Power PDU (UP6 / USP-Strip). |
 | `unifi_set_site_leds` | Mutate | Toggle all device LEDs site-wide on or off. |
 | `unifi_toggle_device` | Mutate | Enable or disable a device without unadopting it. |
