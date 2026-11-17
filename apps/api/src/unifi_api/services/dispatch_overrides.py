@@ -130,6 +130,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_toggle_traffic_route": ("traffic_route_manager", "toggle_traffic_route"),
     # update_device_radio: tool needs current radio_table to identify target band.
     "unifi_update_device_radio": ("device_manager", "update_device_radio"),
+    # The outdoor-mode preview reads the current value first.
+    "unifi_set_device_outdoor_mode": ("device_manager", "set_device_outdoor_mode"),
     # PDU and port-forward updates both pre-fetch current state for preview.
     "unifi_set_outlet_state": ("device_manager", "set_outlet_state"),
     "unifi_update_port_forward": ("firewall_manager", "update_port_forward"),
@@ -840,6 +842,7 @@ _RADIO_UPDATE_FIELDS = frozenset(
         "min_rssi",
         "assisted_roaming_enabled",
         "antenna_gain",
+        "antenna_id",
         "vwire_enabled",
         "sens_level_enabled",
         "sens_level",
@@ -1443,6 +1446,13 @@ def _translate_device_led(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     if led_state not in valid_states:
         raise ValueError(f"Invalid led_state '{led_state}'. Must be one of: {', '.join(valid_states)}")
     return (), {"device_mac": args["mac_address"], "led_override": led_state}
+
+
+def _translate_device_outdoor_mode(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models._actions import SetDeviceOutdoorModeInput
+
+    validated = SetDeviceOutdoorModeInput(device_mac=args["mac_address"], mode=args["mode"])
+    return (), {"device_mac": validated.device_mac, "mode": validated.mode}
 
 
 def _snapshot_direct_result(args: dict[str, Any]) -> tuple[bool, Any]:
@@ -2078,6 +2088,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_create_wlan": _spec(_translate_wlan_create, "wlan_data"),
     "unifi_update_wlan": _spec(_translate_wlan_update, "wlan_id", "update_data"),
     "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
+    "unifi_set_device_outdoor_mode": _spec(_translate_device_outdoor_mode, "device_mac", "mode"),
     "unifi_locate_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "enabled"),
     "unifi_force_provision_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
     "unifi_toggle_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "disabled"),

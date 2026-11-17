@@ -11,7 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import create_preview, preview_response, update_preview
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiNotFoundError, UniFiValidationError
 from unifi_core.network.models._actions import (
     AdoptDeviceInput,
     ForceProvisionDeviceInput,
@@ -19,6 +19,7 @@ from unifi_core.network.models._actions import (
     RebootDeviceInput,
     RenameDeviceInput,
     SetDeviceLedInput,
+    SetDeviceOutdoorModeInput,
     SetOutletStateInput,
     SetSiteLedsInput,
     UpgradeDeviceInput,
@@ -441,8 +442,9 @@ async def get_device_radio(
         "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), "
         "min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), "
-        "antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. "
-        "Use unifi_get_device_radio first to see current settings."
+        "antenna_gain (dBi), antenna_id (device-wide antenna selection on APs with external-antenna options), "
+        "vwire_enabled, sens_level_enabled, sens_level. "
+        "Use unifi_get_device_radio first to see current settings and the device's antennas."
     ),
     permission_category="devices",
     permission_action="update",
@@ -493,6 +495,17 @@ async def update_device_radio(
         Optional[int],
         Field(description="External antenna gain in dBi for regulatory TX power compensation"),
     ] = None,
+    antenna_id: Annotated[
+        Optional[int],
+        Field(
+            description=(
+                "Antenna to use, device-wide: applies to all radios, whichever radio is named. An id "
+                "from the antennas list of unifi_get_device_radio (the device's antenna_table); only "
+                "APs with external-antenna options have one. The selected antenna's gain sets TX power "
+                "and EIRP; the preview shows the antenna name and per-radio gain before and after"
+            )
+        ),
+    ] = None,
     vwire_enabled: Annotated[
         Optional[bool],
         Field(description="Enable virtual wire mode (transparent bridge for meshed APs)"),
@@ -528,6 +541,8 @@ async def update_device_radio(
         updates["assisted_roaming_enabled"] = assisted_roaming_enabled
     if antenna_gain is not None:
         updates["antenna_gain"] = antenna_gain
+    if antenna_id is not None:
+        updates["antenna_id"] = antenna_id
     if vwire_enabled is not None:
         updates["vwire_enabled"] = vwire_enabled
     if sens_level_enabled is not None:
@@ -547,6 +562,12 @@ async def update_device_radio(
                 "success": False,
                 "error": f"Device {mac_address} not found or does not have radios.",
             }
+        # Checked before the radio lookup, so a device without antennas says so first.
+        antenna_choice = (
+            await device_manager.preview_radio_antenna(mac_address, validated_data["antenna_id"])
+            if "antenna_id" in validated_data
+            else None
+        )
 
         target_radio = next((r for r in radio_data["radios"] if r["radio"] == radio or r["name"] == radio), None)
         if not target_radio:
@@ -555,7 +576,8 @@ async def update_device_radio(
             ]
             return {
                 "success": False,
-                "error": f"Radio '{radio}' not found on device. Available: {', '.join(available)}",
+                "error": f"Radio '{radio}' not found on device. "
+                + (f"Available: {', '.join(available)}" if available else "This device reports no radios."),
             }
 
         band_label = RADIO_BAND_LABELS.get(target_radio["radio"], target_radio.get("name", radio))
@@ -564,17 +586,29 @@ async def update_device_radio(
         current_state = {k: target_radio.get(k) for k in validated_data}
 
         if not confirm:
+            proposed = dict(validated_data)
+            warnings = [
+                "Device radio will restart briefly after changes are applied.",
+                "Connected clients may experience a brief disconnection.",
+            ]
+            if antenna_choice is not None:
+                current_state["antenna"] = antenna_choice["current"]
+                proposed["antenna"] = antenna_choice["requested"]
+                warnings.append("The antenna is device-wide: the change applies to every radio on this device.")
             preview = update_preview(
                 resource_type="device_radio",
                 resource_id=f"{mac_address}/{radio}",
                 resource_name=f"{device_name} ({band_label})",
                 current_state=current_state,
-                updates=validated_data,
+                updates=proposed,
             )
-            preview["warnings"] = [
-                "Device radio will restart briefly after changes are applied.",
-                "Connected clients may experience a brief disconnection.",
-            ]
+            preview["warnings"] = warnings
+            if antenna_choice is not None and antenna_choice["unchanged"] and set(validated_data) == {"antenna_id"}:
+                preview["message"] = (
+                    f"{device_name} already uses antenna '{antenna_choice['requested']['name']}' on every radio; "
+                    "confirming changes nothing."
+                )
+                preview["warnings"] = []
             return preview
 
         success = await device_manager.update_device_radio(mac_address, radio, validated_data)
@@ -585,7 +619,7 @@ async def update_device_radio(
                 "updated_fields": list(updates.keys()),
             }
         return {"success": False, "error": f"Failed to update radio '{radio}' on device {mac_address}."}
-    except UniFiNotFoundError as e:
+    except (UniFiNotFoundError, UniFiValidationError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.error("Error updating radio on [redacted]: %s", type(e).__name__)
@@ -958,6 +992,67 @@ async def set_device_led(
     except Exception as e:
         logger.error("Error setting LED override on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set LED override on {mac_address}: {e}"}
+
+
+@server.tool(
+    name="unifi_set_device_outdoor_mode",
+    description=(
+        "Set an access point's outdoor mode override, which decides the channels it may use "
+        "(in ETSI countries outdoor APs may not use 5 GHz channels 36-64). "
+        "'default' follows the model's own setting; 'on' or 'off' forces it. "
+        "Refused for devices that do not report the setting. Requires confirmation; the preview "
+        "shows the current value."
+    ),
+    permission_category="devices",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def set_device_outdoor_mode(
+    mac_address: Annotated[str, Field(description="MAC address of the access point (from unifi_list_devices)")],
+    mode: Annotated[
+        Literal["default", "on", "off"],
+        Field(description="Outdoor mode override: 'default' (the model's own setting), 'on' or 'off'"),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the change. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Set the outdoor mode override on an access point."""
+    try:
+        SetDeviceOutdoorModeInput(device_mac=mac_address, mode=mode)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
+        if not confirm:
+            current = await device_manager.get_device_outdoor_mode(mac_address)
+            unchanged = current.get("outdoor_mode_override") == mode
+            preview = update_preview(
+                resource_type="device_outdoor_mode",
+                resource_id=mac_address,
+                resource_name=current.get("name") or mac_address,
+                current_state={"outdoor_mode_override": current.get("outdoor_mode_override")},
+                updates={"outdoor_mode_override": mode},
+                warnings=None
+                if unchanged
+                else [
+                    "If the current channel is not allowed in the new mode, the access point moves to "
+                    "another one and clients may briefly disconnect."
+                ],
+            )
+            if unchanged:
+                preview["message"] = f"Outdoor mode override is already '{mode}'; confirming changes nothing."
+            return preview
+        success = await device_manager.set_device_outdoor_mode(mac_address, mode)
+        if success:
+            return {"success": True, "message": f"Outdoor mode override set to '{mode}' on device '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set outdoor mode on '{mac_address}'."}
+    except (UniFiNotFoundError, UniFiValidationError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error setting outdoor mode on [redacted]: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to set outdoor mode on {mac_address}: {e}"}
 
 
 @server.tool(

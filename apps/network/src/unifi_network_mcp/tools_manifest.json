@@ -1,5 +1,5 @@
 {
-  "count": 212,
+  "count": 213,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -160,6 +160,7 @@
     "unifi_set_client_fixed_ap": "unifi_network_mcp.tools.clients",
     "unifi_set_client_ip_settings": "unifi_network_mcp.tools.clients",
     "unifi_set_device_led": "unifi_network_mcp.tools.devices",
+    "unifi_set_device_outdoor_mode": "unifi_network_mcp.tools.devices",
     "unifi_set_jumbo_frames": "unifi_network_mcp.tools.switch",
     "unifi_set_outlet_state": "unifi_network_mcp.tools.devices",
     "unifi_set_site_leds": "unifi_network_mcp.tools.devices",
@@ -18564,6 +18565,125 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
+      "description": "Set an access point's outdoor mode override, which decides the channels it may use (in ETSI countries outdoor APs may not use 5 GHz channels 36-64). 'default' follows the model's own setting; 'on' or 'off' forces it. Refused for devices that do not report the setting. Requires confirmation; the preview shows the current value.",
+      "name": "unifi_set_device_outdoor_mode",
+      "permission_action": "update",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the change. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "mac_address": {
+              "description": "MAC address of the access point (from unifi_list_devices)",
+              "type": "string"
+            },
+            "mode": {
+              "description": "Outdoor mode override: 'default' (the model's own setting), 'on' or 'off'",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mac_address",
+            "mode"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Set Device Outdoor Mode"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
       "description": "Enable or disable jumbo frames on a switch. Note: the UniFi controller requires jumbo frames to be enabled via the UI at least once before the API can toggle it. If you get JumboFrameChangeNotAllowed, enable it in the UI first. Requires confirmation.",
       "name": "unifi_set_jumbo_frames",
       "permission_action": "update",
@@ -21181,7 +21301,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings.",
+      "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), antenna_id (device-wide antenna selection on APs with external-antenna options), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings and the device's antennas.",
       "name": "unifi_update_device_radio",
       "permission_action": "update",
       "permission_category": "devices",
@@ -21190,6 +21310,10 @@
           "properties": {
             "antenna_gain": {
               "description": "External antenna gain in dBi for regulatory TX power compensation",
+              "type": "integer"
+            },
+            "antenna_id": {
+              "description": "Antenna to use, device-wide: applies to all radios, whichever radio is named. An id from the antennas list of unifi_get_device_radio (the device's antenna_table); only APs with external-antenna options have one. The selected antenna's gain sets TX power and EIRP; the preview shows the antenna name and per-radio gain before and after",
               "type": "integer"
             },
             "assisted_roaming_enabled": {

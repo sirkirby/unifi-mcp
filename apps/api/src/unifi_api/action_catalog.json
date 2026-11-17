@@ -6787,6 +6787,34 @@
       }
     },
     {
+      "name": "unifi_set_device_outdoor_mode",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "device_manager",
+      "manager_method": "set_device_outdoor_mode",
+      "input_schema": {
+        "properties": {
+          "mac_address": {
+            "description": "MAC address of the access point (from unifi_list_devices)",
+            "type": "string"
+          },
+          "mode": {
+            "description": "Outdoor mode override: 'default' (the model's own setting), 'on' or 'off'",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mac_address",
+          "mode"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_set_jumbo_frames",
       "product": "network",
       "category": "switch",
@@ -7347,6 +7375,10 @@
         "properties": {
           "antenna_gain": {
             "description": "External antenna gain in dBi for regulatory TX power compensation",
+            "type": "integer"
+          },
+          "antenna_id": {
+            "description": "Antenna to use, device-wide: applies to all radios, whichever radio is named. An id from the antennas list of unifi_get_device_radio (the device's antenna_table); only APs with external-antenna options have one. The selected antenna's gain sets TX power and EIRP; the preview shows the antenna name and per-radio gain before and after",
             "type": "integer"
           },
           "assisted_roaming_enabled": {

@@ -29,6 +29,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "unifi_reboot_device": {"kind": RenderKind.DETAIL},
         "unifi_rename_device": {"kind": RenderKind.DETAIL},
         "unifi_set_device_led": {"kind": RenderKind.DETAIL},
+        "unifi_set_device_outdoor_mode": {"kind": RenderKind.DETAIL},
         "unifi_set_outlet_state": {"kind": RenderKind.DETAIL},
         "unifi_set_site_leds": {"kind": RenderKind.DETAIL},
         "unifi_toggle_device": {"kind": RenderKind.DETAIL},
