@@ -103,7 +103,7 @@ async def test_the_server_recovers_when_the_controller_comes_up(tmp_path, serve_
     controller = FakeController("access")
     try:
         assert await cm.initialize() is False
-        assert cm.last_connection_error.startswith("Could not connect to UniFi Access at 127.0.0.1")
+        assert cm.last_connection_error.startswith("Could not connect to UniFi Access (tried ")
 
         started = time.monotonic()
         outage = await _list_doors(cm)
@@ -230,5 +230,5 @@ def test_stdio_call_against_a_closed_port_reports_the_controller_unreachable(tmp
     assert run["call_seconds"] < STDIO_WAIT_SECONDS + 2.0
     payload = tool_payload(run["call"])
     assert payload["success"] is False
-    assert "Could not connect to UniFi Access at 127.0.0.1" in payload["error"]
+    assert "Could not connect to UniFi Access (tried " in payload["error"]
     assert "credentials" not in payload["error"]

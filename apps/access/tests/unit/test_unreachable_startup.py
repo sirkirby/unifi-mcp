@@ -67,7 +67,7 @@ async def test_startup_registers_tools_and_serves_when_controller_unreachable(mo
     listener.assert_not_awaited()
     assert "access_tool_index" in listed
     assert cm.is_connected is False
-    assert cm.last_connection_error.startswith("Could not connect to UniFi Access at 192.0.2.1")
+    assert cm.last_connection_error.startswith("Could not connect to UniFi Access (tried ")
 
 
 @pytest.mark.asyncio

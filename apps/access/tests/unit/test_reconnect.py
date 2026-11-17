@@ -143,7 +143,7 @@ async def test_rejected_login_is_not_retried_and_opens_an_escalating_cooldown():
     login = _Login(cm, "rejected")
     assert await _start(cm, login) is False
     assert login.calls == 1, "a rejected login must not be retried by the startup backoff"
-    assert cm.last_connection_error.startswith("UniFi Access at 192.0.2.1 rejected the configured credentials")
+    assert cm.last_connection_error.startswith("UniFi Access rejected the configured credentials")
     first_block = cm._reconnect_block_remaining()
     assert 0 < first_block <= cm_module._RECONNECT_BLOCK_BASE_SECONDS
 
@@ -193,9 +193,7 @@ async def test_rejected_relogin_on_an_expired_session_opens_the_cooldown():
 
     login.mode = "rejected"
     with patch.object(cm, "_proxy_login", login):
-        with pytest.raises(
-            AccessUnavailableError, match="re-authentication failed: UniFi Access at 192.0.2.1 rejected"
-        ):
+        with pytest.raises(AccessUnavailableError, match="re-authentication failed: UniFi Access rejected"):
             await DoorManager(cm).list_doors()
         assert login.calls == 2
         assert cm.has_proxy is False and cm.is_connected is False

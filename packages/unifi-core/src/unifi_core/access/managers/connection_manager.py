@@ -35,6 +35,12 @@ import aiohttp
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiRateLimitError
+from unifi_core.redaction import (
+    append_exception_hint,
+    strip_exception_url_origins,
+    strip_origins_from_methods,
+    strip_url_origins,
+)
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
     ConnectivityProbe,
@@ -76,6 +82,30 @@ _RECONNECT_BLOCK_BASE_SECONDS = 60.0
 _RECONNECT_BLOCK_MAX_SECONDS = 900.0
 
 _PROXY_REJECTED_STATUSES = frozenset({401, 403})
+
+# A 403 names only the request; the caller cannot tell a missing role from an
+# outage. Fixed text: it never quotes the controller.
+_PROXY_FORBIDDEN_HINT = (
+    "The Access account lacks permission for this operation; changes need a role with Full Management "
+    "of Access, and user changes need permission to manage UniFi OS users."
+)
+_API_TOKEN_FORBIDDEN_HINT = (
+    "The UniFi Access API token lacks the permission this operation needs; "
+    "grant it in the token's permission settings in the Access application."
+)
+
+# Every py-unifi-access request passes through these client methods, which
+# quote the absolute request URL or aiohttp's "Cannot connect to host <host>".
+_SDK_REQUEST_METHODS = ("_request", "get_thumbnail")
+
+
+def _hint_forbidden_api_token(error: BaseException) -> None:
+    try:
+        from unifi_access_api import ApiForbiddenError
+    except ImportError:  # pragma: no cover - the [access] extra ships the SDK
+        return
+    if isinstance(error, ApiForbiddenError):
+        append_exception_hint(error, _API_TOKEN_FORBIDDEN_HINT)
 
 
 class AccessUnavailableError(UniFiConnectionError):
@@ -373,8 +403,8 @@ class AccessConnectionManager:
         except TimeoutError:
             await self._discard_unavailable_sessions()
             raise UniFiConnectionError(
-                f"Timed out after {_CONNECT_ATTEMPT_TIMEOUT_SECONDS:.0f}s connecting to UniFi Access at "
-                f"{self.host}. Check that the controller is reachable."
+                f"Timed out after {_CONNECT_ATTEMPT_TIMEOUT_SECONDS:.0f}s connecting to UniFi Access. "
+                "Check that the configured host is reachable."
             ) from None
         if self._api_client_available or self._proxy_available:
             note = self._certificate_failure_note()
@@ -461,8 +491,8 @@ class AccessConnectionManager:
     def _unreachable_message(self) -> str:
         # A rejected login has its own message; this one never blames the credentials.
         message = (
-            f"Could not connect to UniFi Access at {self.host} "
-            f"(tried {' and '.join(self._configured_paths())}). Check that the controller is reachable "
+            "Could not connect to UniFi Access "
+            f"(tried {' and '.join(self._configured_paths())}). Check that the configured host is reachable "
             "from this machine and that UniFi Access is running on it."
         )
         if any(is_certificate_error(failure) for failure in self._path_failures):
@@ -472,7 +502,7 @@ class AccessConnectionManager:
 
     def _rejected_message(self) -> str:
         message = (
-            f"UniFi Access at {self.host} rejected the configured credentials "
+            "UniFi Access rejected the configured credentials "
             f"(tried {' and '.join(self._configured_paths())}). Check the username/password or API key."
         )
         note = self._certificate_failure_note()
@@ -500,7 +530,7 @@ class AccessConnectionManager:
         """
         if self._attempt.in_progress:
             return AccessUnavailableError(
-                f"{message}: still connecting to UniFi Access at {self.host}, which has not answered yet. "
+                f"{message}: still connecting to UniFi Access, which has not answered yet. "
                 "Check that the controller is reachable from this machine; the attempt continues in the "
                 "background and a later call uses the connection once it succeeds."
             )
@@ -554,6 +584,11 @@ class AccessConnectionManager:
                 # connector applies the fingerprint (aiohttp checks a connector
                 # pin even when the request asks for no verification).
                 verify_ssl=not isinstance(context, ssl.SSLContext),
+            )
+            # Tools return the SDK's error text to callers; keep the controller's
+            # address out of it and keep the class.
+            strip_origins_from_methods(
+                self._api_client, _SDK_REQUEST_METHODS, self._hosts(), on_error=_hint_forbidden_api_token
             )
             await self._api_client.authenticate()
             self._api_client_available = True
@@ -692,8 +727,10 @@ class AccessConnectionManager:
                 except (ValueError, aiohttp.ContentTypeError) as exc:
                     body = await resp.text()
                     raise UniFiConnectionError(
-                        f"{operation} failed: HTTP {resp.status} {method} {url} — "
-                        f"invalid JSON response{(': ' + body[:200]) if body else ''}"
+                        self._safe_text(
+                            f"{operation} failed: HTTP {resp.status} {method} {url} — "
+                            f"invalid JSON response{(': ' + body[:200]) if body else ''}"
+                        )
                     ) from exc
 
                 message = ""
@@ -705,8 +742,9 @@ class AccessConnectionManager:
                         f"HTTP {resp.status}{(' — ' + message) if message else ''}. {remediation}"
                     )
                 if resp.status != 200:
+                    detail = f" — {message}" if message else ""
                     raise UniFiConnectionError(
-                        f"{operation} failed: HTTP {resp.status} {method} {url}{(' — ' + message) if message else ''}"
+                        self._safe_text(f"{operation} failed: HTTP {resp.status} {method} {url}{detail}")
                     )
                 if not isinstance(payload, dict):
                     raise UniFiConnectionError(f"{operation} failed: unexpected Access API response shape")
@@ -723,10 +761,15 @@ class AccessConnectionManager:
         except TimeoutError as exc:
             # A timeout carries no message, so name it or the error ends at the colon.
             raise UniFiConnectionError(
-                f"{operation} failed: timed out after {_DEVELOPER_REQUEST_TIMEOUT_SECONDS:.0f}s {method} {url}"
+                self._safe_text(
+                    f"{operation} failed: timed out after {_DEVELOPER_REQUEST_TIMEOUT_SECONDS:.0f}s {method} {url}"
+                )
             ) from exc
         except (aiohttp.ClientError, OSError) as exc:
-            raise UniFiConnectionError(f"{operation} failed: {exc}") from exc
+            # aiohttp renders some errors from attributes rather than ``args``
+            # ("Cannot connect to host <host>:<port>"), so strip the rendered text.
+            self._safe_error(exc)
+            raise UniFiConnectionError(self._safe_text(f"{operation} failed: {exc}")) from exc
 
     # ------------------------------------------------------------------
     # Proxy request helpers
@@ -774,11 +817,12 @@ class AccessConnectionManager:
                 retry_headers = {"X-CSRF-Token": self._csrf_token}
                 async with self._proxy_session.request(method, url, headers=retry_headers, **kwargs) as retry_resp:
                     if retry_resp.status != 200:
-                        raise UniFiConnectionError(
-                            f"{label} request failed after re-auth: HTTP {retry_resp.status} {method} {url}"
+                        raise self._proxy_status_error(
+                            f"{label} request failed after re-auth: HTTP {retry_resp.status} {method} {url}",
+                            retry_resp.status,
                         )
                     payload = await retry_resp.json()
-                    self._raise_for_api_error(payload, method, url, label)
+                    self._raise_for_api_error(payload, method, self._safe_text(url), label)
                     return payload
 
             if resp.status != 200:
@@ -787,12 +831,32 @@ class AccessConnectionManager:
                     body = await resp.text()
                 except Exception:
                     pass
-                raise UniFiConnectionError(
-                    f"{label} request failed: HTTP {resp.status} {method} {url}{(' — ' + body[:200]) if body else ''}"
+                raise self._proxy_status_error(
+                    f"{label} request failed: HTTP {resp.status} {method} {url}{(' — ' + body[:200]) if body else ''}",
+                    resp.status,
                 )
             payload = await resp.json()
-            self._raise_for_api_error(payload, method, url, label)
+            self._raise_for_api_error(payload, method, self._safe_text(url), label)
             return payload
+
+    def _hosts(self) -> tuple[str, ...]:
+        """The configured console address, as error text may quote it bare."""
+        return (self.host,) if isinstance(self.host, str) and self.host else ()
+
+    def _safe_text(self, text: str) -> str:
+        """``text`` without the console's URL origin or address; the request path stays."""
+        return strip_url_origins(text, self._hosts())
+
+    def _safe_error(self, error: BaseException) -> BaseException:
+        """Strip the console's address from ``error`` and its cause chain, in place."""
+        return strip_exception_url_origins(error, self._hosts())
+
+    def _proxy_status_error(self, message: str, status: int) -> UniFiConnectionError:
+        """A non-200 proxy answer: path and status kept, address dropped, a 403 explained."""
+        error = UniFiConnectionError(self._safe_text(message))
+        if status == 403:
+            append_exception_hint(error, _PROXY_FORBIDDEN_HINT)
+        return error
 
     async def _drop_rejected_proxy_session(self) -> None:
         self._proxy_available = False
