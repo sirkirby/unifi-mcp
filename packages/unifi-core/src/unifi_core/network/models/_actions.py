@@ -14,7 +14,7 @@ via ``ToolInput(**kwargs)`` at the top of the body.
 from __future__ import annotations
 
 from ipaddress import IPv4Address
-from typing import ClassVar, Dict, List, Optional
+from typing import ClassVar, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -190,6 +190,24 @@ class SetDeviceLedInput(BaseModel):
 
     device_mac: str = Field(description="MAC address of the device (from unifi_list_devices)")
     led_state: str = Field(description="LED override state: 'on', 'off', or 'default'")
+
+
+class SetDeviceOutdoorModeInput(BaseModel):
+    """Input for ``unifi_set_device_outdoor_mode``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    device_mac: str = Field(description="MAC address of the access point (from unifi_list_devices)")
+    mode: Literal["default", "on", "off"] = Field(
+        description="Outdoor mode override: 'default' (the model's own setting), 'on' or 'off'"
+    )
+
+    @field_validator("device_mac")
+    @classmethod
+    def validate_mac(cls, value: str) -> str:
+        if not looks_like_mac(value):
+            raise ValueError("must be a valid MAC address")
+        return value
 
 
 class ForceProvisionDeviceInput(BaseModel):

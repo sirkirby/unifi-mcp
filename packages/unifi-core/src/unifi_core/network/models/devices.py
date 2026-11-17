@@ -13,6 +13,7 @@ Factory helpers:
 - ``normalize_radio_ht``           — controller width value → canonical MHz string
 - ``to_controller_update``         — filter a partial Device dict to mutable keys
 - ``radio_to_controller_update``   — filter a partial radio dict to mutable keys
+- ``antenna_change``               — check an antenna_id against the device's antenna_table
 
 Per-class MUTABLE_FIELDS constants drive the cross-layer symmetry test.
 """
@@ -135,6 +136,14 @@ class DeviceRadio(BaseModel):
     antenna_gain: Optional[int] = Field(
         default=None,
         description="External antenna gain in dBi",
+    )
+    antenna_id: Optional[int] = Field(
+        default=None,
+        description=(
+            "Selected antenna: an id from the device's antenna_table, which lists the antennas "
+            "an AP with external-antenna options supports and the gain of each per radio. "
+            "Device-wide: the controller keeps the same id on every radio (-1 means the default option)"
+        ),
     )
     vwire_enabled: Optional[bool] = Field(
         default=None,
@@ -277,6 +286,7 @@ def radio_from_controller(raw: Any) -> DeviceRadio:
         min_rssi=_get(raw, "min_rssi"),
         assisted_roaming_enabled=_get(raw, "assisted_roaming_enabled"),
         antenna_gain=_get(raw, "antenna_gain"),
+        antenna_id=_get(raw, "antenna_id"),
         vwire_enabled=_get(raw, "vwire_enabled"),
         sens_level_enabled=_get(raw, "sens_level_enabled"),
         sens_level=_get(raw, "sens_level"),
@@ -318,8 +328,107 @@ def validate_radio_update(radio: str, fields: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("min_rssi can only be set when min_rssi_enabled is true.")
     if fields.get("sens_level") is not None and fields.get("sens_level_enabled") is not True:
         raise ValueError("sens_level can only be set when sens_level_enabled is true.")
+    antenna_id = fields.get("antenna_id")
+    if antenna_id is not None and (isinstance(antenna_id, bool) or not isinstance(antenna_id, int) or antenna_id < 0):
+        raise ValueError("antenna_id must be a non-negative integer id from the device's antenna_table.")
 
     updates = radio_to_controller_update(fields)
     if not updates:
         raise ValueError("No radio settings provided to update.")
     return updates
+
+
+# ---------------------------------------------------------------------------
+# Antenna selection and outdoor mode
+# ---------------------------------------------------------------------------
+
+OUTDOOR_MODES: tuple[str, ...] = ("default", "on", "off")
+
+
+def _antenna_options(device_raw: Dict[str, Any]) -> list[Dict[str, Any]]:
+    table = device_raw.get("antenna_table")
+    return [option for option in table if isinstance(option, dict)] if isinstance(table, list) else []
+
+
+def _same_id(a: Any, b: Any) -> bool:
+    return a is not None and b is not None and not isinstance(a, bool) and str(a) == str(b)
+
+
+def _radios(device_raw: Dict[str, Any]) -> list[Dict[str, Any]]:
+    return [radio for radio in device_raw.get("radio_table") or [] if isinstance(radio, dict)]
+
+
+def antenna_summary(option: Optional[Dict[str, Any]], radios: list[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """An antenna_table option as ``{id, name, gain_dbi}``, or ``None``.
+
+    ``gain_dbi`` maps each radio's band (``ng``, ``na``, ``6e``) to the
+    option's gain for it; options key gains by the radio's internal name
+    (``wifi0_gain``, ``wifi1_gain``).
+    """
+    if option is None:
+        return None
+    return {
+        "id": option.get("id"),
+        "name": option.get("name"),
+        "gain_dbi": {
+            radio.get("radio") or radio.get("name"): option.get(f"{radio.get('name')}_gain")
+            for radio in radios
+            if radio.get("name")
+        },
+    }
+
+
+def antenna_change(device_raw: Dict[str, Any], antenna_id: int) -> Dict[str, Any]:
+    """Check ``antenna_id`` against the device's antenna_table and describe the change.
+
+    The antenna is a device-wide choice: the controller keeps the same
+    ``antenna_id`` on every radio_table entry. A radio whose ``antenna_id`` is
+    missing or ``-1`` (single-option models report ``-1``) uses the option
+    marked ``default``.
+
+    Returns ``{antenna_id, current, requested, unchanged}``: ``antenna_id`` is
+    the option's own id value, to write as the controller spells it;
+    ``requested`` is the option's :func:`antenna_summary`; ``current`` is the
+    summary of the option every radio uses, or, when radios disagree,
+    ``{"per_radio": {band: summary}}``; ``unchanged`` is true when every radio
+    already uses the requested option.
+
+    Raises:
+        ValueError: The device has no antenna_table, or the id is not one of
+            its antennas.
+    """
+    options = _antenna_options(device_raw)
+    if not options:
+        raise ValueError(
+            "This device has no selectable antennas (it reports no antenna_table), so antenna_id cannot be set."
+        )
+    target = next((option for option in options if _same_id(option.get("id"), antenna_id)), None)
+    if target is None:
+        choices = ", ".join(f"{option.get('id')} ({option.get('name')})" for option in options)
+        raise ValueError(f"antenna_id {antenna_id} is not one of this device's antennas. Choose one of: {choices}.")
+
+    default = next((option for option in options if option.get("default") is True), None)
+
+    def in_use(radio: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        selected = radio.get("antenna_id")
+        if selected is None or _same_id(selected, -1):
+            return default
+        return next((option for option in options if _same_id(option.get("id"), selected)), None)
+
+    radios = _radios(device_raw)
+    used = [in_use(radio) for radio in radios]
+    if all(option is used[0] for option in used):
+        current = antenna_summary(used[0] if used else default, radios)
+    else:
+        current = {
+            "per_radio": {
+                radio.get("radio") or radio.get("name"): antenna_summary(option, [radio])
+                for radio, option in zip(radios, used)
+            }
+        }
+    return {
+        "antenna_id": target.get("id"),
+        "current": current,
+        "requested": antenna_summary(target, radios),
+        "unchanged": bool(radios) and all(option is target for option in used),
+    }
