@@ -514,6 +514,51 @@ async def test_create_network_rejects_manual_dns_without_primary_before_write():
     conn.request.assert_not_called()
 
 
+async def test_update_network_rejects_ipv6_subnet_for_stored_non_static_type_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.return_value = [_network(purpose="corporate", ipv6_interface_type="pd")]
+
+    result = await mgr.update_network(NETWORK_ID, {"ipv6_subnet": "fd00:0:0:50::1/64"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "ipv6_interface_type" in result.error
+    assert conn.request.await_count == 1
+
+
+async def test_update_network_accepts_ipv6_subnet_for_stored_static_type():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="corporate", ipv6_interface_type="static", ipv6_subnet="fd00:0:0:50::1/64")
+    after = {**before, "ipv6_subnet": "fd00:0:0:60::1/64"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"ipv6_subnet": "fd00:0:0:60::1/64"})
+
+    assert result.success is True
+    assert result.persisted_fields == ("ipv6_subnet",)
+
+
+async def test_create_network_rejects_ipv6_subnet_without_static_type_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.create_network(
+        {
+            "name": "Lab",
+            "purpose": "corporate",
+            "ip_subnet": "10.0.0.1/24",
+            "ipv6_subnet": "fd00:0:0:50::1/64",
+        }
+    )
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "ipv6_interface_type" in result.error
+    conn.request.assert_not_called()
+
+
 async def test_update_network_rejects_unsafe_guest_before_write():
     conn = _make_connection()
     mgr = NetworkManager(conn)

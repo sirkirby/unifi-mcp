@@ -18,7 +18,7 @@ type must expose every field listed here.
 from __future__ import annotations
 
 import re
-from ipaddress import ip_address, ip_interface
+from ipaddress import IPv6Interface, ip_address, ip_interface
 from typing import Any, Dict, List, Mapping, Optional
 
 from pydantic import BaseModel, Field, ValidationError
@@ -374,6 +374,13 @@ class Network(BaseModel):
             "Switching a delegated ('pd') network to 'static' drops its delegated prefix"
         ),
     )
+    ipv6_subnet: Optional[str] = Field(
+        default=None,
+        description=(
+            "Static LAN IPv6 address of the gateway on this network and its prefix length in CIDR form "
+            "(e.g. 'fd00:0:0:50::1/64'); used when ipv6_interface_type is 'static'"
+        ),
+    )
     ipv6_aliases: Optional[List[str]] = Field(
         default=None,
         description=(
@@ -546,6 +553,7 @@ def from_controller(raw: Any) -> Network:
         wan_ipv6_dns1=_get(raw, "wan_ipv6_dns1"),
         wan_ipv6_dns2=_get(raw, "wan_ipv6_dns2"),
         ipv6_interface_type=_get(raw, "ipv6_interface_type"),
+        ipv6_subnet=_get(raw, "ipv6_subnet"),
         ipv6_aliases=_get(raw, "ipv6_aliases"),
         ipv6_ra_enabled=_get(raw, "ipv6_ra_enabled"),
         ipv6_ra_priority=_get(raw, "ipv6_ra_priority"),
@@ -587,6 +595,9 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
 
 
+# Prefix lengths accepted for a static ipv6_subnet: /0 and /128 can't name a LAN gateway.
+_IPV6_SUBNET_MIN_PREFIX = 1
+_IPV6_SUBNET_MAX_PREFIX = 127
 _ALLOWED_PURPOSES = frozenset({"corporate", "wan", "vlan-only", "vpn-client", "vpn-server"})
 
 # /rest/networkconf holds WAN uplinks and VPN configs alongside LANs; only
@@ -611,6 +622,36 @@ def _normalize_vlan_payload(payload: Dict[str, Any]) -> None:
     """Emit vlan as the controller-native int regardless of caller input type."""
     if "vlan" in payload:
         payload["vlan"] = int(payload["vlan"])
+
+
+def _validate_ipv6_subnet(value: str) -> str:
+    """Return ``value`` normalised if it is a usable static LAN IPv6 range, else raise ``ValueError``.
+
+    Accepts gateway-address form only (``fd00:0:0:50::1/64``): the controller
+    stores the range that way, and a bare network address would make the
+    gateway claim the network address. Error messages name the rule broken,
+    never echo the value.
+    """
+    text = value.strip()
+    if "%" in text:
+        raise ValueError("'ipv6_subnet' must not include a scope ID.")
+    if "/" not in text:
+        raise ValueError("'ipv6_subnet' must be a valid IPv6 CIDR (gateway address/prefix length).")
+    try:
+        interface = IPv6Interface(text)
+    except ValueError:
+        raise ValueError("'ipv6_subnet' must be a valid IPv6 CIDR (gateway address/prefix length).") from None
+    prefixlen = interface.network.prefixlen
+    if not _IPV6_SUBNET_MIN_PREFIX <= prefixlen <= _IPV6_SUBNET_MAX_PREFIX:
+        raise ValueError(
+            f"'ipv6_subnet' prefix length must be between /{_IPV6_SUBNET_MIN_PREFIX} and /{_IPV6_SUBNET_MAX_PREFIX}."
+        )
+    address = interface.ip
+    if address == interface.network.network_address:
+        raise ValueError("'ipv6_subnet' must name the gateway address inside the range, not the network address.")
+    if address.is_unspecified or address.is_loopback or address.is_multicast or address.is_link_local:
+        raise ValueError("'ipv6_subnet' must be a unicast, non-link-local gateway address.")
+    return str(interface)
 
 
 def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
@@ -672,6 +713,10 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
             ip_interface(model.ip_subnet)
         except ValueError:
             raise ValueError("'ip_subnet' must be a valid IPv4 or IPv6 CIDR.") from None
+    if model.ipv6_subnet is not None:
+        if model.ipv6_interface_type is not None and model.ipv6_interface_type != "static":
+            raise ValueError("'ipv6_subnet' can only be set when 'ipv6_interface_type' is 'static'.")
+        model.ipv6_subnet = _validate_ipv6_subnet(model.ipv6_subnet)
     for field_name in ("wan_dns1", "wan_dns2"):
         value = getattr(model, field_name)
         if not value:
@@ -707,6 +752,21 @@ def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> 
         ) from None
     if address.version != 4:
         raise ValueError("The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'.")
+
+
+def validate_ipv6_subnet_state(current: Dict[str, Any], updates: Dict[str, Any]) -> None:
+    """Reject ``ipv6_subnet`` when the effective ``ipv6_interface_type`` is not ``static``.
+
+    The effective type is the one in ``updates`` if present, otherwise the stored
+    one from ``current``. A stored network without the key counts as non-static.
+    """
+    if "ipv6_subnet" not in updates:
+        return
+    if updates.get("ipv6_interface_type", current.get("ipv6_interface_type")) != "static":
+        raise ValueError(
+            "'ipv6_subnet' can only be set when the effective 'ipv6_interface_type' is 'static'. "
+            "Set 'ipv6_interface_type' to 'static' in the same request."
+        )
 
 
 def is_hotspot_zone(zone: Mapping[str, Any]) -> bool:
@@ -791,6 +851,7 @@ def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     _normalize_vlan_payload(payload)
     payload.setdefault("enabled", True)
     validate_wan_dns_state({}, payload)
+    validate_ipv6_subnet_state({}, payload)
     return payload
 
 
