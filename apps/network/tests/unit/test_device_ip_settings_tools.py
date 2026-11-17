@@ -89,6 +89,37 @@ async def test_preview_of_a_switch_to_dhcp_says_where_the_address_comes_from():
 
 
 @pytest.mark.asyncio
+async def test_preview_of_clearing_a_dns_server_shows_the_value_that_goes():
+    manager = _device_manager({**RAW, "config_network": {**CONFIG, "dns2": "198.51.100.53"}})
+    with patch("unifi_network_mcp.tools.devices.device_manager", manager):
+        from unifi_network_mcp.tools.devices import set_device_ip_settings
+
+        result = await set_device_ip_settings(mac_address=MAC, mode="static", dns2="")
+
+    assert result["preview"]["current"]["dns2"] == "198.51.100.53"
+    assert "dns2" not in result["preview"]["proposed"]
+    assert result["cleared"] == ["dns2"]
+
+
+@pytest.mark.asyncio
+async def test_preview_of_a_switch_to_dhcp_shows_the_static_settings_that_go():
+    manager = _device_manager()
+    with patch("unifi_network_mcp.tools.devices.device_manager", manager):
+        from unifi_network_mcp.tools.devices import set_device_ip_settings
+
+        result = await set_device_ip_settings(mac_address=MAC, mode="dhcp")
+
+    assert result["preview"]["current"] == {
+        "mode": "static",
+        "ip": "192.0.2.20",
+        "netmask": "255.255.255.0",
+        "gateway": "192.0.2.1",
+        "dns1": "192.0.2.1",
+    }
+    assert result["cleared"] == ["dns1", "gateway", "ip", "netmask"]
+
+
+@pytest.mark.asyncio
 async def test_preview_of_the_current_settings_says_confirming_changes_nothing():
     manager = _device_manager()
     with patch("unifi_network_mcp.tools.devices.device_manager", manager):

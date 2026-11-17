@@ -1118,14 +1118,19 @@ async def set_device_ip_settings(
                 new_ip = change["requested"].get("ip")
                 if new_ip and new_ip != change.get("ip"):
                     warnings.append(f"The device moves to {new_ip}; from there it must still reach the controller.")
-            preview = update_preview(
+            # Full snapshots, so a cleared DNS server or a switch to DHCP shows what goes away.
+            preview = preview_response(
+                action="update",
                 resource_type="device_ip_settings",
                 resource_id=mac_address,
                 resource_name=change.get("name") or mac_address,
                 current_state=change["current"],
-                updates=change["requested"],
+                proposed_changes=change["requested"],
                 warnings=warnings,
             )
+            cleared = sorted(set(change["current"]) - set(change["requested"]))
+            if cleared:
+                preview["cleared"] = cleared
             preview["current_address"] = change.get("ip")
             if unchanged:
                 preview["message"] = "IP settings are already as requested; confirming changes nothing."
