@@ -14,12 +14,14 @@ Factory helpers:
 - ``to_controller_update``         — filter a partial Device dict to mutable keys
 - ``radio_to_controller_update``   — filter a partial radio dict to mutable keys
 - ``antenna_change``               — check an antenna_id against the device's antenna_table
+- ``ip_settings_change``           — check a device IP settings change and build its config_network
 
 Per-class MUTABLE_FIELDS constants drive the cross-layer symmetry test.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from typing import Any, Dict, Optional
 
@@ -431,4 +433,123 @@ def antenna_change(device_raw: Dict[str, Any], antenna_id: int) -> Dict[str, Any
         "current": current,
         "requested": antenna_summary(target, radios),
         "unchanged": bool(radios) and all(option is target for option in used),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Device IP settings (config_network)
+# ---------------------------------------------------------------------------
+
+IP_SETTINGS_MODES: tuple[str, ...] = ("dhcp", "static")
+_STATIC_KEYS: tuple[str, ...] = ("ip", "netmask", "gateway", "dns1", "dns2", "dnssuffix")
+_GATEWAY_TYPE_PREFIXES: tuple[str, ...] = ("ugw", "udm", "uxg")
+
+
+def ip_settings_view(config: Dict[str, Any]) -> Dict[str, Any]:
+    """A ``config_network`` as ``{mode, ...}``; address fields appear only in static mode.
+
+    A device in DHCP mode can keep a stale ``ip`` in its record, which it does
+    not use, so DHCP shows the mode alone.
+    """
+    mode = config.get("type")
+    view: Dict[str, Any] = {"mode": mode}
+    if mode == "static":
+        view.update({key: config[key] for key in _STATIC_KEYS if config.get(key) not in (None, "")})
+    return view
+
+
+def _ipv4(value: str, label: str) -> ipaddress.IPv4Address:
+    try:
+        return ipaddress.IPv4Address(value)
+    except ValueError:
+        raise ValueError(f"{label} '{value}' is not an IPv4 address.") from None
+
+
+def _static_config(current: Dict[str, Any], given: Dict[str, str]) -> Dict[str, Any]:
+    kept = current if current.get("type") == "static" else {}
+    merged = {key: kept[key] for key in _STATIC_KEYS if key in kept}
+    merged.update(given)
+    missing = [key for key in ("ip", "netmask", "gateway") if not merged.get(key)]
+    if missing:
+        raise ValueError(f"Static IP settings need {', '.join(missing)}.")
+
+    address = _ipv4(str(merged["ip"]), "ip")
+    gateway = _ipv4(str(merged["gateway"]), "gateway")
+    try:
+        network = ipaddress.IPv4Network(f"{address}/{str(merged['netmask']).lstrip('/')}", strict=False)
+    except ValueError:
+        raise ValueError(f"netmask '{merged['netmask']}' is not an IPv4 netmask.") from None
+    if network.prefixlen > 30:
+        raise ValueError(f"netmask '{merged['netmask']}' leaves no room for a gateway; use /30 or wider.")
+    if address in (network.network_address, network.broadcast_address):
+        raise ValueError(f"ip {address} is the network or broadcast address of {network}.")
+    if gateway not in network:
+        raise ValueError(f"gateway {gateway} is outside {network}, the subnet that ip and netmask describe.")
+    if gateway == address:
+        raise ValueError("ip and gateway are the same address.")
+    for key in ("dns1", "dns2"):
+        if merged.get(key):
+            _ipv4(str(merged[key]), key)
+
+    merged["netmask"] = str(network.netmask)
+    return {"type": "static", **merged}
+
+
+def ip_settings_change(
+    device_raw: Dict[str, Any],
+    mode: str,
+    *,
+    ip: Optional[str] = None,
+    netmask: Optional[str] = None,
+    gateway: Optional[str] = None,
+    dns1: Optional[str] = None,
+    dns2: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Check a device IP settings change and build the ``config_network`` to write.
+
+    Static mode keeps the device's current static values for any field not
+    given, so changing one DNS server needs only that field; an empty string
+    clears ``dns1`` or ``dns2``. ``netmask`` takes dotted or prefix form and is
+    written dotted. DHCP takes no address fields. Keys of ``config_network``
+    other than the address fields (``bonding_enabled``) are carried over.
+
+    Returns ``{config_network, current, requested, unchanged}``: the record to
+    write, :func:`ip_settings_view` of the current and requested settings, and
+    whether they are the same.
+
+    Raises:
+        ValueError: The device is a gateway, it reports no ``config_network``,
+            the mode is unknown, or the requested settings are incomplete or
+            inconsistent.
+    """
+    if str(device_raw.get("type") or "")[:3] in _GATEWAY_TYPE_PREFIXES:
+        raise ValueError(
+            "A gateway's addresses come from its WAN and LAN network settings, not device IP settings; "
+            "change them with the network tools."
+        )
+    current = device_raw.get("config_network")
+    if not isinstance(current, dict):
+        raise ValueError("This device reports no IP settings (config_network), so they cannot be set.")
+    if mode not in IP_SETTINGS_MODES:
+        raise ValueError(f"Invalid mode '{mode}'. Must be one of: {', '.join(IP_SETTINGS_MODES)}")
+
+    fields = {"ip": ip, "netmask": netmask, "gateway": gateway, "dns1": dns1, "dns2": dns2}
+    given = {key: str(value).strip() for key, value in fields.items() if value is not None}
+    if mode == "dhcp":
+        if given:
+            raise ValueError(f"DHCP takes no address fields; drop {', '.join(given)} or use mode 'static'.")
+        written: Dict[str, Any] = {"type": "dhcp"}
+    else:
+        written = _static_config(current, given)
+
+    for key, value in current.items():
+        if key != "type" and key not in _STATIC_KEYS:
+            written[key] = value
+    current_view = ip_settings_view(current)
+    requested_view = ip_settings_view(written)
+    return {
+        "config_network": written,
+        "current": current_view,
+        "requested": requested_view,
+        "unchanged": current_view == requested_view,
     }
