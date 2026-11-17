@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -252,6 +254,33 @@ from unifi_api.services.sitemanager_managers import SiteManagerFactory
 from unifi_api.services.streams import SubscriberPool
 
 _streams_log = logging.getLogger("unifi-api.streams")
+_access_log = logging.getLogger("unifi-api.access")
+
+
+_PATH_PARAM = re.compile(r"{([^}:]+)(?::[^}]+)?}")
+
+
+def _route_template(request: Request) -> str | None:
+    """The matched route's path template, which names its parameters rather than their values.
+
+    An included router's route carries its path without the include prefix, and
+    include prefixes here are static, so the prefix is the request path minus the
+    route's rendered path. When that does not line up, the route's own template is
+    returned rather than anything from the request.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if not isinstance(template, str):
+        return None
+    params = request.scope.get("path_params") or {}
+    try:
+        rendered = _PATH_PARAM.sub(lambda m: str(params[m.group(1)]), template)
+    except KeyError:
+        return template
+    path = request.scope.get("path", "")
+    if rendered and path.endswith(rendered):
+        return path[: len(path) - len(rendered)] + template
+    return template
 
 
 class _UnifiGraphQLRouter(GraphQLRouter):
@@ -483,11 +512,24 @@ def create_app(config: ApiConfig) -> FastAPI:
     async def request_id_middleware(request: Request, call_next):
         rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
         token = request_id_ctx.set(rid)
+        started = time.perf_counter()
+        status = 500
         try:
             response: Response = await call_next(request)
+            status = response.status_code
             response.headers["X-Request-ID"] = rid
             return response
         finally:
+            # The request line carries ids and cursors, so log the route template instead.
+            _access_log.info(
+                "request",
+                extra={
+                    "method": request.method,
+                    "route": _route_template(request),
+                    "status": status,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                },
+            )
             request_id_ctx.reset(token)
 
     # Wire DB

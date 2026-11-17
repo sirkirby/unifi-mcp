@@ -50,7 +50,7 @@ def serve(
     configure_logging(cfg.logging.level)
     ensure_db_encryption_key(cfg.db.path)
     app_instance = create_app(cfg)
-    uvicorn.run(app_instance, host=host or cfg.http.host, port=port or cfg.http.port, log_config=None)
+    uvicorn.run(app_instance, host=host or cfg.http.host, port=port or cfg.http.port, log_config=None, access_log=False)
 
 
 @app.command()
