@@ -1281,6 +1281,7 @@ type Network {
   wanIpv6Dns1: String
   wanIpv6Dns2: String
   ipv6InterfaceType: String
+  ipv6Subnet: String
   ipv6Aliases: [String!]
   ipv6RaEnabled: Boolean
   ipv6RaPriority: String
