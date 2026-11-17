@@ -78,6 +78,19 @@ class ToggleRtspInput(BaseModel):
     )
 
 
+class RenameCameraDetectionAreaInput(BaseModel):
+    """Input for ``protect_rename_camera_detection_area``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    camera_id: str = Field(description="Camera UUID")
+    kind: Literal["line", "zone", "loiter_zone"] = Field(
+        description="Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone"
+    )
+    area_id: str = Field(description="Area id from protect_list_camera_detection_areas")
+    new_name: str = Field(description="New name for the area")
+
+
 class AlarmArmInput(BaseModel):
     """Input for ``protect_alarm_arm``."""
 

@@ -7,6 +7,7 @@ update settings, and control PTZ functions via the pyunifiprotect bootstrap data
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,13 @@ logger = logging.getLogger(__name__)
 PTZ_MIN_SPEED = -1000
 PTZ_MAX_SPEED = 1000
 PTZ_MAX_DURATION_MS = 5000
+
+# Public kind -> raw camera key. Protect has no uiprotect model for these.
+DETECTION_AREA_KINDS = {
+    "line": "smartDetectLines",
+    "zone": "smartDetectZones",
+    "loiter_zone": "smartDetectLoiterZones",
+}
 
 
 class CameraManager:
@@ -547,6 +555,140 @@ class CameraManager:
             result["rtsp_alias"] = channel.rtsp_alias
             result.update(self._rtsp_stream_urls(channel.rtsp_alias))
         return result
+
+    # ------------------------------------------------------------------
+    # Detection areas (crossing lines, smart-detect zones, loiter zones)
+    # ------------------------------------------------------------------
+
+    async def _read_raw_camera(self, camera_id: str) -> Dict[str, Any]:
+        """Read the camera fresh from the NVR as a raw dict.
+
+        uiprotect has no model for crossing lines and its bootstrap cache can
+        be stale after a write, so detection areas are always read from the NVR.
+        """
+        self._get_camera(camera_id)
+        raw = await self._cm.client.api_request(f"cameras/{camera_id}", method="get")
+        if not isinstance(raw, dict):
+            raise RuntimeError(f"Unexpected response reading camera {camera_id}")
+        return raw
+
+    @staticmethod
+    def _find_detection_area(raw: Dict[str, Any], kind: str, area_id: str) -> Dict[str, Any]:
+        """Return the raw item of ``kind`` with ``area_id``, raising ValueError if absent."""
+        for item in raw.get(DETECTION_AREA_KINDS[kind]) or []:
+            if str(item.get("id")) == area_id:
+                return item
+        raise ValueError(f"Camera has no {kind} with id '{area_id}'")
+
+    @staticmethod
+    def _check_detection_area_rename(
+        raw: Dict[str, Any], kind: str, area_id: str, new_name: str
+    ) -> tuple[Dict[str, Any], str]:
+        """Validate a rename against the camera's current data; return the item and trimmed name."""
+        if kind not in DETECTION_AREA_KINDS:
+            raise ValueError(f"Unknown kind '{kind}'. Use one of: {', '.join(DETECTION_AREA_KINDS)}")
+        name = new_name.strip() if isinstance(new_name, str) else ""
+        if not name:
+            raise ValueError("new_name must not be blank")
+        item = CameraManager._find_detection_area(raw, kind, area_id)
+        if item.get("name") == name:
+            return item, name
+        for other in raw.get(DETECTION_AREA_KINDS[kind]) or []:
+            if other is not item and str(other.get("name") or "").strip().casefold() == name.casefold():
+                raise ValueError(f"Another {kind} on this camera is already named '{name}'")
+        return item, name
+
+    async def list_camera_detection_areas(self, camera_id: str) -> Dict[str, Any]:
+        """List a camera's crossing lines, smart-detect zones and loiter zones."""
+        raw = await self._read_raw_camera(camera_id)
+        areas: List[Dict[str, Any]] = []
+        for kind, key in DETECTION_AREA_KINDS.items():
+            for item in raw.get(key) or []:
+                area: Dict[str, Any] = {
+                    "id": str(item.get("id")),
+                    "name": item.get("name"),
+                    "kind": kind,
+                    "object_types": item.get("objectTypes") or [],
+                }
+                if kind == "line":
+                    area["direction"] = item.get("direction")
+                areas.append(area)
+        return {"camera_id": camera_id, "camera_name": raw.get("name"), "areas": areas, "count": len(areas)}
+
+    async def rename_camera_detection_area(
+        self, camera_id: str, kind: str, area_id: str, new_name: str
+    ) -> Dict[str, Any]:
+        """Return current and proposed name for a detection area (preview)."""
+        raw = await self._read_raw_camera(camera_id)
+        item, name = self._check_detection_area_rename(raw, kind, area_id, new_name)
+        return {
+            "camera_id": camera_id,
+            "camera_name": raw.get("name"),
+            "kind": kind,
+            "area_id": area_id,
+            "current_name": item.get("name"),
+            "proposed_name": name,
+        }
+
+    async def apply_rename_camera_detection_area(
+        self, camera_id: str, kind: str, area_id: str, new_name: str
+    ) -> Dict[str, Any]:
+        """Rename one crossing line, smart-detect zone or loiter zone after confirmation.
+
+        Protect replaces the whole list on write, so the camera is read fresh,
+        the matching item's ``name`` is the only value changed, and the whole
+        list is sent back. The camera is then read again and every item of the
+        list is compared with what was read before; any difference raises.
+
+        Known risk: an edit made in the Protect app between the read and the
+        write is overwritten; the read-back reports it.
+        """
+        raw = await self._read_raw_camera(camera_id)
+        item, name = self._check_detection_area_rename(raw, kind, area_id, new_name)
+        previous_name = item.get("name")
+        result: Dict[str, Any] = {
+            "camera_id": camera_id,
+            "camera_name": raw.get("name"),
+            "kind": kind,
+            "area_id": area_id,
+            "previous_name": previous_name,
+            "name": name,
+        }
+        if previous_name == name:
+            return {**result, "changed": False}
+
+        key = DETECTION_AREA_KINDS[kind]
+        expected = copy.deepcopy(raw[key])
+        for item in expected:
+            if str(item.get("id")) == area_id:
+                item["name"] = name
+        await self._cm.client.api_request(f"cameras/{camera_id}", method="patch", json={key: expected})
+
+        after = (await self._read_raw_camera(camera_id)).get(key) or []
+        problems = self._diff_detection_areas(expected, after)
+        if problems:
+            raise RuntimeError(
+                f"The rename of {kind} '{area_id}' on camera {camera_id} was sent to the NVR, "
+                "but the read-back differs from what was sent: " + "; ".join(problems)
+            )
+        return {**result, "changed": True, "verified": True}
+
+    @staticmethod
+    def _diff_detection_areas(expected: List[Dict[str, Any]], actual: List[Dict[str, Any]]) -> List[str]:
+        """Describe every difference between two lists of raw detection areas, matched by id."""
+        actual_by_id = {str(item.get("id")): item for item in actual}
+        problems: List[str] = []
+        for want in expected:
+            item_id = str(want.get("id"))
+            got = actual_by_id.pop(item_id, None)
+            if got is None:
+                problems.append(f"item {item_id} is missing")
+                continue
+            for field in sorted(set(want) | set(got)):
+                if want.get(field) != got.get(field):
+                    problems.append(f"item {item_id} {field}: expected {want.get(field)!r}, got {got.get(field)!r}")
+        problems.extend(f"item {item_id} was added" for item_id in actual_by_id)
+        return problems
 
     async def ptz_goto_preset(self, camera_id: str, preset_slot: int) -> Dict[str, Any]:
         """Move a PTZ camera to a named preset position.
