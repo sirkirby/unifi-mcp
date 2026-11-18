@@ -1276,10 +1276,33 @@ def _only_report(tmp_path, server="sitemanager"):
 def test_sitemanager_is_a_server_target_and_part_of_all():
     import live_smoke
 
-    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager"]
+    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager", "innerspace"]
     assert live_smoke.SERVER_PACKAGES["sitemanager"] == "unifi-sitemanager-mcp"
     assert live_smoke.SERVER_CONFIGS["sitemanager"]["prefix"] == "sitemanager"
     assert live_smoke.SUPPORT_BUNDLE_SERVERS == ("network", "protect", "access")
+
+
+def test_innerspace_is_a_server_target_without_a_support_bundle():
+    import live_smoke
+
+    assert live_smoke.SERVER_PACKAGES["innerspace"] == "unifi-innerspace-mcp"
+    config = live_smoke.SERVER_CONFIGS["innerspace"]
+    assert config["prefix"] == "innerspace"
+    assert config["manifest"].is_file()
+    assert "innerspace" not in live_smoke.SUPPORT_BUNDLE_SERVERS
+    names = {tool["name"] for tool in live_smoke.load_manifest("innerspace")["tools"]}
+    assert "innerspace_list_floor_plans" in names
+
+
+def test_an_innerspace_exception_is_recorded_by_its_class_only():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=AsyncMock(side_effect=RuntimeError("FAKE-plan-title on 192.0.2.10")))
+
+    record = asyncio.run(runner.call("innerspace_get_project", {}, "readonly"))
+
+    assert (record.status, record.error) == ("exception", "unexpected RuntimeError")
 
 
 def test_sitemanager_reads_are_exactly_the_nine_read_only_domain_tools():
@@ -1308,7 +1331,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
         phase="safe", report_dir="out", delay=0.25, include_heavy_reads=False, interactive_risky=False, tool=[]
     )
     assert live_smoke.run_all_servers(args) == 0
-    assert len(commands) == 4
+    assert len(commands) == 5
     script = str(Path(live_smoke.__file__).resolve())
     for command, (server, package) in zip(
         commands,
@@ -1317,6 +1340,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
             ("protect", "unifi-protect-mcp"),
             ("access", "unifi-access-mcp"),
             ("sitemanager", "unifi-sitemanager-mcp"),
+            ("innerspace", "unifi-innerspace-mcp"),
         ],
     ):
         assert command == [
@@ -1677,3 +1701,73 @@ def test_live_smoke_previews_skip_meta_tools_that_are_not_read_only():
 
     assert called == []
     assert [(r.tool, r.status) for r in runner.report.records] == [("unifi_batch_cancel", "skipped")]
+
+
+def test_innerspace_plan_id_is_discovered_from_the_floor_plan_list():
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember(
+        "innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{"id": "plan-1"}], "count": 1}}
+    )
+
+    for tool in ("innerspace_list_walls", "innerspace_list_placed_devices", "innerspace_get_plan_asset"):
+        assert runner.args_for_tool(tool, ["plan_id"]) == ({"plan_id": "plan-1"}, "")
+
+
+def _innerspace_runner(status_result):
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append(tool)
+        if tool == "innerspace_get_status":
+            return status_result
+        return {"success": True, "data": {"floor_plans": [{"id": "plan-1"}], "count": 1}}
+
+    runner.server = SimpleNamespace(call_tool=call_tool)
+    runner.unwrap_result = lambda raw: raw
+    return runner, calls
+
+
+@pytest.mark.parametrize(
+    ("status", "state"),
+    [({"installed": False, "running": False}, "not installed"), ({"installed": True, "running": False}, "not running")],
+)
+def test_innerspace_reads_are_skipped_when_the_app_is_absent(status, state):
+    runner, calls = _innerspace_runner({"success": True, "data": status})
+
+    asyncio.run(runner.run())
+
+    assert calls == ["innerspace_get_status"]
+    skipped = [r for r in runner.report.records if r.status == "skipped"]
+    assert len(skipped) == 8
+    assert {r.error for r in skipped} == {f"InnerSpace is {state} on this console"}
+
+
+@pytest.mark.parametrize(
+    "status_result",
+    [
+        {"success": True, "data": {"installed": True, "running": True}},
+        {"success": False, "error": "Failed to get InnerSpace status: the console is unreachable"},
+        # Empty or redacted: unknown, not "not installed".
+        {"success": True},
+        {"success": True, "data": {}},
+        {"success": True, "data": "[REDACTED]"},
+        {"success": True, "data": {"installed": "[REDACTED]", "running": "[REDACTED]"}},
+        {"success": True, "data": {"installed": True}},
+    ],
+)
+def test_innerspace_reads_run_when_the_app_runs_or_its_status_is_unknown(status_result):
+    runner, calls = _innerspace_runner(status_result)
+
+    asyncio.run(runner.run())
+
+    # Read once before the seed reads, which do not repeat it, and once in the read-only phase.
+    assert calls[0] == "innerspace_get_status"
+    assert calls.count("innerspace_get_status") == 2
+    assert "innerspace_list_walls" in calls
+    assert not [r for r in runner.report.records if r.status == "skipped"]

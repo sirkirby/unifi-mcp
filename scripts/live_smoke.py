@@ -42,9 +42,10 @@ SERVER_PACKAGES = {
     "protect": "unifi-protect-mcp",
     "access": "unifi-access-mcp",
     "sitemanager": "unifi-sitemanager-mcp",
+    "innerspace": "unifi-innerspace-mcp",
 }
 
-# Servers that ship a support-bundle service. Site Manager has none.
+# Servers that ship a support-bundle service. Site Manager and InnerSpace have none.
 SUPPORT_BUNDLE_SERVERS = ("network", "protect", "access")
 
 
@@ -97,6 +98,19 @@ SERVER_CONFIGS = {
         "manifest": REPO_ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json",
         "prefix": "sitemanager",
         "server_label": "UniFi Site Manager",
+        "close": "close",
+    },
+    "innerspace": {
+        "main": "unifi_innerspace_mcp.main",
+        "runtime": "unifi_innerspace_mcp.runtime",
+        "bootstrap": "unifi_innerspace_mcp.bootstrap",
+        "categories": "unifi_innerspace_mcp.categories",
+        "jobs": "unifi_innerspace_mcp.jobs",
+        "tool_index": "unifi_innerspace_mcp.tool_index",
+        "base_package": "unifi_innerspace_mcp.tools",
+        "manifest": REPO_ROOT / "apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json",
+        "prefix": "innerspace",
+        "server_label": "UniFi InnerSpace",
         "close": "close",
     },
 }
@@ -261,7 +275,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run live smoke checks against UniFi MCP tools.")
     parser.add_argument(
         "--server",
-        choices=["network", "protect", "access", "sitemanager", "all"],
+        choices=["network", "protect", "access", "sitemanager", "innerspace", "all"],
         required=False,
         help="Required for MCP-direct phases. Ignored for --phase api-actions / api-resources / api-streams.",
     )
@@ -665,8 +679,9 @@ class LiveSmokeRunner:
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.status = "exception"
             record.success = False
-            # Site Manager transport exceptions can carry request headers.
-            record.error = f"unexpected {type(exc).__name__}" if self.server_key == "sitemanager" else str(exc)
+            # Site Manager transport exceptions can carry request headers, InnerSpace ones console values.
+            by_class = self.server_key in ("sitemanager", "innerspace")
+            record.error = f"unexpected {type(exc).__name__}" if by_class else str(exc)
         self.report.records.append(record)
         print(f"{self.server_key} {phase} {record.status}: {tool} ({record.duration_ms}ms)", flush=True)
         if self.args.delay:
@@ -718,6 +733,9 @@ class LiveSmokeRunner:
                 await self.run_sitemanager_reads()
             return
 
+        if self.server_key == "innerspace" and not await self.innerspace_app_ready():
+            return
+
         await self.seed_read_lists()
 
         if self.args.phase in ("readonly", "safe"):
@@ -728,6 +746,25 @@ class LiveSmokeRunner:
             await self.run_lifecycles()
         if self.args.phase == "approved":
             await self.run_approved()
+
+    async def innerspace_app_ready(self) -> bool:
+        """Read the InnerSpace app status first. Not installed or not running: every other read is skipped.
+
+        A status read that fails, or whose ``installed`` and ``running`` are not both booleans (empty or
+        redacted), is not a verdict on the app, so the reads then run and report their own errors.
+        """
+        record = await self.call("innerspace_get_status", {}, "seed")
+        status = (self.cache.by_tool.get("innerspace_get_status") or {}).get("data")
+        status = status if isinstance(status, dict) else {}
+        known = isinstance(status.get("installed"), bool) and isinstance(status.get("running"), bool)
+        if record.status != "ok" or not known or (status["installed"] and status["running"]):
+            return True
+        state = "not running" if status.get("installed") else "not installed"
+        for tool in self.selected_tools():
+            # Domain tools carry a permission category; the meta-tools do not read the console.
+            if tool["name"] != "innerspace_get_status" and tool.get("permission_category"):
+                self.skip(tool["name"], "readonly", f"InnerSpace is {state} on this console")
+        return False
 
     def selected_tools(self) -> list[dict[str, Any]]:
         tools = list(self.manifest["tools"])
@@ -775,7 +812,7 @@ class LiveSmokeRunner:
         seen: set[str] = set()
         for tool in candidate_tools:
             name = tool["name"]
-            if name in seen:
+            if name in seen or name in self.cache.by_tool:
                 continue
             seen.add(name)
             if not is_read_only(tool) or required_params(tool) or name in STREAM_OR_HEAVY_READS:
@@ -956,6 +993,8 @@ class LiveSmokeRunner:
             return self.cache.device_mac("ap") or self.cache.device_mac("uap")
         if param == "ip_address":
             return self.cache.client_ip()
+        if param == "plan_id":
+            return self.cache.id_from_tool("innerspace_list_floor_plans", "floor_plans", ("id",))
         if param == "camera_id":
             return self.cache.id_from(("cameras",), ("id", "_id"))
         if param == "face_id":

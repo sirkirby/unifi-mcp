@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("server", ["network", "protect", "access", "sitemanager"])
+@pytest.mark.parametrize("server", ["network", "protect", "access", "sitemanager", "innerspace"])
 def test_packaged_http_is_opt_in_and_loopback(server, monkeypatch):
     monkeypatch.delenv("UNIFI_MCP_HOST", raising=False)
     monkeypatch.delenv("UNIFI_MCP_HTTP_ENABLED", raising=False)
@@ -78,6 +78,50 @@ def test_compose_sitemanager_is_opt_in_loopback_and_outside_the_relay():
             assert "sitemanager" not in other.get("profiles", [])
 
 
+INNERSPACE_CONNECTION_VARS = {
+    "UNIFI_INNERSPACE_HOST",
+    "UNIFI_INNERSPACE_USERNAME",
+    "UNIFI_INNERSPACE_PASSWORD",
+    "UNIFI_INNERSPACE_PASSWORD_FILE",
+    "UNIFI_INNERSPACE_PORT",
+    "UNIFI_INNERSPACE_VERIFY_SSL",
+    "UNIFI_INNERSPACE_SSL_FINGERPRINT",
+}
+
+
+def test_compose_innerspace_is_opt_in_loopback_and_outside_the_relay():
+    compose = yaml.safe_load((ROOT / "docker/docker-compose.yml").read_text())
+    service = compose["services"]["unifi-innerspace-mcp"]
+    assert service["profiles"] == ["innerspace"]
+    assert service["build"] == {"context": "..", "dockerfile": "apps/innerspace/Dockerfile"}
+    assert service["ports"] == ["127.0.0.1:3005:3005"]
+    assert "env_file" not in service
+    names = {entry.split("=", 1)[0] for entry in service["environment"]}
+    assert names == INNERSPACE_CONNECTION_VARS | {
+        "UNIFI_MCP_HTTP_ENABLED",
+        "UNIFI_MCP_HTTP_TRANSPORT",
+        "UNIFI_MCP_HOST",
+        "UNIFI_MCP_PORT",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET",
+        "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
+        "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN",
+        "UNIFI_MCP_HTTP_AUTH_TOKEN",
+    }
+    # Passed through bare, so an unset token stays unset instead of empty.
+    assert "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
+    assert "UNIFI_MCP_PORT=3005" in service["environment"]
+
+    relay = compose["services"]["unifi-mcp-relay"]
+    assert "unifi-innerspace-mcp" not in relay["depends_on"]
+    assert not any("innerspace" in value or ":3005" in value for value in relay["environment"])
+    for name, other in compose["services"].items():
+        if name != "unifi-innerspace-mcp":
+            assert "innerspace" not in other.get("profiles", [])
+
+
 def _resolved_compose_environments(
     tmp_path: Path,
     *,
@@ -127,7 +171,14 @@ def _resolved_compose_environments(
     return {
         service_name: service["environment"]
         for service_name, service in services.items()
-        if service_name in {"unifi-network-mcp", "unifi-protect-mcp", "unifi-access-mcp", "unifi-sitemanager-mcp"}
+        if service_name
+        in {
+            "unifi-network-mcp",
+            "unifi-protect-mcp",
+            "unifi-access-mcp",
+            "unifi-sitemanager-mcp",
+            "unifi-innerspace-mcp",
+        }
     }
 
 
@@ -208,4 +259,42 @@ def test_compose_sitemanager_profile_resolves_with_only_its_own_variables(tmp_pa
         "host.docker.internal:3003",
         "unifi-sitemanager-mcp",
         "unifi-sitemanager-mcp:3003",
+    }
+
+
+@pytest.mark.parametrize("shell_allowed_hosts", [None, "shell.example.com", ""])
+def test_compose_innerspace_profile_resolves_with_only_its_own_variables(tmp_path: Path, shell_allowed_hosts):
+    default = _resolved_compose_environments(
+        tmp_path / "default", env_file_allowed_hosts=None, shell_allowed_hosts=None
+    )
+    assert len(default) == 3
+    assert "unifi-innerspace-mcp" not in default
+
+    environments = _resolved_compose_environments(
+        tmp_path / "profile",
+        env_file_allowed_hosts="env-file.example.com",
+        shell_allowed_hosts=shell_allowed_hosts,
+        profiles=("innerspace",),
+    )
+    assert len(environments) == 4
+    environment = environments["unifi-innerspace-mcp"]
+    # The shared env file is not loaded: no console settings, no env-file hosts.
+    for name in ("UNIFI_HOST", "UNIFI_API_KEY", "UNIFI_MCP_ALLOWED_HOSTS"):
+        assert name not in environment
+    assert environments["unifi-network-mcp"]["UNIFI_HOST"] == "controller.example.com"
+    # Unset settings resolve to the server's defaults, never to an empty value it cannot read.
+    assert (environment["UNIFI_INNERSPACE_PORT"], environment["UNIFI_INNERSPACE_VERIFY_SSL"]) == ("443", "false")
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE"] == (shell_allowed_hosts or "")
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET"] == (
+        "true" if shell_allowed_hosts is not None else ""
+    )
+    assert set(environment["UNIFI_MCP_INTERNAL_ALLOWED_HOSTS"].split(",")) == {
+        "localhost",
+        "localhost:3005",
+        "127.0.0.1",
+        "127.0.0.1:3005",
+        "host.docker.internal",
+        "host.docker.internal:3005",
+        "unifi-innerspace-mcp",
+        "unifi-innerspace-mcp:3005",
     }

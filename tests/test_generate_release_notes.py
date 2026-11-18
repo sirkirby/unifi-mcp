@@ -342,3 +342,36 @@ def test_sitemanager_first_release_has_no_previous_tag(monkeypatch) -> None:
     assert "commits/sitemanager/v0.1.0" in notes
     assert "compare/" not in notes
     assert len(calls) == 4
+
+
+def test_innerspace_tag_parsing() -> None:
+    tag = parse_release_tag("innerspace/v0.1.0")
+    assert tag == ReleaseTag(tag="innerspace/v0.1.0", package_key="innerspace", version="0.1.0")
+    with pytest.raises(ValueError, match="Unsupported release tag"):
+        parse_release_tag("innerspace/0.1.0")
+
+
+@pytest.mark.parametrize(
+    "path,group",
+    [
+        ("apps/innerspace/src/unifi_innerspace_mcp/main.py", "InnerSpace MCP"),
+        ("packages/unifi-core/src/unifi_core/innerspace/models/floor_plans.py", "Shared Libraries"),
+        ("packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py", "Shared Libraries"),
+        (".github/workflows/release-innerspace.yml", "Release Infrastructure"),
+        ("apps/network/src/unifi_network_mcp/main.py", None),
+        ("plugins/unifi-access/skills/unifi-access/SKILL.md", None),
+        ("apps/innerspace-other/main.py", None),
+    ],
+)
+def test_innerspace_release_path_scope(path: str, group: str | None) -> None:
+    classified = classify_commit(
+        CommitInfo(sha="abc123", subject="feat: fixture change", files=(path,)), APP_CONFIGS["innerspace"]
+    )
+    assert (classified.group_title if classified else None) == group
+
+
+def test_innerspace_release_notes_name_the_package_and_have_no_bundle_group() -> None:
+    config = APP_CONFIGS["innerspace"]
+    assert config.display_name == "UniFi InnerSpace MCP"
+    assert config.install_command.format(version="0.1.0") == "uvx unifi-innerspace-mcp==0.1.0"
+    assert not any("plugins/" in pattern for group in config.path_groups for pattern in group.patterns)

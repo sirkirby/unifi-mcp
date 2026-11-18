@@ -41,7 +41,13 @@ def test_built_wheel_contains_and_loads_catalog_without_sibling_apps(tmp_path: P
 import importlib.abc
 import sys
 
-blocked = ('unifi_network_mcp', 'unifi_protect_mcp', 'unifi_access_mcp', 'unifi_sitemanager_mcp')
+blocked = (
+    'unifi_network_mcp',
+    'unifi_protect_mcp',
+    'unifi_access_mcp',
+    'unifi_sitemanager_mcp',
+    'unifi_innerspace_mcp',
+)
 
 class BlockSiblingApps(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
