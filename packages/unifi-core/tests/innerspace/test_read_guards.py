@@ -29,6 +29,7 @@ READS = {
     "list_walls": (InnerSpaceProjectManager, (PLAN_A,), {}),
     "list_placed_devices": (InnerSpaceProjectManager, (PLAN_A,), {}),
     "list_floor_plans": (InnerSpaceFloorPlanManager, (), {}),
+    "get_plan_asset": (InnerSpaceFloorPlanManager, (PLAN_A,), {}),
     "list_access_points": (InnerSpaceInventoryManager, (), {}),
     "list_switches": (InnerSpaceInventoryManager, (), {}),
     "list_inventory": (InnerSpaceInventoryManager, (), {}),
@@ -54,7 +55,7 @@ async def test_reads_fail_closed_when_app_stopped(connected, console, name):
 def _script(console, name):
     if name in ("get_project", "list_walls", "list_placed_devices"):
         script_project(console)
-    elif name == "list_floor_plans":
+    elif name in ("list_floor_plans", "get_plan_asset"):
         console.reply("GET", SYSTEM_PATH, load("system.json"))
         console.reply("GET", PLANS_PATH, load("v1_floor_plans.json"))
         console.reply("GET", PROJECT_PATH, load("v1_project.json"))

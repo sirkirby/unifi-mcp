@@ -13,16 +13,24 @@ Rules the rest of the package relies on:
 * The cookie jar is not used. The session cookie is taken from a successful
   login only and sent as an explicit header, so a cookie set by any other
   response is never stored or replayed.
-* Error text is fixed: the operation, the HTTP status and an allowlisted
-  ``errors.*`` code. Never the response body, the console address, the request
+* Error text is fixed: the operation, the HTTP status and an ``errors.*``
+  code matching a fixed pattern. Never the response body, the console address, the request
   path or an exception's text, and errors are raised outside ``except`` blocks
   so nothing is chained. Logs carry the operation, a route template and the
   exception class.
 * A refused session (401, or 403 ``errors.api.access``, which the console
-  returns for a missing or expired cookie) is re-established once under a lock
-  and the request retried once. A rejected login drops the session and pauses
-  automatic reconnects on an escalating cool-down, so repeated calls cannot
-  lock the account out.
+  returns for a missing or expired cookie and for an account without access)
+  is re-established once under a lock and the request retried once. A refusal
+  of the fresh session is a permission error, and for a short window after it
+  further refusals raise the same error without another login. A rejected
+  login drops the session and pauses automatic reconnects on an escalating
+  cool-down, so repeated calls cannot lock the account out.
+* ``/api/system`` answers a missing or expired session with 200 and a public
+  payload that has no application list, so on that route a 2xx without
+  ``apps.controllers`` is a refused session too, and its CSRF token is never
+  adopted. If the session issued for the retry still gets no list, the account
+  cannot read the app list: a permission error, and for a short window further
+  list-less replies raise it without another login.
 """
 
 from __future__ import annotations
@@ -36,7 +44,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Mapping, TypeVar
+from typing import Any, Awaitable, Callable, Collection, Mapping, TypeVar
 
 import aiohttp
 from yarl import URL
@@ -48,7 +56,6 @@ from unifi_core.exceptions import (
     UniFiConnectionError,
     UniFiError,
     UniFiMalformedResponseError,
-    UniFiNotFoundError,
     UniFiOperationError,
     UniFiPermissionError,
     UniFiRateLimitError,
@@ -81,6 +88,15 @@ _RECONNECT_MIN_INTERVAL_SECONDS = 30.0
 _RECONNECT_BLOCK_BASE_SECONDS = 60.0
 _RECONNECT_BLOCK_MAX_SECONDS = 900.0
 _APP_STATUS_CACHE_SECONDS = 30.0
+# After the console refuses a session issued for the same call, refusals within
+# this window raise the permission error without logging in again.
+_NO_ACCESS_WINDOW_SECONDS = 60.0
+# Bodies are read up to a cap and never beyond it: JSON replies here, binary
+# replies at the caller's cap, which cannot exceed the asset ceiling.
+_JSON_CEILING_BYTES = 32_000_000
+ASSET_CEILING_BYTES = 16_000_000
+_READ_CHUNK_BYTES = 65_536
+_IMAGE_MAGIC = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
 
 _SESSION_REFUSED_CODE = "errors.api.access"
 _ERROR_CODE = re.compile(r"errors\.[A-Za-z.]{1,64}")
@@ -112,15 +128,24 @@ _REJECTED = (
     "automatic reconnects back off after each rejection."
 )
 _RATE_LIMITED = "The UniFi OS console rate-limited the login. Automatic reconnects back off after each refusal."
+_NO_SESSION_ISSUED = (
+    "The UniFi OS console accepted the login request but issued no session. Automatic reconnects back off "
+    "after each refusal."
+)
 _SESSION_REJECTED = "The UniFi OS console refused the session right after a fresh login."
 _UNREACHABLE = (
     "Could not log in to the UniFi OS console. Check that the configured host and port are reachable from "
     "this machine and that they point at the console."
 )
+_UNEXPECTED = "Could not log in to the UniFi OS console because of an unexpected client error."
 _NOT_CONNECTED = "Not connected to the UniFi OS console."
 _PERMISSION = (
     "the console refused the session for InnerSpace (expired session or an account without InnerSpace access). "
-    "Reads need a UniFi OS account that can open the InnerSpace application; they were tested with a Super Admin."
+    "Reads need a UniFi OS account that can open the InnerSpace application, e.g. a Super Admin."
+)
+_NO_APP_LIST = (
+    "the console account cannot read the application list: the console answered without it on a session it "
+    "had just issued. Reads need a UniFi OS account that can open the InnerSpace application, e.g. a Super Admin."
 )
 
 
@@ -186,6 +211,10 @@ class _SessionRejectedError(UniFiAuthError):
     """The console refused a session it had just issued."""
 
 
+class _NoSessionIssuedError(UniFiAuthError):
+    """The console answered the login with success but without a session cookie and CSRF token."""
+
+
 @dataclass(frozen=True, slots=True)
 class _SessionAuth:
     """The session cookie and CSRF token from one login. Never rendered."""
@@ -202,19 +231,53 @@ class _Reply:
     status: int
     payload: Any = None
     is_json: bool = False
+    body: bytes = b""
+    content_type: str | None = None
+    oversize: bool = False
     token: str | None = field(default=None, repr=False)
     csrf: str | None = field(default=None, repr=False)
 
 
+async def _read_capped(response: aiohttp.ClientResponse, limit: int) -> tuple[bytes, bool]:
+    """Read the decoded body up to ``limit`` bytes; ``True`` when it is longer (the rest stays unread)."""
+    declared = response.content_length
+    # Refuse on the declared length alone: it fails closed, since nothing is read and the
+    # caller treats the reply as oversize whatever the body would have held.
+    if declared is not None and declared > limit:
+        return b"", True
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.content.iter_chunked(_READ_CHUNK_BYTES):
+        total += len(chunk)
+        if total > limit:
+            return b"", True
+        chunks.append(chunk)
+    return b"".join(chunks), False
+
+
 def _error_code(payload: Any) -> str | None:
-    """The console's ``error.code`` when it is an allowlisted ``errors.*`` code."""
+    """The console's ``error.code`` when it is an ``errors.*`` code matching a fixed pattern."""
     error = payload.get("error") if isinstance(payload, dict) else None
     code = error.get("code") if isinstance(error, dict) else None
     return code if isinstance(code, str) and _ERROR_CODE.fullmatch(code) else None
 
 
-def _session_refused(reply: _Reply) -> bool:
-    return reply.status == 401 or (reply.status == 403 and _error_code(reply.payload) == _SESSION_REFUSED_CODE)
+def _session_refused(reply: _Reply, path: str | None = None) -> bool:
+    """401, 403 ``errors.api.access``, or (for ``path`` ``/api/system``) a 2xx JSON reply without the app list."""
+    if reply.status == 401 or (reply.status == 403 and _error_code(reply.payload) == _SESSION_REFUSED_CODE):
+        return True
+    return path == SYSTEM_PATH and _without_app_list(reply)
+
+
+def _has_app_list(payload: Any) -> bool:
+    """Whether a ``/api/system`` payload carries ``apps.controllers`` as a list; only a session it accepts gets it."""
+    apps = payload.get("apps") if isinstance(payload, dict) else None
+    return isinstance(apps, dict) and isinstance(apps.get("controllers"), list)
+
+
+def _without_app_list(reply: _Reply) -> bool:
+    """A 2xx JSON reply without the app list: the public ``/api/system`` payload served to a refused session."""
+    return 200 <= reply.status < 300 and reply.is_json and not _has_app_list(reply.payload)
 
 
 class InnerSpaceConnectionManager:
@@ -282,6 +345,9 @@ class InnerSpaceConnectionManager:
         self._reconnect_block_count = 0
         self._reconnect_callbacks: list[Callable[[], Awaitable[None]]] = []
         self._app_running_until = 0.0
+        self._no_access_until = 0.0
+        # Until then, a list-less /api/system reply raises the permission error without another login.
+        self._app_list_refused_until = 0.0
 
     # ------------------------------------------------------------------
     # Status
@@ -347,8 +413,8 @@ class InnerSpaceConnectionManager:
             warn_if_unverified(logger, self._tls, product="InnerSpace", env_prefix=self.tls_env_prefix)
         if self.is_connected:
             return True
-        if self._attempt.in_progress and await self._attempt.join():
-            return True
+        if self._attempt.in_progress:
+            return await self._attempt.join()
         self._attempt.start(self._connect_attempt, name="innerspace-connect")
         return await self._attempt.join()
 
@@ -411,14 +477,18 @@ class InnerSpaceConnectionManager:
         # Fixed text by class: never the exception's own text.
         if isinstance(error, _SessionRejectedError):
             text = _SESSION_REJECTED
+        elif isinstance(error, _NoSessionIssuedError):
+            text = _NO_SESSION_ISSUED
         elif isinstance(error, UniFiAuthError):
             text = self._with_auth_failure_hint(_REJECTED)
         elif isinstance(error, UniFiRateLimitError):
             text = _RATE_LIMITED
         elif is_certificate_error(error):
             text = certificate_error_hint(env_prefix=self.tls_env_prefix)
-        else:
+        elif isinstance(error, (UniFiConnectionError, TimeoutError)):
             text = _UNREACHABLE
+        else:
+            text = _UNEXPECTED
         self._last_connection_error = text
         logger.error("[innerspace-cm] Could not log in to the UniFi OS console: %s", type(error).__name__)
         if isinstance(error, (UniFiAuthError, UniFiRateLimitError)):
@@ -453,10 +523,14 @@ class InnerSpaceConnectionManager:
         return InnerSpaceUnavailableError(text)
 
     async def close(self) -> None:
-        """Log out when a session exists, close the HTTP session and stop reconnects. Idempotent."""
+        """Log out when a session exists, close the HTTP session and stop reconnects. Idempotent.
+
+        Waits for a re-login in progress, so the session it creates is the one logged out.
+        """
         self._closed = True
         await self._attempt.cancel()
-        await self._discard_session(logout=True)
+        async with self._auth_lock:
+            await self._discard_session(logout=True)
 
     async def _discard_session(self, *, logout: bool = False) -> None:
         session, auth = self._session, self._auth
@@ -465,21 +539,25 @@ class InnerSpaceConnectionManager:
         if session is None:
             return
         if logout and auth is not None:
-            try:
-                reply = await self._send(
-                    session,
-                    "POST",
-                    LOGOUT_PATH,
-                    self._url(LOGOUT_PATH, "InnerSpace logout"),
-                    operation="InnerSpace logout",
-                    headers=auth.headers(),
-                )
-            except UniFiError as exc:
-                logger.debug("[innerspace-cm] Logout failed: %s", type(exc).__name__)
-            else:
-                if reply.status != 200:
-                    logger.debug("[innerspace-cm] Logout answered HTTP %s", reply.status)
+            await self._logout(session, auth, level=logging.WARNING)
         await session.close()
+
+    async def _logout(self, session: aiohttp.ClientSession, auth: _SessionAuth, *, level: int) -> None:
+        """End ``auth`` on the console; a failure is logged at ``level`` by class or status only."""
+        try:
+            reply = await self._send(
+                session,
+                "POST",
+                LOGOUT_PATH,
+                self._url(LOGOUT_PATH, "InnerSpace logout"),
+                operation="InnerSpace logout",
+                headers=auth.headers(),
+            )
+        except UniFiError as exc:
+            logger.log(level, "[innerspace-cm] Logout failed: %s", type(exc).__name__)
+        else:
+            if reply.status != 200:
+                logger.log(level, "[innerspace-cm] Logout answered HTTP %s", reply.status)
 
     # ------------------------------------------------------------------
     # Transport
@@ -520,20 +598,28 @@ class InnerSpaceConnectionManager:
         operation: str,
         headers: dict[str, str],
         json_body: Any = None,
+        limit: int | None = None,
+        binary: bool = False,
     ) -> _Reply:
-        """Send one request, never following a redirect, and read the whole answer."""
+        """Send one request, never following a redirect, and read the answer up to ``limit`` bytes.
+
+        A longer body sets ``oversize`` and the rest is not read. With ``binary`` a 2xx body is
+        returned as bytes instead of being parsed as JSON. ``limit`` defaults to the JSON ceiling.
+        """
+        limit = _JSON_CEILING_BYTES if limit is None else limit
         failure: UniFiConnectionError | None = None
         cause = ""
         try:
             async with session.request(
                 method,
                 url,
-                headers={"Accept": "application/json", **headers},
+                headers={"Accept": "image/png, image/jpeg" if binary else "application/json", **headers},
                 json=json_body,
                 allow_redirects=False,
             ) as response:
                 status = response.status
-                body = await response.read()
+                body, oversize = await _read_capped(response, limit)
+                content_type = response.headers.get("Content-Type", "").partition(";")[0].strip().lower() or None
                 token = response.cookies.get("TOKEN")
                 csrf = response.headers.get("X-Updated-Csrf-Token") or response.headers.get("X-Csrf-Token")
         except CertificateVerificationError as exc:
@@ -552,11 +638,16 @@ class InnerSpaceConnectionManager:
             logger.warning("[innerspace-cm] %s: %s %s failed (%s)", operation, method, _log_route(path), cause)
             raise failure
         logger.debug("[innerspace-cm] %s %s answered HTTP %s", method, _log_route(path), status)
+        token_value = token.value if token else None
+        if binary and 200 <= status < 300:
+            return _Reply(status, body=body, content_type=content_type, oversize=oversize, token=token_value, csrf=csrf)
         try:
+            if oversize:
+                raise ValueError
             payload, is_json = _json.loads(body), True
         except ValueError:
             payload, is_json = None, False
-        return _Reply(status, payload, is_json, token.value if token else None, csrf)
+        return _Reply(status, payload, is_json, oversize=oversize, token=token_value, csrf=csrf)
 
     async def _login(self, session: aiohttp.ClientSession) -> _SessionAuth:
         """Log in on ``session`` and return the new session cookie and CSRF token. Caller holds the lock."""
@@ -572,33 +663,42 @@ class InnerSpaceConnectionManager:
         )
         if reply.status == 200 and reply.token and reply.csrf:
             return _SessionAuth(token=reply.token, csrf=reply.csrf)
-        if reply.status in (401, 403):
-            raise UniFiAuthError(_REJECTED)
         if reply.status == 429:
             raise UniFiRateLimitError(_RATE_LIMITED)
+        # Every other refusal of the request, and a success without a session, takes the cool-down.
+        if 400 <= reply.status < 500:
+            raise UniFiAuthError(_REJECTED)
+        if 200 <= reply.status < 300:
+            raise _NoSessionIssuedError(_NO_SESSION_ISSUED)
         raise UniFiConnectionError(f"{operation}: the console answered HTTP {reply.status} without a session")
 
     async def _relogin(self, refused: _SessionAuth, operation: str) -> None:
         """Replace a refused session once, however many callers saw it refused.
 
         Only the first caller under the lock logs in; the others find a
-        different session in place and retry with it. A failed login drops the
-        session for every caller and, when the console rejected it, opens the
-        cool-down.
+        different session token in place and retry with it. Sessions are told
+        apart by token only, so a CSRF token rotated meanwhile does not count. The replaced session is
+        logged out, since the console also refuses a session that is still
+        valid but lacks access. A failed login drops the session for every
+        caller and, when the console rejected it, opens the cool-down.
         """
         async with self._auth_lock:
-            if not self.is_connected:
+            session = self._session
+            if not self.is_connected or session is None:
                 error = self._unavailable(operation)
-            elif self._auth != refused:
+            elif self._auth is None or self._auth.token != refused.token:
                 return
             else:
+                replaced = self._auth
                 logger.info("[innerspace-cm] %s: session refused; logging in again", operation)
                 failure: Exception | None = None
                 try:
-                    self._auth = await self._login(self._session)
+                    self._auth = await self._login(session)
                 except UniFiError as exc:
                     failure = exc
                 if failure is None:
+                    # Expected to be refused when the old session had expired.
+                    await self._logout(session, replaced, level=logging.DEBUG)
                     return
                 await self._drop_session(failure)
                 error = self._unavailable(operation)
@@ -607,7 +707,7 @@ class InnerSpaceConnectionManager:
     async def _reject_session(self, refused: _SessionAuth, operation: str) -> None:
         """A session issued moments ago was refused again: drop it and stop."""
         async with self._auth_lock:
-            if self._auth == refused:
+            if self._auth is not None and self._auth.token == refused.token:
                 await self._drop_session(_SessionRejectedError(_SESSION_REJECTED))
         raise self._unavailable(operation)
 
@@ -634,6 +734,48 @@ class InnerSpaceConnectionManager:
         A refused session is re-established once and the request retried once.
         Every failure raises a typed error with fixed text naming ``operation``.
         """
+        reply = await self._exchange(method, path, operation=operation, params=params, json=json)
+        return self._interpret(reply, operation)
+
+    async def request_bytes(
+        self,
+        path: str,
+        *,
+        operation: str,
+        max_bytes: int,
+        allowed_types: Collection[str],
+    ) -> tuple[bytes, str]:
+        """GET a PNG or JPEG and return its bytes and content type.
+
+        At most ``max_bytes`` (never more than :data:`ASSET_CEILING_BYTES`) are read; a longer
+        body, a content type outside ``allowed_types`` or bytes that are not the image type
+        they claim to be raise a typed error with fixed text. Redirects are never followed.
+        """
+        limit = min(max_bytes, ASSET_CEILING_BYTES)
+        reply = await self._exchange("GET", path, operation=operation, limit=limit, binary=True)
+        self._check_status(reply, operation)
+        if reply.oversize:
+            raise UniFiMalformedResponseError(f"{operation}: the image is larger than the allowed size")
+        content_type = reply.content_type
+        magic = _IMAGE_MAGIC.get(content_type or "")
+        if content_type not in allowed_types or magic is None or not reply.body.startswith(magic):
+            raise UniFiMalformedResponseError(
+                f"{operation}: the console returned something other than an allowed image"
+            )
+        return reply.body, content_type
+
+    async def _exchange(
+        self,
+        method: str,
+        path: str,
+        *,
+        operation: str,
+        params: Mapping[str, str] | None = None,
+        json: Any = None,
+        limit: int | None = None,
+        binary: bool = False,
+    ) -> _Reply:
+        """Send with the session; on a refused session log in once and send once more."""
         if self._origin is None:
             raise self._unavailable(operation)
         url = self._url(path, operation)
@@ -642,39 +784,88 @@ class InnerSpaceConnectionManager:
         auth, session = self._auth, self._session
         if auth is None or session is None or self._closed:
             raise self._unavailable(operation)
-        reply = await self._send(
-            session, method, path, url, operation=operation, headers=auth.headers(), json_body=json
+        send = functools.partial(
+            self._send,
+            method=method,
+            path=path,
+            url=url,
+            operation=operation,
+            json_body=json,
+            limit=limit,
+            binary=binary,
         )
-        if not _session_refused(reply):
-            return self._interpret(reply, operation)
+        reply = await send(session, headers=auth.headers())
+        if not _session_refused(reply, path):
+            self._note_app_list(reply, path)
+            return self._adopt_csrf(reply, auth)
+        if reply.status == 403 and self._clock() < self._no_access_until:
+            raise UniFiPermissionError(f"{operation}: {_PERMISSION}")
+        if path == SYSTEM_PATH and _without_app_list(reply) and self._clock() < self._app_list_refused_until:
+            raise UniFiPermissionError(f"{operation}: {_NO_APP_LIST}")
 
         await self._relogin(auth, operation)
         auth, session = self._auth, self._session
-        if auth is None or session is None:
+        if auth is None or session is None or self._closed:
             raise self._unavailable(operation)
-        reply = await self._send(
-            session, method, path, url, operation=operation, headers=auth.headers(), json_body=json
-        )
+        reply = await send(session, headers=auth.headers())
         if reply.status == 401:
             await self._reject_session(auth, operation)
         if _session_refused(reply):
+            self._no_access_until = self._clock() + _NO_ACCESS_WINDOW_SECONDS
             raise UniFiPermissionError(f"{operation}: {_PERMISSION}")
-        return self._interpret(reply, operation)
+        if path == SYSTEM_PATH and _without_app_list(reply):
+            self._app_list_refused_until = self._clock() + _NO_ACCESS_WINDOW_SECONDS
+            raise UniFiPermissionError(f"{operation}: {_NO_APP_LIST}")
+        self._no_access_until = 0.0
+        self._note_app_list(reply, path)
+        return self._adopt_csrf(reply, auth)
 
-    @staticmethod
-    def _interpret(reply: _Reply, operation: str) -> Any:
+    def _note_app_list(self, reply: _Reply, path: str) -> None:
+        """A 2xx ``/api/system`` reply that carries the list shows the account can read it: close the window."""
+        if path == SYSTEM_PATH and 200 <= reply.status < 300 and _has_app_list(reply.payload):
+            self._app_list_refused_until = 0.0
+
+    def _adopt_csrf(self, reply: _Reply, auth: _SessionAuth) -> _Reply:
+        """Keep a CSRF token the console rotated on a successful reply to the current session.
+
+        A reply that also sets a session cookie replaces both together; a cookie
+        without a CSRF token changes nothing.
+        """
+        current = self._auth
+        if not 200 <= reply.status < 300 or not reply.csrf or current is None or current.token != auth.token:
+            return reply
+        rotated = _SessionAuth(token=reply.token or current.token, csrf=reply.csrf)
+        if rotated != current:
+            self._auth = rotated
+        return reply
+
+    def _interpret(self, reply: _Reply, operation: str) -> Any:
+        self._check_status(reply, operation)
+        if reply.oversize:
+            raise UniFiMalformedResponseError(
+                f"{operation}: the console returned a response larger than the allowed size"
+            )
+        if not reply.is_json:
+            raise UniFiMalformedResponseError(f"{operation}: the console returned a response that is not JSON")
+        return reply.payload
+
+    def _check_status(self, reply: _Reply, operation: str) -> None:
+        """Raise the typed error for any status outside 2xx.
+
+        A 404 is an :class:`InnerSpaceHttpError`, not "not found": the console
+        answers it for a route it does not serve, which says nothing about the
+        object asked for. Any HTTP error also drops the cached app status, so
+        the next read checks the app again.
+        """
         status = reply.status
         if 200 <= status < 300:
-            if not reply.is_json:
-                raise UniFiMalformedResponseError(f"{operation}: the console returned a response that is not JSON")
-            return reply.payload
+            return
+        self._app_running_until = 0.0
         if 300 <= status < 400:
             raise InnerSpaceHttpError(
                 f"{operation}: the console answered with an unexpected redirect (HTTP {status}); not followed",
                 status=status,
             )
-        if status == 404:
-            raise UniFiNotFoundError("route", "InnerSpace", f"{operation}: InnerSpace route not found")
         if status == 429:
             raise UniFiRateLimitError(f"{operation}: the console rate-limited the request (HTTP 429)")
         code = _error_code(reply.payload)
@@ -686,6 +877,8 @@ class InnerSpaceConnectionManager:
         if self._clock() < self._app_running_until:
             return
         status = app_status_from_api(await self.request("GET", SYSTEM_PATH, operation=operation))
+        if not status.installed:
+            raise InnerSpaceUnavailableError(f"{operation}: InnerSpace is not installed on this console")
         if not status.running:
             raise InnerSpaceUnavailableError(f"{operation}: InnerSpace is not running on this console")
         self._app_running_until = self._clock() + _APP_STATUS_CACHE_SECONDS

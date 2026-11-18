@@ -43,3 +43,12 @@ def script_placed(console, path, fixture, *, unit="metric"):
     console.reply("GET", PLANS_PATH, load("v1_floor_plans.json"))
     if unit is not None:
         console.reply("GET", INTERNAL_PROJECT_PATH, with_unit(unit))
+
+
+def png_bytes(size=64):
+    """A minimal valid PNG signature plus filler; only the leading bytes are inspected."""
+    return b"\x89PNG\r\n\x1a\n" + b"\x00" * size
+
+
+def jpeg_bytes(size=64):
+    return b"\xff\xd8\xff\xe0" + b"\x00" * size

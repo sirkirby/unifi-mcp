@@ -10,7 +10,6 @@ from aiohttp import web
 from aiohttp.test_utils import TestServer
 from unifi_core.exceptions import (
     UniFiMalformedResponseError,
-    UniFiNotFoundError,
     UniFiPermissionError,
     UniFiRateLimitError,
     UniFiValidationError,
@@ -34,6 +33,7 @@ FLOOR_PLANS = f"{INTEGRATION_PREFIX}/floor_plans"
 SYSTEM = "/api/system"
 OP = "List floor plans"
 MARKER = "body-marker-7f3e"
+ROTATED = "csrf-9"
 PERMISSION_TEXT = (
     f"{OP}: the console refused the session for InnerSpace (expired session or an account without InnerSpace access)"
 )
@@ -104,6 +104,47 @@ async def test_bad_credentials_fixed_error_no_retry(console, caplog):
         assert "TOKEN" not in text
 
 
+@pytest.mark.parametrize("status", [400, 404, 422])
+async def test_login_4xx_is_rejected_with_cooldown(manager, console, status):
+    console.reply("POST", LOGIN, {"error": {"code": "errors.thing"}}, status=status)
+
+    assert await manager.initialize() is False
+
+    assert manager.last_connection_error == cm_module._REJECTED
+    assert manager._reconnect_block_remaining() > 0
+
+
+async def test_login_success_without_session_takes_cooldown(manager, console):
+    console.reply("POST", LOGIN, {"unique_id": "synthetic-user"})
+
+    assert await manager.initialize() is False
+
+    assert manager.last_connection_error == cm_module._NO_SESSION_ISSUED
+    assert "host and port" not in manager.last_connection_error
+    assert manager._reconnect_block_remaining() > 0
+
+
+async def test_unknown_login_failure_has_its_own_text(manager, console, monkeypatch):
+    async def broken(session):
+        raise RuntimeError(MARKER)
+
+    monkeypatch.setattr(manager, "_login", broken)
+
+    assert await manager.initialize() is False
+
+    assert manager.last_connection_error == cm_module._UNEXPECTED
+    assert "host and port" not in manager.last_connection_error
+
+
+async def test_concurrent_initialize_joins_one_attempt(manager, console):
+    console.reject_logins()
+
+    results = await asyncio.gather(manager.initialize(), manager.initialize())
+
+    assert results == [False, False]
+    assert console.logins == 1
+
+
 async def test_requests_carry_cookie_and_csrf(connected, console):
     console.reply("GET", FLOOR_PLANS, {"data": []})
 
@@ -120,8 +161,9 @@ async def test_requests_carry_cookie_and_csrf(connected, console):
 # ---------------------------------------------------------------------------
 
 
-async def test_concurrent_401_triggers_one_login(connected, console):
-    console.expire_session(401)
+@pytest.mark.parametrize("status", [401, 403])
+async def test_concurrent_session_expiry_triggers_one_login(connected, console, status):
+    console.expire_session(status)
     console.hold_401_until(5)
     for index in range(5):
         console.reply("GET", FLOOR_PLANS, {"data": [index]})
@@ -139,15 +181,70 @@ async def test_concurrent_401_triggers_one_login(connected, console):
     assert all(call.headers["X-CSRF-Token"] == "csrf-2" for call in retries)
 
 
-async def test_csrf_already_rotated_skips_login(connected, console):
-    stale = connected._auth
+@pytest.mark.parametrize("header", ["X-Updated-Csrf-Token", "X-Csrf-Token"])
+async def test_rotated_csrf_is_adopted_from_a_successful_reply(connected, console, header):
+    console.reply("GET", FLOOR_PLANS, {"data": [1]}, headers={header: ROTATED})
+    console.reply("GET", FLOOR_PLANS, {"data": [2]})
 
-    await connected._relogin(stale, OP)
-    assert console.logins == 2
-    await connected._relogin(stale, OP)
+    await connected.request("GET", FLOOR_PLANS, operation=OP)
+    console.rotate_csrf(ROTATED)
+    assert await connected.request("GET", FLOOR_PLANS, operation=OP) == {"data": [2]}
 
+    assert [call.headers["X-CSRF-Token"] for call in console.calls("GET", FLOOR_PLANS)] == ["csrf-1", ROTATED]
+    assert console.logins == 1
+
+
+async def test_csrf_rotated_by_another_call_does_not_block_relogin(connected, console):
+    """Call A is refused on the token whose CSRF call B just rotated: A still logs in again once."""
+    other = f"{INTEGRATION_PREFIX}/switches"
+    arrived, release = asyncio.Event(), asyncio.Event()
+    console.reply("GET", other, ACCESS_DENIED, status=403, gate=(arrived, release))
+    console.reply("GET", other, {"data": "after-relogin"})
+    console.reply("GET", FLOOR_PLANS, {"data": [1]}, headers={"X-Updated-Csrf-Token": ROTATED})
+
+    call_a = asyncio.create_task(connected.request("GET", other, operation=OP))
+    await arrived.wait()
+    await connected.request("GET", FLOOR_PLANS, operation=OP)
+    assert connected._auth.csrf == ROTATED
+    release.set()
+
+    assert await call_a == {"data": "after-relogin"}
     assert console.logins == 2
-    assert connected._auth.csrf == "csrf-2"
+    assert console.calls("GET", other)[-1].headers["Cookie"] == "TOKEN=session-2"
+
+
+async def test_rotated_token_and_csrf_are_adopted_together(connected, console):
+    rotated_cookie = "TOKEN=session-r; Path=/"
+    console.reply(
+        "GET", FLOOR_PLANS, {"data": [1]}, headers={"Set-Cookie": rotated_cookie, "X-Updated-Csrf-Token": ROTATED}
+    )
+    console.reply("GET", FLOOR_PLANS, {"data": [2]})
+
+    await connected.request("GET", FLOOR_PLANS, operation=OP)
+    console.rotate_token("session-r")
+    console.rotate_csrf(ROTATED)
+    assert await connected.request("GET", FLOOR_PLANS, operation=OP) == {"data": [2]}
+
+    last = console.calls("GET", FLOOR_PLANS)[-1]
+    assert (last.headers["Cookie"], last.headers["X-CSRF-Token"]) == ("TOKEN=session-r", ROTATED)
+    assert console.logins == 1
+
+
+async def test_rotated_token_without_csrf_changes_nothing(connected, console):
+    console.reply("GET", FLOOR_PLANS, {"data": [1]}, headers={"Set-Cookie": "TOKEN=session-r; Path=/"})
+
+    await connected.request("GET", FLOOR_PLANS, operation=OP)
+
+    assert (connected._auth.token, connected._auth.csrf) == ("session-1", "csrf-1")
+
+
+async def test_csrf_on_an_error_reply_is_not_adopted(connected, console):
+    console.reply("GET", FLOOR_PLANS, status=500, headers={"X-Updated-Csrf-Token": ROTATED})
+
+    with pytest.raises(InnerSpaceHttpError):
+        await connected.request("GET", FLOOR_PLANS, operation=OP)
+
+    assert connected._auth.csrf == "csrf-1"
 
 
 async def test_second_401_not_retried(connected, console):
@@ -163,8 +260,9 @@ async def test_second_401_not_retried(connected, console):
     assert connected._reconnect_block_remaining() > 0
 
 
-async def test_concurrent_rejected_relogin(connected, console):
-    console.expire_session(401)
+@pytest.mark.parametrize("status", [401, 403])
+async def test_concurrent_rejected_relogin(connected, console, status):
+    console.expire_session(status)
     console.hold_401_until(5)
     console.reject_logins()
 
@@ -245,6 +343,27 @@ async def test_403_access_code_relogs_in_once(connected, console):
     assert [call.headers["Cookie"] for call in calls] == ["TOKEN=session-1", "TOKEN=session-2"]
 
 
+async def test_account_without_access_logs_in_once_per_window(connected, console):
+    clock = _Clock()
+    connected._clock = clock
+    for _ in range(6):
+        console.reply("GET", FLOOR_PLANS, ACCESS_DENIED, status=403)
+
+    for _ in range(3):
+        with pytest.raises(UniFiPermissionError):
+            await connected.request("GET", FLOOR_PLANS, operation=OP)
+    # The first call logs in again once; the next two raise without a login.
+    assert console.logins == 2
+    assert len(console.calls("GET", FLOOR_PLANS)) == 4
+    # The replaced session was logged out.
+    assert [call.headers["Cookie"] for call in console.calls("POST", LOGOUT)] == ["TOKEN=session-1"]
+
+    clock.now += 61
+    with pytest.raises(UniFiPermissionError):
+        await connected.request("GET", FLOOR_PLANS, operation=OP)
+    assert console.logins == 3
+
+
 async def test_403_after_relogin_is_permission_error(connected, console):
     console.reply("GET", FLOOR_PLANS, ACCESS_DENIED, status=403)
     console.reply("GET", FLOOR_PLANS, ACCESS_DENIED, status=403)
@@ -279,14 +398,15 @@ async def test_403_other_code_is_http_error(connected, console, payload, code):
     assert "DROP" not in str(raised.value)
 
 
-async def test_404_not_found(connected, console):
+async def test_404_is_an_undetermined_http_error(connected, console):
     error = _errors()["not_found"]
     console.reply("GET", FLOOR_PLANS, error["body"], status=error["status"])
 
-    with pytest.raises(UniFiNotFoundError) as raised:
+    with pytest.raises(InnerSpaceHttpError) as raised:
         await connected.request("GET", FLOOR_PLANS, operation=OP)
 
-    assert str(raised.value) == f"{OP}: InnerSpace route not found"
+    assert (raised.value.status, raised.value.code) == (404, "errors.route.notFound")
+    assert str(raised.value) == f"{OP}: the console answered HTTP 404 (errors.route.notFound)"
 
 
 async def test_429_rate_limit(connected, console):
@@ -498,8 +618,8 @@ async def test_ensure_app_running_caches_running_result(connected, console):
     assert len(console.calls("GET", SYSTEM)) == 2
 
 
-@pytest.mark.parametrize("state", ["stopped", "absent"])
-async def test_ensure_app_running_refuses_stopped_app(connected, console, state):
+@pytest.mark.parametrize(("state", "text"), [("stopped", "is not running"), ("absent", "is not installed")])
+async def test_ensure_app_running_refuses_stopped_app(connected, console, state, text):
     system = _system()
     controllers = system["apps"]["controllers"]
     if state == "stopped":
@@ -512,8 +632,23 @@ async def test_ensure_app_running_refuses_stopped_app(connected, console, state)
     for _ in range(2):
         with pytest.raises(InnerSpaceUnavailableError) as raised:
             await connected.ensure_app_running(OP)
-        assert str(raised.value) == f"{OP}: InnerSpace is not running on this console"
+        assert str(raised.value) == f"{OP}: InnerSpace {text} on this console"
     # A stopped result is never cached.
+    assert len(console.calls("GET", SYSTEM)) == 2
+
+
+async def test_failed_read_drops_the_cached_app_status(connected, console):
+    clock = _Clock()
+    connected._clock = clock
+    console.reply("GET", SYSTEM, _system())
+    console.reply("GET", FLOOR_PLANS, _errors()["not_found"]["body"], status=404)
+    console.reply("GET", SYSTEM, _system())
+
+    await connected.ensure_app_running(OP)
+    with pytest.raises(InnerSpaceHttpError):
+        await connected.request("GET", FLOOR_PLANS, operation=OP)
+    await connected.ensure_app_running(OP)
+
     assert len(console.calls("GET", SYSTEM)) == 2
 
 
@@ -542,7 +677,7 @@ async def test_hint_on_not_configured():
     assert manager.last_connection_error == f"{cm_module._NOT_CONFIGURED} {HINT}"
 
 
-@pytest.mark.parametrize("status", [401, 403])
+@pytest.mark.parametrize("status", [401, 403, 400])
 async def test_hint_on_a_rejected_login(console, status):
     console.reply("POST", LOGIN, ACCESS_DENIED, status=status)
     manager = _hinted(console.base_url)
@@ -583,6 +718,12 @@ async def _session_rejected(console, manager):
     return cm_module._SESSION_REJECTED
 
 
+async def _no_session_issued(console, manager):
+    console.reply("POST", LOGIN, {"unique_id": "synthetic-user"})
+    assert await manager.initialize() is False
+    return cm_module._NO_SESSION_ISSUED
+
+
 async def _login_rate_limited(console, manager):
     console.reply("POST", LOGIN, status=429)
     assert await manager.initialize() is False
@@ -601,8 +742,8 @@ async def _request_403(console, manager):
 
 @pytest.mark.parametrize(
     "scenario",
-    [_session_rejected, _login_rate_limited, _request_403],
-    ids=["session-rejected", "login-429", "request-403"],
+    [_session_rejected, _no_session_issued, _login_rate_limited, _request_403],
+    ids=["session-rejected", "no-session-issued", "login-429", "request-403"],
 )
 @pytest.mark.parametrize("hint", [True, False], ids=["hint", "no-hint"])
 async def test_no_hint_on_other_failures(console, scenario, hint):
@@ -743,9 +884,22 @@ async def test_empty_host_is_not_configured():
     assert InnerSpaceConnectionManager("  ", USERNAME, PASSWORD).authentication_status.session_configured is False
 
 
-async def test_session_ignores_proxy_environment(connected, monkeypatch):
-    monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
-    assert connected._session.trust_env is False
+async def test_session_ignores_proxy_environment(manager, console, monkeypatch):
+    proxy, server = await start_stub()
+    try:
+        for name in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+            monkeypatch.setenv(name, proxy.base_url)
+        for name in ("NO_PROXY", "no_proxy"):
+            monkeypatch.delenv(name, raising=False)
+        console.reply("GET", FLOOR_PLANS, {"data": []})
+
+        assert await manager.initialize() is True
+        assert await manager.request("GET", FLOOR_PLANS, operation=OP) == {"data": []}
+    finally:
+        await server.close()
+
+    assert proxy.requests == []
+    assert console.logins == 1
 
 
 async def test_close_idempotent_and_logs_out(connected, console):
@@ -757,6 +911,37 @@ async def test_close_idempotent_and_logs_out(connected, console):
     assert logout.headers["Cookie"] == "TOKEN=session-1"
     assert not connected.is_connected
     assert not connected.reconnect_due
+
+
+async def test_failed_logout_is_logged_at_warning_with_status_only(connected, console, caplog):
+    console.reply("POST", LOGOUT, {"error": {"message": MARKER}}, status=500)
+
+    with caplog.at_level(logging.WARNING, logger=cm_module.__name__):
+        await connected.close()
+
+    (record,) = [r for r in caplog.records if "Logout" in r.getMessage()]
+    assert record.levelno == logging.WARNING
+    assert record.getMessage() == "[innerspace-cm] Logout answered HTTP 500"
+
+
+async def test_close_during_relogin_logs_out_the_new_session(connected, console):
+    console.expire_session(403)
+    gate = console.hold_logins()
+    request = asyncio.create_task(connected.request("GET", FLOOR_PLANS, operation=OP))
+    await console.login_arrived.wait()
+    closing = asyncio.create_task(connected.close())
+    for _ in range(5):
+        await asyncio.sleep(0)
+    gate.set()
+
+    await closing
+    with pytest.raises(InnerSpaceUnavailableError):
+        await request
+
+    assert console.logins == 2
+    assert console.calls("POST", LOGOUT)[-1].headers["Cookie"] == "TOKEN=session-2"
+    assert not connected.is_connected
+    assert console.calls("GET", FLOOR_PLANS)[-1].headers["Cookie"] == "TOKEN=session-1"
 
 
 async def test_close_without_session_sends_nothing(manager, console):
