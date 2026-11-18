@@ -93,7 +93,9 @@ The scoping clause is not optional for integration-API tools.
 
 ## Step 3: Require the API key, with clear remediation
 
-Integration API endpoints reject session-cookie auth. Without the API key,
+This step covers the Network Integration API. InnerSpace is session-only and does not use it (see AGENTS.md, InnerSpace session isolation).
+
+Network Integration API endpoints reject session-cookie auth. Without the API key,
 the tool MUST fail with a remediation message. Put the check in the manager
 so every tool in the family inherits it:
 
