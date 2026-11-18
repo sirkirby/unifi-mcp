@@ -284,3 +284,7 @@ class ReorderFloorPlansInput(InnerSpaceWriteInput):
     @classmethod
     def _plans(cls, values: list[str]) -> list[str]:
         return _unique([_identifier(value, "plan") for value in values])
+
+
+class ProjectUnitInput(InnerSpaceWriteInput):
+    unit: Unit = Field(description="metric or imperial")
