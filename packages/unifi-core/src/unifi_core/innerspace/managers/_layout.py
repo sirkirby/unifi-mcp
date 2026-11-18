@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError
 from unifi_core.innerspace.frames import Coordinates, PlanFrame, from_plan_point, to_plan_point
+from unifi_core.innerspace.managers._reads import read_floor_plan_rows
 from unifi_core.innerspace.managers._writes import (
     InnerSpaceWriteRefusedError,
     ensure_writable,
@@ -54,6 +55,8 @@ class WriteRequest:
     body: Any
     expect: Expect
     created_ids: list[str] = field(default_factory=list)
+    # The read-back also reads the floor-plan rows, for an ``expect`` that checks what the console computed.
+    read_rows: bool = False
 
 
 @dataclass
@@ -245,7 +248,9 @@ async def apply_write(
             return noop_write(operation=operation, metadata=metadata)
 
         async def read_back() -> Mapping[str, bool | None]:
-            return request.expect(Snapshot(await read_internal_project(cm, operation=operation)))
+            data = await read_internal_project(cm, operation=operation)
+            rows = await read_floor_plan_rows(cm, operation=operation) if request.read_rows else ()
+            return request.expect(Snapshot(data, rows))
 
         return await send_write(
             cm,

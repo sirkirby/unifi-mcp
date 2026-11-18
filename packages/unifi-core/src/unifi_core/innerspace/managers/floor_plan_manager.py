@@ -1,4 +1,4 @@
-"""InnerSpace floor plans: reads, and the title, floor attenuation and order writes.
+"""InnerSpace floor plans: reads, and the title, floor attenuation, order and scale writes.
 
 The plan ``PATCH`` routes answer with every shape and product in the project;
 that reply is never logged or returned, and the read-back decides the outcome.
@@ -7,35 +7,46 @@ that reply is never logged or returned, and the read-back decides the outcome.
 from __future__ import annotations
 
 import base64
+import math
 import re
 from functools import partial
 from typing import Any
 
 from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError, UniFiValidationError
+from unifi_core.innerspace.frames import Coordinates
 from unifi_core.innerspace.managers._layout import (
+    ALREADY_APPLIED,
+    Display,
     Snapshot,
     WritePlan,
     WriteRequest,
     apply_write,
     matches,
+    pick,
+    plan_points,
+    points_close,
     preview_write,
+    shape_change_body,
     state,
 )
 from unifi_core.innerspace.managers._reads import read_floor_plan_rows, read_plan_maps, read_project_unit
-from unifi_core.innerspace.managers._writes import plan_path
+from unifi_core.innerspace.managers._writes import InnerSpaceWriteRefusedError, plan_path, write_ids
 from unifi_core.innerspace.managers.connection_manager import (
     PLAN_ORDER_PATH,
+    SHAPE_CHANGE_PATH,
     InnerSpaceConnectionManager,
     reconnects_on_demand,
 )
-from unifi_core.innerspace.models._coerce import text
-from unifi_core.innerspace.models.floor_plans import FloorPlan, floor_plan_from_api
+from unifi_core.innerspace.models._coerce import number, text
+from unifi_core.innerspace.models.floor_plans import FloorPlan, floor_plan_from_api, scale_per_unit
 from unifi_core.innerspace.models.reads import InnerSpaceAssetInput, InnerSpaceSiteInput
 from unifi_core.innerspace.models.writes import (
     FloorAttenuationInput,
+    PlanScaleInput,
     RenameFloorPlanInput,
     ReorderFloorPlansInput,
 )
+from unifi_core.innerspace.units import Unit, from_metres, to_metres
 from unifi_core.write_verification import WriteVerificationResult
 
 PLAN_ASSET_MAX_BYTES = 8_000_000
@@ -47,6 +58,13 @@ _IMAGE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
 _RENAME = "rename InnerSpace floor plan"
 _ATTENUATION = "set InnerSpace floor attenuation"
 _REORDER = "reorder InnerSpace floor plans"
+_SCALE = "set InnerSpace plan scale"
+_SCALE_TOOL = "innerspace_set_plan_scale"
+# The read-back key for the plan's computed scale, and how far it may differ from pixels over metres sent.
+_COMPUTED_SCALE = "floor_plan_scale"
+_SCALE_TOLERANCE = 1e-3
+# How far the stored length of the scale line may differ from the metres sent: float round trips, not edits.
+_LENGTH_TOLERANCE = 1e-6
 
 
 def _plan_field(snapshot: Snapshot, plan_id: str, key: str, value: Any, operation: str, shown: str) -> WritePlan:
@@ -110,6 +128,126 @@ def _reorder(args: ReorderFloorPlansInput, snapshot: Snapshot) -> WritePlan:
         request=request if moved else None,
         effects={"plans_moved": len(moved)},
         warnings=["Plan order also stacks the floors: neighbouring order values are adjacent floors for coverage"],
+    )
+
+
+def _ppm_state(read: float | None, wanted: float, prior: float | None) -> bool | None:
+    """The plan's computed scale after a scale write: True within 0.1 % of the line sent, False when unchanged.
+
+    The stored line only echoes what was sent; the floor-plan row's ``ppm`` is what the console made of it,
+    so a length taken in another unit shows here. Anything else, a missing ``ppm`` included, is unknown.
+    """
+    if read is None:
+        return None
+    if math.isclose(read, wanted, rel_tol=_SCALE_TOLERANCE):
+        return True
+    return False if prior is not None and math.isclose(read, prior, rel_tol=1e-9) else None
+
+
+def _length_kept(stored: dict[str, Any] | None, metres: float) -> bool:
+    """Whether the stored line's length is the one sent, allowing for the console's float round trip."""
+    read = number(stored.get("scale")) if stored else None
+    return read is not None and math.isclose(read, metres, rel_tol=_LENGTH_TOLERANCE)
+
+
+def _scale(args: PlanScaleInput, snapshot: Snapshot) -> WritePlan:
+    plan_id = args.plan_id
+    plan = snapshot.plan(plan_id, _SCALE)
+    lines = snapshot.on_plan(plan_id, "scale")
+    if len(lines) != 1:
+        raise InnerSpaceWriteRefusedError(
+            f"{_SCALE}: the plan has {'no' if not lines else 'more than one'} scale line, and only a plan with "
+            "exactly one can have it replaced"
+        )
+    (stored,) = lines
+    metres: float = to_metres(args.length, args.unit)  # type: ignore[assignment]
+    stored_metres = number(stored.get("scale"))
+    devices = len(snapshot.on_plan(plan_id, "device"))
+    if stored.get("id") == write_ids(_SCALE_TOOL, args.model_dump(mode="json"), 1)[0]:
+        # The line is this call's own, from an identical earlier call. The plan's scale has changed since,
+        # so the same frame points convert differently; they are not compared.
+        if not matches({"s": stored_metres}, {"s": metres}):
+            raise InnerSpaceWriteRefusedError(
+                f"{_SCALE}: the plan's scale line was set by an identical earlier call and has been changed "
+                "since. Nothing was sent; change an argument to replace it."
+            )
+        return WritePlan(
+            preview={"plan_id": plan_id, "plan_title": plan.get("title"), "unit": args.unit},
+            request=None,
+            effects={"devices_shifted": 0},
+            warnings=[ALREADY_APPLIED],
+            already_applied=True,
+        )
+    position = plan_points(
+        [(args.x1, args.y1), (args.x2, args.y2)],
+        frame=snapshot.frame(plan_id),
+        unit=args.unit,
+        coordinates=args.coordinates,
+        operation=_SCALE,
+    )
+    pixels = math.hypot(position[1]["x"] - position[0]["x"], position[1]["y"] - position[0]["y"])
+    display = Display(snapshot.geometry(plan_id), args.unit, args.coordinates)
+    (x1, y1), (x2, y2) = (display.position(stored.get("position")) + [(None, None)] * 2)[:2]
+    unchanged = points_close(stored.get("position"), position) and matches({"s": stored_metres}, {"s": metres})
+    prior_ppm = snapshot.geometry(plan_id).ppm
+
+    def request(ids: list[str]) -> WriteRequest:
+        line = {
+            "id": ids[0],
+            "type": "scale",
+            "projectId": snapshot.project_id,
+            "planId": plan_id,
+            "scale": metres,
+            "height": stored.get("height"),
+            "position": position,
+            "status": stored.get("status", 0),
+            "defaultScale": False,
+            "defaultHeight": stored.get("defaultHeight", False),
+            "computedScale": None,
+        }
+        wanted = pick(line, ("type", "planId", "position"))
+
+        def expect(after: Snapshot) -> dict[str, bool | None]:
+            created = after.shapes.get(line["id"])
+            created_state = state(created, wanted, None)
+            if created_state and not _length_kept(created, metres):
+                created_state = None
+            states = {line["id"]: created_state, stored["id"]: after.shapes.get(stored["id"]) is None}
+            # When the new line keeps the scale, the computed scale reads the same either way and decides nothing.
+            if prior_ppm is None or not math.isclose(pixels / metres, prior_ppm, rel_tol=_SCALE_TOLERANCE):
+                states[_COMPUTED_SCALE] = _ppm_state(after.geometry(plan_id).ppm, pixels / metres, prior_ppm)
+            return states
+
+        body = shape_change_body(create=[line], remove=[stored], scale=True)
+        return WriteRequest("POST", SHAPE_CHANGE_PATH, body, expect, [line["id"]], read_rows=True)
+
+    preview = {
+        "plan_id": plan_id,
+        "plan_title": plan.get("title"),
+        "unit": args.unit,
+        "coordinates": args.coordinates,
+        "current": {
+            "line": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+            # Unrounded: it is what an undo sends back.
+            "length": None if stored_metres is None else from_metres(stored_metres, args.unit),  # type: ignore[arg-type]
+            "scale_per_unit": scale_per_unit(snapshot.geometry(plan_id).ppm, args.unit),
+        },
+        "proposed": {
+            "line": {"x1": args.x1, "y1": args.y1, "x2": args.x2, "y2": args.y2},
+            "length": args.length,
+            "scale_per_unit": scale_per_unit(pixels / metres, args.unit),
+        },
+    }
+    warnings = [
+        f"{devices} devices on this plan are stored in metres and move on the image when its scale changes; "
+        "walls and attenuation objects keep their place on the image"
+    ]
+    return WritePlan(
+        preview=preview,
+        request=None if unchanged else request,
+        new_ids=1,
+        effects={"devices_shifted": devices},
+        warnings=warnings,
     )
 
 
@@ -212,3 +350,42 @@ class InnerSpaceFloorPlanManager:
             args=args,
             build=partial(_reorder, args),
         )
+
+    async def preview_set_plan_scale(
+        self,
+        plan_id: str,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        length: float,
+        *,
+        unit: Unit,
+        coordinates: Coordinates = "frame",
+    ) -> dict[str, Any]:
+        """The current and proposed scale line and scale, and how many devices would shift on the image."""
+        args = PlanScaleInput(
+            plan_id=plan_id, x1=x1, y1=y1, x2=x2, y2=y2, length=length, unit=unit, coordinates=coordinates
+        )
+        return await preview_write(self._cm, operation=_SCALE, build=partial(_scale, args), tool=_SCALE_TOOL, args=args)
+
+    async def apply_set_plan_scale(
+        self,
+        plan_id: str,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        length: float,
+        *,
+        unit: Unit,
+        coordinates: Coordinates = "frame",
+    ) -> WriteVerificationResult:
+        """Replace the plan's scale line (a new one created, the old one removed, in one call).
+
+        Destructive: devices are stored in metres, so every device on the plan moves on the image.
+        """
+        args = PlanScaleInput(
+            plan_id=plan_id, x1=x1, y1=y1, x2=x2, y2=y2, length=length, unit=unit, coordinates=coordinates
+        )
+        return await apply_write(self._cm, operation=_SCALE, tool=_SCALE_TOOL, args=args, build=partial(_scale, args))

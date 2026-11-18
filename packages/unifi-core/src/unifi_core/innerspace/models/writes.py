@@ -458,5 +458,27 @@ class ReorderFloorPlansInput(InnerSpaceWriteInput):
         return _unique([_identifier(value, "plan") for value in values])
 
 
+class PlanScaleInput(InnerSpaceLengthInput):
+    """A reference line on the plan and its real length: the plan's new scale."""
+
+    plan_id: str
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    length: float = Field(gt=0, description="Real length of the line, in unit")
+
+    @field_validator("plan_id")
+    @classmethod
+    def _plan(cls, value: str) -> str:
+        return _identifier(value, "plan")
+
+    @model_validator(mode="after")
+    def _a_line(self) -> PlanScaleInput:
+        if (self.x1, self.y1) == (self.x2, self.y2):
+            raise ValueError("The two ends of the line must differ")
+        return self
+
+
 class ProjectUnitInput(InnerSpaceWriteInput):
     unit: Unit = Field(description="metric or imperial")
