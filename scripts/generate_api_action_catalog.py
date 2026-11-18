@@ -91,14 +91,15 @@ def _manager_types(repo_root: Path) -> dict[tuple[str, str], type]:
 
 
 def _manager_attributes(repo_root: Path) -> dict[str, set[str]]:
-    path = repo_root / "apps/api/src/unifi_api/services/managers.py"
+    console_path = repo_root / "apps/api/src/unifi_api/services/managers.py"
     try:
-        tree = ast.parse(path.read_text(), filename=str(path))
+        console_tree = ast.parse(console_path.read_text(), filename=str(console_path))
     except (OSError, SyntaxError) as exc:
-        raise CatalogGenerationError(f"cannot parse API manager registry {path}: {exc}") from exc
+        raise CatalogGenerationError(f"cannot parse API manager registry {console_path}: {exc}") from exc
 
     managers: dict[str, set[str]] = {}
     for product, _package in PRODUCTS:
+        path, tree = console_path, console_tree
         if product == "sitemanager":
             path = repo_root / "apps/api/src/unifi_api/services/sitemanager_managers.py"
             try:

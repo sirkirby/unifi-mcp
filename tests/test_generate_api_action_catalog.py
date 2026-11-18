@@ -114,6 +114,22 @@ def _replace_manifest(root: Path, transform) -> None:
     path.write_text(json.dumps(payload))
 
 
+def test_manager_registry_of_a_product_after_sitemanager_is_read_from_managers_py(tmp_path: Path, monkeypatch) -> None:
+    generator = _load_generator()
+    _write_synthetic_repo(tmp_path)
+    managers_path = tmp_path / "apps/api/src/unifi_api/services/managers.py"
+    managers_path.write_text(
+        managers_path.read_text()
+        + '\ndef _build_widgets_managers():\n    return {"widget_manager": lambda cm: object()}\n'
+    )
+    monkeypatch.setattr(generator, "PRODUCTS", (*generator.PRODUCTS, ("widgets", "unifi_widgets_mcp")))
+
+    managers = generator._manager_attributes(tmp_path)
+
+    assert managers["widgets"] == {"widget_manager"}
+    assert managers["sitemanager"] == set()
+
+
 def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) -> None:
     generator = _load_generator()
     _write_synthetic_repo(tmp_path)
