@@ -52,6 +52,19 @@ def tool_to_field_path(tool_name: str, *, product: str, sibling_list_stems: set[
             "sitemanager_get_sdwan_config_status": "sdwanConfigStatus",
         }
         return f"query.sitemanager.{fields[tool_name]}" if tool_name in fields else ""
+    if product == "innerspace":
+        fields = {
+            "innerspace_get_status": "status",
+            "innerspace_get_project": "project",
+            "innerspace_list_floor_plans": "floorPlans",
+            "innerspace_list_walls": "walls",
+            "innerspace_list_placed_devices": "placedDevices",
+            "innerspace_list_access_points": "accessPoints",
+            "innerspace_list_switches": "switches",
+            "innerspace_list_inventory": "inventory",
+            "innerspace_get_plan_asset": "planAsset",
+        }
+        return f"query.innerspace.{fields[tool_name]}" if tool_name in fields else ""
     if tool_name.startswith("unifi_list_"):
         stem = tool_name[len("unifi_list_") :]
         return f"query.{product}.{_to_camel(stem)}"

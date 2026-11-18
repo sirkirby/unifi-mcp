@@ -24,6 +24,7 @@ from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import Controller
 from unifi_api.routes.admin._common import render
 from unifi_api.services.controllers import (
+    CONTROLLER_PRODUCTS,
     ControllerNotFound,
     CreateControllerPayload,
     InvalidControllerCredentials,
@@ -76,8 +77,10 @@ def _blank_to_none(value: str) -> str | None:
 
 def _parse_product_kinds(form_data: list[str]) -> list[str]:
     """FastAPI Form() with the same name multi-yields a list[str]."""
-    if any(p not in ("network", "protect", "access") for p in form_data):
-        raise HTTPException(status_code=422, detail="Controller products must be network, protect, or access.")
+    if any(p not in CONTROLLER_PRODUCTS for p in form_data):
+        raise HTTPException(
+            status_code=422, detail="Controller products must be network, protect, access, or innerspace."
+        )
     return form_data
 
 

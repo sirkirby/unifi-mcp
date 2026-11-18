@@ -32,6 +32,7 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
         "protect": set(),
         "access": set(),
         "sitemanager": set(),
+        "innerspace": set(),
     }
     for name in manifest.all_tools():
         try:
@@ -93,3 +94,24 @@ def test_all_account_fields_have_exact_canonical_names():
     for name, field in expected.items():
         assert tool_to_field_path(name, product="sitemanager") == "query.sitemanager." + field
         assert "A READ key sees every resource the cloud account can see." in namespace.fields[field].description
+
+
+def test_all_innerspace_fields_have_exact_canonical_names():
+    expected = {
+        "innerspace_get_status": "status",
+        "innerspace_get_project": "project",
+        "innerspace_list_floor_plans": "floorPlans",
+        "innerspace_list_walls": "walls",
+        "innerspace_list_placed_devices": "placedDevices",
+        "innerspace_list_access_points": "accessPoints",
+        "innerspace_list_switches": "switches",
+        "innerspace_list_inventory": "inventory",
+        "innerspace_get_plan_asset": "planAsset",
+    }
+    from unifi_api.graphql.schema import schema
+
+    namespace = schema._schema.get_type("InnerSpaceQuery")
+    assert set(namespace.fields) == set(expected.values())
+    for name, field in expected.items():
+        assert tool_to_field_path(name, product="innerspace") == "query.innerspace." + field
+        assert "scoped to the InnerSpace tool family" in namespace.fields[field].description

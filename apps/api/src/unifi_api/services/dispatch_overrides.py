@@ -1738,7 +1738,28 @@ def _vouchers_result(result: Any, args: dict[str, Any], manager: Any) -> Any:
     )
 
 
-UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
+def _innerspace_page_result(result: Any, args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    """A wall or placed-device page with the limit it was cut at, as REST and GraphQL report it."""
+    from unifi_api.services.innerspace import DEFAULT_LIMIT, page_with_limit
+
+    return page_with_limit(result, args.get("limit", DEFAULT_LIMIT))
+
+
+# The API never returns plan image bytes: the image is read through the MCP
+# resource. A request for them is refused rather than silently dropped.
+UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {
+    "innerspace_get_plan_asset": frozenset({"include_image"}),
+}
+
+# Where to go instead, per tool, when the refusal has a better answer than the
+# generic one.
+UNSUPPORTED_ACTION_PARAMETER_HINTS: dict[str, str] = {
+    "innerspace_get_plan_asset": (
+        "omit include_image: the API never returns the plan image. The InnerSpace MCP server's plan image "
+        "resource, innerspace://plans/{plan_id}/image, serves PNG plan images; for other formats use "
+        "innerspace_get_plan_asset with include_image on the MCP server."
+    ),
+}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
 ResultAdapter = Callable[[Any, dict[str, Any], Any], Any]
@@ -1748,6 +1769,8 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
 }
 
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
+    "innerspace_list_walls": _innerspace_page_result,
+    "innerspace_list_placed_devices": _innerspace_page_result,
     "protect_get_snapshot": _snapshot_result,
     "protect_recent_events": _recent_events_result,
     "protect_alarm_list_profiles": _alarm_profile_list_result,

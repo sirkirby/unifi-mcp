@@ -76,6 +76,10 @@ from unifi_api.routes.resources.access import (
 from unifi_api.routes.resources.access import (
     visitors as access_visitors_routes,
 )
+from unifi_api.routes.resources.innerspace import devices as innerspace_devices_routes
+from unifi_api.routes.resources.innerspace import floor_plans as innerspace_floor_plans_routes
+from unifi_api.routes.resources.innerspace import project as innerspace_project_routes
+from unifi_api.routes.resources.innerspace import system as innerspace_system_routes
 from unifi_api.routes.resources.network import (
     acl as net_acl_routes,
 )
@@ -248,6 +252,7 @@ from unifi_api.services.audit import write_audit
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
 from unifi_api.services.controllers import list_controllers
+from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
@@ -519,6 +524,10 @@ def create_app(config: ApiConfig) -> FastAPI:
     async def _sitemanager_error(request: Request, exc: SiteManagerAPIError):
         return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
 
+    @app.exception_handler(InnerSpaceAPIError)
+    async def _innerspace_error(request: Request, exc: InnerSpaceAPIError):
+        return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
+
     @app.middleware("http")
     async def _sitemanager_no_store(request: Request, call_next):
         response = await call_next(request)
@@ -721,6 +730,13 @@ def create_app(config: ApiConfig) -> FastAPI:
         access_system_routes,
     ):
         app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
+    for r in (
+        innerspace_system_routes,
+        innerspace_project_routes,
+        innerspace_floor_plans_routes,
+        innerspace_devices_routes,
+    ):
+        app.include_router(r.router, prefix="/v1")
     for r in (
         net_streams_routes,
         protect_streams_routes,

@@ -65,7 +65,7 @@ def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 305
+    assert len(registry) == 314
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")
@@ -182,4 +182,50 @@ def test_account_connection_kind_cannot_default_to_controller(monkeypatch):
     value = _action(name="sitemanager_list_hosts", product="sitemanager", auth_method="api_key_only")
     monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(value))
     with pytest.raises(CatalogLoadError, match="connection_kind"):
+        ManifestRegistry.load()
+
+
+INNERSPACE_TOOLS = {
+    "innerspace_get_plan_asset",
+    "innerspace_get_project",
+    "innerspace_get_status",
+    "innerspace_list_access_points",
+    "innerspace_list_floor_plans",
+    "innerspace_list_inventory",
+    "innerspace_list_placed_devices",
+    "innerspace_list_switches",
+    "innerspace_list_walls",
+}
+
+
+def test_innerspace_catalog_entries_are_session_reads() -> None:
+    registry = ManifestRegistry.load()
+    entries = [registry.resolve(name) for name in registry.all_tools() if name.startswith("innerspace_")]
+
+    assert {entry.name for entry in entries} == INNERSPACE_TOOLS
+    for entry in entries:
+        assert entry.product == "innerspace"
+        assert entry.connection_kind == "controller"
+        assert (entry.permission_action, entry.read_only_hint, entry.auth_method) == ("read", True, "local_only")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        dict(permission_action="update", read_only_hint=False),
+        dict(auth_method="either"),
+        dict(auth_method="api_key_only"),
+    ],
+)
+def test_innerspace_catalog_refuses_anything_but_session_reads(monkeypatch, changes) -> None:
+    action = _action(
+        name="innerspace_get_status",
+        product="innerspace",
+        manager_attr="system_manager",
+        manager_method="get_status",
+        **changes,
+    )
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(action))
+
+    with pytest.raises(CatalogLoadError, match="read-only session InnerSpace operation"):
         ManifestRegistry.load()

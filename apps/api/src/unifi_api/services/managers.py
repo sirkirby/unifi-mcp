@@ -48,6 +48,20 @@ class UnknownManager(Exception):
     """Raised when a requested domain manager attribute is not registered."""
 
 
+class ControllerInitializationFailed(ConnectionError):
+    """A connection manager did not initialize.
+
+    The message names the product and adds the connection manager's
+    ``last_connection_error``. InnerSpace builds that text from fixed strings, so
+    the InnerSpace surfaces return it. ``connection_manager`` is the manager that
+    failed when the factory keeps it (InnerSpace), otherwise ``None``.
+    """
+
+    def __init__(self, message: str, *, connection_manager: Any = None) -> None:
+        super().__init__(message)
+        self.connection_manager = connection_manager
+
+
 # Per-product mapping: runtime-singleton attribute name (as referenced by
 # tool modules, e.g. ``client_manager``) -> a builder callable that
 # constructs the domain manager from a connection_manager.
@@ -174,10 +188,25 @@ def _build_access_managers() -> dict[str, Callable[..., Any]]:
     }
 
 
+def _build_innerspace_managers() -> dict[str, Callable[..., Any]]:
+    from unifi_core.innerspace.managers.floor_plan_manager import InnerSpaceFloorPlanManager
+    from unifi_core.innerspace.managers.inventory_manager import InnerSpaceInventoryManager
+    from unifi_core.innerspace.managers.project_manager import InnerSpaceProjectManager
+    from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
+
+    return {
+        "floor_plan_manager": lambda cm: InnerSpaceFloorPlanManager(cm),
+        "inventory_manager": lambda cm: InnerSpaceInventoryManager(cm),
+        "project_manager": lambda cm: InnerSpaceProjectManager(cm),
+        "system_manager": lambda cm: InnerSpaceSystemManager(cm),
+    }
+
+
 _PRODUCT_BUILDERS: dict[str, Callable[[], dict[str, Callable[..., Any]]]] = {
     "network": _build_network_managers,
     "protect": _build_protect_managers,
     "access": _build_access_managers,
+    "innerspace": _build_innerspace_managers,
 }
 
 
@@ -315,7 +344,9 @@ class ManagerFactory:
         await self._finish_cleanup_before_cancellation(_close_all())
 
     @classmethod
-    async def _require_initialized(cls, cm: Any, product: str) -> Any:
+    async def _require_initialized(cls, cm: Any, product: str, *, keep_on_failure: bool = False) -> Any:
+        """Return ``cm`` once initialized. On an unsuccessful login, close it, or with
+        ``keep_on_failure`` hand it back open on the raised error."""
         try:
             initialized = await cm.initialize()
         except BaseException:
@@ -333,6 +364,11 @@ class ManagerFactory:
         # A fixed-text failure that keeps its category (auth, permission, timeout) and status.
         failure = getattr(cm, "initialization_failure", None)
         detail = getattr(cm, "last_connection_error", None)
+        suffix = f": {detail}" if detail else ""
+        if keep_on_failure:
+            raise ControllerInitializationFailed(
+                f"Failed to initialize {product} controller connection{suffix}", connection_manager=cm
+            )
         try:
             await cls._close_connection_manager(cm)
         except Exception as cleanup_error:
@@ -343,8 +379,7 @@ class ManagerFactory:
             )
         if isinstance(failure, ConnectionError):
             raise failure
-        suffix = f": {detail}" if detail else ""
-        raise ConnectionError(f"Failed to initialize {product} controller connection{suffix}")
+        raise ControllerInitializationFailed(f"Failed to initialize {product} controller connection{suffix}")
 
     @staticmethod
     def gate_for(controller_id: str, product: str) -> Any:
@@ -393,12 +428,20 @@ class ManagerFactory:
             cm = self._connection_cache.get(key)
             if cm is not None:
                 return cm
-            cm = await self._construct_connection_manager(
-                session,
-                controller_id,
-                product,
-                site=site_scope,
-            )
+            try:
+                cm = await self._construct_connection_manager(
+                    session,
+                    controller_id,
+                    product,
+                    site=site_scope,
+                    keep_failed=True,
+                )
+            except ControllerInitializationFailed as failure:
+                if failure.connection_manager is not None:
+                    # A kept InnerSpace manager: later requests use it, so a refused
+                    # login waits out its reconnect cool-down instead of logging in again.
+                    self._connection_cache[key] = failure.connection_manager
+                raise
             self._connection_cache[key] = cm
             return cm
 
@@ -409,7 +452,14 @@ class ManagerFactory:
         product: str,
         *,
         site: str | None = None,
+        keep_failed: bool = False,
     ) -> Any:
+        """Build and initialize a product's connection manager.
+
+        ``keep_failed`` keeps an InnerSpace manager whose login failed open and
+        hands it back on :class:`ControllerInitializationFailed`; the probe leaves
+        it unset, so it never caches what it builds.
+        """
         controller = await session.get(Controller, controller_id)
         if controller is None:
             raise ValueError(f"controller {controller_id} not found")
@@ -424,6 +474,7 @@ class ManagerFactory:
         #   - network: site, cache_timeout, max_retries, retry_delay
         #   - protect: site, api_key
         #   - access:  api_key, api_port
+        #   - innerspace: none; it is session-only and never receives the API token
         # Connections are NOT established at construction time — we must call
         # initialize() eagerly here so callers don't hang on the first
         # authenticated request. The MCP servers do this at startup; the
@@ -475,6 +526,27 @@ class ManagerFactory:
                 api_key=creds.get("api_token"),
             )
             return await self._require_initialized(cm, product)
+        if product == "innerspace":
+            from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
+
+            # Session only: a stored API token belongs to the other products and
+            # is never passed here. No tls_env_prefix: the API reads no
+            # INNERSPACE settings, so the manager neither warns nor hints at them.
+            try:
+                cm = InnerSpaceConnectionManager(
+                    host=host,
+                    username=creds.get("username") or "",
+                    password=creds.get("password") or "",
+                    port=port,
+                    verify_ssl=controller.verify_tls,
+                )
+            except ValueError:
+                # The manager's text is fixed; it never carries the address.
+                raise ControllerInitializationFailed(
+                    "Failed to initialize innerspace controller connection: the controller address is not a valid "
+                    "console host and port"
+                ) from None
+            return await self._require_initialized(cm, product, keep_on_failure=keep_failed)
         raise UnknownProduct(f"unknown product '{product}'")
 
     def _builders_for(self, product: str) -> dict[str, Callable[..., Any]]:

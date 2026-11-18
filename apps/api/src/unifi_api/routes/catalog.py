@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
+from unifi_api.graphql.types.innerspace.registration import REGISTRATIONS as INNERSPACE_REGISTRATIONS
 from unifi_api.graphql.types.sitemanager.registration import REGISTRATIONS
 
 router = APIRouter()
@@ -101,10 +102,10 @@ async def get_resources(request: Request) -> dict:
     seen: set[tuple[str, str]] = set()
 
     def _render_hint(product: str, resource: str) -> dict:
-        if product == "sitemanager":
-            for key, projection, kind in REGISTRATIONS.values():
-                if key == resource:
-                    return projection.render_hint(kind)
+        registrations = {"sitemanager": REGISTRATIONS, "innerspace": INNERSPACE_REGISTRATIONS}.get(product, {})
+        for key, projection, kind in registrations.values():
+            if key == resource:
+                return projection.render_hint(kind)
         try:
             type_class = type_registry.lookup(product, resource)
         except Exception:
