@@ -218,11 +218,12 @@ class StubConsole:
         return web.json_response(payload, status=status, headers=headers)
 
 
-async def start_stub() -> tuple[StubConsole, TestServer]:
+async def start_stub(port: int | None = None) -> tuple[StubConsole, TestServer]:
+    """Start the stub on a free loopback port, or on ``port`` (one a test found closed)."""
     stub = StubConsole()
     app = web.Application()
     app.router.add_route("*", "/{tail:.*}", stub.handle)
-    server = TestServer(app, host="127.0.0.1")
+    server = TestServer(app, host="127.0.0.1", port=port)
     await server.start_server()
     stub.base_url = str(server.make_url("")).rstrip("/")
     return stub, server

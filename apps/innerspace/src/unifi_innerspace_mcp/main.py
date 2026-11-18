@@ -61,6 +61,17 @@ async def connect_at_startup() -> bool:
     return True
 
 
+async def plan_image_resource_enabled() -> bool:
+    """Whether the plan image resource is served: only beside ``innerspace_get_plan_asset``.
+
+    The category and tool filters apply in eager mode only; there, the resource
+    follows whether the filtered registration kept that tool.
+    """
+    if UNIFI_TOOL_REGISTRATION_MODE != "eager":
+        return True
+    return any(tool.name == "innerspace_get_plan_asset" for tool in await server.list_tools())
+
+
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
@@ -110,6 +121,15 @@ async def main_async():
             server_label="UniFi InnerSpace",
             lazy_direct_tools=LAZY_DIRECT_TOOLS,
         )
+
+        # ---- Register MCP resources ----
+        if await plan_image_resource_enabled():
+            from unifi_innerspace_mcp.resources.plan_image import register_plan_image_resource
+
+            register_plan_image_resource()
+            logger.info("MCP resources registered (plan images).")
+        else:
+            logger.info("Plan image resource not registered: innerspace_get_plan_asset is filtered out.")
 
         # ---- Start transports ----
         http_enabled, http_transport, host, port = resolve_http_config(config.server, default_port=3005, logger=logger)

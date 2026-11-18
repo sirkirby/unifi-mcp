@@ -17,3 +17,5 @@ stub_automatic_controller_connects = unifi_test_guard.connect_stub("unifi_inners
 # Add the app's src directory to path so unifi_innerspace_mcp is importable
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
+
+from innerspace_stub import connected, console, manager  # noqa: E402,F401  (fixtures, by name)

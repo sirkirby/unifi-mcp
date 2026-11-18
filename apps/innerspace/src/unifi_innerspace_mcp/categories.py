@@ -40,10 +40,21 @@ def _build_tool_module_map() -> Dict[str, str]:
 
 TOOL_MODULE_MAP: Dict[str, str] = _build_tool_module_map()
 
-# Every tool is read-only. Lazy mode lists them all directly: its one indirect
-# route, innerspace_execute, is not read-only, so a client that permits only
-# read-only tools would otherwise reach none of them.
-LAZY_DIRECT_TOOLS: tuple[str, ...] = tuple(sorted(TOOL_MODULE_MAP))
+# The read-only tools lazy mode lists directly: its one indirect route,
+# innerspace_execute, is not read-only, so a client that permits only
+# read-only tools would otherwise reach none of them. Named one by one so a
+# tool added later is listed directly only by choice, and only when read-only.
+LAZY_DIRECT_TOOLS: tuple[str, ...] = (
+    "innerspace_get_plan_asset",
+    "innerspace_get_project",
+    "innerspace_get_status",
+    "innerspace_list_access_points",
+    "innerspace_list_floor_plans",
+    "innerspace_list_inventory",
+    "innerspace_list_placed_devices",
+    "innerspace_list_switches",
+    "innerspace_list_walls",
+)
 
 
 def setup_lazy_loading(server, tool_decorator: Callable) -> LazyToolLoader:
