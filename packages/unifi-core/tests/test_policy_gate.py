@@ -83,6 +83,15 @@ def test_recognized_or_out_of_scope_vars_do_not_warn(var, monkeypatch, caplog):
     assert caplog.text == ""
 
 
+@pytest.mark.parametrize("server", ["network", "protect", "access"])
+@pytest.mark.parametrize("var", ["UNIFI_POLICY_INNERSPACE_WALLS_DELETE", "UNIFI_POLICY_INNERSPACE_DELETE"])
+def test_innerspace_variables_are_left_to_their_own_server(server, var, monkeypatch, caplog):
+    monkeypatch.setenv(var, "false")
+
+    assert _run(server, PROTECT_GATES, caplog) == []
+    assert caplog.text == ""
+
+
 def test_action_no_tool_registers_for_that_category_warns(monkeypatch, caplog):
     monkeypatch.setenv("UNIFI_POLICY_PROTECT_CAMERAS_DELETE", "true")
 

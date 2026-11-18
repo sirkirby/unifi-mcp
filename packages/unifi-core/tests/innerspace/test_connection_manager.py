@@ -1011,3 +1011,70 @@ async def test_routes_outside_the_allowlist_are_refused_before_sending(connected
 def test_host_is_stripped():
     cm = InnerSpaceConnectionManager(" 192.0.2.1 ", USERNAME, PASSWORD)
     assert cm.host == "192.0.2.1"
+
+
+PLAN_ROUTE = "/proxy/innerspace/api/project/plan/00000000-0000-4000-8000-000000000001"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/proxy/innerspace/api/shape/change"),
+        ("POST", "/proxy/innerspace/api/project/wall-type"),
+        ("POST", "/proxy/innerspace/api/project/attenuation-object-type"),
+        ("PATCH", "/proxy/innerspace/api/project/plan/order"),
+        ("PATCH", PLAN_ROUTE),
+        ("PATCH", "/proxy/innerspace/api/project"),
+        ("GET", "/proxy/innerspace/api/project"),
+    ],
+)
+async def test_the_write_routes_are_in_the_allowlist(connected, console, method, path):
+    console.reply(method, path, {"data": []})
+
+    await connected.request(method, path, operation=OP)
+
+    assert console.requests[-1].path == path
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("DELETE", PLAN_ROUTE),
+        ("PUT", PLAN_ROUTE),
+        ("POST", PLAN_ROUTE),
+        ("DELETE", "/proxy/innerspace/api/project"),
+        ("POST", "/proxy/innerspace/api/project"),
+        ("DELETE", "/proxy/innerspace/api/shape/change"),
+        ("GET", "/proxy/innerspace/api/project/plan/order"),
+        ("POST", f"{INTEGRATION_PREFIX}/floor_plans"),
+        ("DELETE", "/proxy/innerspace/api/project/wall-type"),
+    ],
+)
+async def test_a_method_the_route_does_not_allow_is_refused_before_sending(connected, console, method, path):
+    """The allowlist pairs each route with its methods: a plan delete, for one, never reaches the console."""
+    console.reply(method, path, {"data": []})
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError) as raised:
+        await connected.request(method, path, operation=OP)
+
+    assert "unsafe InnerSpace request path" in str(raised.value)
+    assert len(console.requests) == sent_before
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/proxy/innerspace/api/site-migration",
+        "/proxy/innerspace/api/project/plan",
+        "/proxy/innerspace/api/project/plan/00000000-0000-4000-8000-000000000001/map",
+        "/proxy/innerspace/api/project/image",
+    ],
+)
+async def test_internal_routes_near_the_write_routes_stay_refused(connected, console, path):
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError):
+        await connected.request("POST", path, operation=OP)
+
+    assert len(console.requests) == sent_before

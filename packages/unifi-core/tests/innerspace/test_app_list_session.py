@@ -10,13 +10,16 @@ from pathlib import Path
 
 import pytest
 from unifi_core.exceptions import UniFiPermissionError
-from unifi_core.innerspace.managers.connection_manager import SYSTEM_PATH
+from unifi_core.innerspace.managers._writes import locked_write, send_write
+from unifi_core.innerspace.managers.connection_manager import SHAPE_CHANGE_PATH, SYSTEM_PATH
 from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
 
 from tests.innerspace.conftest import LOGOUT
+from tests.innerspace.helpers import new_wall, ready, stored_shape
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OP = "Read InnerSpace status"
+WALL_1 = "00000000-0000-4000-8000-0000000000b1"
 PUBLIC = {"name": "Synthetic Console", "hardware": {"shortname": "SYNTH"}}
 
 
@@ -93,6 +96,33 @@ async def test_concurrent_reads_after_expiry_log_in_once(connected, console):
     assert all(status.running for status in results)
 
 
+async def test_a_locked_write_racing_the_relogin_is_sent_once_on_the_new_session(connected, console):
+    """A reader and a locked write both meet the public payload: one login between them, and the write lands."""
+    ready(console)
+    console.reply("GET", SYSTEM_PATH, _system())
+    console.expire_session()
+    console.hold_401_until(2)
+    wall = new_wall(WALL_1)
+
+    async def write():
+        async def read_back():
+            return {WALL_1: stored_shape(console, WALL_1) is not None}
+
+        async with locked_write(connected, operation=OP):
+            body = {"create": [wall], "update": [], "remove": [], "mode": "2D"}
+            return await send_write(
+                connected, "POST", SHAPE_CHANGE_PATH, body, operation=OP, read_back=read_back, metadata={}
+            )
+
+    _status, result = await asyncio.gather(InnerSpaceSystemManager(connected).get_status(), write())
+
+    assert console.logins == 2
+    assert (result.success, result.mutation_applied) == (True, True)
+    assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == 1
+    console.assert_csrf()
+    assert stored_shape(console, WALL_1) is not None
+
+
 async def test_no_app_list_on_the_new_session_is_a_permission_error_once_per_window(connected, console):
     """An account the console answers without the list: one login, then no login inside the window."""
     clock = _Clock()
@@ -138,8 +168,8 @@ async def test_a_later_read_with_the_list_closes_the_window(connected, console):
     assert console.logins == 3
 
 
-async def test_the_window_is_separate_from_the_no_access_window(connected, console):
-    """The app-list window is its own: a later 403 refusal still gets its ordinary re-login."""
+async def test_the_window_does_not_block_writes_or_other_reads(connected, console):
+    """The app-list window is its own: a later write refusal still gets its ordinary re-login."""
     for _ in range(2):
         console.reply("GET", SYSTEM_PATH, PUBLIC)
     with pytest.raises(UniFiPermissionError):

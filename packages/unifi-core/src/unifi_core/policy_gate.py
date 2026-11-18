@@ -26,7 +26,7 @@ VALID_PERMISSION_MODES = ("confirm", "bypass")
 _POLICY_PREFIX = "UNIFI_POLICY_"
 # Servers that share the UNIFI_POLICY_ namespace; a variable whose first
 # segment names another one of these is left to that server's own scan.
-_SERVER_PREFIXES = frozenset({"NETWORK", "PROTECT", "ACCESS", "DRIVE"})
+_SERVER_PREFIXES = frozenset({"NETWORK", "PROTECT", "ACCESS", "DRIVE", "INNERSPACE"})
 _MAX_REPORTED_UNKNOWN = 20
 _TRUTHY = frozenset(("true", "1", "yes", "on"))
 _FALSY = frozenset(("false", "0", "no", "off"))
