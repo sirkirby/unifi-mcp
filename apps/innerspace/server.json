@@ -1,0 +1,58 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sirkirby/unifi-innerspace-mcp",
+  "title": "UniFi InnerSpace MCP",
+  "description": "Read UniFi InnerSpace projects, floor plans, walls, and placed devices via MCP.",
+  "version": "0.0.0",
+  "repository": {
+    "url": "https://github.com/sirkirby/unifi-mcp",
+    "source": "github",
+    "subfolder": "apps/innerspace"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "unifi-innerspace-mcp",
+      "version": "0.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "UNIFI_HOST",
+          "description": "Controller IP/hostname",
+          "isRequired": true
+        },
+        {
+          "name": "UNIFI_USERNAME",
+          "description": "Admin username",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "UNIFI_PASSWORD",
+          "description": "Admin password",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "UNIFI_PORT",
+          "description": "Controller HTTPS port",
+          "isRequired": false,
+          "default": "443"
+        },
+        {
+          "name": "UNIFI_VERIFY_SSL",
+          "description": "SSL certificate verification",
+          "isRequired": false,
+          "default": "false"
+        },
+        {
+          "name": "UNIFI_SSL_FINGERPRINT",
+          "description": "SHA-256 fingerprint pinning the controller certificate (overrides UNIFI_VERIFY_SSL)",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

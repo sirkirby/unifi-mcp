@@ -88,7 +88,7 @@ class TestAppSpecificConfigs:
         assert "UNIFI_SITE" not in names
 
     def test_all_apps_configured(self):
-        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access", "sitemanager"}
+        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access", "sitemanager", "innerspace"}
 
     def test_sitemanager_offers_only_its_own_key(self):
         manifest = build_server_manifest("sitemanager", "0.1.0")
@@ -102,6 +102,16 @@ class TestAppSpecificConfigs:
 
     def test_sitemanager_version_ignores_plain_v_tags(self):
         assert APP_CONFIGS["sitemanager"]["tag_prefixes"] == ["sitemanager/v"]
+
+    def test_innerspace_is_session_only(self):
+        manifest = build_server_manifest("innerspace", "0.1.0")
+        names = [v["name"] for v in manifest["packages"][0]["environmentVariables"]]
+
+        assert {"UNIFI_HOST", "UNIFI_USERNAME", "UNIFI_PASSWORD"} <= set(names)
+        assert "UNIFI_API_KEY" not in names
+        assert manifest["name"] == "io.github.sirkirby/unifi-innerspace-mcp"
+        assert manifest["repository"]["subfolder"] == "apps/innerspace"
+        assert APP_CONFIGS["innerspace"]["tag_prefixes"] == ["innerspace/v"]
 
     def test_invalid_app_raises(self):
         with pytest.raises(ValueError, match="Unknown app"):

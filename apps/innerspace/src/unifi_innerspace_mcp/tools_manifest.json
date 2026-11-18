@@ -1,0 +1,384 @@
+{
+  "count": 6,
+  "generated_by": "scripts/generate_tool_manifest.py",
+  "module_map": {},
+  "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Run several UniFi InnerSpace tools as background jobs through the indirect execution wrapper. Writes execute one at a time in submission order; reads run concurrently, up to a cap. Queued jobs can be cancelled. Arguments are fixed at submission, and a batch does not stop on failure. Returns job IDs; use innerspace_batch_status to check progress and innerspace_batch_cancel to cancel queued jobs.",
+      "name": "innerspace_batch",
+      "schema": {
+        "input": {
+          "properties": {
+            "operations": {
+              "description": "Array of {tool, arguments} objects using names from innerspace_tool_index in lazy mode, or known domain tool names in meta-only mode",
+              "items": {
+                "properties": {
+                  "arguments": {
+                    "description": "Tool parameters matching the domain tool's input schema",
+                    "type": "object"
+                  },
+                  "tool": {
+                    "description": "Tool name from innerspace_tool_index in lazy mode, or a known domain tool name in meta-only mode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tool"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operations"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "errors": {
+              "description": "Errors for operations that failed to start",
+              "type": "array"
+            },
+            "jobs": {
+              "description": "Started jobs with index, tool name, and jobId",
+              "items": {
+                "properties": {
+                  "index": {
+                    "type": "integer"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "tool": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Execute"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Cancel queued UniFi InnerSpace batch jobs. Jobs already running or finished are reported, not cancelled.",
+      "name": "innerspace_batch_cancel",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to cancel",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to cancel at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "cancelled": {
+              "description": "True when the job was withdrawn before it ran",
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Outcome per job (when using jobIds parameter)",
+              "items": {
+                "properties": {
+                  "cancelled": {
+                    "description": "True when the job was withdrawn before it ran",
+                    "type": "boolean"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Why the job was not cancelled",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Status after the call",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "done",
+                      "error",
+                      "cancelled",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "description": "Why the job was not cancelled",
+              "type": "string"
+            },
+            "status": {
+              "description": "Status after the call",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Cancel"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Check status of UniFi InnerSpace batch operations. Returns status (with the queue position while queued), result (if done), or error (if failed).",
+      "name": "innerspace_batch_status",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to check",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to check at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "error": {
+              "description": "Error message (present when status is 'error')",
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Status of multiple jobs (when using jobIds parameter)",
+              "type": "array"
+            },
+            "position": {
+              "description": "While queued: write operations ahead of this job (1 = next; 0 = starting). Null while it waits for an earlier job in its batch.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "result": {
+              "description": "Job result (present when status is 'done')"
+            },
+            "status": {
+              "description": "Current job status. 'queued' waits for an earlier job or its write turn; 'cancelled' never ran.",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Execute a UniFi InnerSpace tool (floor plans, walls, wall types and device placement from UniFi InnerSpace) by name for lazy/meta-only workflows.",
+      "name": "innerspace_execute",
+      "schema": {
+        "input": {
+          "properties": {
+            "arguments": {
+              "description": "Tool parameters matching the domain tool's input schema",
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "tool": {
+              "description": "Domain tool name (e.g. 'innerspace_list_*'); discover it through innerspace_tool_index in lazy mode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "tool"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "description": "Result from the executed UniFi InnerSpace tool",
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Execute Tool"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Load UniFi InnerSpace tools (floor plans, walls, wall types and device placement from UniFi InnerSpace) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
+      "name": "innerspace_load_tools",
+      "schema": {
+        "input": {
+          "properties": {
+            "tools": {
+              "description": "Tool names to load (from innerspace_tool_index)",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "tools"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "errors": {
+              "description": "Errors for tools that failed to load",
+              "type": "array"
+            },
+            "loaded": {
+              "description": "Successfully loaded tool names",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "message": {
+              "description": "Summary message",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Load Tools"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Discover UniFi InnerSpace tools (floor plans, walls, wall types and device placement from UniFi InnerSpace) through the compact tool index. The catalog is manifest-backed in lazy mode; in meta-only mode it starts with registered meta-tools and expands after domain modules execute. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "name": "innerspace_tool_index",
+      "schema": {
+        "input": {
+          "properties": {
+            "category": {
+              "description": "Filter to one category. Valid values are returned in the 'categories' field of every response.",
+              "type": "string"
+            },
+            "include_schemas": {
+              "default": false,
+              "description": "Include full input/output schemas per tool. Defaults to false \u2014 set true with a name, category or search filter to get parameter details for specific tools.",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Exact, case-sensitive tool name. Cannot be combined with category or search. Unknown names return an empty index.",
+              "type": "string"
+            },
+            "search": {
+              "description": "Case-insensitive token search over tool names and descriptions. Ignores common words and one-character terms; multi-word queries require at least half of usable terms (minimum two). Terms of four or more characters also match token prefixes. Results are ranked by exact phrase and name matches, with at most 20 returned. An empty string applies no filter; a non-empty query with no usable terms returns no tools.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "categories": {
+              "description": "All available category names (use as values for the category filter)",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "count": {
+              "description": "Number of tools returned",
+              "type": "integer"
+            },
+            "filtered": {
+              "description": "True when name, category or search filter was applied",
+              "type": "boolean"
+            },
+            "tools": {
+              "description": "Matching tools with name and description (plus schemas if include_schemas)",
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Tool Index"
+    }
+  ]
+}

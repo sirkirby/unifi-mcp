@@ -20,7 +20,7 @@ Three layers keep tests away from real controllers:
   at teardown, even when the code under test swallowed the refusal.
 * ``connect_stub(...)`` builds an autouse fixture that replaces the
   self-initiated login and reconnect paths of a suite's environment-built
-  runtime connection manager, and Access's and Protect's on-demand reconnects,
+  runtime connection manager, and the on-demand reconnects of Access, Protect and InnerSpace,
   unless a test opts in with ``@pytest.mark.real_reconnect``.
 
 Fixture controller hosts should use TEST-NET addresses (``192.0.2.0/24``).
@@ -165,6 +165,7 @@ def connect_stub(*runtime_modules: str):
                     monkeypatch.setattr(manager, name, _not_connected)
         _stub_access_reconnect(monkeypatch)
         _stub_protect_reconnect(monkeypatch)
+        _stub_innerspace_reconnect(monkeypatch)
 
     return stub_automatic_controller_connects
 
@@ -193,3 +194,16 @@ def _stub_protect_reconnect(monkeypatch) -> None:
             return self._initialized and self._client is not None
 
         monkeypatch.setattr(ProtectConnectionManager, "ensure_connected", _protect_ensure_connected_stub)
+
+
+def _stub_innerspace_reconnect(monkeypatch) -> None:
+    try:
+        from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
+    except ImportError:
+        return
+    if hasattr(InnerSpaceConnectionManager, "reconnect"):
+
+        async def _innerspace_reconnect_stub(self) -> bool:
+            return self.is_connected
+
+        monkeypatch.setattr(InnerSpaceConnectionManager, "reconnect", _innerspace_reconnect_stub)
