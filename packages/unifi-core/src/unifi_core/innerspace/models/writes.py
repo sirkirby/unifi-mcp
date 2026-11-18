@@ -244,6 +244,178 @@ class WallTypeUpdate(InnerSpaceUpdateItem):
 
 
 # ---------------------------------------------------------------------------
+# Attenuation objects and their types
+# ---------------------------------------------------------------------------
+
+# The built-in attenuation-object kinds of InnerSpace 1.4.3, plus ``custom`` for a project type.
+AttenuationObjectVariant = Literal[
+    "car",
+    "cubicles",
+    "elevator",
+    "foliage_heavy",
+    "foliage_light",
+    "human_crowd",
+    "machinery",
+    "server_rack",
+    "shelf_small",
+    "shelf_medium",
+    "shelf_warehouse",
+    "truck",
+    "custom",
+]
+# Corners of one polygon, the repeated first point included.
+MAX_POLYGON_POINTS = 100
+
+
+class PolygonPoint(InnerSpaceWriteInput):
+    x: float
+    y: float
+
+
+def _closed(points: list[PolygonPoint]) -> list[PolygonPoint]:
+    """A closed polygon: at least three corners and the first point repeated last, as the console requires."""
+    if len(points) < 4 or points[0] != points[-1]:
+        raise ValueError("A polygon has at least three corners and repeats its first point as its last")
+    return points
+
+
+def _check_object_type(variant: str | None, type_id: str | None) -> None:
+    if (variant == "custom") != (type_id is not None):
+        raise ValueError('An attenuation-object type id goes with variant "custom", and only with it')
+
+
+class AttenuationObjectCreate(InnerSpaceWriteInput):
+    points: list[PolygonPoint] = Field(
+        min_length=4,
+        max_length=MAX_POLYGON_POINTS,
+        description="Corners of a closed polygon: the last point repeats the first",
+    )
+    variant: AttenuationObjectVariant
+    attenuation_object_type_id: str | None = None
+
+    @field_validator("points")
+    @classmethod
+    def _closed_polygon(cls, value: list[PolygonPoint]) -> list[PolygonPoint]:
+        return _closed(value)
+
+    @field_validator("attenuation_object_type_id")
+    @classmethod
+    def _valid_type(cls, value: str | None) -> str | None:
+        return None if value is None else _identifier(value, "attenuation-object type")
+
+    @model_validator(mode="after")
+    def _type_matches_variant(self) -> AttenuationObjectCreate:
+        _check_object_type(self.variant, self.attenuation_object_type_id)
+        return self
+
+
+class AttenuationObjectUpdate(InnerSpaceUpdateItem):
+    """An attenuation object's new polygon (all corners), kind, or both."""
+
+    MUTABLE_FIELDS: ClassVar[frozenset[str]] = frozenset({"points", "variant", "attenuation_object_type_id"})
+
+    points: list[PolygonPoint] | None = Field(default=None, min_length=4, max_length=MAX_POLYGON_POINTS)
+    variant: AttenuationObjectVariant | None = None
+    attenuation_object_type_id: str | None = None
+
+    @field_validator("points")
+    @classmethod
+    def _closed_polygon(cls, value: list[PolygonPoint] | None) -> list[PolygonPoint] | None:
+        return None if value is None else _closed(value)
+
+    @field_validator("attenuation_object_type_id")
+    @classmethod
+    def _valid_type(cls, value: str | None) -> str | None:
+        return None if value is None else _identifier(value, "attenuation-object type")
+
+    @model_validator(mode="after")
+    def _type_matches_variant(self) -> AttenuationObjectUpdate:
+        if self.variant is not None or self.attenuation_object_type_id is not None:
+            _check_object_type(self.variant, self.attenuation_object_type_id)
+        return self
+
+
+class CreateAttenuationObjectsInput(InnerSpaceLengthInput):
+    plan_id: str
+    objects: list[AttenuationObjectCreate] = Field(
+        min_length=1, max_length=MAX_CREATE, description="At most 100 attenuation objects per call"
+    )
+
+    @field_validator("plan_id")
+    @classmethod
+    def _plan(cls, value: str) -> str:
+        return _identifier(value, "plan")
+
+
+class UpdateAttenuationObjectsInput(InnerSpaceLengthInput):
+    plan_id: str
+    objects: list[AttenuationObjectUpdate] = Field(
+        min_length=1, max_length=MAX_UPDATE, description="At most 100 attenuation objects per call"
+    )
+
+    @field_validator("plan_id")
+    @classmethod
+    def _plan(cls, value: str) -> str:
+        return _identifier(value, "plan")
+
+    @model_validator(mode="after")
+    def _unique_objects(self) -> UpdateAttenuationObjectsInput:
+        _unique([item.id for item in self.objects])
+        return self
+
+
+class RemoveAttenuationObjectsInput(InnerSpaceWriteInput):
+    plan_id: str
+    object_ids: list[str] = Field(
+        min_length=1, max_length=MAX_REMOVE, description="At most 50 attenuation objects per call"
+    )
+
+    @field_validator("plan_id")
+    @classmethod
+    def _plan(cls, value: str) -> str:
+        return _identifier(value, "plan")
+
+    @field_validator("object_ids")
+    @classmethod
+    def _objects(cls, values: list[str]) -> list[str]:
+        return _unique([_identifier(value, "attenuation object") for value in values])
+
+
+class AttenuationObjectTypeCreate(InnerSpaceWriteInput):
+    name: str
+    attenuation_db: float = Field(ge=0, le=99, description="Loss through the object in dB, 0 to 99")
+    color: str = Field(description="#RRGGBB")
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str) -> str:
+        return _name(value)
+
+    @field_validator("color")
+    @classmethod
+    def _valid_color(cls, value: str) -> str:
+        return _color(value)
+
+
+class AttenuationObjectTypeUpdate(InnerSpaceUpdateItem):
+    MUTABLE_FIELDS: ClassVar[frozenset[str]] = frozenset({"name", "attenuation_db", "color"})
+
+    name: str | None = None
+    attenuation_db: float | None = Field(default=None, ge=0, le=99)
+    color: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str | None) -> str | None:
+        return None if value is None else _name(value)
+
+    @field_validator("color")
+    @classmethod
+    def _valid_color(cls, value: str | None) -> str | None:
+        return None if value is None else _color(value)
+
+
+# ---------------------------------------------------------------------------
 # Floor plans and the project
 # ---------------------------------------------------------------------------
 

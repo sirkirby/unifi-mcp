@@ -107,3 +107,6 @@ def ready(console, state=None, writes=1):
 def stored_copy(shape_id):
     """The fixture's stored shape, as the stateful stub serves it."""
     return deepcopy(next(s for s in internal_state()["shapes"] if s["id"] == shape_id))
+
+
+STAMP_STATE = {"createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z"}
