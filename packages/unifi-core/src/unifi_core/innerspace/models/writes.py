@@ -241,3 +241,46 @@ class WallTypeUpdate(InnerSpaceUpdateItem):
     @classmethod
     def _valid_color(cls, value: str | None) -> str | None:
         return None if value is None else _color(value)
+
+
+# ---------------------------------------------------------------------------
+# Floor plans and the project
+# ---------------------------------------------------------------------------
+
+
+class _PlanWrite(InnerSpaceWriteInput):
+    plan_id: str
+
+    @field_validator("plan_id")
+    @classmethod
+    def _plan(cls, value: str) -> str:
+        return _identifier(value, "plan")
+
+
+class RenameFloorPlanInput(_PlanWrite):
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def _valid_title(cls, value: str) -> str:
+        value = value.strip()
+        if not 1 <= len(value) <= 32:
+            raise ValueError("A title has 1 to 32 characters")
+        return value
+
+
+class FloorAttenuationInput(_PlanWrite):
+    attenuation_db: float | None = Field(
+        ge=1, le=99, description="Loss through this floor in dB, 1 to 99; null restores the app default (20 dB)"
+    )
+
+
+class ReorderFloorPlansInput(InnerSpaceWriteInput):
+    plan_ids: list[str] = Field(
+        min_length=1, max_length=MAX_UPDATE, description="Every plan of the project once, lowest floor first"
+    )
+
+    @field_validator("plan_ids")
+    @classmethod
+    def _plans(cls, values: list[str]) -> list[str]:
+        return _unique([_identifier(value, "plan") for value in values])
