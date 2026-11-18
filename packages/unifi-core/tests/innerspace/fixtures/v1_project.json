@@ -21,6 +21,20 @@
         "createdAt": "2026-01-01T00:00:00.000Z",
         "dcImportId": null,
         "dcSourceProjectId": null,
+        "id": "00000000-0000-4000-8000-000000000005",
+        "location": null,
+        "ordering": 3,
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "siteId": "00000000-0000-4000-8000-000000000001",
+        "title": "Plan C",
+        "type": "real",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "attenuation": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "dcImportId": null,
+        "dcSourceProjectId": null,
         "id": "00000000-0000-4000-8000-000000000004",
         "location": null,
         "ordering": 2,
@@ -35,12 +49,12 @@
         "createdAt": "2026-01-01T00:00:00.000Z",
         "dcImportId": null,
         "dcSourceProjectId": null,
-        "id": "00000000-0000-4000-8000-000000000005",
+        "id": "00000000-0000-4000-8000-000000000037",
         "location": null,
-        "ordering": 3,
+        "ordering": null,
         "projectId": "00000000-0000-4000-8000-000000000002",
         "siteId": "00000000-0000-4000-8000-000000000001",
-        "title": "Plan C",
+        "title": "Plan D",
         "type": "real",
         "updatedAt": "2026-01-01T00:00:00.000Z"
       }
@@ -194,7 +208,7 @@
         "location": null,
         "meta": {
           "ip": "192.0.2.2",
-          "mac": "00:00:5e:00:53:02"
+          "mac": "00005e005302"
         },
         "mount": "ceiling",
         "optimize": false,
@@ -363,8 +377,8 @@
         "status": 0,
         "type": "wall",
         "updatedAt": "2026-01-01T00:00:00.000Z",
-        "variant": "drywall",
-        "wallTypeId": null
+        "variant": "custom",
+        "wallTypeId": "00000000-0000-4000-8000-000000000028"
       },
       {
         "antenna": null,
@@ -382,7 +396,7 @@
         "planId": "00000000-0000-4000-8000-000000000004",
         "position": [
           {
-            "x": -2.0,
+            "x": -2,
             "y": 2.5,
             "z": 1.0
           }
@@ -393,7 +407,7 @@
         "rackOrder": null,
         "rotation": {
           "base": {
-            "w": 1.0,
+            "w": 1,
             "x": 0.0,
             "y": 0.0,
             "z": 0.0
@@ -715,6 +729,50 @@
         "updatedAt": "2026-01-01T00:00:00.000Z",
         "urlImage": "/proxy/innerspace/integration/v1/assets/00000000-0000-4000-8000-000000000036/00000000-0000-4000-8000-000000000027.png",
         "urlModel": null
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000038",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.7",
+          "mac": "00:00:5e:00:53:07"
+        },
+        "mount": "ceiling",
+        "optimize": false,
+        "parentId": null,
+        "planId": null,
+        "position": [
+          {
+            "x": 0.5,
+            "y": 2.7,
+            "z": 0.5
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 7",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
       }
     ],
     "wallTypes": [

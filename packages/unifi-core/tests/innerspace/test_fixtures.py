@@ -71,7 +71,9 @@ def test_shared_literals_hold():
     project = _load("v1_project.json")["data"]
     plans = {p["title"]: p for p in project["plans"]}
     fps = {f["name"]: f for f in _load("v1_floor_plans.json")["floor_plans"]}
-    assert set(plans) == {"Plan A", "Plan B", "Plan C"}
+    assert set(plans) == {"Plan A", "Plan B", "Plan C", "Plan D"}
+    # The console does not send plans in order: the raw orderings are 1, 3, 2 and one null.
+    assert [p["ordering"] for p in project["plans"]] == [1, 3, 2, None]
     assert set(fps) == {"Plan A", "Plan B"}
     assert (fps["Plan A"]["ppm"], fps["Plan A"]["width"], fps["Plan A"]["height"]) == (100.0, 1000, 800)
     assert fps["Plan B"]["ppm"] == 50.0
@@ -93,6 +95,15 @@ def test_shared_literals_hold():
     assert map_b["imageScale"]["x"] == 1.784
     assert any(map_b["imageOffset"][axis] for axis in "xyz")
     assert not on("Plan C", "scale")
+    assert not [s for s in project["shapes"] if s["planId"] == plans["Plan D"]["id"]]
+    (unplaced,) = [s for s in project["shapes"] if s["planId"] is None]
+    assert unplaced["type"] == "device"
+    custom = [s for s in on("Plan B", "wall") if s["variant"] == "custom"]
+    assert [s["wallTypeId"] for s in custom] == [project["wallTypes"][0]["id"]]
+    assert [d["meta"]["mac"] for d in devices] == ["00:00:5e:00:53:01", "00005e005302"]
+    device_3 = on("Plan B", "device")[0]
+    assert (device_3["position"][0]["x"], device_3["rotation"]["base"]["w"]) == (-2, 1)
+    assert all(isinstance(v, int) for v in (device_3["position"][0]["x"], device_3["rotation"]["base"]["w"]))
 
     ap = _load("v1_access_points.json")["access_points"][0]
     assert ap["floor_plan_id"] == plans["Plan A"]["id"]

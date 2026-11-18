@@ -45,14 +45,19 @@ async def test_entry_absent_is_not_installed(connected, console):
     assert (status.installed, status.running, status.version) == (False, False, None)
 
 
-async def test_missing_is_running_is_not_running(connected, console):
+@pytest.mark.parametrize("field", ["isInstalled", "isRunning"])
+@pytest.mark.parametrize("value", ["absent", None, "true", 1])
+async def test_entry_without_boolean_flags_is_malformed(connected, console, field, value):
     system = _system()
-    del system["apps"]["controllers"][0]["isRunning"]
+    entry = system["apps"]["controllers"][0]
+    if value == "absent":
+        del entry[field]
+    else:
+        entry[field] = value
     console.reply("GET", SYSTEM_PATH, system)
 
-    status = await InnerSpaceSystemManager(connected).get_status()
-
-    assert (status.installed, status.running) == (True, False)
+    with pytest.raises(UniFiMalformedResponseError):
+        await InnerSpaceSystemManager(connected).get_status()
 
 
 @pytest.mark.parametrize(

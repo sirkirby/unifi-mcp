@@ -25,7 +25,8 @@ def app_status_from_api(raw: Any) -> InnerSpaceAppStatus:
     """Build the status from the ``/api/system`` payload.
 
     An entry absent from a controller list means not installed. A payload without
-    that list is unreadable, not "not installed", and raises.
+    that list, or an entry whose ``isInstalled`` or ``isRunning`` is not a boolean,
+    is unreadable, not "not installed", and raises.
     """
     controllers = as_dict(as_dict(raw).get("apps")).get("controllers")
     if not isinstance(controllers, list):
@@ -33,9 +34,12 @@ def app_status_from_api(raw: Any) -> InnerSpaceAppStatus:
     entry = next((c for c in controllers if as_dict(c).get("name") == _APP_NAME), None)
     if entry is None:
         return InnerSpaceAppStatus(installed=False, running=False)
+    installed, running = entry.get("isInstalled"), entry.get("isRunning")
+    if not isinstance(installed, bool) or not isinstance(running, bool):
+        raise UniFiMalformedResponseError("the console's system response has an unreadable InnerSpace entry")
     return InnerSpaceAppStatus(
-        installed=entry.get("isInstalled") is True,
-        running=entry.get("isRunning") is True,
+        installed=installed,
+        running=running,
         version=text(entry.get("version")),
         update_available=text(entry.get("updateAvailable")),
     )

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from unifi_core.innerspace.models._coerce import as_dict, finite, length, text
 from unifi_core.innerspace.units import Unit, plan_units_to_metres
+from unifi_core.mac import canonical_mac
 
 ApMount = Literal["ceiling", "wall", "rack", "floor"]
 DeviceStatus = Literal["online", "offline"]
@@ -24,6 +25,7 @@ class AccessPoint(BaseModel):
     floor_plan_id: str | None = None
     x: float | None = None
     y: float | None = None
+    scale_missing: bool = Field(description="True when the device's plan has no usable scale, so x and y are None")
     height: float | None = None
     azimuth: float | None = None
     mount: ApMount | str | None = None
@@ -43,6 +45,7 @@ class Switch(BaseModel):
     floor_plan_id: str | None = None
     x: float | None = None
     y: float | None = None
+    scale_missing: bool = Field(description="True when the device's plan has no usable scale, so x and y are None")
     status: DeviceStatus | str | None = None
     unit: Unit
 
@@ -62,17 +65,22 @@ def _pixel_length(pixels: Any, ppm: float | None, unit: Unit) -> float | None:
     return None if value is None else length(plan_units_to_metres(value, ppm), unit)
 
 
+def _scale_missing(ppm: float | None) -> bool:
+    return plan_units_to_metres(1.0, ppm) is None
+
+
 def access_point_from_api(raw: Any, *, ppm: float | None, unit: Unit) -> AccessPoint:
     row = as_dict(raw)
     return AccessPoint(
         id=text(row.get("id")),
         name=text(row.get("name")),
         model=text(row.get("model")),
-        mac=text(row.get("mac")),
+        mac=canonical_mac(row.get("mac")),
         serial=text(row.get("serial")),
         floor_plan_id=text(row.get("floor_plan_id")),
         x=_pixel_length(row.get("x"), ppm, unit),
         y=_pixel_length(row.get("y"), ppm, unit),
+        scale_missing=_scale_missing(ppm),
         height=length(finite(row.get("height")), unit),
         azimuth=finite(row.get("azimuth")),
         mount=text(row.get("mount")),
@@ -88,11 +96,12 @@ def switch_from_api(raw: Any, *, ppm: float | None, unit: Unit) -> Switch:
         name=text(row.get("name")),
         model=text(row.get("model")),
         type=text(row.get("type")),
-        mac=text(row.get("mac")),
+        mac=canonical_mac(row.get("mac")),
         serial=text(row.get("serial")),
         floor_plan_id=text(row.get("floor_plan_id")),
         x=_pixel_length(row.get("x"), ppm, unit),
         y=_pixel_length(row.get("y"), ppm, unit),
+        scale_missing=_scale_missing(ppm),
         status=text(row.get("status")),
         unit=unit,
     )
@@ -104,6 +113,6 @@ def inventory_device_from_api(raw: Any) -> InventoryDevice:
         id=text(row.get("id")),
         name=text(row.get("name")),
         model=text(row.get("model")),
-        mac=text(row.get("mac")),
+        mac=canonical_mac(row.get("mac")),
         serial=text(row.get("serial")),
     )

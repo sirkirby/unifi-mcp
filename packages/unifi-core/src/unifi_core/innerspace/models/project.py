@@ -1,9 +1,11 @@
 """The InnerSpace project: plans, wall types, walls and placed devices.
 
-Every coordinate uses one frame: distance from the top-left of the plan image,
-x to the right and y downward, measured in the project unit (the documented
-API's frame; the map's image offset and scale are not applied). The controller
-sends walls in plan units (origin at the image centre, y up) and devices in
+Every coordinate uses one frame, the documented API's plan frame: distance from
+the plan's top-left in the vendor's coordinates, x to the right and y downward,
+in the project unit. It lines up with the plan image only when the plan's
+``image_scale`` is 1 and its ``image_offset`` is (0, 0); the conversion to image
+pixels is on :class:`~unifi_core.innerspace.models.floor_plans.FloorPlan`. The
+controller sends walls in plan units (origin at the centre, y up) and devices in
 metres with the height on the y axis, so both are converted here.
 """
 
@@ -17,9 +19,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from unifi_core.exceptions import UniFiMalformedResponseError
-from unifi_core.innerspace.models._coerce import as_dict, as_list, finite, flag, length, text
-from unifi_core.innerspace.models.floor_plans import NO_GEOMETRY, PlanGeometry, scale_per_unit
+from unifi_core.innerspace.models._coerce import as_dict, as_list, finite, flag, length, number, text, whole_or_number
+from unifi_core.innerspace.models.floor_plans import NO_GEOMETRY, PlanGeometry, image_transform, scale_per_unit
 from unifi_core.innerspace.units import Unit, plan_units_to_metres
+from unifi_core.mac import canonical_mac
 
 WallVariant = Literal[
     "concrete",
@@ -60,16 +63,22 @@ class Project(BaseModel):
 
 
 class PlanSummary(BaseModel):
+    """One plan of the project.
+
+    Positions on this plan line up with its image only when ``image_scale`` is 1
+    and ``image_offset`` is (0, 0); the conversion to image pixels is on ``FloorPlan``.
+    """
+
     model_config = ConfigDict(extra="ignore")
 
     id: str | None = None
     title: str | None = None
-    ordering: int | None = None
+    ordering: int | float | None = None
     site_id: str | None = None
     scale_per_unit: float | None = Field(default=None, description="Plan units per metre, or per foot when imperial")
     scale_missing: bool
-    image_scale: float = Field(description="The map's horizontal image scale")
-    image_offset: tuple[float, float] = Field(description="The map's image offset (x, y)")
+    image_scale: float | None = Field(description="The plan map's horizontal image scale, or None when not sent")
+    image_offset: tuple[float, float] | None = Field(description="The plan map's image offset (x, y), or None")
     shape_counts: dict[str, int] = Field(default_factory=dict)
 
 
@@ -129,6 +138,7 @@ class WallPage(BaseModel):
     total: int
     truncated: bool
     scale_missing: bool
+    unreadable: int = Field(description="Walls without exactly two readable end points; their coordinates are None")
 
 
 class PlacedDevicePage(BaseModel):
@@ -147,6 +157,8 @@ def _data(raw: Any) -> dict[str, Any]:
     data = as_dict(inner)
     if not isinstance(data.get("project"), dict):
         raise UniFiMalformedResponseError("InnerSpace project response has no project")
+    if not isinstance(data.get("plans"), list) or not isinstance(data.get("shapes"), list):
+        raise UniFiMalformedResponseError("InnerSpace project response has no plans or shapes list")
     return data
 
 
@@ -158,18 +170,28 @@ def _shapes(data: dict[str, Any], plan_id: str | None, kind: str) -> list[dict[s
     ]
 
 
-def _points(shape: dict[str, Any]) -> list[tuple[float, float, float]]:
-    points = []
-    for point in as_list(shape.get("position")):
-        p = as_dict(point)
-        x, y, z = finite(p.get("x")), finite(p.get("y")), finite(p.get("z", 0))
-        if x is not None and y is not None and z is not None:
-            points.append((x, y, z))
-    return points
+def _wall_ends(shape: dict[str, Any]) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """The wall's two end points (x, y), or ``None`` unless it has exactly two readable ones."""
+    position = shape.get("position")
+    if not isinstance(position, list) or len(position) != 2:
+        return None
+    ends = []
+    for point in position:
+        x, y = number(as_dict(point).get("x")), number(as_dict(point).get("y"))
+        if x is None or y is None:
+            return None
+        ends.append((x, y))
+    return ends[0], ends[1]
+
+
+def _device_point(shape: dict[str, Any]) -> dict[str, Any]:
+    """The device's first position entry; later entries are never used in its place."""
+    position = shape.get("position")
+    return as_dict(position[0]) if isinstance(position, list) and position else {}
 
 
 def _wall_metres(x: float, y: float, geometry: PlanGeometry) -> tuple[float, float] | None:
-    """A wall point (plan units: image-centre origin, y up) as metres from the image's top-left."""
+    """A wall point (plan units: image-centre origin, y up) as metres from the plan's top-left (vendor frame)."""
     if not geometry.usable:
         return None
     mx = plan_units_to_metres(x + geometry.width_px / 2, geometry.ppm)  # type: ignore[operator]
@@ -178,7 +200,7 @@ def _wall_metres(x: float, y: float, geometry: PlanGeometry) -> tuple[float, flo
 
 
 def _device_metres(x: float, z: float, geometry: PlanGeometry) -> tuple[float, float] | None:
-    """A device's metre position (x, z) as metres from the image's top-left."""
+    """A device's metre position (x, z) as metres from the plan's top-left (vendor frame)."""
     if not geometry.usable:
         return None
     ppm = geometry.ppm
@@ -187,12 +209,13 @@ def _device_metres(x: float, z: float, geometry: PlanGeometry) -> tuple[float, f
     return None if mx is None or my is None else (mx, my)
 
 
-def _wall(shape: dict[str, Any], geometry: PlanGeometry, unit: Unit) -> Wall | None:
-    points = _points(shape)
-    if len(points) < 2:
-        return None
-    start = _wall_metres(points[0][0], points[0][1], geometry)
-    end = _wall_metres(points[1][0], points[1][1], geometry)
+def _wall(shape: dict[str, Any], geometry: PlanGeometry, unit: Unit) -> tuple[Wall, bool]:
+    """The wall and whether its end points were readable; an unreadable wall has no coordinates."""
+    ends = _wall_ends(shape)
+    start = end = None
+    if ends:
+        start = _wall_metres(*ends[0], geometry)
+        end = _wall_metres(*ends[1], geometry)
     coords: dict[str, float | None] = dict.fromkeys(("x1", "y1", "x2", "y2", "length"))
     if start and end:
         coords = {
@@ -202,13 +225,14 @@ def _wall(shape: dict[str, Any], geometry: PlanGeometry, unit: Unit) -> Wall | N
             "y2": length(end[1], unit),
             "length": length(math.hypot(end[0] - start[0], end[1] - start[1]), unit),
         }
-    return Wall(
+    wall = Wall(
         id=text(shape.get("id")),
         plan_id=text(shape.get("planId")),
         variant=text(shape.get("variant")),
         wall_type_id=text(shape.get("wallTypeId")),
         **coords,
     )
+    return wall, ends is not None
 
 
 def _quaternion(value: Any) -> Quaternion | None:
@@ -222,20 +246,19 @@ def _rotation(value: Any) -> dict[str, Quaternion] | None:
 
 
 def _placed_device(shape: dict[str, Any], geometry: PlanGeometry, unit: Unit) -> PlacedDevice:
-    points = _points(shape)
-    x = y = height = None
-    if points:
-        px, py, pz = points[0]
-        height = length(py, unit)
-        placed = _device_metres(px, pz, geometry)
-        if placed:
-            x, y = length(placed[0], unit), length(placed[1], unit)
+    point = _device_point(shape)
+    px, py, pz = number(point.get("x")), number(point.get("y")), number(point.get("z"))
+    height = length(py, unit)
+    x = y = None
+    placed = None if px is None or pz is None else _device_metres(px, pz, geometry)
+    if placed:
+        x, y = length(placed[0], unit), length(placed[1], unit)
     return PlacedDevice(
         id=text(shape.get("id")),
         plan_id=text(shape.get("planId")),
         title=text(shape.get("title")),
         product_id=text(shape.get("productId")),
-        mac=text(as_dict(shape.get("meta")).get("mac")),
+        mac=canonical_mac(as_dict(shape.get("meta")).get("mac")),
         x=x,
         y=y,
         height=height,
@@ -259,18 +282,16 @@ def _wall_type(raw: Any) -> WallType:
 def _plan_summary(plan: dict[str, Any], data: dict[str, Any], geometry: PlanGeometry, unit: Unit) -> PlanSummary:
     plan_id = plan.get("id")
     shapes = [s for s in as_list(data.get("shapes")) if isinstance(s, dict) and s.get("planId") == plan_id]
-    image_map = next((s for s in shapes if s.get("type") == "map"), {})
-    offset = as_dict(image_map.get("imageOffset"))
-    ordering = finite(plan.get("ordering"))
+    image_scale, image_offset = image_transform(next((s for s in shapes if s.get("type") == "map"), None))
     return PlanSummary(
         id=text(plan_id),
         title=text(plan.get("title")),
-        ordering=int(ordering) if ordering is not None else None,
+        ordering=whole_or_number(plan.get("ordering")),
         site_id=text(plan.get("siteId")),
         scale_per_unit=scale_per_unit(geometry.ppm, unit),
         scale_missing=not geometry.usable,
-        image_scale=finite(as_dict(image_map.get("imageScale")).get("x")) or 1.0,
-        image_offset=(finite(offset.get("x")) or 0.0, finite(offset.get("y")) or 0.0),
+        image_scale=image_scale,
+        image_offset=image_offset,
         shape_counts=dict(Counter(s["type"] for s in shapes if isinstance(s.get("type"), str))),
     )
 
@@ -287,8 +308,8 @@ def _shape_listing(data: dict[str, Any], geometry: Mapping[str, PlanGeometry], u
             "type": text(shape.get("type")),
             "plan_id": text(shape.get("planId")),
         }
-        if entry["type"] == "wall" and (wall := _wall(shape, plan_geometry, unit)):
-            entry.update(wall.model_dump(exclude={"id", "plan_id"}))
+        if entry["type"] == "wall":
+            entry.update(_wall(shape, plan_geometry, unit)[0].model_dump(exclude={"id", "plan_id"}))
         elif entry["type"] == "device":
             entry.update(_placed_device(shape, plan_geometry, unit).model_dump(exclude={"id", "plan_id", "mac"}))
         listing.append(entry)
@@ -325,7 +346,8 @@ def project_summary_from_api(
 
 
 def walls_from_api(raw_project: Any, plan_id: str, *, geometry: PlanGeometry, unit: Unit, limit: int) -> WallPage:
-    walls = [w for s in _shapes(_data(raw_project), plan_id, "wall") if (w := _wall(s, geometry, unit))]
+    read = [_wall(s, geometry, unit) for s in _shapes(_data(raw_project), plan_id, "wall")]
+    walls = [wall for wall, _ in read]
     return WallPage(
         unit=unit,
         plan_id=plan_id,
@@ -333,6 +355,7 @@ def walls_from_api(raw_project: Any, plan_id: str, *, geometry: PlanGeometry, un
         total=len(walls),
         truncated=len(walls) > limit,
         scale_missing=not geometry.usable,
+        unreadable=sum(1 for _, readable in read if not readable),
     )
 
 
@@ -348,3 +371,21 @@ def placed_devices_from_api(
         truncated=len(devices) > limit,
         scale_missing=not geometry.usable,
     )
+
+
+def plan_maps_from_api(raw_project: Any) -> dict[str, dict[str, Any]]:
+    """Each plan's first map shape, by plan id."""
+    maps: dict[str, dict[str, Any]] = {}
+    for shape in _data(raw_project)["shapes"]:
+        if isinstance(shape, dict) and shape.get("type") == "map" and isinstance(shape.get("planId"), str):
+            maps.setdefault(shape["planId"], shape)
+    return maps
+
+
+def plan_ids_from_api(raw_project: Any) -> set[str]:
+    """Ids of the plans in the project response."""
+    return {
+        p["id"]
+        for p in as_list(_data(raw_project).get("plans"))
+        if isinstance(p, dict) and isinstance(p.get("id"), str)
+    }

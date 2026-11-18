@@ -21,6 +21,21 @@ def text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def number(value: Any) -> float | None:
+    """A finite JSON number; strings, booleans, NaN and infinity give ``None``."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return float(value)
+
+
+def whole_or_number(value: Any) -> int | float | None:
+    """A finite number, as an ``int`` when it is whole; a fraction is kept, never truncated."""
+    found = finite(value)
+    if found is None:
+        return None
+    return int(found) if found.is_integer() else found
+
+
 def flag(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
