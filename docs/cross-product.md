@@ -14,6 +14,14 @@ The Site Manager server reads a whole UI account from Ubiquiti's cloud API, not 
 - Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the console servers only. The Site Manager server has no incident evidence tool and no events.
 - The relay does not include it by default. Adding it to a relay location lets any relay token for that location, including a read-only one, read the whole account.
 
+### InnerSpace is its own family
+
+The InnerSpace server (not yet released) reads the floor plans, walls and device placements of the InnerSpace application on a console. It is a console product like Network, Protect and Access, but it is not part of the cross-product features on this page:
+
+- Its plan, site, device and wall IDs belong to the InnerSpace tool family, which is its own family. Do not pass them to Network, Protect, Access or Site Manager tools, and do not join or translate them to those servers' IDs. There is no bridging tool. Match by a value both sides report, such as a device MAC address, only when the user confirms the match.
+- Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the Network and Protect servers only. The InnerSpace server has no incident evidence tool and no events.
+- The relay does not include it by default. Adding it to a relay location lets any relay token for that location read the project's floor plans.
+
 ### Local Mode (stdio)
 
 Each server runs independently. An agent connected to several servers can call

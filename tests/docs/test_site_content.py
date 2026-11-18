@@ -44,6 +44,7 @@ MANIFESTS = {
     "protect": Path("apps/protect/src/unifi_protect_mcp/tools_manifest.json"),
     "access": Path("apps/access/src/unifi_access_mcp/tools_manifest.json"),
     "sitemanager": Path("apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json"),
+    "innerspace": Path("apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json"),
 }
 
 # Whether unifi-sitemanager-mcp has a first release. Until it does, public pages
@@ -59,6 +60,21 @@ SITEMANAGER_RELEASE_ONLY_TEXT = (
     "unifi-sitemanager@unifi-plugins",
     "pypi.org/project/unifi-sitemanager-mcp",
     "img.shields.io/pypi/v/unifi-sitemanager-mcp",
+)
+
+# Whether unifi-innerspace-mcp has a first release. Until it does, no page may
+# present an install command, badge or marketplace link for it as working.
+INNERSPACE_RELEASED = False
+
+# Install surfaces that only work once the InnerSpace package is published.
+INNERSPACE_RELEASE_ONLY_TEXT = (
+    "uvx unifi-innerspace-mcp",
+    "pip install unifi-innerspace-mcp",
+    "pipx install unifi-innerspace-mcp",
+    "docker pull ghcr.io/sirkirby/unifi-innerspace-mcp",
+    "unifi-innerspace@unifi-plugins",
+    "pypi.org/project/unifi-innerspace-mcp",
+    "img.shields.io/pypi/v/unifi-innerspace-mcp",
 )
 
 # Public pages that describe the servers. The Site Manager app's own README
@@ -89,6 +105,15 @@ SERVER_SURFACES = (
     Path("apps/api/README.md"),
 )
 
+# The InnerSpace app's own pages, which are checked against the same gate.
+INNERSPACE_APP_PAGES = (
+    Path("apps/innerspace/README.md"),
+    Path("apps/innerspace/docs/configuration.md"),
+    Path("apps/innerspace/docs/permissions.md"),
+    Path("apps/innerspace/docs/tools.md"),
+    Path("apps/innerspace/docs/troubleshooting.md"),
+)
+
 COUNT_SURFACES = {
     "network": [
         Path("README.md"),
@@ -112,6 +137,12 @@ COUNT_SURFACES = {
     "sitemanager": [
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
+    ],
+    # InnerSpace does the same: nine domain tools, without the meta-tools.
+    "innerspace": [
+        Path("README.md"),
+        Path("docs/ARCHITECTURE.md"),
+        Path("apps/innerspace/docs/tools.md"),
     ],
 }
 
@@ -252,7 +283,7 @@ def pinned_counts(root: Path = Path(".")) -> dict[str, int]:
 
 
 def manifest_counts() -> dict[str, int]:
-    """Published tool counts: every manifest tool, except Site Manager's domain tools only."""
+    """Published tool counts: every manifest tool, except Site Manager and InnerSpace, which count domain tools only."""
     refs = _plugin_tool_refs()
     counts: dict[str, int] = {}
     for product, path in MANIFESTS.items():
@@ -666,6 +697,8 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             if "data-product" in attributes
         }
         for product, count in manifest_counts().items():
+            if product == "innerspace" and not INNERSPACE_RELEASED:
+                continue  # the homepage lists released servers only
             with self.subTest(product=product):
                 self.assertIn(product, product_elements)
                 self.assertEqual(product_elements[product], str(count))
@@ -1146,6 +1179,106 @@ class ContentReconciliationTests(unittest.TestCase):
             "can read the whole UI account",
             "`503` `sitemanager_not_configured`",
             "NOT_CONFIGURED",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+    def test_server_status_table_lists_innerspace_with_its_release_state(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        status = "Beta" if INNERSPACE_RELEASED else "Not yet released"
+        self.assertIn(f"| [InnerSpace](apps/innerspace/) | {status} | {manifest_counts()['innerspace']} |", readme)
+
+    def test_unreleased_innerspace_is_not_presented_as_installable(self):
+        if INNERSPACE_RELEASED:
+            self.skipTest("unifi-innerspace-mcp is released")
+        for path in SERVER_SURFACES + INNERSPACE_APP_PAGES:
+            content = path.read_text(encoding="utf-8")
+            for text in INNERSPACE_RELEASE_ONLY_TEXT:
+                with self.subTest(path=path, text=text):
+                    self.assertNotIn(text, content)
+
+    def test_innerspace_is_named_as_not_yet_released_on_the_pages_that_list_servers(self):
+        if INNERSPACE_RELEASED:
+            self.skipTest("unifi-innerspace-mcp is released")
+        for path in (
+            Path("README.md"),
+            Path("QUICKSTART.md"),
+            Path("docs/README.md"),
+            Path("docs/ARCHITECTURE.md"),
+            Path("apps/innerspace/README.md"),
+        ):
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            with self.subTest(path=path):
+                self.assertRegex(content, r"(?i)innerspace[^.|]*(?:not (?:yet )?(?:published|released)|unreleased)")
+
+    def test_innerspace_is_listed_where_the_products_are_enumerated(self):
+        surfaces = {
+            Path("README.md"): ("unifi-innerspace-mcp", "apps/innerspace/docs/configuration.md", "InnerSpace"),
+            Path("QUICKSTART.md"): ("InnerSpace", "unifi-innerspace-mcp", "port 3005"),
+            Path("CONTRIBUTING.md"): ("apps/innerspace/", "innerspace/v*", "apps/innerspace/docs/troubleshooting.md"),
+            Path("SECURITY.md"): ("InnerSpace", "session", "UNIFI_API_KEY"),
+            Path("SUPPORT.md"): ("apps/innerspace/docs/troubleshooting.md", "InnerSpace"),
+            Path("PRIVACY.md"): ("InnerSpace", "floor plan"),
+            Path("docs/README.md"): ("apps/innerspace/docs/configuration.md", "apps/innerspace/docs/tools.md"),
+            Path("docs/ARCHITECTURE.md"): ("apps/innerspace", "unifi_core.innerspace"),
+            Path("docs/tool-index.md"): ("`innerspace_`", "InnerSpace differences"),
+            Path("docs/tls-verification.md"): ("InnerSpace", "UNIFI_INNERSPACE_SSL_FINGERPRINT"),
+            Path("docs/permissions.md"): ("InnerSpace", "nine domain tools"),
+            Path("docs/cross-product.md"): ("InnerSpace", "own family"),
+            Path("docs/support-bundles.md"): ("InnerSpace", "no support-bundle"),
+            Path("apps/api/README.md"): ("## InnerSpace console product", "innerspace_site_id"),
+        }
+        for path, phrases in surfaces.items():
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+
+    def test_innerspace_docs_scope_the_read_only_guarantee_to_the_domain_tools(self):
+        shared = Path("docs/permissions.md").read_text(encoding="utf-8")
+        shared_section = (
+            shared.split("### InnerSpace: nothing to gate", 1)[1].split("\n### ", 1)[0].split("\n---", 1)[0]
+        )
+        pages = {
+            Path("apps/innerspace/README.md"): Path("apps/innerspace/README.md").read_text(encoding="utf-8"),
+            Path("apps/innerspace/docs/permissions.md"): Path("apps/innerspace/docs/permissions.md").read_text(
+                encoding="utf-8"
+            ),
+            Path("docs/permissions.md"): shared_section,
+        }
+        for path, text in pages.items():
+            content = " ".join(text.split())
+            with self.subTest(path=path):
+                self.assertRegex(content, r"(?i)nine (?:domain )?tools")
+                self.assertNotRegex(content, r"(?i)every tool[^.]*\bread-only|all (?:the )?tools[^.]*\bread-only")
+
+    def test_innerspace_docs_state_what_is_and_is_not_redacted_or_served(self):
+        tools = " ".join(Path("apps/innerspace/docs/tools.md").read_text(encoding="utf-8").split())
+        permissions = " ".join(Path("apps/innerspace/docs/permissions.md").read_text(encoding="utf-8").split())
+        self.assertIn("MAC addresses are not redacted", permissions)
+        self.assertIn("redacted by default", permissions)
+        self.assertNotRegex(permissions, r"(?i)always redacted")
+        self.assertIn("image_offset", tools)
+        self.assertIn("innerspace://plans/{plan_id}/image", tools)
+        self.assertIn(
+            "never returns image bytes", " ".join(Path("apps/api/README.md").read_text(encoding="utf-8").split())
+        )
+
+    def test_api_readme_documents_every_innerspace_route(self):
+        spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))
+        paths = sorted(path for path in spec["paths"] if "/innerspace/" in path)
+        self.assertGreater(len(paths), 0)
+        readme = Path("apps/api/README.md").read_text(encoding="utf-8")
+        section = " ".join(readme.split("## InnerSpace console product", 1)[1].split("\n## ", 1)[0].split())
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(path, section)
+        for phrase in (
+            "`innerspace`",
+            "username and password",
+            "not supported by the typed API action endpoint",
+            "BAD_REQUEST",
+            "UPSTREAM_ERROR",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)

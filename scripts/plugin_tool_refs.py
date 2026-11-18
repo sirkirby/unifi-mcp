@@ -83,8 +83,8 @@ def pinned_manifest(root: Path, product: str) -> tuple[str, dict]:
 
 
 def tool_count(manifest: dict, product: str) -> int:
-    """Site Manager counts domain tools; retain the other products' released totals."""
-    return len(manifest["module_map"]) if product == "sitemanager" else len(manifest["tools"])
+    """Site Manager and InnerSpace count domain tools; retain the other products' released totals."""
+    return len(manifest["module_map"]) if product in ("sitemanager", "innerspace") else len(manifest["tools"])
 
 
 def pinned_tool_count(root: Path, product: str) -> int:

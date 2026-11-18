@@ -2,7 +2,7 @@
 
 REST + GraphQL HTTP API for UniFi controllers. Run it as a standalone HTTP
 service for desktop apps, web dashboards, Pi extensions, automation services,
-and MCP adapters that need typed access to UniFi Network, Protect, and Access.
+and MCP adapters that need typed access to UniFi Network, Protect, Access, and InnerSpace.
 
 ## Quickstart
 
@@ -314,6 +314,111 @@ An unconfigured read answers, for example:
 A probe without a connection answers `503` with `"ok": false` and
 `"error_kind": "sitemanager_not_configured"`.
 
+## InnerSpace console product
+
+The API server serves the nine reads of the [InnerSpace MCP server](../innerspace/)
+(not yet released) for a controller that declares the `innerspace` product. It
+is a read-only console product: it reads the console's InnerSpace application
+through a console login session, through the same `unifi-core` managers as the
+MCP server. Run the API from a source checkout
+([Quickstart A](#a-local-clone-developing-or-testing-changes)) to use it before
+the next API release.
+
+### Register the controller
+
+`POST /v1/controllers` (or the **Controllers** tab, or the CLI) with
+`"innerspace"` in `product_kinds`. InnerSpace needs a **username and password**,
+on create and on update: a controller that declares it with only an API token
+is refused. The stored API token, if any, is never passed to the InnerSpace
+connection, and a console's local API key is never used for InnerSpace. The
+account must be able to open the InnerSpace application, for example a Super
+Admin.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/controllers \
+  -H "Authorization: Bearer $ADMIN_KEY" -H "Content-Type: application/json" \
+  -d '{"name": "Example console", "base_url": "https://192.168.1.1",
+       "product_kinds": ["innerspace"], "username": "innerspace-mcp",
+       "password": "<password>", "verify_tls": false}'
+```
+
+The capability probe does not probe InnerSpace, so a controller's
+`product_kinds` are what you declare: `GET /v1/controllers/{cid}/capabilities`
+lists a declared `innerspace` under `not_probed`, never under `products`.
+Whether InnerSpace is installed and running is decided at the first read, from
+the console's system endpoint, never from a 403 or a 404. The admin probe
+(`POST /v1/controllers/{cid}/probe`) proves only that the login works, not that
+InnerSpace is installed, and it spends one console login.
+
+### Reading InnerSpace
+
+All reads need only the `read` scope, name the controller with the `controller`
+query parameter, and call the same manager methods:
+
+| Surface | Paths |
+|---|---|
+| REST | `GET /v1/sites/{site_id}/innerspace/status`, `GET /v1/sites/{site_id}/innerspace/project`, `GET /v1/sites/{site_id}/innerspace/floor-plans`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/walls`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/devices`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset`, `GET /v1/sites/{site_id}/innerspace/access-points`, `GET /v1/sites/{site_id}/innerspace/switches`, `GET /v1/sites/{site_id}/innerspace/inventory` |
+| GraphQL | The `innerspace` namespace: `status`, `project`, `floorPlans`, `walls`, `placedDevices`, `accessPoints`, `switches`, `inventory`, `planAsset` |
+| Actions | `POST /v1/actions/{tool_name}` for the nine `innerspace_*` read tools |
+
+The path `site_id` is the controller site of the other console products and is
+**ignored** for InnerSpace. The InnerSpace site filter is the query parameter
+`innerspace_site_id` (`innerspaceSiteId` in GraphQL), which is the manager's own
+`site_id`. Lengths come back in the project's unit, or the `unit` you pass
+(`metric` or `imperial`). Walls and placed devices take `limit` (1-2000, default
+500) and report `total` and `truncated`. InnerSpace lists are not paged, so
+there is no cursor. IDs from these routes belong to the InnerSpace family: do
+not pass them to Network, Protect, Access or Site Manager routes.
+
+```bash
+curl -s "http://localhost:8080/v1/sites/default/innerspace/floor-plans?controller=<id>" \
+  -H "Authorization: Bearer $READ_KEY"
+
+curl -s http://localhost:8080/v1/graphql \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"query":"{ innerspace { floorPlans(controller: \"<id>\") { id name scalePerUnit } } }"}'
+
+curl -s -X POST http://localhost:8080/v1/actions/innerspace_list_walls \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"controller": "<id>", "args": {"plan_id": "<plan_id>", "limit": 100}}'
+```
+
+### Plan images are not served
+
+The API never returns image bytes. `GET .../floor-plans/{plan_id}/asset`,
+`planAsset` and `innerspace_get_plan_asset` return image metadata only: file
+name, type, pixel size, scale, image scale and offset. `include_image` is
+rejected on the REST route (`422`) and on the action endpoint ("not supported
+by the typed API action endpoint"), and GraphQL has no such argument. Read the
+image through the InnerSpace MCP server's `innerspace://plans/{plan_id}/image`
+resource.
+
+### Errors
+
+Invalid arguments, a missing plan and refused access are answered with fixed
+text; the rejected value is never in a response, a log line or an audit record.
+REST answers `{"detail": {"kind": "...", "message": "..."}}`; GraphQL puts the
+code in the error's `extensions`.
+
+| Situation | REST status and `kind` | GraphQL code |
+|---|---|---|
+| Invalid arguments (bad id, `limit` out of range, `include_image`) | `422` `invalid_innerspace_request` | `BAD_REQUEST` |
+| No such floor plan | `404` `innerspace_not_found` | `NOT_FOUND` |
+| The console refused the session for InnerSpace (expired session or no InnerSpace access) | `403` `innerspace_forbidden` | `UPSTREAM_FORBIDDEN` |
+| Not installed, not running, login rejected, connection, HTTP, malformed or rate-limited | `502` `innerspace_upstream_error` | `UPSTREAM_ERROR` |
+| Controller does not declare `innerspace` | `409` `capability_mismatch` | |
+
+InnerSpace not being installed is a `502`, never a `404`. Over the action
+endpoint, a failure keeps the repository's generic contract: HTTP `200` with
+`success: false`, fixed text, and the error class audited as `error_kind`.
+
+### What read exposes, and redaction
+
+Every key with the `read` scope can read the project's floor plans, wall
+positions and device placements for any registered InnerSpace controller.
+Response redaction hides secret-looking fields by name and is on by default;
+MAC addresses, serial numbers and plan geometry are not redacted.
+
 ## Distribution
 
 `unifi-api-server` is published to:
@@ -408,7 +513,7 @@ This is the same constraint the MCP servers (`unifi-network-mcp`,
 ## Development
 
 The project uses an `uv` workspace covering `apps/api/` plus the shared
-`packages/unifi-core/` and three MCP apps. Common development commands:
+`packages/unifi-core/` and the five MCP apps. Common development commands:
 
 ```bash
 # Install everything once

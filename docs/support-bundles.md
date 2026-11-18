@@ -2,6 +2,8 @@
 
 Use a support bundle when a UniFi Network, Protect, or Access MCP server starts but behaves unexpectedly. It gathers a small, structured set of troubleshooting facts without collecting raw controller responses or ordinary diagnostic logs.
 
+The InnerSpace server (not yet released) has no support-bundle tool either: for its problems, follow its [troubleshooting guide](../apps/innerspace/docs/troubleshooting.md) and fill in the bug form's manual fields, without the console login, console address, plan names, MAC addresses or plan images.
+
 The Site Manager server has no support-bundle tool, and support bundles stay scoped to the three console servers. For a Site Manager problem, follow its [troubleshooting guide](../apps/sitemanager/docs/troubleshooting.md), use [`sitemanager_setup_status`](../apps/sitemanager/docs/configuration.md#the-api-key) when the server is in setup mode, and fill in the bug form's manual fields. Include the trace id from Ubiquiti when an error shows one, never the API key.
 
 The shortest path is:

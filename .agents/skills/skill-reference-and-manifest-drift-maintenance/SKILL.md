@@ -3,7 +3,7 @@ name: myco:skill-reference-and-manifest-drift-maintenance
 description: |
   Use when adding, changing, or reviewing tool categories, tool parameters,
   or tool docstrings in unifi-mcp apps (apps/access, apps/network,
-  apps/protect, apps/sitemanager) whose behavior surfaces through generated artifacts: each
+  apps/protect, apps/sitemanager, apps/innerspace) whose behavior surfaces through generated artifacts: each
   app's generated tool manifest (e.g.
   apps/protect/src/unifi_protect_mcp/tools_manifest.json) and the plugin
   skill reference docs with AUTO:tools:<category> marker blocks. Applies
@@ -156,6 +156,27 @@ Access: Site Manager has no support-bundle tool. Do not add it to that generator
 Site Manager releases trigger the same plugin writeback as those three; its first
 tag may precede the bundle, in which case only its server manifest is updated.
 Use the release-pipeline skill for the package map and key-only smoke target.
+
+### InnerSpace count contract
+
+The fifth MCP app is `apps/innerspace` (`unifi-innerspace-mcp`, tag namespace
+`innerspace/v*`, hatch-vcs `--match innerspace/v*`). It has no plugin bundle yet, so there
+is no plugin reference to regenerate. Like Site Manager, it states its domain tools only:
+the published count is `len(module_map)` (nine: `innerspace_get_status`,
+`innerspace_get_project`, `innerspace_list_floor_plans`, `innerspace_list_walls`,
+`innerspace_list_placed_devices`, `innerspace_list_access_points`,
+`innerspace_list_switches`, `innerspace_list_inventory`, `innerspace_get_plan_asset`),
+without the five shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
+convention, and `tests/docs/test_site_content.py` checks the count in the root README,
+`docs/ARCHITECTURE.md` and `apps/innerspace/docs/tools.md`. A change to a tool signature
+regenerates the manifest (`make -C apps/innerspace manifest`) and moves that count and the
+tool catalog together.
+
+InnerSpace is not yet released. The docs test keeps release-only install text (a PyPI
+command, image pull, plugin marketplace id or package badge) off the public pages while
+`INNERSPACE_RELEASED` is `False`; flip it in the same change that publishes the first tag.
+`generate_support_skills.py` stays limited to Network, Protect and Access: InnerSpace has no
+support-bundle tool.
 
 ## Procedure C: Resolve generated-manifest merge conflicts by regeneration
 

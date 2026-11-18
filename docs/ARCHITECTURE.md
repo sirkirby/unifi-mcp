@@ -9,6 +9,7 @@ unifi-mcp/
     protect/              # UniFi Protect MCP server
     access/               # UniFi Access MCP server
     sitemanager/          # UniFi Site Manager MCP server (Ubiquiti cloud, read-only)
+    innerspace/           # UniFi InnerSpace MCP server (console login, read-only; not yet released)
     api/                  # REST + GraphQL API server
     worker/               # Cloudflare Worker gateway + npm CLI
   packages/
@@ -41,7 +42,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `sitemanager/` | Site Manager cloud client, managers and models; the fixed `https://api.ui.com` origin lives in `sitemanager/managers/connection_manager.py` |
 | `innerspace/` | InnerSpace client, managers and models; reads under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py` |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/api`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/api`.
 
 ### unifi-mcp-shared
 
@@ -60,7 +61,7 @@ per connection, so one process can serve clients at either migration state.
 | `config.py` | OmegaConf config loading with env var interpolation |
 | `formatting.py` | Response formatting helpers |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`.
 
 ### apps/network
 
@@ -123,6 +124,23 @@ The UniFi Site Manager MCP server. 9 read-only domain tools over Ubiquiti's clou
 
 Unlike the console servers, it has no controller: every request goes to the fixed origin `https://api.ui.com`, which no setting can change. Its one credential, a Site Manager API key, is read only from `UNIFI_SITEMANAGER_API_KEY` or its `_FILE` / `_COMMAND` form, with no fallback to `UNIFI_API_KEY`, shared `UNIFI_*` variables, `config.yaml` or `CONFIG_PATH`. The key reads every console on the account. Its host, site and device IDs belong to their own tool family. It makes no request at startup, and without a key it registers only `sitemanager_setup_status`. HTTP is opt-in on port 3003, and the Cloud Relay does not reach it unless an operator adds it.
 
+### apps/innerspace
+
+The UniFi InnerSpace MCP server, not yet released. 9 read-only domain tools over the InnerSpace application on a UniFi OS console: its status, the project, floor plans, walls, placed devices, access points, switches, unplaced inventory and a plan's image metadata, plus the five shared meta-tools. It has no writes, no policy gates in this version, no events, and no support-bundle tool. It registers one MCP resource, `innerspace://plans/{plan_id}/image`.
+
+- `src/unifi_innerspace_mcp/` -- server code
+  - `main.py` -- entry point, tool registration, transport dispatch
+  - `runtime.py` -- singleton factories for the managers
+  - domain logic lives in `packages/unifi-core/src/unifi_core/innerspace/managers/`, released in `unifi-core` before the app
+  - `tools/` -- tool wrappers in four category modules (`status`, `project`, `floor_plans`, `devices`); the managers live in `unifi_core.innerspace`
+  - `arguments.py` -- shared argument types, kept outside `tools/` so importing them registers no tool
+  - `resources/` -- the plan image resource and its URI template
+  - `config/config.yaml` -- console connection and runtime settings; no `api_key`
+- `tests/` -- unit tests with a fake or loopback console; they never contact a real one
+- `Dockerfile` -- container build
+
+It reads through a console login session (`unifi_core.innerspace.managers.connection_manager`), never an API key, and never reads `UNIFI_API_KEY`. The session client does not follow redirects or use proxy environment variables, and builds its error text from fixed strings. Positions come back in the project's unit, in the plan's own frame; each plan carries its scale, image scale and offset so a position can be placed on the image. Its IDs belong to their own tool family. It connects in the background after answering the client, and whether InnerSpace is installed and running is decided at the first read from the console's system endpoint, not probed at startup. Without a host it registers only `innerspace_setup_status`. HTTP is opt-in on port 3005, and the Cloud Relay does not reach it unless an operator adds it. The read-only guarantee covers the nine domain tools; the meta-tools are not counted as read-only tools.
+
 ### apps/api
 
 The independent `unifi-api-server` HTTP service for custom applications,
@@ -135,6 +153,8 @@ while using the API server as its backend.
 The API app and the MCP apps independently consume the manager layer from `unifi-core`; the API does not proxy or require the MCP servers. It is also not part of the Cloud Relay request path.
 
 The API also serves the nine Site Manager reads. The cloud account is one account-level connection, separate from controller records: an administrator adds it, its key is stored encrypted in the API database, and a separate factory builds the Site Manager managers from it. It never reads the MCP server's environment or imports the MCP app. See [Site Manager cloud connection](../apps/api/README.md#site-manager-cloud-connection).
+
+It serves the nine InnerSpace reads for a controller that declares the `innerspace` product, through the same `unifi-core` managers: REST routes, a GraphQL `innerspace` namespace and catalog actions share one error mapping with fixed text. A stored controller needs a username and password for InnerSpace, and its API token is never passed to the InnerSpace connection. No API surface returns plan image bytes. See [InnerSpace console product](../apps/api/README.md#innerspace-console-product).
 
 ### packages/unifi-mcp-relay
 
@@ -150,7 +170,7 @@ A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, `apps/access`, or `apps/sitemanager`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
+The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, or `apps/innerspace`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 
@@ -209,7 +229,7 @@ Rules:
 
 ## Adding a New Server
 
-To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/` for a console product, or `apps/sitemanager/` for a cloud API:
+To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/` for a console product, `apps/sitemanager/` for a cloud API, or `apps/innerspace/` for a console application read through a login session with no API key:
 
 1. **Create app directory:** `apps/<appname>/`
 2. **Create `pyproject.toml`** depending on `unifi-core` and `unifi-mcp-shared`
@@ -237,7 +257,7 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 10. **Use one lowercase token for the app name** (as in `sitemanager`). Scripts derive the directory, Python module, env prefix and plugin name from it, and a hyphen or underscore breaks several of them.
 11. **Commit a placeholder `tools_manifest.json` before the first `make manifest`:** the wheel force-includes it, so the package cannot be installed to generate it otherwise.
 
-`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle.
+`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle. `apps/innerspace/` is the reference for a read-only console application that uses the console login session only: category modules with `Annotated` argument types outside `tools/`, a background connection, and setup mode without a host.
 
 ## Shared Patterns
 
@@ -250,6 +270,6 @@ All servers share these patterns via `unifi-mcp-shared`:
 - **Config:** OmegaConf YAML with `${oc.env:VAR,default}` interpolation
 - **Tool response contract:** `{"success": bool, "data": ...}` or `{"success": false, "error": "..."}`
 
-### MCP Resources (Protect and Access)
+### MCP Resources (Protect, Access and InnerSpace)
 
-Servers may also register MCP resources via a `resources/` directory alongside `tools/`. Resources are ideal for data that benefits from polling rather than explicit tool calls (e.g., event streams, camera snapshots). Resource modules use `@server.resource()` decorators and are imported during startup in `main.py`. Both the Protect server (camera snapshots, event streams) and the Access server (event streams) use this pattern.
+Servers may also register MCP resources via a `resources/` directory alongside `tools/`. Resources are ideal for data that benefits from polling rather than explicit tool calls (e.g., event streams, camera snapshots). Resource modules use `@server.resource()` decorators and are imported during startup in `main.py`. The Protect server (camera snapshots, event streams), the Access server (event streams) and the InnerSpace server (floor plan images, read on demand) use this pattern.

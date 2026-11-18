@@ -34,6 +34,7 @@ Each app exposes the following lazy-loading meta-tools:
 | Protect | `protect_` | `protect_tool_index`, `protect_execute`, `protect_batch`, `protect_batch_status`, `protect_batch_cancel`, `protect_load_tools` in lazy mode |
 | Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_batch_cancel`, `access_load_tools` in lazy mode |
 | Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_batch_cancel`, `sitemanager_load_tools` in lazy mode |
+| InnerSpace (not yet released) | `innerspace_` | `innerspace_tool_index`, `innerspace_execute`, `innerspace_batch`, `innerspace_batch_status`, `innerspace_batch_cancel`, `innerspace_load_tools` in lazy mode |
 
 These tools are not replacements for `tools/list`. They are UniFi-specific
 extensions for clients and models that need a compact, filterable catalog or
@@ -158,6 +159,27 @@ the shared model in three ways:
 
 See [Site Manager permissions](../apps/sitemanager/docs/permissions.md#meta-tools-and-read-only-clients).
 
+### InnerSpace differences
+
+The InnerSpace server, not yet released, has nine domain tools, all read-only,
+and it adjusts the shared model the same way Site Manager does:
+
+- In `lazy` mode it lists all nine domain tools directly. `innerspace_tool_index`
+  and `innerspace_batch_status` are marked read-only, while `innerspace_execute`,
+  `innerspace_batch` and `innerspace_load_tools` are not, so the read-only
+  guarantee covers the nine domain tools and not the meta-tools.
+- In `meta_only` mode the nine tools are reachable only through
+  `innerspace_execute`, so a client that allows only read-only tools reaches
+  none of them.
+- Without a host it starts in setup mode and registers only
+  `innerspace_setup_status`, which explains what to set and makes no request.
+- Its categories are `status`, `project`, `floor_plans` and `devices`, for
+  `UNIFI_ENABLED_CATEGORIES` and the `category` filter of `innerspace_tool_index`.
+- Its tool descriptions say that InnerSpace ids are scoped to the InnerSpace
+  tool family and must not be passed to the other servers.
+
+See [InnerSpace permissions](../apps/innerspace/docs/permissions.md#meta-tools-and-read-only-clients).
+
 Standard MCP-only clients remain supported in `eager` mode. In `lazy` and
 `meta_only` modes, `tools/list` is still correct: it reports the tools currently
 registered with the server. The UniFi extension path exposes the larger
@@ -199,6 +221,6 @@ When adopting new MCP spec features:
 - map future standard metadata surfaces to the generated manifest before adding
   new bespoke discovery APIs
 - keep OAuth and remote exposure concerns scoped to relay/cloud deployments;
-  the Network, Protect, and Access servers continue to target local controller
-  access, and the Site Manager server targets only Ubiquiti's fixed
+  the Network, Protect, Access and InnerSpace servers continue to target local
+  console access, and the Site Manager server targets only Ubiquiti's fixed
   `api.ui.com` origin

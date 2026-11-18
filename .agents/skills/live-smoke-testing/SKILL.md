@@ -184,6 +184,9 @@ uv run python scripts/live_smoke.py --server all --phase safe
 # Site Manager (cloud, key-only) — see Procedure B2
 uv run --all-packages python scripts/live_smoke.py --server sitemanager --phase readonly
 
+# InnerSpace (console login, read-only) — see Procedure B3
+uv run --all-packages python scripts/live_smoke.py --server innerspace --phase readonly
+
 # Inventory — prints safety_tier classification for every tool; no live calls
 uv run python scripts/live_smoke.py --server network --phase inventory
 ```
@@ -229,6 +232,31 @@ host, no hardware prerequisite and no support-bundle tool.
 - **Reports** never carry the key, request headers or a traceback: the key is replaced with
   `***REDACTED***` in error text and transport exceptions are recorded by class name only.
 - Account-wide reads are an explicit operator run; never run them from setup validation.
+
+## Procedure B3: InnerSpace Target (`--server innerspace`)
+
+InnerSpace is read through a console login session. It is a registered harness target
+(`--server innerspace`) with no support-bundle tool; `SUPPORT_BUNDLE_SERVERS` stays network,
+protect and access.
+
+- **Prerequisites:** a console with the InnerSpace application installed and running, and a
+  UniFi OS account that can open it. Credentials are `UNIFI_INNERSPACE_HOST`,
+  `UNIFI_INNERSPACE_USERNAME` and `UNIFI_INNERSPACE_PASSWORD` (or the `_FILE` / `_COMMAND`
+  forms). Never `UNIFI_API_KEY`: a console's local key is not used for InnerSpace.
+- **What runs:** the nine domain tools are all read-only. `innerspace_get_status` runs first;
+  when it reports InnerSpace not installed or not running, the other eight reads are recorded
+  as skipped with that reason. The reads that need `plan_id` (`innerspace_list_walls`,
+  `innerspace_list_placed_devices`, `innerspace_get_plan_asset`) take the first id from the
+  `innerspace_list_floor_plans` result of the seed phase, and are skipped only when that list
+  is empty or failed. Never feed them Network, Protect, Access or Site Manager IDs.
+- **Phases:** `readonly` and `safe` run the reads; `preview`, `lifecycle` and `approved` have
+  nothing to run. `--phase support --server innerspace` is unsupported, as for Site Manager.
+- **Evidence:** a run against a console shows what the console accepted at that version; unit
+  tests cannot. Say which kind of evidence you have, and record the controller and InnerSpace
+  versions. Plan geometry, floor plans and device positions describe a building: keep reports
+  out of the repository.
+- **Negative control:** with the InnerSpace application stopped, a read must fail with the fixed
+  "not running" text (HTTP 502 over the API), never as a missing resource.
 
 ## Procedure C: Human-in-the-Loop Mutation Gate
 
