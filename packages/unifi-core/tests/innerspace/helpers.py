@@ -87,8 +87,23 @@ def stored_shape(console, shape_id):
     return next((s for s in console.project["shapes"] if s["id"] == shape_id), None)
 
 
+UUID_SHAPED = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
+
+def script_preview(console, times=1):
+    """Script the reads of ``times`` previews besides the internal project: the app check and the floor plans."""
+    for _ in range(times):
+        console.reply("GET", SYSTEM_PATH, load("system.json"))
+        console.reply("GET", PLANS_PATH, {"floor_plans": floor_plan_rows()})
+
+
 def ready(console, state=None, writes=1):
     """Load the stateful project and script the checks of ``writes`` applies."""
     console.load_project(internal_state() if state is None else state)
     for _ in range(writes):
         console.script_write(floor_plans=floor_plan_rows())
+
+
+def stored_copy(shape_id):
+    """The fixture's stored shape, as the stateful stub serves it."""
+    return deepcopy(next(s for s in internal_state()["shapes"] if s["id"] == shape_id))
