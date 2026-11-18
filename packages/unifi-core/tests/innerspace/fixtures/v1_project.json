@@ -1,0 +1,738 @@
+{
+  "data": {
+    "attenuationObjectTypes": [],
+    "plans": [
+      {
+        "attenuation": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "dcImportId": null,
+        "dcSourceProjectId": null,
+        "id": "00000000-0000-4000-8000-000000000003",
+        "location": null,
+        "ordering": 1,
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "siteId": "00000000-0000-4000-8000-000000000001",
+        "title": "Plan A",
+        "type": "real",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "attenuation": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "dcImportId": null,
+        "dcSourceProjectId": null,
+        "id": "00000000-0000-4000-8000-000000000004",
+        "location": null,
+        "ordering": 2,
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "siteId": "00000000-0000-4000-8000-000000000001",
+        "title": "Plan B",
+        "type": "real",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "attenuation": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "dcImportId": null,
+        "dcSourceProjectId": null,
+        "id": "00000000-0000-4000-8000-000000000005",
+        "location": null,
+        "ordering": 3,
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "siteId": "00000000-0000-4000-8000-000000000001",
+        "title": "Plan C",
+        "type": "real",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "products": [
+      {
+        "app": "network",
+        "category": "wifi",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000006",
+        "isManaged": true,
+        "mount": 3,
+        "released": true,
+        "siteId": "00000000-0000-4000-8000-000000000001",
+        "sku": "SYN-AP-1",
+        "stale": false,
+        "subcategory": "access_point",
+        "title": "Model AP",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "project": {
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "id": "00000000-0000-4000-8000-000000000002",
+      "title": "Project 1",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    "shapes": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000008",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": -100,
+            "y": 100,
+            "z": 0
+          },
+          {
+            "x": 300,
+            "y": 100,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000009",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": 300,
+            "y": 100,
+            "z": 0
+          },
+          {
+            "x": 300,
+            "y": -200,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000010",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": 300,
+            "y": -200,
+            "z": 0
+          },
+          {
+            "x": -100,
+            "y": -200,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000011",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.1",
+          "mac": "00:00:5e:00:53:01"
+        },
+        "mount": "ceiling",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": -3.5,
+            "y": 2.7,
+            "z": -2.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 1",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000012",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.2",
+          "mac": "00:00:5e:00:53:02"
+        },
+        "mount": "ceiling",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": 1.5,
+            "y": 2.7,
+            "z": -1.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 2",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "computedScale": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "defaultHeight": true,
+        "defaultScale": false,
+        "height": 2.7,
+        "id": "00000000-0000-4000-8000-000000000013",
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0
+          },
+          {
+            "x": 100.0,
+            "y": 0.0,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "scale": 100.0,
+        "status": 0,
+        "type": "scale",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "additionalBinUrl": null,
+        "additionalZipUrl": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000014",
+        "imageOffset": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "imageRotation": 0,
+        "imageScale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "opacity": 1.0,
+        "planId": "00000000-0000-4000-8000-000000000003",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rotation": 0,
+        "scale": {
+          "x": 10.0,
+          "y": 8.0,
+          "z": 1
+        },
+        "status": 0,
+        "type": "map",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "urlImage": "/proxy/innerspace/integration/v1/assets/00000000-0000-4000-8000-000000000034/00000000-0000-4000-8000-000000000014.png",
+        "urlModel": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000015",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": -200,
+            "y": 150,
+            "z": 0
+          },
+          {
+            "x": 200,
+            "y": 150,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000016",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": 200,
+            "y": 150,
+            "z": 0
+          },
+          {
+            "x": 200,
+            "y": -150,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000017",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": 200,
+            "y": -150,
+            "z": 0
+          },
+          {
+            "x": -200,
+            "y": -150,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000018",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.3",
+          "mac": "00:00:5e:00:53:03"
+        },
+        "mount": "wall",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": -2.0,
+            "y": 2.5,
+            "z": 1.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 3",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000019",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.4",
+          "mac": "00:00:5e:00:53:04"
+        },
+        "mount": "ceiling",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": 3.0,
+            "y": 2.5,
+            "z": -1.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 4",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "computedScale": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "defaultHeight": true,
+        "defaultScale": false,
+        "height": 2.7,
+        "id": "00000000-0000-4000-8000-000000000020",
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0
+          },
+          {
+            "x": 100.0,
+            "y": 0.0,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "scale": 100.0,
+        "status": 0,
+        "type": "scale",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "additionalBinUrl": null,
+        "additionalZipUrl": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000021",
+        "imageOffset": {
+          "x": 12.5,
+          "y": -7.5,
+          "z": 0
+        },
+        "imageRotation": 0,
+        "imageScale": {
+          "x": 1.784,
+          "y": 1.784,
+          "z": 1
+        },
+        "opacity": 1.0,
+        "planId": "00000000-0000-4000-8000-000000000004",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rotation": 0,
+        "scale": {
+          "x": 10.0,
+          "y": 8.0,
+          "z": 1
+        },
+        "status": 0,
+        "type": "map",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "urlImage": "/proxy/innerspace/integration/v1/assets/00000000-0000-4000-8000-000000000035/00000000-0000-4000-8000-000000000021.png",
+        "urlModel": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000022",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": -100,
+            "y": 100,
+            "z": 0
+          },
+          {
+            "x": 100,
+            "y": 100,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000023",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": 100,
+            "y": 100,
+            "z": 0
+          },
+          {
+            "x": 100,
+            "y": -100,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000024",
+        "originalPosition": null,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": 100,
+            "y": -100,
+            "z": 0
+          },
+          {
+            "x": -100,
+            "y": -100,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "status": 0,
+        "type": "wall",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "variant": "drywall",
+        "wallTypeId": null
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000025",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.5",
+          "mac": "00:00:5e:00:53:05"
+        },
+        "mount": "floor",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 2.7,
+            "z": 0.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 5",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "antenna": null,
+        "childIndex": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000026",
+        "location": null,
+        "meta": {
+          "ip": "192.0.2.6",
+          "mac": "00:00:5e:00:53:06"
+        },
+        "mount": "floor",
+        "optimize": false,
+        "parentId": null,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": 1.0,
+            "y": 2.7,
+            "z": 1.0
+          }
+        ],
+        "productId": "00000000-0000-4000-8000-000000000006",
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rackId": null,
+        "rackOrder": null,
+        "rotation": {
+          "base": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "pov": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        "status": 1,
+        "title": "Device 6",
+        "type": "device",
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "additionalBinUrl": null,
+        "additionalZipUrl": null,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000027",
+        "imageOffset": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "imageRotation": 0,
+        "imageScale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "opacity": 1.0,
+        "planId": "00000000-0000-4000-8000-000000000005",
+        "position": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0
+          }
+        ],
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "rotation": 0,
+        "scale": {
+          "x": 10.0,
+          "y": 8.0,
+          "z": 1
+        },
+        "status": 0,
+        "type": "map",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "urlImage": "/proxy/innerspace/integration/v1/assets/00000000-0000-4000-8000-000000000036/00000000-0000-4000-8000-000000000027.png",
+        "urlModel": null
+      }
+    ],
+    "wallTypes": [
+      {
+        "attenuation": 10,
+        "autoFillEnabled": false,
+        "bottomHeight": null,
+        "color": "#808080",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "00000000-0000-4000-8000-000000000028",
+        "isDeleted": false,
+        "name": "Wall Type 1",
+        "overridesVariant": null,
+        "projectId": "00000000-0000-4000-8000-000000000002",
+        "topHeight": null,
+        "transparent": false,
+        "updatedAt": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+}
