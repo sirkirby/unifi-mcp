@@ -1,13 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { resolveCommand } from "./command.mjs";
 
 const execFileAsync = promisify(execFile);
 
 export const MIN_NODE_MAJOR = 22;
 
+function run(cmd, args, options) {
+  const resolved = resolveCommand(cmd, args);
+  return execFileAsync(resolved.file, resolved.args, { ...options, ...resolved.options });
+}
+
 export async function checkCommand(cmd, args = ["--version"]) {
   try {
-    const { stdout } = await execFileAsync(cmd, args, { timeout: 10_000 });
+    const { stdout } = await run(cmd, args, { timeout: 10_000 });
     const version = stdout.trim().replace(/^v/, "");
     return { available: true, version };
   } catch {
@@ -29,7 +35,7 @@ export async function ensureWrangler() {
 
   console.log("Wrangler not found. Installing...");
   try {
-    await execFileAsync("npm", ["install", "-g", "wrangler"], { timeout: 120_000 });
+    await run("npm", ["install", "-g", "wrangler"], { timeout: 120_000 });
     return true;
   } catch (err) {
     console.error("Failed to install wrangler:", err.message);
@@ -40,7 +46,7 @@ export async function ensureWrangler() {
 
 export async function checkWranglerAuth() {
   try {
-    const { stdout } = await execFileAsync("wrangler", ["whoami"], { timeout: 15_000 });
+    const { stdout } = await run("wrangler", ["whoami"], { timeout: 15_000 });
     if (stdout.includes("not authenticated") || stdout.includes("not logged in")) {
       return false;
     }

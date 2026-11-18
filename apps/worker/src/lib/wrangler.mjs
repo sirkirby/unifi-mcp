@@ -3,8 +3,19 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveCommand } from "./command.mjs";
 
 const execFileAsync = promisify(execFile);
+
+function run(cmd, args, options) {
+  const resolved = resolveCommand(cmd, args);
+  return execFileAsync(resolved.file, resolved.args, { ...options, ...resolved.options });
+}
+
+function start(cmd, args, options) {
+  const resolved = resolveCommand(cmd, args);
+  return spawn(resolved.file, resolved.args, { ...options, ...resolved.options });
+}
 
 function getWorkerDir() {
   const cliDir = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +52,7 @@ export async function deploy(workerName, { customDomain, observability } = {}) {
 
   // Install worker dependencies (including devDependencies — wrangler and
   // @cloudflare/workers-types are devDeps needed for the build step)
-  await execFileAsync("npm", ["install"], {
+  await run("npm", ["install"], {
     cwd: workerDir,
     timeout: 120_000,
   });
@@ -56,7 +67,7 @@ export async function deploy(workerName, { customDomain, observability } = {}) {
 
   try {
     const args = ["deploy", "--name", workerName];
-    const { stdout, stderr } = await execFileAsync("wrangler", args, {
+    const { stdout, stderr } = await run("wrangler", args, {
       cwd: workerDir,
       timeout: 120_000,
     });
@@ -76,7 +87,7 @@ export async function deploy(workerName, { customDomain, observability } = {}) {
 export async function putSecret(workerName, secretName, secretValue) {
   const workerDir = getWorkerDir();
   return new Promise((resolve, reject) => {
-    const child = spawn("wrangler", ["secret", "put", secretName, "--name", workerName], {
+    const child = start("wrangler", ["secret", "put", secretName, "--name", workerName], {
       cwd: workerDir,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -94,7 +105,7 @@ export async function putSecret(workerName, secretName, secretValue) {
 
 export async function deleteWorker(workerName) {
   const workerDir = getWorkerDir();
-  await execFileAsync("wrangler", ["delete", "--name", workerName, "--force"], {
+  await run("wrangler", ["delete", "--name", workerName, "--force"], {
     cwd: workerDir,
     timeout: 30_000,
   });
@@ -102,7 +113,7 @@ export async function deleteWorker(workerName) {
 
 export async function login() {
   return new Promise((resolve, reject) => {
-    const child = spawn("wrangler", ["login"], { stdio: "inherit" });
+    const child = start("wrangler", ["login"], { stdio: "inherit" });
     child.on("close", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`wrangler login exited with code ${code}`));
