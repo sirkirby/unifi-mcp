@@ -1,0 +1,99 @@
+"""The InnerSpace app status manager: parsing, malformed bodies and refused sessions."""
+
+import json
+from pathlib import Path
+
+import pytest
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiPermissionError
+from unifi_core.innerspace.managers.connection_manager import SYSTEM_PATH, InnerSpaceUnavailableError
+from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
+
+from tests.innerspace.conftest import ACCESS_DENIED
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _system() -> dict:
+    return json.loads((FIXTURES / "system.json").read_text())
+
+
+async def test_get_status_from_fixture(connected, console):
+    console.reply("GET", SYSTEM_PATH, _system())
+
+    status = await InnerSpaceSystemManager(connected).get_status()
+
+    assert (status.installed, status.running, status.version, status.update_available) == (True, True, "1.4.3", None)
+
+
+async def test_get_status_reports_update_available(connected, console):
+    system = _system()
+    system["apps"]["controllers"][0]["updateAvailable"] = "1.5.0"
+    console.reply("GET", SYSTEM_PATH, system)
+
+    status = await InnerSpaceSystemManager(connected).get_status()
+
+    assert status.update_available == "1.5.0"
+
+
+async def test_entry_absent_is_not_installed(connected, console):
+    system = _system()
+    del system["apps"]["controllers"][0]
+    console.reply("GET", SYSTEM_PATH, system)
+
+    status = await InnerSpaceSystemManager(connected).get_status()
+
+    assert (status.installed, status.running, status.version) == (False, False, None)
+
+
+async def test_missing_is_running_is_not_running(connected, console):
+    system = _system()
+    del system["apps"]["controllers"][0]["isRunning"]
+    console.reply("GET", SYSTEM_PATH, system)
+
+    status = await InnerSpaceSystemManager(connected).get_status()
+
+    assert (status.installed, status.running) == (True, False)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"apps": {}},
+        {"apps": {"controllers": None}},
+        {"apps": {"controllers": {}}},
+        {"apps": {"controllers": "innerspace"}},
+        {"apps": []},
+        [],
+    ],
+)
+async def test_unreadable_controller_list_is_malformed(connected, console, payload):
+    console.reply("GET", SYSTEM_PATH, payload)
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await InnerSpaceSystemManager(connected).get_status()
+
+
+async def test_non_json_body_is_malformed(connected, console):
+    console.reply("GET", SYSTEM_PATH, body_bytes=b"<html>not json</html>")
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await InnerSpaceSystemManager(connected).get_status()
+
+
+async def test_system_auth_errors(connected, console):
+    # 403 errors.api.access: one re-login, then the same refusal is a permission error.
+    console.reply("GET", SYSTEM_PATH, ACCESS_DENIED, status=403)
+    console.reply("GET", SYSTEM_PATH, ACCESS_DENIED, status=403)
+    with pytest.raises(UniFiPermissionError) as refused:
+        await InnerSpaceSystemManager(connected).get_status()
+    assert console.logins == 2
+    assert len(console.calls("GET", SYSTEM_PATH)) == 2
+    assert "not installed" not in str(refused.value).lower()
+
+    # 401 right after a fresh login: the session is dropped and the app is unavailable.
+    console.reply("GET", SYSTEM_PATH, ACCESS_DENIED, status=403)
+    console.reply("GET", SYSTEM_PATH, status=401)
+    with pytest.raises(InnerSpaceUnavailableError) as unavailable:
+        await InnerSpaceSystemManager(connected).get_status()
+    assert "not installed" not in str(unavailable.value).lower()
