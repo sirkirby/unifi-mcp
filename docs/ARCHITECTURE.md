@@ -40,7 +40,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
 | `event_timeline.py` | Legacy timeline shape, with a projection from evidence records |
 | `sitemanager/` | Site Manager cloud client, managers and models; the fixed `https://api.ui.com` origin lives in `sitemanager/managers/connection_manager.py` |
-| `innerspace/` | InnerSpace client, managers and models; reads under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py` |
+| `innerspace/` | InnerSpace client, managers and models; reads and layout writes under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py`, the shared write layer (app check, write lock, no replay, read-back) is `innerspace/managers/_writes.py`, and plan-frame conversion for writes is `innerspace/frames.py` |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/api`.
 

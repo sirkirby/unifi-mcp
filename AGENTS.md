@@ -140,12 +140,30 @@ Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authe
 InnerSpace is a separate UniFi OS application under `/proxy/innerspace/` with its own routes and ID family; the Network surface rules above do not apply to it.
 
 - InnerSpace uses the console session only (login on `/api/auth/login`, the `TOKEN` cookie plus its CSRF token). A console's local API key MUST NOT be used for InnerSpace. Do not add the Site Manager cloud-connector key path without its own credential isolation rules.
-- The session client sends only the routes in its route allowlist (`_LOG_ROUTES`). Reads use the documented integration API (`/proxy/innerspace/integration/v1`); the only internal route is the project's display unit. Any other internal route is **banned** until it is added to the allowlist and to this rule.
+- The session client sends only the routes in its route allowlist (`_LOG_ROUTES`), each with the methods listed for it and only from the call that owns it; anything else is refused before sending, including another method on a listed route. The full list:
+  - session code only: `POST /api/auth/login`, `POST /api/auth/logout`;
+  - `GET /api/system` (whether InnerSpace is installed and running);
+  - the documented integration API (`/proxy/innerspace/integration/v1`), `GET` only: `/project`, `/floor_plans`, `/access_points`, `/switches`, `/inventory`, and `/assets/{folder}/{file}` (the plan image, through `request_bytes` only);
+  - the internal routes (`/proxy/innerspace/api`): `GET /project` (the display unit, and the state a write builds on and reads back); `PATCH /project` (unit); `POST /shape/change` in 2D mode (walls, attenuation objects, the plan's scale shape); `POST /project/wall-type` and `POST /project/attenuation-object-type` (create and update); `PATCH /project/plan/{plan_id}` (title or attenuation); `PATCH /project/plan/order`.
+  Any other route or method is **banned** until it is added to the allowlist and to this rule; that includes plan create and delete, map replacement, image upload and `site-migration`.
 - InnerSpace IDs are scoped to the InnerSpace tool family: never pass them to other products' tools or translate between them. Caller-supplied IDs placed in a path MUST pass through `object_id`; a plan image is fetched only from that plan's own `image_url`, never from a caller-supplied filename.
 - Whether InnerSpace is installed and running comes only from the `/api/system` application list, never from a 403 or a 404.
 - The HTTP session MUST NOT follow redirects or honor proxy environment variables.
 - Errors are built from fixed text, the HTTP status and a pattern-checked `errors.*` code, never the response body, console address, request path or exception text. Logs carry the operation, a route template and the exception class.
 - **Anchor:** `packages/unifi-core/src/unifi_core/innerspace/managers/connection_manager.py`
+
+### InnerSpace writes
+
+Layout writes go through the shared write layer in `unifi_core/innerspace/managers/_writes.py`: a `preview_*` method that only reads, and an `apply_*` method that re-reads, writes and verifies by reading back.
+
+- `preview_*` and `apply_*` refuse unless `/api/system` (read uncached) reports InnerSpace installed and running.
+- `apply_*` holds the connection manager's `write_lock` from its first read to its read-back; previews never take it. Servers also run confirmed writes through the operation gate. Neither coordinates other processes or the browser editor: re-read before writing, refuse a shape that changed type or plan or is gone, and state the remaining race in the tool's docstring.
+- No replay: writes call `request(..., replay=False)`. A refused session is renewed without resending; a lost answer is `mutation_applied: None`, never a resend. Only the read-back decides whether a write applied.
+- Send whole stored objects from a fresh read, never partial objects or bare ids; a request equal to the stored state sends nothing.
+- New ids are deterministic (`uuid5` of the tool, its canonical arguments and the batch index) and made in `apply_*` only, so a retry finds its own create and sends nothing.
+- No request body carries a `map` shape; only the plan scale write carries a `scale` shape.
+- Never log or return a write's reply body; read back instead.
+- **Anchor:** `packages/unifi-core/src/unifi_core/innerspace/managers/_writes.py`
 
 ### Authentication routing golden path
 
