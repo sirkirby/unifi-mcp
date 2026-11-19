@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aiounifi.errors import Forbidden, RequestError, ResponseError
 from unifi_core.network import stats_series
-from unifi_core.network.managers.stats_manager import StatsManager
+from unifi_core.network.managers.stats_manager import AnomaliesUnavailableError, StatsManager
 
 HOUR = 3_600_000
 END = 1_790_002_800_000  # on an hour boundary
@@ -438,3 +438,44 @@ async def test_a_failing_site_history_is_not_hidden_behind_the_empty_archive() -
 
     with pytest.raises(RequestError):
         await manager.get_speedtest_results(duration_hours=24)
+
+
+# --- anomalies ------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [["MODERN"], Forbidden("403")], ids=["modern", "forbidden_engine"])
+async def test_network_11_empty_anomalies_are_unavailable_not_an_empty_success(source: Any) -> None:
+    """Network 11 answers the legacy endpoint with no rows and serves anomalies nowhere else."""
+    manager, connection = _manager({"/stat/anomalies": [], "/source": source})
+
+    with pytest.raises(AnomaliesUnavailableError, match="Network 11"):
+        await manager.get_anomalies(duration_hours=24)
+    cached = [call[0][0] for call in connection._update_cache.call_args_list]
+    assert not [key for key in cached if key.startswith("stats_anomalies")]
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_controller_with_no_anomalies_returns_an_empty_list() -> None:
+    manager, connection = _manager({"/stat/anomalies": [], "/source": NOT_FOUND})
+
+    assert await manager.get_anomalies(duration_hours=24) == []
+    assert _paths(connection) == ["/stat/anomalies", "/source"]
+
+
+@pytest.mark.asyncio
+async def test_failed_probe_with_no_anomalies_is_a_retryable_error_not_cached() -> None:
+    manager, connection = _manager({"/stat/anomalies": [], "/source": RequestError("timeout")})
+
+    with pytest.raises(RequestError, match="Retry"):
+        await manager.get_anomalies(duration_hours=24)
+    connection._update_cache.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_anomalies_the_legacy_endpoint_returns_are_kept_without_probing() -> None:
+    anomalies = [{"anomaly": "USER_LOW_PHY_RATE", "time": END - HOUR}]
+    manager, connection = _manager({"/stat/anomalies": anomalies, "/source": ["MODERN"]})
+
+    assert await manager.get_anomalies(duration_hours=24) == anomalies
+    assert _paths(connection) == ["/stat/anomalies"]
