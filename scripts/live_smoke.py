@@ -142,6 +142,8 @@ KNOWN_CONTROLLER_ISSUE_READS = {
 
 KNOWN_CONTROLLER_ISSUE_MARKERS = {
     "access_get_activity_summary": ("CODE_SYSTEM_ERROR", r"API code -3\b"),
+    # Network 11 no longer serves anomalies; the tool says so instead of an empty success.
+    "unifi_get_anomalies": (r"Anomalies are unavailable on this controller",),
     "unifi_create_firewall_policy": (
         "FirewallPolicyCreateRespondTrafficPolicyNotAllowed",
         "Firewall policy create respond traffic not allowed",
