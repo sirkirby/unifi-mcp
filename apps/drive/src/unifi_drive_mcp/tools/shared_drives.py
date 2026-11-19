@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
     name="drive_list_shared_drives",
     description=(
         "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and "
-        "remote-backup flags. These IDs are scoped to the UniFi Drive tool family; do not pass them to "
-        "other products' tools."
+        "remote-backup flags. These IDs are scoped to the UniFi Drive tool family; pass them as "
+        "shared_drives[].id to the drive_*_nfs_connection tools, not to other products' tools."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="shared_drive",

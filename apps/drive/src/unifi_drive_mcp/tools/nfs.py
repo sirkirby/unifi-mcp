@@ -3,8 +3,13 @@
 Drive stores every NFS client in one list and its API replaces the list as a
 whole. Each tool here reads the list, changes one client and writes the list
 back with every other client unchanged. A confirmed write plans again from
-fresh state under the manager's NFS lock, so concurrent writes run one after
-the other instead of dropping each other's clients.
+fresh state under the manager's NFS lock, so concurrent writes from this server
+run one after the other instead of dropping each other's clients.
+
+The lock only covers this process. Drive keeps no version on the list, so a
+write from another process (a second MCP server, or the API server, pointed at
+the same NAS) that lands between the last re-read and the ``PUT`` is
+overwritten without either call reporting it.
 """
 
 import logging
@@ -23,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 _GRANTS = TypeAdapter(List[NfsSharedDriveAccess])
 
-_SHARED_DRIVES_DESCRIPTION = (
+_ADD_SHARED_DRIVES_DESCRIPTION = (
     'Shared drives the client may mount, e.g. [{"id": "<shared drive id>", "permission": "rw"}]. '
     "permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives."
+)
+_UPDATE_SHARED_DRIVES_DESCRIPTION = (
+    'The client\'s new shared drive list, e.g. [{"id": "<shared drive id>", "permission": "ro"}]. It replaces '
+    "the whole list. A drive the client already has keeps its current permission when permission is left "
+    "out; a newly granted drive defaults to rw. IDs come from drive_list_shared_drives."
 )
 
 
@@ -80,7 +90,7 @@ async def drive_list_nfs_connections() -> Dict[str, Any]:
 )
 async def drive_add_nfs_connection(
     client: Annotated[str, Field(description="Client IP address or hostname allowed to mount")],
-    shared_drives: Annotated[List[Dict[str, Any]], Field(description=_SHARED_DRIVES_DESCRIPTION)],
+    shared_drives: Annotated[List[NfsSharedDriveAccess], Field(description=_ADD_SHARED_DRIVES_DESCRIPTION)],
     async_writes: Annotated[
         bool, Field(description="Use async writes: faster, but writes can be lost on a NAS power loss (default false)")
     ] = False,
@@ -124,7 +134,9 @@ async def drive_add_nfs_connection(
 )
 async def drive_update_nfs_connection(
     client: Annotated[str, Field(description="The client's IP address or hostname, as listed")],
-    shared_drives: Annotated[Optional[List[Dict[str, Any]]], Field(description=_SHARED_DRIVES_DESCRIPTION)] = None,
+    shared_drives: Annotated[
+        Optional[List[NfsSharedDriveAccess]], Field(description=_UPDATE_SHARED_DRIVES_DESCRIPTION)
+    ] = None,
     async_writes: Annotated[Optional[bool], Field(description="Use async writes")] = None,
     confirm: Annotated[
         bool, Field(description="When true, saves the change. When false (default), returns a preview.")
