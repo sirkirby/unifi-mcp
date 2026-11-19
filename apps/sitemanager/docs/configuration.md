@@ -96,12 +96,13 @@ Stdio is the default. To serve HTTP:
 | `UNIFI_MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host headers the server accepts, comma-separated (for a reverse proxy) |
 | `UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION` | `true` | Check the Host header against `UNIFI_MCP_ALLOWED_HOSTS` |
 | `UNIFI_MCP_HTTP_FORCE` | `false` | Serve HTTP from a process that is not PID 1 (local development only) |
+| `UNIFI_MCP_STDIO_ENABLED` | `true` | Set `false` to serve HTTP alone from a process that is not PID 1 (an init-managed container or a service manager); needs `UNIFI_MCP_HTTP_ENABLED=true` and `UNIFI_MCP_HTTP_FORCE=true` |
 
 Anyone who can reach the HTTP endpoint can read the whole account's inventory. Keep it on loopback or set an auth token.
 
 The auth token is resolved in this order: `UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN`, then `UNIFI_MCP_HTTP_AUTH_TOKEN`, then `server.http.auth_token` in a `CONFIG_PATH` file. Both variables accept the `_FILE` and `_COMMAND` forms. A token variable that is set but empty refuses startup rather than turning authentication off, and so does a token shorter than 32 characters or one holding whitespace or non-printable characters.
 
-HTTP binds only in the container's main process (PID 1). A server started any other way with `UNIFI_MCP_HTTP_ENABLED=true` logs that HTTP was skipped and serves stdio only, unless `UNIFI_MCP_HTTP_FORCE=true`. Never set either variable in a client's MCP entry.
+HTTP binds only in the container's main process (PID 1). A server started any other way with `UNIFI_MCP_HTTP_ENABLED=true` logs that HTTP was skipped and serves stdio only, unless `UNIFI_MCP_HTTP_FORCE=true`. Outside PID 1, stdio stays the primary transport; `UNIFI_MCP_STDIO_ENABLED=false` serves HTTP alone. Never set these variables in a client's MCP entry.
 
 In Docker, the `unifi-sitemanager-mcp` service in `docker/docker-compose.yml` is in the opt-in `sitemanager` profile. It listens on `0.0.0.0:3003` inside the container and is published only on `127.0.0.1:3003` on the host. Other containers on the Compose network can reach it, so set a token before relying on it.
 

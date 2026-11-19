@@ -163,7 +163,7 @@ Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authe
 
 ### Plugin Bundles
 
-- Plugin MCP configs launch the server over stdio only. Never set `UNIFI_MCP_HTTP_ENABLED` or `UNIFI_MCP_HTTP_FORCE` in a plugin, and keep `http.force` defaulting to `false` in every app `config.yaml`: forcing HTTP binds a listener from client-launched (non-PID-1) processes.
+- Plugin MCP configs launch the server over stdio only. Never set `UNIFI_MCP_HTTP_ENABLED`, `UNIFI_MCP_HTTP_FORCE` or `UNIFI_MCP_STDIO_ENABLED` in a plugin, and keep `http.force` defaulting to `false` in every app `config.yaml`: forcing HTTP binds a listener from client-launched (non-PID-1) processes.
 - Shell scripts under `plugins/` MUST run on macOS `/bin/bash` 3.2 (no `declare -A`, `mapfile` or `readarray`). Setup scripts ship a PowerShell equivalent for Windows.
 - Declare Claude Code's MCP server inline in `.claude-plugin/plugin.json`; Codex and OpenClaw run `.mcp.codex.json`. Never ship a root `.mcp.json`: OpenClaw merges it into the server it runs, and its `${user_config.*}` templates arrive as literal values.
 - Plugin skill directory names MUST be unique across all bundles and distinct from `.agents/skills/` names: standalone skill installers place skills in one flat directory.

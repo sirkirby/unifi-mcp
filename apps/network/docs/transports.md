@@ -169,3 +169,4 @@ Configure authentication and TLS on Nginx, Cloudflare, or the Kubernetes ingress
 - **HTTP** should only be enabled in local development, behind authenticated reverse proxies, or with the [bearer token](#http-bearer-token) set and carried over TLS
 - Leave HTTP disabled in production unless you understand the security implications
 - HTTP starts for PID 1 only when explicitly enabled; use `UNIFI_MCP_HTTP_FORCE=true` for an opted-in local non-container process.
+- Outside PID 1, stdio stays the primary transport and its exit stops HTTP. A service whose stdin is empty (an init-managed container, a service manager) sets `UNIFI_MCP_STDIO_ENABLED=false` with `UNIFI_MCP_HTTP_ENABLED=true` and `UNIFI_MCP_HTTP_FORCE=true` to serve HTTP alone. Never set it in a client's MCP entry.

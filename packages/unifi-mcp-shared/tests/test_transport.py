@@ -102,6 +102,51 @@ class TestRunTransports:
         assert mock_server.run_sse_async.await_count == expected_sse
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("stdio_setting", "expected_stdio", "expected_http"),
+        [
+            ("false", 0, 1),
+            ("FALSE", 0, 1),
+            ("true", 1, 1),
+            ("", 1, 1),
+        ],
+    )
+    async def test_stdio_setting_outside_pid1(
+        self, mock_server, monkeypatch, stdio_setting, expected_stdio, expected_http
+    ):
+        """Turning stdio off serves HTTP alone without the server being PID 1; empty counts as unset."""
+        monkeypatch.setenv("UNIFI_MCP_STDIO_ENABLED", stdio_setting)
+        with patch("unifi_mcp_shared.transport.os.getpid", return_value=12345):
+            await run_transports(
+                server=mock_server,
+                http_enabled=True,
+                host="127.0.0.1",
+                port=3000,
+                http_transport="streamable-http",
+                logger=logging.getLogger("test"),
+            )
+        assert mock_server.run_stdio_async.await_count == expected_stdio
+        assert mock_server.run_streamable_http_async.await_count == expected_http
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("pid", [1, 12345])
+    async def test_stdio_off_without_http_refuses_startup(self, mock_server, monkeypatch, caplog, pid):
+        monkeypatch.setenv("UNIFI_MCP_STDIO_ENABLED", "false")
+        with patch("unifi_mcp_shared.transport.os.getpid", return_value=pid), pytest.raises(SystemExit) as exc:
+            await run_transports(
+                server=mock_server,
+                http_enabled=False,
+                host="127.0.0.1",
+                port=3000,
+                http_transport="streamable-http",
+                logger=logging.getLogger("test"),
+            )
+        assert exc.value.code == 2
+        assert "UNIFI_MCP_HTTP_ENABLED=true" in caplog.text
+        mock_server.run_stdio_async.assert_not_awaited()
+        mock_server.run_streamable_http_async.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_pid1_http_error_logged_not_raised(self, mock_server, caplog):
         """HTTP errors are logged but don't crash in PID 1 mode (matches dual-transport behaviour)."""
         mock_server.run_streamable_http_async.side_effect = RuntimeError("bind failed")
