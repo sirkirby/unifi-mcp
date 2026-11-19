@@ -99,6 +99,15 @@ _STATS_SOURCE_UNKNOWN = (
 )
 _STATS_SOURCE_FORBIDDEN = "FORBIDDEN"
 _STATS_SOURCE_LEGACY = "LEGACY"
+_ANOMALIES_UNAVAILABLE = (
+    "Anomalies are unavailable on this controller: Network 11 answers the legacy /stat/anomalies "
+    "endpoint with no rows and has no known replacement, so an empty list would not mean that none "
+    "were detected."
+)
+_ANOMALIES_SOURCE_UNKNOWN = (
+    "The legacy anomalies endpoint returned nothing, and the check for Network 11, which no longer "
+    "serves anomalies, failed, so the empty answer may not mean none were detected. Retry the call."
+)
 
 
 class StatsPermissionError(RequestError):
@@ -106,6 +115,13 @@ class StatsPermissionError(RequestError):
 
     def __init__(self) -> None:
         super().__init__(_STATS_FORBIDDEN)
+
+
+class AnomaliesUnavailableError(RequestError):
+    """Network 11 no longer serves anomalies, so an empty read cannot mean none were detected."""
+
+    def __init__(self) -> None:
+        super().__init__(_ANOMALIES_UNAVAILABLE)
 
 
 class StatsWindowError(ValueError):
@@ -1412,8 +1428,17 @@ class StatsManager:
     async def get_anomalies(self, duration_hours: int = 24) -> List[Dict[str, Any]]:
         """Get detected anomalies.
 
+        Network 11 answers ``/stat/anomalies`` with an empty list while its APs
+        keep detecting anomalies, and exposes no known replacement. An empty answer
+        from a controller on the Network 11 statistics engine is therefore
+        reported as unavailable, and one whose engine check failed as retryable,
+        rather than as no anomalies.
+
         Args:
             duration_hours: Number of hours to look back.
+
+        Raises:
+            AnomaliesUnavailableError: The controller is on Network 11.
         """
         cache_key = f"{CACHE_PREFIX_STATS_ANOMALIES}_{duration_hours}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
@@ -1432,8 +1457,18 @@ class StatsManager:
             api_request = ApiRequest(method="post", path=endpoint, data=payload)
             response = await self._connection.request(api_request)
             result = response if isinstance(response, list) else []
+            if not result:
+                source = await self._stats_source()
+                # A refused engine check still proves the engine exists, so this is Network 11 too.
+                if source in (stats_series.STATS_SOURCE_MODERN, _STATS_SOURCE_FORBIDDEN):
+                    raise AnomaliesUnavailableError()
+                if source is None:
+                    raise RequestError(_ANOMALIES_SOURCE_UNKNOWN)
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
+        except AnomaliesUnavailableError:
+            logger.info("Anomalies are unavailable from this Network 11 controller")
+            raise
         except Exception as e:
             logger.error("Error getting anomalies: %s", e)
             raise
