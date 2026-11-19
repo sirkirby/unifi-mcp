@@ -27,6 +27,10 @@ if TYPE_CHECKING:
     from mcp.server.mcpserver import MCPServer
     from starlette.types import ASGIApp, Receive, Scope, Send
 
+# Set to false to serve HTTP alone from a process that is not PID 1 (an
+# init-managed container, a service manager). Empty counts as unset.
+STDIO_ENABLED_ENV = "UNIFI_MCP_STDIO_ENABLED"
+
 VALID_HTTP_TRANSPORTS = {"streamable-http", "sse"}
 _TRANSPORT_LABELS = {"streamable-http": "Streamable HTTP", "sse": "HTTP SSE"}
 
@@ -234,7 +238,7 @@ async def run_transports(
     logger: logging.Logger,
     auth_token: str | None = None,
 ) -> None:
-    """Run stdio (always) and optionally HTTP, with stdio as the primary.
+    """Run stdio and optionally HTTP, with stdio as the primary.
 
     Stdio is the primary transport — Claude Code (and any other stdio MCP
     client) talks to the server over it.  HTTP, when enabled, is a side
@@ -248,7 +252,22 @@ async def run_transports(
     When ``auth_token`` is set (see :func:`resolve_http_auth_token`), every HTTP
     request must carry it as ``Authorization: Bearer <token>``; stdio is
     unaffected.
+
+    The main process of a container (PID 1) has no stdio client and runs HTTP
+    alone. ``UNIFI_MCP_STDIO_ENABLED=false`` takes the same HTTP-only path for
+    any process; it needs HTTP to be enabled, or startup is refused because
+    nothing would serve.
     """
+
+    stdio_enabled = parse_config_bool(os.environ.get(STDIO_ENABLED_ENV) or None, default=True)
+    if not stdio_enabled and not http_enabled:
+        logger.error(
+            "%s=false turns stdio off, but HTTP is not enabled, so nothing would serve. "
+            "Set UNIFI_MCP_HTTP_ENABLED=true, plus UNIFI_MCP_HTTP_FORCE=true when the server is not "
+            "a container's main process (PID 1). Refusing to start.",
+            STDIO_ENABLED_ENV,
+        )
+        raise SystemExit(2)
 
     async def run_stdio() -> None:
         logger.info("Starting FastMCP stdio server ...")
@@ -310,10 +329,13 @@ async def run_transports(
 
     # When running as PID 1 (Docker container main process), stdin has no
     # client — stdio would exit immediately via EOF and cancel the HTTP
-    # transport.  Run HTTP-only in this case.
+    # transport.  Run HTTP-only in this case, or when stdio is turned off.
     is_main_container_process = os.getpid() == 1
-    if is_main_container_process:
-        logger.info("Container main process (PID 1): running %s transport only.", transport_label)
+    if is_main_container_process or not stdio_enabled:
+        if is_main_container_process:
+            logger.info("Container main process (PID 1): running %s transport only.", transport_label)
+        else:
+            logger.info("%s=false: running %s transport only.", STDIO_ENABLED_ENV, transport_label)
         try:
             await run_http()
             logger.info("FastMCP %s server exited.", transport_label)
