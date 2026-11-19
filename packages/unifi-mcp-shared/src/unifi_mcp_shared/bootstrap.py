@@ -647,6 +647,7 @@ def load_server_config(
     env_prefix: str,
     keys: Sequence[str] = ("host", "username", "password", "port", "site", "verify_ssl", "api_key"),
     logger: logging.Logger,
+    isolated_keys: Sequence[str] = (),
 ):
     """Load YAML config with environment variable substitution.
 
@@ -668,6 +669,10 @@ def load_server_config(
                     (e.g. ``"NETWORK"``, ``"PROTECT"``, ``"ACCESS"``).
         keys: Tuple of config keys to merge from env vars.
         logger: Logger instance for status messages.
+        isolated_keys: Keys read from the server-specific variable only, never
+                       from the shared ``UNIFI_<KEY>``. Use it for a server whose
+                       console is not the gateway, so the gateway's host and
+                       credentials are never sent to it.
 
     Returns:
         An OmegaConf config object.
@@ -710,7 +715,7 @@ def load_server_config(
     # Merge env vars: server-specific (e.g. UNIFI_NETWORK_HOST) > shared (UNIFI_HOST)
     unifi_env_overrides: dict[str, Any] = {}
     for key in keys:
-        val = resolve_env(key, env_prefix=env_prefix, logger=logger)
+        val = resolve_env(key, env_prefix=env_prefix, logger=logger, shared_fallback=key not in isolated_keys)
         if val is not None:
             if key == "verify_ssl":
                 val = val.lower() in {"1", "true", "yes"}
