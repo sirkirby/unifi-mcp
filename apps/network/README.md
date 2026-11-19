@@ -128,7 +128,7 @@ UNIFI_NETWORK_HOST=192.168.1.1      # Controller IP or hostname
 UNIFI_NETWORK_USERNAME=admin         # Local admin username
 UNIFI_NETWORK_PASSWORD=your-password # Admin password
 # Optional:
-# UNIFI_NETWORK_API_KEY=             # UniFi API key (inventory and explicit Integration API tools)
+# UNIFI_NETWORK_API_KEY=             # UniFi API key (read tools and explicit Integration API tools)
 # UNIFI_NETWORK_PORT=443             # Controller HTTPS port
 # UNIFI_NETWORK_SITE=default         # UniFi site name
 # UNIFI_NETWORK_VERIFY_SSL=false     # SSL certificate verification
@@ -142,13 +142,16 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 
 ### API-key inventory and session authentication
 
-Configure `UNIFI_NETWORK_API_KEY` without a username/password for device,
-active-client, network, and WLAN lists. The same tools select the available
+Configure `UNIFI_NETWORK_API_KEY` without a username/password for read tools
+that discovery marks `either`: device, client, network, and WLAN inventory, site
+settings, system information, routing, user groups, vouchers, VPN configuration,
+and the V2 rule lists (firewall policies and zones, NAT, ACL, QoS, DNS, content
+filtering, traffic routes, client groups). The same tools select the available
 read path; no duplicate API-key tools are needed. When valid session credentials
 are also configured, the existing session path remains preferred.
 
-On controllers accepting API keys on legacy inventory endpoints, the usual IDs
-and fields are preserved. This was verified on Network 10.6.106 with a UniFi OS
+On controllers accepting API keys on legacy endpoints, the usual IDs and fields
+are preserved. This was verified on Network 10.6.106 and 11.1 with a UniFi OS
 proxy; the minimum supported firmware is not established. Other controllers
 can use the public Integration inventory fallback when that API is available.
 Public inventory has narrower fields and network coverage (for example, WAN/VPN
@@ -158,10 +161,11 @@ these UUIDs to legacy details/update tools. Missing legacy fields are unknown.
 API GraphQL projections therefore allow null for unavailable enabled, wired,
 and guest flags; clients must handle those nulls.
 
-Historical clients (`include_offline=true`), full details, legacy mutations,
-and the Network websocket still require their supported legacy/session paths.
-API-key legacy transport is restricted to verified inventory GET requests;
-successful reads do not imply permission to write. Explicit Integration tools
+Historical clients (`include_offline=true`), full client details, reads the
+controller serves through POST (events, anomalies, client sessions, statistics
+reports), legacy mutations, and the Network websocket still require their
+supported legacy/session paths. API-key legacy transport is restricted to
+verified GET requests; successful reads do not imply permission to write. Explicit Integration tools
 such as DPI lookup and firewall ordering retain their own API-key contracts
 (legacy zone-ID resolution also needs a session). Protect still requires session
 bootstrap, with an additional API key for public setters; Access retains its

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_client_groups",
+    auth="either",
     description="List client groups (network member groups). "
     "Groups organize devices by MAC address for use in OON policies and firewall rules.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
@@ -57,6 +58,7 @@ async def list_client_groups() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_client_group_details",
+    auth="either",
     description="Get detailed configuration for a specific client group by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

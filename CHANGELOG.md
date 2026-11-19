@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-19 — unifi-network 1.12.1
+
+- The setup skill describes API-key-only Network access as verified reads (inventory, settings, system information and rule lists); mutations, events, statistics reports and full client details still need a username and password.
+
+
 ## 2026-11-17 — unifi-network 1.12.0
 
 - Pins `unifi-network-mcp` [0.48.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.48.0).

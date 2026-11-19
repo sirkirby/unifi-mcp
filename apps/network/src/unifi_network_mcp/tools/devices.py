@@ -135,6 +135,7 @@ async def list_devices(
 
 @server.tool(
     name="unifi_get_device_details",
+    auth="either",
     description=(
         "Returns device data for one device by MAC address. By default (summary=false) returns the "
         "full raw device object — all controller-reported fields including radio tables, port tables, "
@@ -402,6 +403,7 @@ RADIO_BAND_LABELS = {"ng": "2.4GHz", "na": "5GHz", "6e": "6GHz", "wifi6e": "6GHz
 
 @server.tool(
     name="unifi_get_device_radio",
+    auth="either",
     description=(
         "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Returns per-band config (channel, tx_power, channel width, min_rssi) "
@@ -1235,6 +1237,7 @@ async def set_site_leds(
 
 @server.tool(
     name="unifi_get_pdu_outlets",
+    auth="either",
     description=(
         "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). "
         "Combines the device's sensed outlet_table (live relay_state, cycle_enabled, "

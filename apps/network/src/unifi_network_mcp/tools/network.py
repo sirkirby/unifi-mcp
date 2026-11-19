@@ -155,6 +155,7 @@ async def list_networks(
 
 @server.tool(
     name="unifi_get_network_details",
+    auth="either",
     description=(
         "Get details for a specific network by ID. By default (summary=false) returns the full raw "
         "network configuration. Set summary=true to trim to selected sections via include "
@@ -816,6 +817,7 @@ async def list_wlans(
 
 @server.tool(
     name="unifi_get_wlan_details",
+    auth="either",
     description="Get details for a specific WLAN by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -1244,6 +1246,7 @@ async def toggle_wlan(
 
 @server.tool(
     name="unifi_list_ap_groups",
+    auth="either",
     description=(
         "List all AP groups configured on the controller. "
         "AP groups control which access points broadcast which SSIDs. "
@@ -1269,6 +1272,7 @@ async def list_ap_groups() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_ap_group_details",
+    auth="either",
     description="Get details of a specific AP group by ID, including member APs and WLANs.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

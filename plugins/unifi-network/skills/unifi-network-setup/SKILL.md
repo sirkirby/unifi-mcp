@@ -64,8 +64,8 @@ Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168
 ## Step 2: Credentials
 
 Ask which authentication path the user needs:
-- API key only for supported device, client, network, and WLAN inventory plus
-  API-key-only Integration API lookups
+- API key only for supported read tools (inventory, settings, system
+  information, and rule lists) plus API-key-only Integration API lookups
 - Local username and password for legacy and session-backed tool families
 - Both for the widest tool coverage and independently usable API-key reads if
   the session fails
@@ -132,9 +132,9 @@ see above.
 
 ### Optional API Key
 
-Explain that UniFi API-key support is limited to inventory reads and explicit
-Integration API tools; legacy mutations and full details may still require a local
-username and password provider. If selected, configure only an API-key file or
+Explain that UniFi API-key support is limited to verified reads and explicit
+Integration API tools; mutations, events, statistics reports, and full client
+details still require a local username and password provider. If selected, configure only an API-key file or
 command provider, never the raw key.
 
 ## Step 3: Optional Settings

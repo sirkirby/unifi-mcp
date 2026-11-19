@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_acl_rules",
+    auth="either",
     description="List MAC ACL rules (Policy Engine) for Layer 2 access control. "
     "These rules control which devices can communicate at Layer 2 within a VLAN.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
@@ -72,6 +73,7 @@ async def list_acl_rules(
 
 @server.tool(
     name="unifi_get_acl_rule_details",
+    auth="either",
     description="Get detailed configuration for a specific MAC ACL rule by ID. "
     "Returns the same field names as unifi_list_acl_rules.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),

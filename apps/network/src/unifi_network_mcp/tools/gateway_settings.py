@@ -80,6 +80,7 @@ SECURITY_SENSITIVE_FIELDS: frozenset[str] = frozenset(
 
 @server.tool(
     name="unifi_get_gateway_settings",
+    auth="either",
     description="Get the gateway (USG) settings: security (GeoIP filtering, SYN cookies, ICMP "
     "redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS clamp), connection-tracking ALG "
     "modules (FTP/GRE/H.323/PPTP/SIP/TFTP), hardware offloading, and conntrack timeouts. "

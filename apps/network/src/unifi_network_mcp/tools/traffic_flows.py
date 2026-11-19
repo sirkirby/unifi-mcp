@@ -102,6 +102,7 @@ async def get_traffic_flows(
 
 @server.tool(
     name="unifi_get_traffic_flow_statistics",
+    auth="either",
     description=(
         "Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). Returns risk and "
         "region count breakdowns plus Top-Talker rankings for a preset period: top clients, top "

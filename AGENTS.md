@@ -107,8 +107,9 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 UniFi exposes three API surfaces with disjoint ID/auth models: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields), the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields), and the UniFi-OS **Alarm Manager v2** service (`/api/v2/alarms/`, session + **SuperAdmin** auth, UUIDs, `snake_case` fields). They are **not interchangeable**.
 
 Authentication credentials and API surfaces are separate concepts. Network 10.6.106
-also accepts API keys on verified legacy inventory GET endpoints, preserving legacy
-IDs and fields. Detect that capability at runtime; do not assume it on every
+and 11.1 also accept API keys on verified legacy and V2 GET read endpoints, preserving
+legacy IDs and fields. Add a path to the key-read allowlist only after a live GET with
+the key alone returns it. Detect that capability at runtime; do not assume it on every
 controller or infer write/websocket support from successful reads.
 
 ### Site Manager credential isolation
