@@ -13,7 +13,9 @@ from unifi_core.drive.models.services import (
     NfsConnection,
     NfsConnectionInput,
     NfsSharedDriveAccess,
+    connection_to_controller,
     is_world_client,
+    nfs_connection_from_api,
 )
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, UniFiValidationError
 
@@ -361,7 +363,7 @@ def test_world_clients_are_recognized(client, world):
 
 
 def test_mutable_fields_are_the_input_fields():
-    assert MUTABLE_FIELDS == set(NfsConnectionInput.model_fields)
+    assert MUTABLE_FIELDS | READ_ONLY_FIELDS == set(NfsConnectionInput.model_fields)
     assert MUTABLE_FIELDS | READ_ONLY_FIELDS == set(NfsConnection.model_fields)
     assert not MUTABLE_FIELDS & READ_ONLY_FIELDS
 
@@ -522,3 +524,17 @@ async def test_plan_from_a_list_that_changed_is_not_written(files, console):
         await files.apply_nfs_change(change)
 
     assert console.calls("PUT", NFS_ADVANCED) == []
+
+
+def test_listed_connection_round_trips_into_an_input():
+    listed = nfs_connection_from_api(
+        {**fx.nfs_connection(fx.CLIENT, (fx.DRIVE_ID, "Shared_Drive", "ro")), "errorCodes": ["UNRESOLVABLE"]}
+    ).model_dump(exclude_none=True)
+
+    connection = NfsConnectionInput(**listed)
+
+    assert connection_to_controller(connection) == {
+        "client": fx.CLIENT,
+        "async": False,
+        "sharedDrives": [{"id": fx.DRIVE_ID, "permission": "ro"}],
+    }
