@@ -23,7 +23,8 @@ PTZ_MIN_SPEED = -1000
 PTZ_MAX_SPEED = 1000
 PTZ_MAX_DURATION_MS = 5000
 
-# Public kind -> raw camera key. Protect has no uiprotect model for these.
+# Public kind -> raw camera key. Read raw: uiprotect models zones but not
+# lines or loiter zones.
 DETECTION_AREA_KINDS = {
     "line": "smartDetectLines",
     "zone": "smartDetectZones",
@@ -640,8 +641,11 @@ class CameraManager:
         list is sent back. The camera is then read again and every item of the
         list is compared with what was read before; any difference raises.
 
-        Known risk: an edit made in the Protect app between the read and the
-        write is overwritten; the read-back reports it.
+        Known risk: an edit made in the Protect app to another item of the
+        same list between the fresh read and the write is overwritten and is
+        not reported; the write sends the list as read, so the read-back
+        matches it. The read-back only catches changes the controller makes
+        on save.
         """
         raw = await self._read_raw_camera(camera_id)
         item, name = self._check_detection_area_rename(raw, kind, area_id, new_name)
