@@ -28,7 +28,7 @@ In lazy mode, an additional meta-tool is available:
 - `protect_update_camera_settings` -- Update IR, HDR, mic, speaker, status light, motion detection (confirm required)
 - `protect_toggle_recording` -- Enable/disable recording on a camera (confirm required)
 - `protect_toggle_rtsp` -- Enable/disable the RTSP/RTSPS stream on a camera channel (high/medium/low; confirm required)
-- `protect_rename_camera_detection_area` -- Rename one crossing line, smart-detect zone or loiter zone by kind and id; only the name changes, the new name is trimmed and must not match another area of that kind ignoring case, and the result is read back and checked (confirm required)
+- `protect_rename_camera_detection_area` -- Rename one crossing line, smart-detect zone or loiter zone by kind and id; only the name changes, the new name is trimmed and must not match another area of that kind ignoring case, and the result is read back and checked; an edit made in the Protect app between the read and the write is lost without a report (confirm required)
 - `protect_ptz_move` -- Move PTZ camera pan/tilt with normalized speeds (confirm required)
 - `protect_ptz_zoom` -- Zoom PTZ camera with normalized speed (confirm required)
 - `protect_ptz_preset` -- Move PTZ camera to a saved preset position (confirm required)

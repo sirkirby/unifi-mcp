@@ -433,8 +433,10 @@ async def protect_toggle_rtsp(
         "just that name changed, then read again and checked against what was read before; "
         "any difference is reported as an error. The new name is trimmed, and a name already "
         "used by another area of the same kind on the camera is refused, ignoring case. If "
-        "someone edits the same list in the Protect app between the read and the write, that "
-        "edit is overwritten and the read-back reports it. "
+        "someone edits another area of the same list in the Protect app between the read and "
+        "the write, that edit is lost and not reported: the write sends the list as read, so "
+        "the read-back matches it. The read-back only catches changes the controller makes "
+        "on save. "
         "Requires confirm=True to apply."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
