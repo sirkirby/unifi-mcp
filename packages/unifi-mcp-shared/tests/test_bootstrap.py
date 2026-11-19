@@ -300,6 +300,35 @@ class TestLoadServerConfigSecrets:
         monkeypatch.setenv("UNIFI_PASSWORD", "plainpw")
         assert self._load().unifi.password == "plainpw"
 
+    def test_isolated_keys_ignore_the_shared_level(self, monkeypatch):
+        monkeypatch.setenv("UNIFI_HOST", "192.0.2.1")
+        monkeypatch.setenv("UNIFI_PASSWORD", "gatewaypw")
+        monkeypatch.setenv("UNIFI_USERNAME", "gateway-admin")
+
+        cfg = load_server_config(
+            package_name="unifi_mcp_shared",
+            env_prefix="NETWORK",
+            logger=logging.getLogger("test"),
+            isolated_keys=("host", "password"),
+        )
+
+        assert cfg.unifi.host == "" and cfg.unifi.password == ""
+        assert cfg.unifi.username == "gateway-admin"
+
+    def test_isolated_keys_still_read_the_server_level(self, monkeypatch):
+        (self.tmp_path / "pw").write_text("naspw\n")
+        monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_FILE", str(self.tmp_path / "pw"))
+        monkeypatch.setenv("UNIFI_PASSWORD", "gatewaypw")
+
+        cfg = load_server_config(
+            package_name="unifi_mcp_shared",
+            env_prefix="NETWORK",
+            logger=logging.getLogger("test"),
+            isolated_keys=("password",),
+        )
+
+        assert cfg.unifi.password == "naspw"
+
     @pytest.mark.parametrize(
         "secret",
         [

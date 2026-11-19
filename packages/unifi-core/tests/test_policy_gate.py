@@ -72,6 +72,7 @@ def test_unknown_category_warns_and_names_the_nearest_valid_var(monkeypatch, cap
         "UNIFI_POLICY_DELETE",  # global action
         "UNIFI_POLICY_NETWORK_CLIENT_GROUP_DELETE",  # another server's variable
         "UNIFI_POLICY_ACCESS_DOOR_UPDATE",  # another server's variable
+        "UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE",  # another server's variable
         "UNIFI_PERMISSIONS_CAMERA_UPDATE",  # deprecated prefix, handled elsewhere
     ],
 )
