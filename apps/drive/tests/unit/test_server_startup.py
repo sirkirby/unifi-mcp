@@ -87,7 +87,7 @@ def test_a_tool_call_reports_an_unreachable_nas_without_its_address_or_password(
     assert "Traceback" not in run.stderr
 
 
-def test_write_tool_previews_by_default_and_policy_can_deny_it(tmp_path):
+def test_policy_denies_a_write_before_any_request(tmp_path):
     run = run_server(
         tmp_path,
         {**CONFIGURED, "UNIFI_TOOL_REGISTRATION_MODE": "eager", "UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE": "false"},
@@ -96,5 +96,5 @@ def test_write_tool_previews_by_default_and_policy_can_deny_it(tmp_path):
 
     payload = run.calls[0]["structuredContent"]
     assert payload["success"] is False
-    assert "disabled by policy" in payload["error"] or "disabled" in payload["error"]
+    assert "disabled by policy for nfs_connection" in payload["error"]
     assert run.network_attempts == ""

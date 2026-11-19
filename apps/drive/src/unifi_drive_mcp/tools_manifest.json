@@ -833,7 +833,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; do not pass them to other products' tools.",
+      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; pass them as shared_drives[].id to the drive_*_nfs_connection tools, not to other products' tools.",
       "name": "drive_list_shared_drives",
       "permission_action": "read",
       "permission_category": "shared_drive",
@@ -1398,7 +1398,7 @@
               "type": "boolean"
             },
             "shared_drives": {
-              "description": "Shared drives the client may mount, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"rw\"}]. permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives.",
+              "description": "The client's new shared drive list, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"ro\"}]. It replaces the whole list. A drive the client already has keeps its current permission when permission is left out; a newly granted drive defaults to rw. IDs come from drive_list_shared_drives.",
               "type": "array"
             }
           },
