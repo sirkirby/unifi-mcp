@@ -169,7 +169,9 @@ def is_world_client(client: str) -> bool:
     try:
         return ipaddress.ip_network(client, strict=False).prefixlen == 0
     except ValueError:
-        return False
+        # NFS exports also parse shorthand such as ``0/0``, which ``ipaddress`` refuses.
+        prefix = client.rsplit("/", 1)[1]
+        return prefix.isdigit() and int(prefix) == 0
 
 
 class NfsConnectionInput(BaseModel):

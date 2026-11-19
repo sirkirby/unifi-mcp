@@ -344,7 +344,17 @@ def test_listed_grant_round_trips_into_an_input():
 
 @pytest.mark.parametrize(
     ("client", "world"),
-    [("*", True), ("*.*", True), ("0.0.0.0/0", True), ("::/0", True), ("*.lan", False), ("192.0.2.0/24", False)],
+    [
+        ("*", True),
+        ("*.*", True),
+        ("0.0.0.0/0", True),
+        ("::/0", True),
+        ("0/0", True),
+        ("192.0.2.1/00", True),
+        ("*.lan", False),
+        ("192.0.2.0/24", False),
+        ("10/8", False),
+    ],
 )
 def test_world_clients_are_recognized(client, world):
     assert is_world_client(client) is world

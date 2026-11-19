@@ -13,7 +13,14 @@ client. The NFS write methods (``add_nfs_connection``,
 ``update_nfs_connection``, ``remove_nfs_connection``) plan and apply under one
 lock per manager. ``apply_nfs_change`` also re-reads the list just before the
 ``PUT`` and stops if it changed since the plan, which catches an edit made in
-the Drive web UI, or by another process, in the meantime.
+the Drive web UI, or by another process, before that re-read.
+
+Known risk: Drive keeps no version on this list, so nothing closes the gap
+between that re-read and the ``PUT``. The lock covers one manager instance, so
+a write from another process (a second MCP server or the API server against
+the same NAS) that lands in that gap is overwritten by this ``PUT``, and
+neither call reports it. The read-back only catches a write that lands after
+this one.
 """
 
 from __future__ import annotations
@@ -422,7 +429,8 @@ class FileServiceManager:
         if missing_others:
             raise UniFiOperationError(
                 "UniFi Drive accepted the NFS change, but reading it back no longer shows "
-                f"{', '.join(missing_others)}. Check the NFS settings in the Drive web UI."
+                f"{', '.join(missing_others)}. Another write may have changed the list at the same time; "
+                "check the NFS settings in the Drive web UI."
             )
         if change.action == "remove":
             if found is not None:
@@ -432,7 +440,8 @@ class FileServiceManager:
             return None
         if found is None or not _grants_match(found, change.after):
             raise UniFiOperationError(
-                f"UniFi Drive accepted the change, but the connection read back for {change.client} does not match it."
+                f"UniFi Drive accepted the change, but the connection read back for {change.client} does not match it. "
+                "Another write may have changed the list at the same time; check the NFS settings in the Drive web UI."
             )
         return found
 
