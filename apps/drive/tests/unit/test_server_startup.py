@@ -21,7 +21,11 @@ DOMAIN_TOOLS = {
     "drive_list_shared_drives",
     "drive_get_shared_drive",
     "drive_get_file_services",
+    "drive_set_file_service",
     "drive_list_nfs_connections",
+    "drive_add_nfs_connection",
+    "drive_update_nfs_connection",
+    "drive_remove_nfs_connection",
 }
 META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status"}
 
@@ -81,3 +85,16 @@ def test_a_tool_call_reports_an_unreachable_nas_without_its_address_or_password(
     assert "192.0.2.10" not in payload["error"]
     assert PASSWORD not in json.dumps(run.calls) + run.stderr
     assert "Traceback" not in run.stderr
+
+
+def test_write_tool_previews_by_default_and_policy_can_deny_it(tmp_path):
+    run = run_server(
+        tmp_path,
+        {**CONFIGURED, "UNIFI_TOOL_REGISTRATION_MODE": "eager", "UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE": "false"},
+        calls=(("drive_remove_nfs_connection", {"client": "192.0.2.76", "confirm": True}),),
+    )
+
+    payload = run.calls[0]["structuredContent"]
+    assert payload["success"] is False
+    assert "disabled by policy" in payload["error"] or "disabled" in payload["error"]
+    assert run.network_attempts == ""

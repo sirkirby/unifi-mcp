@@ -20,6 +20,12 @@ READ_TOOLS = {
     "drive_get_file_services",
     "drive_list_nfs_connections",
 }
+WRITE_TOOLS = {
+    "drive_set_file_service",
+    "drive_add_nfs_connection",
+    "drive_update_nfs_connection",
+    "drive_remove_nfs_connection",
+}
 
 
 def test_test_session_runs_unconfigured():
@@ -61,7 +67,7 @@ def test_drive_level_credentials_and_pin_are_used(monkeypatch):
 
 
 def test_manifest_lists_exactly_the_drive_tools():
-    assert set(TOOL_MODULE_MAP) == READ_TOOLS
+    assert set(TOOL_MODULE_MAP) == READ_TOOLS | WRITE_TOOLS
     assert "drive_get_support_bundle" not in {tool["name"] for tool in MANIFEST["tools"]}
 
 
@@ -71,6 +77,17 @@ def test_read_tools_are_read_only_and_categorized():
         assert tools[name]["annotations"] == {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
         assert tools[name]["permission_action"] == "read"
         assert tools[name]["permission_category"] in DRIVE_CATEGORY_MAP
+
+
+def test_write_tools_preview_first_and_only_removal_is_destructive():
+    tools = {tool["name"]: tool for tool in MANIFEST["tools"]}
+    for name in WRITE_TOOLS:
+        tool = tools[name]
+        assert tool["annotations"]["readOnlyHint"] is False, name
+        assert "confirm" in tool["schema"]["input"]["properties"], name
+        assert tool["permission_category"] in DRIVE_CATEGORY_MAP, name
+        expected = name == "drive_remove_nfs_connection"
+        assert tool["annotations"]["destructiveHint"] is expected, name
 
 
 def test_no_tool_erases_or_deletes_storage():
