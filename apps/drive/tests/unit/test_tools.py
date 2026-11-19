@@ -62,7 +62,7 @@ async def test_shared_drive_not_found_is_a_plain_error(monkeypatch):
 
     result = await shared_drives.drive_get_shared_drive("x")
 
-    assert result == {"success": False, "error": "Shared drive 'x' not found"}
+    assert result == {"success": False, "error": "Failed to get shared drive: Shared drive 'x' not found"}
 
 
 async def test_list_shared_drives(monkeypatch):

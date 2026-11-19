@@ -50,6 +50,6 @@ async def drive_get_shared_drive(
         drive = await shared_drive_manager.get_shared_drive(drive_id)
         return tool_success(drive.model_dump(exclude_none=True))
     except UniFiNotFoundError as exc:
-        return {"success": False, "error": str(exc)}
+        return {"success": False, "error": f"Failed to get shared drive: {exc}"}
     except Exception as exc:
         return tool_failure("get shared drive", exc)
