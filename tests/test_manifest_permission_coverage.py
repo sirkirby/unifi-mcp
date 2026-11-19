@@ -21,6 +21,7 @@ MANIFESTS = {
     "protect": ROOT / "apps/protect/src/unifi_protect_mcp/tools_manifest.json",
     "access": ROOT / "apps/access/src/unifi_access_mcp/tools_manifest.json",
     "sitemanager": ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json",
+    "drive": ROOT / "apps/drive/src/unifi_drive_mcp/tools_manifest.json",
 }
 
 

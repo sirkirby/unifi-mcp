@@ -88,7 +88,7 @@ class TestAppSpecificConfigs:
         assert "UNIFI_SITE" not in names
 
     def test_all_apps_configured(self):
-        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access", "sitemanager"}
+        assert set(APP_CONFIGS.keys()) == {"network", "protect", "access", "sitemanager", "drive"}
 
     def test_sitemanager_offers_only_its_own_key(self):
         manifest = build_server_manifest("sitemanager", "0.1.0")
@@ -102,6 +102,14 @@ class TestAppSpecificConfigs:
 
     def test_sitemanager_version_ignores_plain_v_tags(self):
         assert APP_CONFIGS["sitemanager"]["tag_prefixes"] == ["sitemanager/v"]
+
+    def test_drive_offers_only_its_own_console_settings(self):
+        manifest = build_server_manifest("drive", "0.1.0")
+        names = [v["name"] for v in manifest["packages"][0]["environmentVariables"]]
+
+        assert all(name.startswith("UNIFI_DRIVE_") for name in names)
+        assert {"UNIFI_DRIVE_HOST", "UNIFI_DRIVE_USERNAME", "UNIFI_DRIVE_PASSWORD"} <= set(names)
+        assert APP_CONFIGS["drive"]["tag_prefixes"] == ["drive/v"]
 
     def test_invalid_app_raises(self):
         with pytest.raises(ValueError, match="Unknown app"):

@@ -95,6 +95,7 @@ SECURITY_FLOORS: dict[str, dict[str, str]] = {
     "unifi-protect-mcp": MCP_SECURITY_FLOORS,
     "unifi-access-mcp": MCP_SECURITY_FLOORS,
     "unifi-sitemanager-mcp": MCP_SECURITY_FLOORS,
+    "unifi-drive-mcp": MCP_SECURITY_FLOORS,
     "unifi-mcp-relay": MCP_SECURITY_FLOORS,
     "unifi-api-server": {
         "anyio": "4.14.2",
@@ -147,6 +148,7 @@ DOWNSTREAM_PACKAGES: list[Downstream] = [
     Downstream(
         REPO / "apps/sitemanager", "unifi-sitemanager-mcp", "unifi_sitemanager_mcp.main", "unifi_sitemanager_mcp"
     ),
+    Downstream(REPO / "apps/drive", "unifi-drive-mcp", "unifi_drive_mcp.main", "unifi_drive_mcp"),
     Downstream(REPO / "apps/api", "unifi-api-server", "unifi_api", "unifi_api"),
     Downstream(
         REPO / "packages/unifi-mcp-relay",
@@ -916,6 +918,7 @@ FLOOR_ONLY_CORE_EXTRAS: dict[str, str] = {
     "unifi-protect-mcp": "protect",
     "unifi-access-mcp": "access",
     "unifi-sitemanager-mcp": "",
+    "unifi-drive-mcp": "",
     "unifi-mcp-relay": "",
 }
 
