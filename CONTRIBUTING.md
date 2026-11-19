@@ -8,6 +8,9 @@ Thanks for helping improve UniFi MCP. Please follow the
 - Search existing issues and discussions before opening a new one.
 - For substantial features, behavior changes, or new tool categories, open an
   issue first so maintainers can confirm the direction before you invest time.
+- Proposing a new server for another UniFi application? Read
+  [Proposing a new server](#proposing-a-new-server) first: a new server has to
+  ship complete.
 - Use [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions)
   for setup help, configuration questions, and general troubleshooting.
 - Do not include UniFi credentials, API keys, tokens, controller addresses, or
@@ -155,18 +158,23 @@ Site Manager API key of your own and is skipped without one:
 
 ## Development Workflow
 
+Managers live in `unifi-core`, not in the app. A manager change ships in a
+`unifi-core` release, so an app that calls a new manager method raises its
+`unifi-core` floor once that release is on PyPI (see
+[What reviewers check](#what-reviewers-check)).
+
 ### Adding a tool to the network server
 
-1. Add the manager method in `apps/network/src/unifi_network_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/network/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/network/`
 2. Add the tool function in `apps/network/src/unifi_network_mcp/tools/<category>.py`
-3. Add the tool name to `TOOL_MODULE_MAP` in `apps/network/src/unifi_network_mcp/utils/lazy_tool_loader.py`
-4. Run `make manifest` from `apps/network/` (or `make manifest` from the repo root to regenerate every app)
-5. Add tests in `apps/network/tests/`
-6. Commit code + manifest + tests together
+3. Run `make manifest` from `apps/network/` (or `make manifest` from the repo root to regenerate every app)
+   - The lazy-loading tool map is built from the tool modules and the manifest; no manual map update needed
+4. Add tests in `apps/network/tests/`
+5. Commit code + manifest + tests together
 
 ### Adding a tool to the protect server
 
-1. Add the manager method in `apps/protect/src/unifi_protect_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/protect/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/protect/`
 2. Add the tool function in `apps/protect/src/unifi_protect_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/protect/` (or `make manifest` from the repo root to regenerate every app)
    - The manifest auto-discovers tools from `@server.tool()` decorators; no manual map update needed
@@ -175,7 +183,7 @@ Site Manager API key of your own and is skipped without one:
 
 ### Adding a tool to the access server
 
-1. Add the manager method in `apps/access/src/unifi_access_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/access/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/access/`
 2. Add the tool function in `apps/access/src/unifi_access_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/access/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/access/tests/`
@@ -187,7 +195,7 @@ The Site Manager server is read-only by design, and its destination is the
 fixed `api.ui.com` origin. Follow the "Site Manager credential isolation" rules
 in [AGENTS.md](AGENTS.md) before adding a tool.
 
-1. Add the manager method under `packages/unifi-core/src/unifi_core/sitemanager/managers/`
+1. Add the manager method under `packages/unifi-core/src/unifi_core/sitemanager/managers/`, with tests in `packages/unifi-core/tests/sitemanager/`
 2. Add the tool function in `apps/sitemanager/src/unifi_sitemanager_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/sitemanager/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/sitemanager/tests/`
@@ -213,6 +221,102 @@ cd apps/network && make pre-commit
 ```
 
 Formatting uses [ruff](https://docs.astral.sh/ruff/) with a 120-character line length.
+
+## Proposing a new server
+
+New servers are welcome as pull requests. They are held to the same bar as the
+servers maintainers built, because once one ships, users and maintainers carry
+it. Pull requests rarely reach that bar on the first pass. Maintainers will close
+the gap with you, by review or by pushing to your branch. The bar does not move.
+
+### Open an issue first
+
+Say:
+- which application it covers;
+- which API it uses: official or internal, and its credential;
+- which tools are reads and which are writes;
+- which application version and hardware you test on;
+- whether you can re-test when the application updates.
+
+Writes against an internal API need someone who can keep re-testing them, or
+they are not accepted.
+
+### What "complete" means
+
+1. **Core first.** The client and managers live in `packages/unifi-core/`. Any
+   shared change lives in `packages/unifi-mcp-shared/`. They go in their own PR,
+   which is released before the server PR, because the server's pin-alignment
+   check needs them on PyPI.
+2. **The server app.** Follow "Adding a New Server" in
+   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), including every release and
+   check registration it lists.
+3. **API parity.** Every tool is also reachable through `unifi-api-server`, and
+   `apps/api/tests/test_resource_route_coverage.py` covers the new product.
+4. **Permissions.** Writes register a policy-gate prefix, preview before they
+   confirm, and follow the [AGENTS.md](AGENTS.md) permission rules.
+5. **Live evidence.** Add a target in `scripts/live_smoke.py` and post its
+   results from real hardware, with identifiers removed.
+6. **Deployment.** A Dockerfile and a Docker Compose service.
+7. **Docs.**
+   - The app's README and `docs/`: configuration, tools and troubleshooting.
+   - The root README, QUICKSTART and docs site tables.
+   - Docs that tell people to install the package (install commands, badges)
+     merge only after it is on PyPI.
+8. **Plugin bundle.** Claude Code and Codex manifests, a setup skill and
+   references. They land with or after the first release tag.
+9. **Support bundle,** or a stated reason the server has none.
+
+### Order of work
+
+1. Core PR.
+2. Release core.
+3. Server PR, reads first. Writes can follow in their own PR.
+4. Release the server.
+5. Plugin, docs and the install-instruction docs.
+
+Maintainers register the PyPI trusted publisher and own the package name.
+
+## What reviewers check
+
+These come up in review again and again. Getting them right before you open a
+pull request saves a round trip. To keep high-priority and security fixes
+moving, maintainers may push these corrections to your branch directly. You keep
+the authorship credit.
+
+- **One package per PR when a boundary is crossed.** Put changes to
+  `unifi-core` or `unifi-mcp-shared` in their own PR. It is released before a
+  downstream PR that depends on it.
+- **Evidence from real hardware.** For anything that calls a UniFi API, show a
+  run against a real controller with its application version.
+  - For a write, show the write and a read-back.
+  - Mock tests alone do not count: response shapes differ between versions.
+- **Writes that cannot clobber.**
+  - Preview first (`confirm=false`).
+  - Read back after writing.
+  - Serialize read-modify-write of a shared list, so two calls cannot overwrite
+    each other.
+  - State any remaining race in the docstring.
+- **Typed tools, not passthroughs.** One tool per setting or resource, with
+  validation. Generic "read or write any setting" accessors are declined.
+- **One ID family per tool.** V2 and Integration IDs never mix in one tool, and
+  no tool silently translates between them. See "API tool families" in
+  [AGENTS.md](AGENTS.md).
+- **Unavailable is not empty.** When the controller no longer serves something,
+  return an error that says so, never an empty success.
+- **Lean tool descriptions.** A tool's description gives its purpose and a brief
+  shape. Explain individual fields in Pydantic `Field` descriptions.
+- **Redaction is server policy.** Never add a request argument that returns
+  secrets. See "Response redaction" in [AGENTS.md](AGENTS.md).
+- **House style.**
+  - Use `%s` logging, never f-strings.
+  - Never put issue or PR numbers in code, comments or tests: describe the
+    behaviour instead.
+  - Commit the regenerated artifacts from `make pre-commit`.
+- **Docs in the same PR as the tool.** For a new tool, update the README, the
+  app README, the app's `docs/tools.md`, `docs/ARCHITECTURE.md`, and the
+  plugin's skill.
+- **No private details.** Keep credentials, IP addresses, MAC addresses,
+  hostnames and SSIDs out of PRs, issues, commits and test fixtures.
 
 ## PR Conventions
 
