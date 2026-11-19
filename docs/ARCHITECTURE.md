@@ -66,7 +66,7 @@ The UniFi Network MCP server. 214 tools covering firewall, clients, devices, net
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
   - `runtime.py` -- singleton factories (`@lru_cache`)
-  - `managers/` -- domain logic (one per category)
+  - domain logic lives in `packages/unifi-core/src/unifi_core/network/managers/`
   - `tools/` -- thin tool wrappers (delegate to managers)
   - `config/config.yaml` -- default configuration
   - `tools_manifest.json` -- pre-generated tool metadata
@@ -81,7 +81,7 @@ The UniFi Protect MCP server. 65 tools across 9 categories covering cameras, eve
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
   - `runtime.py` -- singleton factories (`@lru_cache`)
-  - `managers/` -- domain logic (camera, event, recording, light, sensor, chime, liveview, system)
+  - domain logic lives in `packages/unifi-core/src/unifi_core/protect/managers/` (camera, event, recording, light, sensor, chime, liveview, alarm, system)
   - `tools/` -- thin tool wrappers (delegate to managers)
   - `resources/` -- MCP resources (event stream, camera snapshots)
   - `config/config.yaml` -- default configuration with Protect-specific event settings
@@ -97,7 +97,7 @@ The UniFi Access MCP server. 37 tools across 7 categories covering doors, polici
 - `src/unifi_access_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
   - `runtime.py` -- singleton factories (`@lru_cache`)
-  - `managers/` -- domain logic (door, policy, credential, visitor, event, device, system)
+  - domain logic lives in `packages/unifi-core/src/unifi_core/access/managers/` (door, policy, credential, visitor, event, device, system)
   - `tools/` -- thin tool wrappers (delegate to managers)
   - `resources/` -- MCP resources (event stream)
   - `config/config.yaml` -- default configuration with Access-specific event and auth settings
@@ -187,7 +187,7 @@ Tool Functions (tools/*.py)           <- thin wrappers
     |
     v  Manager method calls
     |
-Manager Layer (managers/*.py)         <- domain logic
+Manager Layer (unifi_core/<product>/managers/*.py)  <- domain logic
     |
     v  unifi-core API calls
     |
@@ -213,7 +213,8 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 3. **Add to workspace** in root `pyproject.toml` (`apps/*` is already a glob)
 4. **Follow the established pattern** (see `apps/protect/` or `apps/access/` as references):
    - `src/unifi_<appname>_mcp/main.py` -- entry point
-   - `src/unifi_<appname>_mcp/managers/` -- domain logic
+   - `src/unifi_<appname>_mcp/runtime.py` -- singleton factories for the managers
+   - domain logic in `packages/unifi-core/src/unifi_core/<appname>/managers/`, released in `unifi-core` before the app that uses it
    - `src/unifi_<appname>_mcp/tools/` -- tool wrappers
    - `src/unifi_<appname>_mcp/resources/` -- MCP resources (if applicable)
    - `src/unifi_<appname>_mcp/config/config.yaml` -- defaults

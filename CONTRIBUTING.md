@@ -158,18 +158,23 @@ Site Manager API key of your own and is skipped without one:
 
 ## Development Workflow
 
+Managers live in `unifi-core`, not in the app. A manager change ships in a
+`unifi-core` release, so an app that calls a new manager method raises its
+`unifi-core` floor once that release is on PyPI (see
+[What reviewers check](#what-reviewers-check)).
+
 ### Adding a tool to the network server
 
-1. Add the manager method in `apps/network/src/unifi_network_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/network/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/network/`
 2. Add the tool function in `apps/network/src/unifi_network_mcp/tools/<category>.py`
-3. Add the tool name to `TOOL_MODULE_MAP` in `apps/network/src/unifi_network_mcp/utils/lazy_tool_loader.py`
-4. Run `make manifest` from `apps/network/` (or `make manifest` from the repo root to regenerate every app)
-5. Add tests in `apps/network/tests/`
-6. Commit code + manifest + tests together
+3. Run `make manifest` from `apps/network/` (or `make manifest` from the repo root to regenerate every app)
+   - The lazy-loading tool map is built from the tool modules and the manifest; no manual map update needed
+4. Add tests in `apps/network/tests/`
+5. Commit code + manifest + tests together
 
 ### Adding a tool to the protect server
 
-1. Add the manager method in `apps/protect/src/unifi_protect_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/protect/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/protect/`
 2. Add the tool function in `apps/protect/src/unifi_protect_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/protect/` (or `make manifest` from the repo root to regenerate every app)
    - The manifest auto-discovers tools from `@server.tool()` decorators; no manual map update needed
@@ -178,7 +183,7 @@ Site Manager API key of your own and is skipped without one:
 
 ### Adding a tool to the access server
 
-1. Add the manager method in `apps/access/src/unifi_access_mcp/managers/<domain>_manager.py`
+1. Add the manager method in `packages/unifi-core/src/unifi_core/access/managers/<domain>_manager.py`, with tests in `packages/unifi-core/tests/access/`
 2. Add the tool function in `apps/access/src/unifi_access_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/access/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/access/tests/`
@@ -190,7 +195,7 @@ The Site Manager server is read-only by design, and its destination is the
 fixed `api.ui.com` origin. Follow the "Site Manager credential isolation" rules
 in [AGENTS.md](AGENTS.md) before adding a tool.
 
-1. Add the manager method under `packages/unifi-core/src/unifi_core/sitemanager/managers/`
+1. Add the manager method under `packages/unifi-core/src/unifi_core/sitemanager/managers/`, with tests in `packages/unifi-core/tests/sitemanager/`
 2. Add the tool function in `apps/sitemanager/src/unifi_sitemanager_mcp/tools/<category>.py`
 3. Run `make manifest` from `apps/sitemanager/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/sitemanager/tests/`
