@@ -12,9 +12,10 @@ NFS on this firmware is NFSv3 and maps every client uid to one Drive user, so
 there is no squash option to set. A client mounts ``<nas>:/var/nfs/shared/<name>``.
 
 Field model: :class:`NfsConnection` is the list/read shape;
-:class:`NfsConnectionInput` is what the add/update tools accept. Its fields are
-the connection's mutable fields (``MUTABLE_FIELDS``), so a connection read from
-the list can be passed back unchanged.
+:class:`NfsConnectionInput` is what the add/update tools accept: the
+connection's mutable fields (``MUTABLE_FIELDS``), plus the read-only
+``error_codes``, which is accepted and ignored so a connection read from the
+list can be passed back unchanged.
 """
 
 from __future__ import annotations
@@ -175,7 +176,12 @@ def is_world_client(client: str) -> bool:
 
 
 class NfsConnectionInput(BaseModel):
-    """Input: an NFS client connection to add."""
+    """Input: an NFS client connection to add.
+
+    The read-only ``error_codes`` of a listed connection is accepted and
+    ignored, so a connection copied from ``drive_list_nfs_connections`` can be
+    passed back as is.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -186,6 +192,7 @@ class NfsConnectionInput(BaseModel):
     async_writes: bool = Field(
         default=False, description="Use async writes (faster, but data can be lost if the NAS loses power)"
     )
+    error_codes: list[Any] | None = Field(default=None, description="Ignored; read-only")
 
     @field_validator("client", mode="before")
     @classmethod

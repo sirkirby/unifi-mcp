@@ -315,6 +315,16 @@ class TestLoadServerConfigSecrets:
         assert cfg.unifi.host == "" and cfg.unifi.password == ""
         assert cfg.unifi.username == "gateway-admin"
 
+    def test_isolated_key_that_is_not_loaded_is_refused(self):
+        with pytest.raises(ValueError, match="passwrod"):
+            load_server_config(
+                package_name="unifi_mcp_shared",
+                env_prefix="NETWORK",
+                logger=logging.getLogger("test"),
+                keys=("host", "password"),
+                isolated_keys=("host", "passwrod"),
+            )
+
     def test_isolated_keys_still_read_the_server_level(self, monkeypatch):
         (self.tmp_path / "pw").write_text("naspw\n")
         monkeypatch.setenv("UNIFI_NETWORK_PASSWORD_FILE", str(self.tmp_path / "pw"))

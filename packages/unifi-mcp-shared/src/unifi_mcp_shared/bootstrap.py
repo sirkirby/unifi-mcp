@@ -672,12 +672,18 @@ def load_server_config(
         isolated_keys: Keys read from the server-specific variable only, never
                        from the shared ``UNIFI_<KEY>``. Use it for a server whose
                        console is not the gateway, so the gateway's host and
-                       credentials are never sent to it.
+                       credentials are never sent to it. Every entry must be in
+                       ``keys``; a typo would otherwise quietly allow the
+                       shared fallback.
 
     Returns:
         An OmegaConf config object.
     """
     from omegaconf import OmegaConf
+
+    unknown_isolated = sorted(set(isolated_keys) - set(keys))
+    if unknown_isolated:
+        raise ValueError(f"isolated_keys names keys that are not loaded: {', '.join(unknown_isolated)}")
 
     config_path_str: str | None = os.getenv("CONFIG_PATH")
     resolved_path: Path | None = None
