@@ -35,10 +35,10 @@ report_settings_file(logger)
 def load_config(path_override: str | Path | None = None) -> OmegaConf:
     """Load YAML config, merging ``UNIFI_DRIVE_*`` variables.
 
-    The NAS is its own console, so its host and login come from ``UNIFI_DRIVE_*``
-    only. The shared ``UNIFI_HOST``/``UNIFI_USERNAME``/``UNIFI_PASSWORD`` name the
-    gateway and are never sent to the NAS. Port and ``verify_ssl`` still fall
-    back to the shared level.
+    The NAS is its own console, so its host, port and login come from
+    ``UNIFI_DRIVE_*`` only. The shared ``UNIFI_HOST``/``UNIFI_PORT``/
+    ``UNIFI_USERNAME``/``UNIFI_PASSWORD`` describe the gateway and are never used
+    for the NAS. Only ``verify_ssl`` still falls back to the shared level.
     """
     from unifi_mcp_shared.bootstrap import load_server_config
 
@@ -47,7 +47,7 @@ def load_config(path_override: str | Path | None = None) -> OmegaConf:
         env_prefix="DRIVE",
         keys=("host", "username", "password", "port", "verify_ssl"),
         logger=logger,
-        isolated_keys=("host", "username", "password"),
+        isolated_keys=("host", "port", "username", "password"),
     )
 
 

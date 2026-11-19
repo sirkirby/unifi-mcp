@@ -495,7 +495,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists the NAS's drive bays and SSD cache slots with the disk in each: model, serial, size, state, temperature, pool membership, hot-spare flags and SMART counters (power-on hours, bad and uncorrectable sectors, read errors) plus any risk or incompatibility reasons Drive reports. Empty bays are left out unless include_empty is true.",
+      "description": "Lists the NAS's drive bays and SSD cache slots with the disk in each, its pool membership and SMART health. Empty bays are left out unless include_empty is true.",
       "name": "drive_list_disks",
       "permission_action": "read",
       "permission_category": "storage",
@@ -605,7 +605,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists the NFS clients allowed to mount shared drives: each client's IP or hostname, the shared drives it may mount with rw/ro permission and the export path to mount (<nas>:/var/nfs/shared/<name>), async writes, and any error codes Drive reports. NFS here is NFSv3 and maps every client user to one Drive user (no squash option).",
+      "description": "Lists the NFS clients allowed to mount shared drives, with the shared drives each may mount and the export path to mount. NFS here is NFSv3 and maps every client user to one Drive user (no squash option).",
       "name": "drive_list_nfs_connections",
       "permission_action": "read",
       "permission_category": "nfs_connection",
@@ -706,7 +706,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; pass them as shared_drives[].id to the drive_*_nfs_connection tools.",
+      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; do not pass them to other products' tools.",
       "name": "drive_list_shared_drives",
       "permission_action": "read",
       "permission_category": "shared_drive",
@@ -807,7 +807,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists storage pools with capacity, usage and status, and each pool's RAID groups: the RAID level in effect (current_level) versus the configured one (config_level), current and expected disk-failure protection, and rebuild or expansion progress. A pool with status noDataProtectionYet has no redundancy yet. Storage pool IDs are scoped to the UniFi Drive tool family.",
+      "description": "Lists storage pools with capacity, usage and status, and each pool's RAID groups: the RAID level in effect (current_level) versus the configured one (config_level), current and expected disk-failure protection, and rebuild or expansion progress. A pool with status noDataProtectionYet has no redundancy yet. Storage pool IDs are scoped to the UniFi Drive tool family; do not pass them to other products' storage tools.",
       "name": "drive_list_storage_pools",
       "permission_action": "read",
       "permission_category": "storage",

@@ -35,8 +35,6 @@ UNIFI_DRIVE_PASSWORD_FILE="$HOME/.config/unifi-mcp/drive-password" \
 uv run --package unifi-drive-mcp unifi-drive-mcp
 ```
 
-Once a `drive/v*` release is published, `uvx unifi-drive-mcp@latest` and `ghcr.io/sirkirby/unifi-drive-mcp` work the same way.
-
 Without a host the server still starts. It answers the client in setup mode, offers only `drive_setup_status`, explains what to set, and makes no request. With a host it also makes no request at startup: the first tool call logs in.
 
 ### MCP client configuration
@@ -45,8 +43,8 @@ Without a host the server still starts. It answers the client in setup mode, off
 {
   "mcpServers": {
     "unifi-drive": {
-      "command": "uvx",
-      "args": ["unifi-drive-mcp@latest"],
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/unifi-mcp", "--package", "unifi-drive-mcp", "unifi-drive-mcp"],
       "env": {
         "UNIFI_DRIVE_HOST": "192.168.1.20",
         "UNIFI_DRIVE_USERNAME": "mcp",
@@ -64,7 +62,7 @@ Without a host the server still starts. It answers the client in setup mode, off
 | `UNIFI_DRIVE_HOST` | unset | IP or hostname of the NAS. `UNIFI_HOST` is not used, because it names the gateway. |
 | `UNIFI_DRIVE_USERNAME` | unset | Local UniFi OS username on the NAS (`UNIFI_USERNAME` is not used) |
 | `UNIFI_DRIVE_PASSWORD` | unset | Its password (`UNIFI_PASSWORD` is not used). `_FILE` and `_COMMAND` spellings work. |
-| `UNIFI_DRIVE_PORT` | `443` | HTTPS port of the NAS |
+| `UNIFI_DRIVE_PORT` | `443` | HTTPS port of the NAS (`UNIFI_PORT` is not used) |
 | `UNIFI_DRIVE_VERIFY_SSL` | `false` | Verify the NAS certificate against the system CAs |
 | `UNIFI_DRIVE_SSL_FINGERPRINT` | unset | SHA-256 fingerprint of the NAS certificate; pins it and overrides `UNIFI_DRIVE_VERIFY_SSL`. `UNIFI_SSL_FINGERPRINT` is not used. |
 | `UNIFI_DRIVE_TIMEOUT_SECONDS` | `30` | Seconds to wait for one response |
@@ -86,6 +84,10 @@ HTTP transport, tool registration modes and diagnostics use the same `UNIFI_MCP_
 | `drive_list_nfs_connections` | NFS clients, the shared drives each may mount (rw/ro) and the export path to mount |
 
 See [docs/tools.md](docs/tools.md) for parameters and behavior.
+
+### No support bundle
+
+The Drive server has no `drive_get_support_bundle` tool. Support bundles are one closed privacy schema shared by the Network, Protect and Access servers (`unifi_core/support_bundle.py`), and Drive isn't part of it. Adding it would change that contract for all three servers. For a Drive problem, run `drive_get_system_info` for the firmware version, use `drive_setup_status` when the server is in setup mode, and fill in the bug form's fields by hand.
 
 ### NFS on UniFi Drive
 

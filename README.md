@@ -28,7 +28,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [InnerSpace](apps/innerspace/) | Beta | 9 | [`unifi-innerspace-mcp`](https://pypi.org/project/unifi-innerspace-mcp/) |
 | [Drive](apps/drive/) | Not yet released | 7 | `unifi-drive-mcp` |
 
-Network, Protect, Access and InnerSpace each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
+Network, Protect, Access, InnerSpace and Drive each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
 InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
 
