@@ -3,7 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveCommand } from "./command.mjs";
+import { assertWorkerName, resolveCommand } from "./command.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,6 +47,7 @@ export function buildWranglerToml(originalToml, { customDomain, observability } 
 }
 
 export async function deploy(workerName, { customDomain, observability } = {}) {
+  assertWorkerName(workerName);
   const workerDir = getWorkerDir();
   const wranglerToml = join(workerDir, "wrangler.toml");
 
@@ -85,6 +86,7 @@ export async function deploy(workerName, { customDomain, observability } = {}) {
 }
 
 export async function putSecret(workerName, secretName, secretValue) {
+  assertWorkerName(workerName);
   const workerDir = getWorkerDir();
   return new Promise((resolve, reject) => {
     const child = start("wrangler", ["secret", "put", secretName, "--name", workerName], {
@@ -104,6 +106,7 @@ export async function putSecret(workerName, secretName, secretValue) {
 }
 
 export async function deleteWorker(workerName) {
+  assertWorkerName(workerName);
   const workerDir = getWorkerDir();
   await run("wrangler", ["delete", "--name", workerName, "--force"], {
     cwd: workerDir,

@@ -11,6 +11,20 @@ function quoteWindowsArg(arg) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+// Cloudflare Worker names are letters, digits, dashes and underscores. Checking
+// this keeps a typed name from reaching cmd.exe, which expands %VAR% even
+// inside double quotes.
+const WORKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/;
+
+export function assertWorkerName(name) {
+  if (typeof name !== "string" || !WORKER_NAME.test(name)) {
+    throw new Error(
+      `Invalid worker name "${name}": use up to 63 letters, digits, dashes or underscores, starting with a letter or digit.`,
+    );
+  }
+  return name;
+}
+
 /**
  * Returns the file, args and extra options to pass to execFile/spawn so that
  * `cmd` resolves the same way it does in a terminal on every platform.

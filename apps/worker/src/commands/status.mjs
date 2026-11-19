@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import chalk from "chalk";
 import { loadConfig, getConfigDir } from "../lib/config.mjs";
+import { resolveCommand } from "../lib/command.mjs";
 import { showStatus, showError } from "../lib/display.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -24,8 +25,10 @@ export async function run() {
   console.log(`  CLI version: ${currentVersion}`);
 
   try {
-    const { stdout } = await execFileAsync("npm", ["view", "unifi-mcp-worker", "version"], {
+    const npm = resolveCommand("npm", ["view", "unifi-mcp-worker", "version"]);
+    const { stdout } = await execFileAsync(npm.file, npm.args, {
       timeout: 10_000,
+      ...npm.options,
     });
     const latest = stdout.trim();
     if (latest !== currentVersion) {

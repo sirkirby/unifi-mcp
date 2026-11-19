@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveCommand } from "../../src/lib/command.mjs";
+import { assertWorkerName, resolveCommand } from "../../src/lib/command.mjs";
 
 describe("resolveCommand", () => {
   it("runs the command directly outside Windows", () => {
@@ -39,5 +39,19 @@ describe("resolveCommand", () => {
   it("defaults to the current platform", () => {
     const resolved = resolveCommand("node", ["--version"]);
     assert.equal(resolved.options.shell === true, process.platform === "win32");
+  });
+});
+
+describe("assertWorkerName", () => {
+  it("accepts Cloudflare worker names", () => {
+    for (const name of ["unifi-mcp-relay", "relay2", "My_Relay", "a".repeat(63)]) {
+      assert.equal(assertWorkerName(name), name);
+    }
+  });
+
+  it("refuses names that could carry shell syntax or are not valid Workers names", () => {
+    for (const name of ["", "-relay", "my relay", "relay&calc", "%PATH%", "relay\"x", "a".repeat(64), undefined]) {
+      assert.throws(() => assertWorkerName(name), /Invalid worker name/);
+    }
   });
 });

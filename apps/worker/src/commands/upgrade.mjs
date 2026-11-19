@@ -1,5 +1,5 @@
 // src/commands/upgrade.mjs
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -10,13 +10,16 @@ import { loadConfig, saveConfig } from "../lib/config.mjs";
 import { ensureWrangler, checkWranglerAuth } from "../lib/prerequisites.mjs";
 import { deploy, login } from "../lib/wrangler.mjs";
 import { showError } from "../lib/display.mjs";
+import { resolveCommand } from "../lib/command.mjs";
 
 const execFileAsync = promisify(execFile);
 
 async function checkForUpdate() {
   try {
-    const { stdout } = await execFileAsync("npm", ["view", "unifi-mcp-worker", "version"], {
+    const npm = resolveCommand("npm", ["view", "unifi-mcp-worker", "version"]);
+    const { stdout } = await execFileAsync(npm.file, npm.args, {
       timeout: 10_000,
+      ...npm.options,
     });
     const latest = stdout.trim();
     const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
@@ -49,13 +52,11 @@ export async function run(flags) {
 
     if (shouldUpdate) {
       console.log("Updating CLI...");
-      await execFileAsync("npm", ["install", "-g", "unifi-mcp-worker@latest"], {
-        timeout: 120_000,
-      });
-      const { spawn } = await import("node:child_process");
-      const child = spawn("unifi-mcp-worker", ["upgrade", ...process.argv.slice(3)], {
-        stdio: "inherit",
-      });
+      const npm = resolveCommand("npm", ["install", "-g", "unifi-mcp-worker@latest"]);
+      await execFileAsync(npm.file, npm.args, { timeout: 120_000, ...npm.options });
+      // The CLI is itself a .cmd shim on Windows.
+      const cli = resolveCommand("unifi-mcp-worker", ["upgrade", ...process.argv.slice(3)]);
+      const child = spawn(cli.file, cli.args, { stdio: "inherit", ...cli.options });
       child.on("close", (code) => process.exit(code));
       return;
     }
