@@ -13,10 +13,9 @@ logger = logging.getLogger(__name__)
 @server.tool(
     name="drive_list_nfs_connections",
     description=(
-        "Lists the NFS clients allowed to mount shared drives: each client's IP or hostname, the shared "
-        "drives it may mount with rw/ro permission and the export path to mount (<nas>:/var/nfs/shared/<name>), "
-        "async writes, and any error codes Drive reports. NFS here is NFSv3 and maps every client user to "
-        "one Drive user (no squash option)."
+        "Lists the NFS clients allowed to mount shared drives, with the shared drives each may mount and "
+        "the export path to mount. NFS here is NFSv3 and maps every client user to one Drive user "
+        "(no squash option)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="nfs_connection",

@@ -96,7 +96,7 @@ APP_CONFIGS = {
     },
     "drive": {
         "title": "UniFi Drive MCP",
-        "description": "Read UniFi NAS storage, disk health and shared drives; manage SMB/NFS file services via MCP.",
+        "description": "Read UniFi NAS storage, disk health, shared drives and SMB/NFS file services via MCP.",
         # No bare "v" fallback: plain v* tags are Network's legacy releases.
         "tag_prefixes": ["drive/v"],
         # A UNAS is its own console, usually not the gateway UNIFI_HOST names,

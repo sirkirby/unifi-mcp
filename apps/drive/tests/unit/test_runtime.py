@@ -37,11 +37,13 @@ def test_gateway_credentials_and_pin_are_not_used_for_the_nas(monkeypatch):
     monkeypatch.setenv("UNIFI_HOST", "192.0.2.1")
     monkeypatch.setenv("UNIFI_USERNAME", "gateway-admin")
     monkeypatch.setenv("UNIFI_PASSWORD", "gateway-password")
+    monkeypatch.setenv("UNIFI_PORT", "8443")
     monkeypatch.setenv("UNIFI_SSL_FINGERPRINT", "AA" * 32)
 
     cfg = load_config()
 
     assert (cfg.unifi.host, cfg.unifi.username, cfg.unifi.password) == ("", "", "")
+    assert int(cfg.unifi.port) == 443
     assert runtime._ssl_fingerprint(cfg.unifi) is None
 
 

@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.sirkirby/unifi-drive-mcp",
   "title": "UniFi Drive MCP",
-  "description": "Read UniFi NAS storage, disk health and shared drives; manage SMB/NFS file services via MCP.",
+  "description": "Read UniFi NAS storage, disk health, shared drives and SMB/NFS file services via MCP.",
   "version": "0.0.0",
   "repository": {
     "url": "https://github.com/sirkirby/unifi-mcp",
