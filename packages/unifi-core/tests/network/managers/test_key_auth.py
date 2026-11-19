@@ -151,8 +151,19 @@ async def test_session_only_connection_preserves_a_key_fallback():
     [
         ("POST", "/proxy/network/api/s/default/cmd/devmgr"),
         ("PUT", "/proxy/network/api/s/default/rest/networkconf"),
-        ("GET", "/proxy/network/api/s/default/get/setting"),
+        ("PUT", "/proxy/network/api/s/default/set/setting/mgmt"),
+        ("POST", "/proxy/network/api/s/default/stat/session"),
+        ("POST", "/proxy/network/api/s/default/stat/report/hourly.site"),
+        ("POST", "/proxy/network/v2/api/site/default/traffic-flows"),
+        ("PUT", "/proxy/network/v2/api/site/default/nat/abc"),
+        ("DELETE", "/v2/api/site/default/acl-rules/abc"),
         ("GET", "/proxy/network/api/s/other/stat/device"),
+        ("GET", "/proxy/network/api/s/default/stat/device/aa:bb:cc:dd:ee:ff"),
+        ("GET", "/proxy/network/api/s/default/rest/firewallgroup"),
+        ("GET", "/proxy/network/api/s/default/get/setting/mgmt/extra"),
+        ("GET", "/proxy/network/v2/api/site/other/device"),
+        ("GET", "/proxy/network/v2/api/site/default/"),
+        ("GET", "/proxy/network/v2/api/stats/source"),
     ],
 )
 async def test_direct_sdk_transport_rejects_unvalidated_operations(method, path):
@@ -162,6 +173,34 @@ async def test_direct_sdk_transport_rejects_unvalidated_operations(method, path)
     with pytest.raises(UniFiAuthError, match="requires Network session"):
         await cm._key_read_transport(request, handler)
     handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prefix", ["", "/proxy/network"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/self/sites",
+        "/api/s/default/rest/networkconf",
+        "/api/s/default/stat/sta",
+        "/api/s/default/get/setting",
+        "/api/s/default/get/setting/",
+        "/api/s/default/get/setting/mgmt",
+        "/api/s/default/rest/setting",
+        "/api/s/default/rest/routing",
+        "/api/s/default/rest/usergroup",
+        "/api/s/default/stat/voucher",
+        "/api/s/default/stat/sysinfo",
+        "/v2/api/site/default/device",
+        "/v2/api/site/default/firewall/zone-matrix",
+    ],
+)
+async def test_key_transport_forwards_verified_reads(prefix, path):
+    cm = connection()
+    request = Mock(method="GET", url=URL("https://controller.test" + prefix + path))
+    handler = AsyncMock(return_value="response")
+    assert await cm._key_read_transport(request, handler) == "response"
+    handler.assert_awaited_once_with(request)
 
 
 @pytest.mark.asyncio

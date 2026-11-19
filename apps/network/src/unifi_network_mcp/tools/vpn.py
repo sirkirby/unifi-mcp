@@ -80,6 +80,7 @@ async def update_vpn_server_alternate_address(
 
 @server.tool(
     name="unifi_list_vpn_clients",
+    auth="either",
     description="List all configured VPN clients (Wireguard, OpenVPN, etc).",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -104,6 +105,7 @@ async def list_vpn_clients() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_vpn_client_details",
+    auth="either",
     description="Get details for a specific VPN client by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -227,6 +229,7 @@ async def delete_vpn_client(
 
 @server.tool(
     name="unifi_list_vpn_servers",
+    auth="either",
     description="List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -251,6 +254,7 @@ async def list_vpn_servers() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_vpn_server_details",
+    auth="either",
     description="Get details for a specific VPN server by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -339,7 +343,7 @@ _TELEPORT_CLIENT_WARNING = (
 
 @server.tool(
     name="unifi_get_teleport_settings",
-    auth="local_only",
+    auth="either",
     description=(
         "Get the site's Teleport VPN settings: whether Teleport is enabled and its client address range "
         "(subnet_cidr, gateway-address form such as '192.168.2.1/24'). The UniFi UI does not show the range; "

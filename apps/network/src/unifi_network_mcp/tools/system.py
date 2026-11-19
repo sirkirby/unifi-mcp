@@ -41,7 +41,7 @@ logger.info("System tools module loaded, server instance: %s", server)
 
 @server.tool(
     name="unifi_get_mdns_settings",
-    auth="local_only",
+    auth="either",
     description="Get site-wide mDNS service settings and read-only network scope.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -175,8 +175,8 @@ async def update_threat_management_settings(
 
 @server.tool(
     name="unifi_get_threat_management_settings",
-    auth="local_only",
-    description="Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
+    auth="either",
+    description="Get site-wide threat management (IDS/IPS) and traffic identification settings.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_threat_management_settings() -> Dict[str, Any]:
@@ -223,6 +223,7 @@ async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_system_info",
+    auth="either",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     description=(
         "Returns controller version, uptime, hostname, device and client counts, update availability, "
@@ -282,6 +283,7 @@ async def get_network_health() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_site_settings",
+    auth="either",
     description="Get current site settings: site identity, regulatory country code, timezone, "
     "connectivity monitor (enabled, uplink type) and NTP servers.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
@@ -318,6 +320,7 @@ def _error_detail(exc: BaseException) -> str:
 
 @server.tool(
     name="unifi_get_snmp_settings",
+    auth="either",
     description="Get current SNMP settings for the site: v1/v2c enabled state and community string, "
     "SNMPv3 enabled state and user name. The two services are independent flags on one record. "
     "The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
@@ -438,6 +441,7 @@ async def update_snmp_settings(
 
 @server.tool(
     name="unifi_get_mgmt_settings",
+    auth="either",
     description="Get the site's device management (mgmt) settings, read-only: device SSH state and user name, "
     "password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API "
     "token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
@@ -559,6 +563,7 @@ async def delete_backup(
 
 @server.tool(
     name="unifi_get_autobackup_settings",
+    auth="either",
     description="Get auto-backup settings (enabled state, schedule, retention count, cloud backup).",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

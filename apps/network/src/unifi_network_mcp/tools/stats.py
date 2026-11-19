@@ -650,6 +650,7 @@ async def get_client_sessions(
 
 @server.tool(
     name="unifi_get_dashboard",
+    auth="either",
     description=(
         "Get the pre-aggregated site dashboard. Defaults to a compact summary that omits "
         "high-volume activity/history series; pass summary=false to preserve raw dashboard entries."
@@ -709,6 +710,7 @@ async def get_anomalies(
 
 @server.tool(
     name="unifi_get_client_wifi_details",
+    auth="either",
     description=(
         "Get detailed WiFi statistics for a single wireless client including signal, noise, "
         "satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more."

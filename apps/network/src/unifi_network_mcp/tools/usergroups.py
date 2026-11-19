@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_usergroups",
+    auth="either",
     description="""List all user groups (bandwidth profiles) for the current site.
 
 User groups define bandwidth limits that can be applied to clients.
@@ -45,6 +46,7 @@ async def list_usergroups() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_usergroup_details",
+    auth="either",
     description="Get detailed information about a specific user group by its ID",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

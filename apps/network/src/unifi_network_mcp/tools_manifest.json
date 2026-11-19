@@ -6699,7 +6699,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed configuration for a specific MAC ACL rule by ID. Returns the same field names as unifi_list_acl_rules.",
       "name": "unifi_get_acl_rule_details",
       "schema": {
@@ -7018,7 +7018,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details of a specific AP group by ID, including member APs and WLANs.",
       "name": "unifi_get_ap_group_details",
       "schema": {
@@ -7125,7 +7125,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get auto-backup settings (enabled state, schedule, retention count, cloud backup).",
       "name": "unifi_get_autobackup_settings",
       "schema": {
@@ -7462,7 +7462,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed configuration for a specific client group by ID.",
       "name": "unifi_get_client_group_details",
       "schema": {
@@ -7804,7 +7804,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more.",
       "name": "unifi_get_client_wifi_details",
       "schema": {
@@ -7911,7 +7911,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed configuration for a specific content filtering profile by ID. Returns the full profile including categories, client MACs, network IDs, safe search settings, and allow/block lists.",
       "name": "unifi_get_content_filter_details",
       "schema": {
@@ -8018,7 +8018,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get the pre-aggregated site dashboard. Defaults to a compact summary that omits high-volume activity/history series; pass summary=false to preserve raw dashboard entries.",
       "name": "unifi_get_dashboard",
       "schema": {
@@ -8128,7 +8128,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs).",
       "name": "unifi_get_device_details",
       "schema": {
@@ -8243,7 +8243,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
       "name": "unifi_get_device_radio",
       "schema": {
@@ -8465,7 +8465,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific DNS record by ID.",
       "name": "unifi_get_dns_record_details",
       "schema": {
@@ -8984,7 +8984,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed configuration for a specific firewall policy by ID.",
       "name": "unifi_get_firewall_policy_details",
       "schema": {
@@ -9203,7 +9203,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get the gateway (USG) settings: security (GeoIP filtering, SYN cookies, ICMP redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS clamp), connection-tracking ALG modules (FTP/GRE/H.323/PPTP/SIP/TFTP), hardware offloading, and conntrack timeouts. Read-only; use unifi_update_gateway_settings to change values.",
       "name": "unifi_get_gateway_settings",
       "schema": {
@@ -9777,7 +9777,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get site-wide mDNS service settings and read-only network scope.",
       "name": "unifi_get_mdns_settings",
       "schema": {
@@ -9876,7 +9876,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
       "name": "unifi_get_mgmt_settings",
       "schema": {
@@ -9975,8 +9975,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
-      "description": "Get a NAT rule from the V2 controller API. Requires Network session credentials. These IDs are scoped to the V2 NAT tool family \u2014 do not pass them to port-forward or Integration API tools.",
+      "auth_method": "either",
+      "description": "Get a NAT rule from the V2 controller API. These IDs are scoped to the V2 NAT tool family \u2014 do not pass them to port-forward or Integration API tools.",
       "name": "unifi_get_nat_rule",
       "schema": {
         "input": {
@@ -10082,7 +10082,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, wan, all).\n\nmDNS field note: Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is configured site-wide on current UniFi Network versions, and this key only mirrors that site-wide scope \u2014 the mirror can go stale for hours, so treat the site-level setting as the source of truth (this server does not expose it). The controller accepts this field on the per-network write path but silently ignores it; unifi_update_network rejects it as read-only.\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
       "name": "unifi_get_network_details",
       "schema": {
@@ -10404,7 +10404,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed configuration for a specific OON policy by ID. Returns the full policy object including secure, qos, route sections and targets.",
       "name": "unifi_get_oon_policy_details",
       "schema": {
@@ -10511,7 +10511,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). Combines the device's sensed outlet_table (live relay_state, cycle_enabled, has_relay, has_metering) with the controller's desired outlet_overrides so callers see both reported and intended state per outlet. Returns an error if the device is not a PDU.",
       "name": "unifi_get_pdu_outlets",
       "schema": {
@@ -10939,7 +10939,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific QoS rule by ID.",
       "name": "unifi_get_qos_rule_details",
       "schema": {
@@ -11153,7 +11153,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed information about a specific static route by its ID",
       "name": "unifi_get_route_details",
       "schema": {
@@ -11376,7 +11376,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers.",
       "name": "unifi_get_site_settings",
       "schema": {
@@ -11475,7 +11475,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. The two services are independent flags on one record. The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
       "name": "unifi_get_snmp_settings",
       "schema": {
@@ -12051,7 +12051,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Returns controller version, uptime, hostname, device and client counts, update availability, and console CPU and memory usage. Use for basic 'is the controller healthy?' checks. For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. For network subsystem details, use unifi_get_network_health.",
       "name": "unifi_get_system_info",
       "schema": {
@@ -12150,7 +12150,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get the site's Teleport VPN settings: whether Teleport is enabled and its client address range (subnet_cidr, gateway-address form such as '192.168.2.1/24'). The UniFi UI does not show the range; the gateway picks it when Teleport is first enabled.",
       "name": "unifi_get_teleport_settings",
       "schema": {
@@ -12249,8 +12249,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
-      "description": "Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
+      "auth_method": "either",
+      "description": "Get site-wide threat management (IDS/IPS) and traffic identification settings.",
       "name": "unifi_get_threat_management_settings",
       "schema": {
         "input": {
@@ -12575,7 +12575,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). Returns risk and region count breakdowns plus Top-Talker rankings for a preset period: top clients, top destinations, top applications (by bytes), top blocked clients, and top blocking policies. Risk bands are low/medium/high (the UI labels these Low/Suspicious/Concerning). Application entries include best-effort DPI application/category names resolved from the controller catalogue; names remain null when the catalogue is unavailable or has no matching entry. The returned application_id is the low V2 traffic-flow application ID, not the Integration API compound ID. These IDs are scoped to the V2 traffic-flow tool family \u2014 do not pass them to Integration API DPI tools. Read-only.",
       "name": "unifi_get_traffic_flow_statistics",
       "schema": {
@@ -12870,7 +12870,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed information for a specific traffic route by ID.",
       "name": "unifi_get_traffic_route_details",
       "schema": {
@@ -12977,7 +12977,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed information about a specific user group by its ID",
       "name": "unifi_get_usergroup_details",
       "schema": {
@@ -13084,7 +13084,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get detailed information about a specific voucher by its ID",
       "name": "unifi_get_voucher_details",
       "schema": {
@@ -13191,7 +13191,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific VPN client by ID.",
       "name": "unifi_get_vpn_client_details",
       "schema": {
@@ -13298,7 +13298,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific VPN server by ID.",
       "name": "unifi_get_vpn_server_details",
       "schema": {
@@ -13405,7 +13405,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Get details for a specific WLAN by ID.",
       "name": "unifi_get_wlan_details",
       "schema": {
@@ -13512,7 +13512,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List MAC ACL rules (Policy Engine) for Layer 2 access control. These rules control which devices can communicate at Layer 2 within a VLAN.",
       "name": "unifi_list_acl_rules",
       "schema": {
@@ -13823,7 +13823,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all AP groups configured on the controller. AP groups control which access points broadcast which SSIDs. Returns group names, IDs, and associated AP/WLAN memberships.",
       "name": "unifi_list_ap_groups",
       "schema": {
@@ -14120,7 +14120,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Lists clients/devices currently blocked from the network. Each entry includes mac, hostname, name, last_seen, blocked. Pass an entry's mac to unifi_unblock_client as mac_address.",
       "name": "unifi_list_blocked_clients",
       "schema": {
@@ -14219,7 +14219,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List client groups (network member groups). Groups organize devices by MAC address for use in OON policies and firewall rules.",
       "name": "unifi_list_client_groups",
       "schema": {
@@ -14438,7 +14438,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List content filtering profiles. Profiles control DNS-based category blocking, safe search enforcement (GOOGLE, YOUTUBE, BING), and domain allow/block lists. Profiles can target specific clients by MAC or entire networks by ID. Common categories: FAMILY, ADVERTISEMENT, MALWARE, PHISHING, BOTNETS, SPAM, SPYWARE, HACKING, ANONYMIZERS, DNS_TUNNELING, ADULT, ALCOHOL, DRUGS, GAMBLING, VIOLENCE, PORNOGRAPHY, NUDITY, WEAPONS, DATING, HATE_SPEECH_AND_EXTREMISM, CHILD_ABUSE, CIPA, EMPTY_DOMAINS, NEWLY_DISCOVERED_DOMAINS, PARKED_DOMAINS, UNREACHABLE_DOMAINS.",
       "name": "unifi_list_content_filters",
       "schema": {
@@ -14665,7 +14665,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all static DNS records configured on the controller. Returns hostname, value, record type, enabled state, and TTL for each record.",
       "name": "unifi_list_dns_records",
       "schema": {
@@ -15306,7 +15306,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs, client MACs, IP/port groups, port matching).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description, protocol + source/destination targeting incl. port_matching_type/port/port_group_id when set). Set summary=false for the full fw_from_controller().model_dump() shape including schedule, logging, ip_version, connection_state_type, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
@@ -15430,7 +15430,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List controller firewall zones (V2 API) with the network IDs assigned to each (networks; resolve them with unifi_list_networks). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
       "name": "unifi_list_firewall_zones",
       "schema": {
@@ -15628,8 +15628,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
-      "description": "List NAT rules from the V2 controller API. Requires Network session credentials. These IDs are scoped to the V2 NAT tool family \u2014 do not pass them to port-forward or Integration API tools.",
+      "auth_method": "either",
+      "description": "List NAT rules from the V2 controller API. These IDs are scoped to the V2 NAT tool family \u2014 do not pass them to port-forward or Integration API tools.",
       "name": "unifi_list_nat_rules",
       "schema": {
         "input": {
@@ -15843,7 +15843,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List OON (Object-Oriented Network) policies. These policies control internet access schedules (bedtime blackouts), application blocking (social media, streaming), QoS, and policy-based routing.",
       "name": "unifi_list_oon_policies",
       "schema": {
@@ -16140,7 +16140,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all QoS rules on the Unifi Network controller for the current site.",
       "name": "unifi_list_qos_rules",
       "schema": {
@@ -16366,7 +16366,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all user-defined static routes for the current site.\n\nReturns route names, destination networks, next-hop addresses, and status.\nThese are manually configured routes, not dynamic or system routes.",
       "name": "unifi_list_routes",
       "schema": {
@@ -16465,7 +16465,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all traffic routes (policy-based routing rules) for the current site.\n\nTraffic routes define how specific traffic is routed based on domains,\nIP addresses, regions, or target devices. Often used for VPN routing.",
       "name": "unifi_list_traffic_routes",
       "schema": {
@@ -16564,7 +16564,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all user groups (bandwidth profiles) for the current site.\n\nUser groups define bandwidth limits that can be applied to clients.\nEach group specifies upload/download speed caps in Kbps.",
       "name": "unifi_list_usergroups",
       "schema": {
@@ -16663,7 +16663,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List hotspot vouchers for the current site.\n\nReturns voucher codes, expiration times, usage quotas, and bandwidth limits.\nVouchers are used for guest network access in captive portal setups. Supports\noptional limit, offset, case-insensitive search by code or note (including UI\nhyphenated codes), and strict fields projection. Deterministic pagination sorts\nby created_at descending with id descending tie-break for shaped calls;\nunshaped calls preserve controller return order for backward compatibility.",
       "name": "unifi_list_vouchers",
       "schema": {
@@ -16782,7 +16782,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all configured VPN clients (Wireguard, OpenVPN, etc).",
       "name": "unifi_list_vpn_clients",
       "schema": {
@@ -16881,7 +16881,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
       "name": "unifi_list_vpn_servers",
       "schema": {
@@ -17260,7 +17260,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Quick IP-to-client lookup. Returns essential fields (hostname, name, mac, is_online, last_seen) to minimize token usage.",
       "name": "unifi_lookup_by_ip",
       "schema": {

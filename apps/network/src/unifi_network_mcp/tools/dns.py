@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_dns_records",
+    auth="either",
     description="List all static DNS records configured on the controller. "
     "Returns hostname, value, record type, enabled state, and TTL for each record.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
@@ -56,6 +57,7 @@ async def list_dns_records() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_dns_record_details",
+    auth="either",
     description="Get details for a specific DNS record by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

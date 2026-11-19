@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_vouchers",
+    auth="either",
     description="""List hotspot vouchers for the current site.
 
 Returns voucher codes, expiration times, usage quotas, and bandwidth limits.
@@ -123,6 +124,7 @@ async def list_vouchers(
 
 @server.tool(
     name="unifi_get_voucher_details",
+    auth="either",
     description="Get detailed information about a specific voucher by its ID",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

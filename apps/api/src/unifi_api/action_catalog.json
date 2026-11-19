@@ -4238,7 +4238,7 @@
       "category": "acl",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "acl_manager",
       "manager_method": "get_acl_rule_by_id",
       "input_schema": {
@@ -4305,7 +4305,7 @@
       "category": "network",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "network_manager",
       "manager_method": "get_ap_group_details",
       "input_schema": {
@@ -4328,7 +4328,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_autobackup_settings",
       "input_schema": {
@@ -4413,7 +4413,7 @@
       "category": "client_groups",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "client_group_manager",
       "manager_method": "get_client_group_by_id",
       "input_schema": {
@@ -4503,7 +4503,7 @@
       "category": "stats",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "stats_manager",
       "manager_method": "get_client_wifi_details",
       "input_schema": {
@@ -4526,7 +4526,7 @@
       "category": "content_filtering",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "content_filter_manager",
       "manager_method": "get_content_filter_by_id",
       "input_schema": {
@@ -4549,7 +4549,7 @@
       "category": "stats",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "stats_manager",
       "manager_method": "get_dashboard",
       "input_schema": {
@@ -4575,7 +4575,7 @@
       "category": "devices",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "device_manager",
       "manager_method": "get_device_details",
       "input_schema": {
@@ -4606,7 +4606,7 @@
       "category": "devices",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "device_manager",
       "manager_method": "get_device_radio",
       "input_schema": {
@@ -4660,7 +4660,7 @@
       "category": "dns",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "dns_manager",
       "manager_method": "get_dns_record",
       "input_schema": {
@@ -4759,7 +4759,7 @@
       "category": "firewall",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "firewall_manager",
       "manager_method": "get_firewall_policy_by_id",
       "input_schema": {
@@ -4810,7 +4810,7 @@
       "category": "gateway_settings",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "gateway_settings_manager",
       "manager_method": "get_gateway_settings",
       "input_schema": {
@@ -4896,7 +4896,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_mdns_settings",
       "input_schema": {
@@ -4911,7 +4911,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_settings",
       "input_schema": {
@@ -4926,7 +4926,7 @@
       "category": "nat",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "nat_manager",
       "manager_method": "get_nat_rule",
       "input_schema": {
@@ -4949,7 +4949,7 @@
       "category": "network",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "network_manager",
       "manager_method": "get_network_details",
       "input_schema": {
@@ -5019,7 +5019,7 @@
       "category": "oon",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "oon_manager",
       "manager_method": "get_oon_policy_by_id",
       "input_schema": {
@@ -5042,7 +5042,7 @@
       "category": "devices",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "device_manager",
       "manager_method": "get_pdu_outlets",
       "input_schema": {
@@ -5134,7 +5134,7 @@
       "category": "qos",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "qos_manager",
       "manager_method": "get_qos_rule_details",
       "input_schema": {
@@ -5180,7 +5180,7 @@
       "category": "routing",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "routing_manager",
       "manager_method": "get_route_details",
       "input_schema": {
@@ -5235,7 +5235,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_site_settings",
       "input_schema": {
@@ -5250,7 +5250,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_settings",
       "input_schema": {
@@ -5354,7 +5354,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_system_info",
       "input_schema": {
@@ -5369,7 +5369,7 @@
       "category": "vpn",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "vpn_manager",
       "manager_method": "get_teleport_settings",
       "input_schema": {
@@ -5384,7 +5384,7 @@
       "category": "system",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "system_manager",
       "manager_method": "get_threat_management_settings",
       "input_schema": {
@@ -5458,7 +5458,7 @@
       "category": "traffic_flows",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "traffic_flow_manager",
       "manager_method": "get_traffic_flow_statistics",
       "input_schema": {
@@ -5585,7 +5585,7 @@
       "category": "traffic_routes",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "traffic_route_manager",
       "manager_method": "get_traffic_route_details",
       "input_schema": {
@@ -5608,7 +5608,7 @@
       "category": "usergroups",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "usergroup_manager",
       "manager_method": "get_usergroup_details",
       "input_schema": {
@@ -5631,7 +5631,7 @@
       "category": "hotspot",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "hotspot_manager",
       "manager_method": "get_voucher_details",
       "input_schema": {
@@ -5654,7 +5654,7 @@
       "category": "vpn",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "vpn_manager",
       "manager_method": "get_vpn_client_details",
       "input_schema": {
@@ -5677,7 +5677,7 @@
       "category": "vpn",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "vpn_manager",
       "manager_method": "get_vpn_server_details",
       "input_schema": {
@@ -5700,7 +5700,7 @@
       "category": "network",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "network_manager",
       "manager_method": "get_wlan_details",
       "input_schema": {
@@ -5723,7 +5723,7 @@
       "category": "acl",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "acl_manager",
       "manager_method": "get_acl_rules",
       "input_schema": {
@@ -5782,7 +5782,7 @@
       "category": "network",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "network_manager",
       "manager_method": "list_ap_groups",
       "input_schema": {
@@ -5827,7 +5827,7 @@
       "category": "clients",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "client_manager",
       "manager_method": "get_blocked_clients",
       "input_schema": {
@@ -5842,7 +5842,7 @@
       "category": "client_groups",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "client_group_manager",
       "manager_method": "get_client_groups",
       "input_schema": {
@@ -5893,7 +5893,7 @@
       "category": "content_filtering",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "content_filter_manager",
       "manager_method": "get_content_filters",
       "input_schema": {
@@ -5952,7 +5952,7 @@
       "category": "dns",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "dns_manager",
       "manager_method": "list_dns_records",
       "input_schema": {
@@ -6089,7 +6089,7 @@
       "category": "firewall",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "firewall_manager",
       "manager_method": "get_firewall_policies",
       "input_schema": {
@@ -6129,7 +6129,7 @@
       "category": "firewall",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "firewall_manager",
       "manager_method": "get_firewall_zones",
       "input_schema": {
@@ -6159,7 +6159,7 @@
       "category": "nat",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "nat_manager",
       "manager_method": "list_nat_rules",
       "input_schema": {
@@ -6206,7 +6206,7 @@
       "category": "oon",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "oon_manager",
       "manager_method": "get_oon_policies",
       "input_schema": {
@@ -6251,7 +6251,7 @@
       "category": "qos",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "qos_manager",
       "manager_method": "get_qos_rules",
       "input_schema": {
@@ -6309,7 +6309,7 @@
       "category": "routing",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "routing_manager",
       "manager_method": "get_routes",
       "input_schema": {
@@ -6324,7 +6324,7 @@
       "category": "traffic_routes",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "traffic_route_manager",
       "manager_method": "get_traffic_routes",
       "input_schema": {
@@ -6339,7 +6339,7 @@
       "category": "usergroups",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "usergroup_manager",
       "manager_method": "get_usergroups",
       "input_schema": {
@@ -6354,7 +6354,7 @@
       "category": "hotspot",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "hotspot_manager",
       "manager_method": "get_vouchers",
       "input_schema": {
@@ -6389,7 +6389,7 @@
       "category": "vpn",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "vpn_manager",
       "manager_method": "get_vpn_clients",
       "input_schema": {
@@ -6404,7 +6404,7 @@
       "category": "vpn",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "vpn_manager",
       "manager_method": "get_vpn_servers",
       "input_schema": {
@@ -6475,7 +6475,7 @@
       "category": "clients",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "client_manager",
       "manager_method": "get_client_by_ip",
       "input_schema": {

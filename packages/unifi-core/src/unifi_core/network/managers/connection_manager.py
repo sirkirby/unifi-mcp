@@ -127,6 +127,29 @@ _FORBIDDEN_HINT = (
 )
 _SETTINGS_PATH_PREFIXES = ("/get/setting/", "/set/setting/")
 
+# Legacy site paths a Network API key reads with GET, each verified with the
+# key alone against a live controller. Reads the controller serves through
+# POST (stat/report, stat/session, stat/anomalies, ...) are not here, and every
+# write needs the session: the key transport refuses any method but GET.
+_KEY_READ_SITE_PATHS = frozenset(
+    {
+        "rest/networkconf",
+        "rest/wlanconf",
+        "rest/user",
+        "rest/setting",
+        "rest/routing",
+        "rest/usergroup",
+        "stat/device",
+        "stat/sta",
+        "stat/voucher",
+        "stat/sysinfo",
+        "get/setting",
+        "get/setting/",
+    }
+)
+# One settings section: get/setting/<section>.
+_KEY_READ_SETTING_SECTION_RE = re.compile(r"get/setting/[^/]+")
+
 
 class SettingsControllerRejection(RequestError):
     """Safe settings failure carrying only a validated controller error code."""
@@ -1034,24 +1057,34 @@ class ConnectionManager:
     def integration_inventory_only(self) -> bool:
         return self._initialized and self._key_mode and self.controller is None
 
+    def _key_read_allowed(self, path: str) -> bool:
+        """Whether a Network API key may GET this controller path."""
+        for prefix in ("", "/proxy/network"):
+            if path == f"{prefix}/api/self/sites":
+                return True
+            site_path = f"{prefix}/api/s/{self.site}/"
+            if path.startswith(site_path):
+                suffix = path[len(site_path) :]
+                return suffix in _KEY_READ_SITE_PATHS or bool(_KEY_READ_SETTING_SECTION_RE.fullmatch(suffix))
+            # Every v2 site read the managers make was verified with the key
+            # alone, so the whole site-scoped v2 GET surface is admitted.
+            v2_site_path = f"{prefix}/v2/api/site/{self.site}/"
+            if path.startswith(v2_site_path) and len(path) > len(v2_site_path):
+                return True
+        return False
+
     async def _key_read_transport(self, request, handler):
-        """Bound even direct SDK calls to verified inventory reads and this host."""
+        """Bound even direct SDK calls to verified GET reads and this host."""
         from yarl import URL
 
         target = URL(self.url_base)
         if (request.url.scheme, request.url.host, request.url.port) != (target.scheme, target.host, target.port):
             raise UniFiAuthError("API-key inventory requests cannot leave the configured controller.")
-        path = request.url.path
-        allowed = path in {"/api/self/sites", "/proxy/network/api/self/sites"} or any(
-            path == f"{prefix}/api/s/{self.site}/{suffix}"
-            for prefix in ("", "/proxy/network")
-            for suffix in ("rest/networkconf", "rest/wlanconf", "stat/device", "stat/sta", "rest/user")
-        )
-        if request.method != "GET" or not allowed:
+        if request.method != "GET" or not self._key_read_allowed(request.url.path):
             raise UniFiAuthError(
                 "This operation requires Network session authentication. "
                 "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD; "
-                "API-key legacy access currently supports inventory reads only."
+                "API-key legacy access supports verified GET reads only."
             )
         return await handler(request)
 

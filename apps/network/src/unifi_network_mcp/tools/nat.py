@@ -50,11 +50,11 @@ def _error(operation: str, error: Exception) -> Dict[str, Any]:
 @server.tool(
     name="unifi_list_nat_rules",
     description=(
-        "List NAT rules from the V2 controller API. Requires Network session credentials. "
+        "List NAT rules from the V2 controller API. "
         "These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools."
     ),
     permission_category="nat",
-    auth="local_only",
+    auth="either",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_nat_rules() -> Dict[str, Any]:
@@ -76,11 +76,11 @@ async def list_nat_rules() -> Dict[str, Any]:
 @server.tool(
     name="unifi_get_nat_rule",
     description=(
-        "Get a NAT rule from the V2 controller API. Requires Network session credentials. "
+        "Get a NAT rule from the V2 controller API. "
         "These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools."
     ),
     permission_category="nat",
-    auth="local_only",
+    auth="either",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def get_nat_rule(

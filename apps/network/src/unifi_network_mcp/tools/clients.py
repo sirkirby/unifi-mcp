@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_lookup_by_ip",
+    auth="either",
     description="Quick IP-to-client lookup. Returns essential fields (hostname, name, mac, is_online, last_seen) to minimize token usage.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -188,6 +189,7 @@ async def get_client_details(
 
 @server.tool(
     name="unifi_list_blocked_clients",
+    auth="either",
     description=(
         "Lists clients/devices currently blocked from the network. Each entry includes "
         "mac, hostname, name, last_seen, blocked. Pass an entry's mac to "

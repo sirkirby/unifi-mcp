@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_routes",
+    auth="either",
     description="""List all user-defined static routes for the current site.
 
 Returns route names, destination networks, next-hop addresses, and status.
@@ -79,6 +80,7 @@ async def list_active_routes() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_route_details",
+    auth="either",
     description="Get detailed information about a specific static route by its ID",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

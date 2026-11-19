@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_firewall_policies",
+    auth="either",
     description=(
         "List firewall policies configured on the Unifi Network controller. "
         "Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, "
@@ -103,6 +104,7 @@ async def list_firewall_policies(
 
 @server.tool(
     name="unifi_get_firewall_policy_details",
+    auth="either",
     description="Get detailed configuration for a specific firewall policy by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
@@ -802,6 +804,7 @@ async def reorder_firewall_policies(
 
 @server.tool(
     name="unifi_list_firewall_zones",
+    auth="either",
     description="List controller firewall zones (V2 API) with the network IDs assigned to each "
     "(networks; resolve them with unifi_list_networks). Returned IDs are V2 controller "
     "ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and "

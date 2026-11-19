@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_content_filters",
+    auth="either",
     description="List content filtering profiles. "
     "Profiles control DNS-based category blocking, safe search enforcement "
     "(GOOGLE, YOUTUBE, BING), and domain allow/block lists. "
@@ -72,6 +73,7 @@ async def list_content_filters() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_content_filter_details",
+    auth="either",
     description="Get detailed configuration for a specific content filtering profile by ID. "
     "Returns the full profile including categories, client MACs, network IDs, "
     "safe search settings, and allow/block lists.",

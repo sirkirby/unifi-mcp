@@ -129,6 +129,7 @@ async def create_traffic_route(
 
 @server.tool(
     name="unifi_list_traffic_routes",
+    auth="either",
     description="""List all traffic routes (policy-based routing rules) for the current site.
 
 Traffic routes define how specific traffic is routed based on domains,
@@ -175,6 +176,7 @@ async def list_traffic_routes() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_traffic_route_details",
+    auth="either",
     description="Get detailed information for a specific traffic route by ID.",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
