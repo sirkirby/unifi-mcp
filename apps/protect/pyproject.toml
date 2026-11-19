@@ -26,7 +26,8 @@ dependencies = [
     # Bounded incident evidence collection and its client view require Core 0.4.71.
     # The Protect alarm trigger/action catalog and webhook firing require Core 0.4.87.
     # Address-free Protect errors with a fixed permission hint require Core 0.4.94.
-    "unifi-core[protect]>=0.4.94,<0.5",
+    # Listing and renaming camera crossing lines and smart-detect zones require Core 0.4.97.
+    "unifi-core[protect]>=0.4.97,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
