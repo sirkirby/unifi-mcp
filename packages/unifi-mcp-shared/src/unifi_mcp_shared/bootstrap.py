@@ -645,6 +645,12 @@ def resolve_env(key: str, *, env_prefix: str, logger: logging.Logger, shared_fal
 # shared host; see load_server_config.
 _HOST_BOUND_KEYS = ("username", "password", "api_key")
 
+# The warning for a cut credential: shared spellings, server prefix, reason, remedy.
+_HOST_CUT_NOTE = "%s set but not used: the host comes from UNIFI_%s_HOST%s; set %s."
+
+# The cut-credential warnings of the last load_server_config call per server prefix.
+_CREDENTIAL_CUT_NOTES: dict[str, tuple[str, ...]] = {}
+
 
 def _host_identity(host: str, port: str) -> tuple[str, str]:
     """What two host settings must share to name the same console.
@@ -673,18 +679,29 @@ def _shared_spellings(key: str) -> list[str]:
     return [name for name in names if os.getenv(name)]
 
 
-def _warn_host_cut(logger: logging.Logger, key: str, env_prefix: str, spellings: list[str], why: str) -> None:
+def _warn_host_cut(logger: logging.Logger, key: str, env_prefix: str, spellings: list[str], why: str) -> str:
     """Name the shared spellings of a cut credential and the server-level variable to set.
 
-    ``why`` is the clause :func:`_host_level_cut` returned. Only variable names are logged.
+    ``why`` is the clause :func:`_host_level_cut` returned. Only variable names are
+    logged. Returns the warning's text.
     """
     names = [_origin(name) for name in spellings]
     subject = f"{names[0]} is" if len(names) == 1 else _listed(names)
     product = f"UNIFI_{env_prefix}_{key.upper()}"
     remedy = f"{product} (or its _FILE/_COMMAND form)" if is_sensitive_key(key) else product
-    logger.warning(
-        "%s set but not used: the host comes from UNIFI_%s_HOST%s; set %s.", subject, env_prefix, why, remedy
-    )
+    args = (subject, env_prefix, why, remedy)
+    logger.warning(_HOST_CUT_NOTE, *args)
+    return _HOST_CUT_NOTE % args
+
+
+def credential_cut_hint(env_prefix: str) -> str | None:
+    """The cut-credential warnings :func:`load_server_config` logged for this server, or ``None``.
+
+    The same fixed text, joined: variable names only, never values or hosts. A
+    server passes it to its connection manager so a rejected login says which
+    shared credential was ignored and what to set instead.
+    """
+    return " ".join(_CREDENTIAL_CUT_NOTES.get(env_prefix, ())) or None
 
 
 def _host_level_cut(
@@ -744,7 +761,8 @@ def load_server_config(
     server's level only. Shared spellings of those keys are then detected by name
     and never read or run, so a broken shared ``_FILE`` or ``_COMMAND`` does not
     refuse startup; each one that is set is named in a warning, without values,
-    when the credential ends up empty.
+    when the credential ends up empty. The warnings are kept for
+    :func:`credential_cut_hint`.
     The server still starts, because setup mode keys off the host, and its first
     login fails until the server-level credential is set. Port, site, TLS settings
     and every other key keep falling back. A host from a ``CONFIG_PATH`` file is
@@ -816,6 +834,7 @@ def load_server_config(
     # except that credentials follow the host (see _host_level_cut).
     host_cut, cut_why = _host_level_cut(keys, isolated_keys, env_prefix=env_prefix, logger=logger)
     no_fallback = host_cut.union(isolated_keys)
+    cut_notes: list[str] = []
     unifi_env_overrides: dict[str, Any] = {}
     for key in keys:
         val = resolve_env(key, env_prefix=env_prefix, logger=logger, shared_fallback=key not in no_fallback)
@@ -843,7 +862,7 @@ def load_server_config(
             # operator's config file is kept and used.
             if key in host_cut and (blanked or not file_value):
                 if spellings := _shared_spellings(key):
-                    _warn_host_cut(logger, key, env_prefix, spellings, cut_why)
+                    cut_notes.append(_warn_host_cut(logger, key, env_prefix, spellings, cut_why))
             continue
         if val is not None:
             if key == "verify_ssl":
@@ -865,6 +884,7 @@ def load_server_config(
         )
         cfg.unifi = OmegaConf.merge(cfg.unifi, unifi_env_overrides)
 
+    _CREDENTIAL_CUT_NOTES[env_prefix] = tuple(cut_notes)
     return cfg
 
 
