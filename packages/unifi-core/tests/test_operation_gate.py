@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
+import random
 
 import pytest
 from unifi_core.operation_gate import (
@@ -44,11 +46,15 @@ class FakeClock:
         finally:
             self._sleepers.remove(entry)
 
-    async def advance(self, seconds: float) -> None:
+    def move(self, seconds: float) -> None:
+        """Advance time and wake due sleepers, without yielding to them."""
         self.value += seconds
         for deadline, future in list(self._sleepers):
             if deadline <= self.value and not future.done():
                 future.set_result(None)
+
+    async def advance(self, seconds: float) -> None:
+        self.move(seconds)
         await settle()
 
 
@@ -670,7 +676,9 @@ def test_host_keys_compare_like_the_credential_host_rule() -> None:
     assert GateKey.for_host("console", "", "network") == GateKey.for_host("console", 443, "network")
     assert GateKey.for_host("console", 8443, "network") != GateKey.for_host("console", 443, "network")
     assert GateKey.for_host("console", 443, "network") != GateKey.for_host("console", 443, "protect")
-    # The host as written: no other normalisation, and non-ASCII case is kept.
+    # Surrounding whitespace never splits one console into two gates.
+    assert GateKey.for_host(" console ", " 443 ", "network") == GateKey.for_host("console", 443, "network")
+    # Otherwise the host as written: no other normalisation, and non-ASCII case is kept.
     assert GateKey.for_host("console/", 443, "network") != GateKey.for_host("console", 443, "network")
     assert GateKey.for_host("CÖNSOLE", 443, "network").identity == "CÖNSOLE:443"
     for bad_host in ("", "  "):
@@ -708,3 +716,254 @@ def test_default_registry_and_reset_helper() -> None:
     reset_gate_registry_for_tests()
     assert gate_registry().get(key) is not gate
     reset_gate_registry_for_tests()
+
+
+# ---------------------------------------------------------------------------
+# Regressions: exits, hand-overs, coinciding deadlines, observers
+# ---------------------------------------------------------------------------
+
+
+async def test_a_write_exited_in_another_context_is_still_released() -> None:
+    gate, _clock = make_gate()
+    entered = gate.write()
+    await entered.__aenter__()
+    assert gate.write_held
+
+    async def exit_elsewhere() -> None:
+        await entered.__aexit__(None, None, None)
+
+    # A framework may run a dependency's teardown in another context, where
+    # the ownership mark cannot be reset. The turn must be released anyway.
+    await asyncio.get_running_loop().create_task(exit_elsewhere(), context=contextvars.Context())
+    assert not gate.write_held
+    await asyncio.wait_for(holder_write(gate), timeout=1)
+
+
+async def test_a_read_exited_in_another_context_still_frees_its_slot() -> None:
+    gate, _clock = make_gate(read_cap=1)
+    entered = gate.read()
+    await entered.__aenter__()
+    assert gate.snapshot()["reads_in_use"] == 1
+
+    async def exit_elsewhere() -> None:
+        await entered.__aexit__(None, None, None)
+
+    await asyncio.get_running_loop().create_task(exit_elsewhere(), context=contextvars.Context())
+    assert gate.snapshot()["reads_in_use"] == 0
+
+
+async def test_a_read_slot_handed_to_a_waiter_that_is_then_cancelled_is_passed_on() -> None:
+    gate, _clock = make_gate(read_cap=1)
+    release = asyncio.Event()
+    ran: list[str] = []
+
+    async def read(name: str, wait: asyncio.Event | None = None) -> None:
+        async with gate.read():
+            ran.append(name)
+            if wait is not None:
+                await wait.wait()
+
+    first = asyncio.create_task(read("first", release))
+    await settle()
+    second = asyncio.create_task(read("second"))
+    third = asyncio.create_task(read("third"))
+    await settle()
+    assert gate.snapshot()["reads_waiting"] == 2
+
+    release.set()
+    await asyncio.sleep(0)  # "first" leaves and hands its slot to "second"
+    assert gate.snapshot()["reads_waiting"] == 1
+    second.cancel()
+    await asyncio.gather(first, third)
+    assert second.cancelled()
+    assert ran == ["first", "third"]
+    assert gate.snapshot()["reads_in_use"] == 0
+    assert gate.snapshot()["reads_waiting"] == 0
+
+
+async def test_a_wait_budget_and_an_over_budget_holder_at_the_same_deadline_fail_once() -> None:
+    gate, clock = make_gate(hold_budget_seconds=10)
+    holder = Holder(gate)
+    await holder.entered.wait()
+
+    # The holder falls due at its budget plus the release grace: the same instant.
+    async def budgeted() -> None:
+        async with gate.write(wait_budget=10 + 1.0):
+            pass
+
+    waiter = asyncio.create_task(budgeted())
+    await settle()
+    await clock.advance(11)
+    with pytest.raises(ControllerBusyError) as busy:
+        await waiter
+    assert busy.value.reason == "wait_budget"
+    assert gate.queue_depth == 0
+    assert gate.snapshot()["counters"]["writes_busy"] == 1
+    assert gate.write_held
+    await holder.finish()
+    assert not gate.write_held
+
+
+class _Boom(BaseException):
+    pass
+
+
+@pytest.mark.parametrize("failing", ["queued", "admitted", "granted"])
+@pytest.mark.parametrize("contended", [True, False])
+async def test_an_observer_raising_a_base_exception_never_leaks_the_gate(failing: str, contended: bool) -> None:
+    gate, _clock = make_gate()
+    holder = Holder(gate) if contended else None
+    if holder is not None:
+        await holder.entered.wait()
+
+    class Raising:
+        def admitted(self) -> None:
+            if failing == "admitted":
+                raise _Boom()
+
+        def queued(self, ticket) -> None:
+            if failing == "queued":
+                raise _Boom()
+
+        def granted(self, ticket) -> None:
+            if failing == "granted":
+                raise _Boom()
+
+    async def observed() -> None:
+        async with observing_operations(Raising()):
+            async with gate.write():
+                raise AssertionError("the body must not run")
+
+    task = asyncio.create_task(observed())
+    await settle()
+    if holder is not None:
+        assert gate.queue_depth == (1 if failing == "granted" else 0)
+        await holder.finish()
+    with pytest.raises(_Boom):
+        await task
+    assert not gate.write_held
+    assert gate.queue_depth == 0
+
+
+# ---------------------------------------------------------------------------
+# Randomised schedules (fixed seeds)
+# ---------------------------------------------------------------------------
+
+
+class _Violation(AssertionError):
+    pass
+
+
+async def _yields(count: int) -> None:
+    for _ in range(count):
+        await asyncio.sleep(0)
+
+
+async def _random_gate_run(seed: int) -> None:
+    rng = random.Random(seed)
+    clock = FakeClock()
+    cap = rng.randint(1, 4)
+    budget = rng.choice([5.0, 20.0, 1000.0])
+    gate = OperationGate(GateSettings(hold_budget_seconds=budget, read_cap=cap), name="stress", clock=clock)
+    state = {"writers": 0}
+    request_order: list[int] = []
+    grant_order: list[int] = []
+    tickets: dict[int, object] = {}
+
+    class Recorder:
+        def __init__(self, index: int) -> None:
+            self.index = index
+
+        def admitted(self) -> None:
+            pass
+
+        def queued(self, ticket) -> None:
+            tickets[self.index] = ticket
+            request_order.append(self.index)
+
+        def granted(self, ticket) -> None:
+            pass
+
+    async def body() -> None:
+        if state["writers"] > 1:
+            raise _Violation(f"seed {seed}: two writers at once")
+        if rng.random() < 0.3:
+            before = gate.snapshot()["reads_in_use"]
+            async with gate.read():
+                if gate.snapshot()["reads_in_use"] != before:
+                    raise _Violation(f"seed {seed}: a nested read took a slot")
+                await _yields(rng.randint(0, 2))
+        if rng.random() < 0.2:
+            with pytest.raises(GateReentryError):
+                async with gate.write():
+                    pass
+        await _yields(rng.randint(0, 4))
+
+    async def writer(index: int) -> None:
+        wait_budget = rng.choice([None, None, 3.0, 50.0])
+        try:
+            async with observing_operations(Recorder(index)):
+                async with gate.write(wait_budget=wait_budget, label=f"w{index}"):
+                    grant_order.append(index)
+                    state["writers"] += 1
+                    try:
+                        await body()
+                    finally:
+                        state["writers"] -= 1
+                    if rng.random() < 0.15:
+                        raise RuntimeError("body failure")
+        except (RuntimeError, ControllerBusyError, WriteTicketCancelled):
+            pass
+
+    async def reader() -> None:
+        try:
+            async with gate.read(wait_budget=rng.choice([None, 2.0])):
+                if gate.snapshot()["reads_in_use"] > cap:
+                    raise _Violation(f"seed {seed}: read cap exceeded")
+                if rng.random() < 0.3:
+                    async with gate.read():
+                        await _yields(rng.randint(0, 2))
+                await _yields(rng.randint(0, 5))
+        except ControllerBusyError:
+            pass
+
+    tasks: list[asyncio.Task] = []
+    for index in range(rng.randint(5, 25)):
+        tasks.append(asyncio.create_task(writer(index) if rng.random() < 0.6 else reader()))
+        await _yields(rng.randint(0, 2))
+        for _ in range(rng.randint(0, 2)):
+            action = rng.random()
+            if action < 0.15:
+                rng.choice(tasks).cancel()
+            elif action < 0.25 and tickets:
+                rng.choice(list(tickets.values())).cancel()
+            elif action < 0.4:
+                clock.move(rng.choice([0.5, 2.0, 10.0]))
+            await _yields(rng.randint(0, 3))
+
+    for _ in range(2000):
+        if all(task.done() for task in tasks):
+            break
+        clock.move(1.0)
+        await _yields(3)
+    else:
+        raise _Violation(f"seed {seed}: operations stuck; {gate.snapshot()}")
+    for task in tasks:
+        if not task.cancelled() and task.exception() is not None:
+            raise task.exception()
+    snapshot = gate.snapshot()
+    if snapshot["write_held"] or snapshot["queue_depth"] or snapshot["reads_in_use"] or snapshot["reads_waiting"]:
+        raise _Violation(f"seed {seed}: gate not idle; {snapshot}")
+    position = {index: order for order, index in enumerate(request_order)}
+    granted_positions = [position[index] for index in grant_order]
+    if granted_positions != sorted(granted_positions):
+        raise _Violation(f"seed {seed}: grants {grant_order} out of request order {request_order}")
+
+
+async def test_random_schedules_keep_writes_exclusive_ordered_and_the_gate_idle_after() -> None:
+    logging.disable(logging.CRITICAL)
+    try:
+        for seed in range(300):
+            await _random_gate_run(seed)
+    finally:
+        logging.disable(logging.NOTSET)

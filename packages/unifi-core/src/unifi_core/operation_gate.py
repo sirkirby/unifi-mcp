@@ -279,6 +279,20 @@ def create_ungated_task(coro: Coroutine[Any, Any, T], *, name: str | None = None
     return asyncio.get_running_loop().create_task(coro, name=name, context=ungated_context())
 
 
+def _reset_holds(token: contextvars.Token[tuple[_Hold, ...]]) -> None:
+    """Drop the hold mark set on entry; tolerate an exit made in another context.
+
+    A context manager entered in one context and exited in another (a
+    framework running a dependency's setup and teardown apart) cannot reset
+    the mark. The gate is released regardless, and a mark left behind is
+    inert: ownership is honoured only while the hold lasts.
+    """
+    try:
+        _holds.reset(token)
+    except ValueError:
+        logger.debug("Operation gate exited in a different context than it was entered")
+
+
 def _held_write(gate: OperationGate) -> WriteTicket | None:
     for hold in _holds.get():
         if isinstance(hold, WriteTicket) and hold.gate is gate and hold.active:
@@ -318,6 +332,9 @@ async def write_request_bound() -> AsyncIterator[None]:
             "The write's time budget is spent; the controller request was not sent. "
             "Read the resource back before retrying the change."
         )
+    # The remaining budget is read on the gate's clock, the timeout runs on the
+    # event loop's. Both are monotonic seconds with the default clock; a test
+    # clock only decides how much budget is left.
     timeout = asyncio.timeout(remaining)
     try:
         async with timeout:
@@ -497,23 +514,31 @@ class OperationGate:
                 "Run the nested change inside the held write, or start it with create_ungated_task."
             )
         ticket = self._enqueue(label)
-        _notify("queued", ticket)
-        _notify("admitted")
+        # The release sits in the outermost finally, independent of anything
+        # else that can fail on the way out (an observer, a context reset).
         try:
-            await self._await_grant(ticket, wait_budget)
-        except BaseException:
-            self._abandon(ticket)
-            raise
-        _notify("granted", ticket)
-        waited = (ticket.granted_at or ticket.requested_at) - ticket.requested_at
-        logger.debug(
-            "Write gate %s granted %s after %.3fs (%d queued)", self.name, label or "write", waited, len(self._waiting)
-        )
-        token = _holds.set((*_holds.get(), ticket))
-        try:
-            yield ticket
+            try:
+                _notify("queued", ticket)
+                _notify("admitted")
+                await self._await_grant(ticket, wait_budget)
+            except BaseException:
+                self._abandon(ticket)
+                raise
+            _notify("granted", ticket)
+            waited = (ticket.granted_at or ticket.requested_at) - ticket.requested_at
+            logger.debug(
+                "Write gate %s granted %s after %.3fs (%d queued)",
+                self.name,
+                label or "write",
+                waited,
+                len(self._waiting),
+            )
+            token = _holds.set((*_holds.get(), ticket))
+            try:
+                yield ticket
+            finally:
+                _reset_holds(token)
         finally:
-            _holds.reset(token)
             self._release(ticket)
 
     def _enqueue(self, label: str | None) -> WriteTicket:
@@ -705,11 +730,13 @@ class OperationGate:
             return
         await self._acquire_read(wait_budget, label)
         hold = _ReadHold(self)
-        token = _holds.set((*_holds.get(), hold))
         try:
-            yield
+            token = _holds.set((*_holds.get(), hold))
+            try:
+                yield
+            finally:
+                _reset_holds(token)
         finally:
-            _holds.reset(token)
             hold.released = True
             self._release_read()
 
@@ -774,10 +801,14 @@ def _normalise_product(product: str) -> str:
 class GateKey:
     """A controller application: who it is, plus the product.
 
-    ``for_host`` compares the way server credentials are matched to a
+    ``for_host`` follows the rule that matches server credentials to a
     console: the host as written with ASCII case folded, plus the effective
-    port (443 when none is given). ``for_controller`` keys an API server's
-    stored controller record.
+    port. Two differences, both of which can only merge gates, never split
+    them: surrounding whitespace is dropped from the host, and the port is
+    443 when none (or a blank) is given, a number written in digits is
+    compared as that number (``"0443"`` is ``443``), and any other port text
+    is kept as written once trimmed. ``for_controller`` keys an API server's
+    stored controller record by its trimmed id.
     """
 
     scope: str
@@ -788,6 +819,7 @@ class GateKey:
     def for_host(cls, host: str, port: int | str | None, product: str) -> GateKey:
         if not isinstance(host, str) or not host.strip():
             raise ValueError("host must be a non-empty string")
+        host = host.strip()
         folded = host.lower() if host.isascii() else host
         port_text = "443" if port is None or (isinstance(port, str) and not port.strip()) else str(port).strip()
         if port_text.isdigit():
