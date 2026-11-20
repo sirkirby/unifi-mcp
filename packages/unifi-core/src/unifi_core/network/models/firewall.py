@@ -546,7 +546,8 @@ def validate_policy_port_targeting(fields: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # The controller stores a targeting selector only under the enum value that
 # activates it; under any other value it accepts the field and silently ignores
-# it. (selector key, activating enum key, activating value).
+# it. (selector key, activating enum key, activating value): the selectors that are
+# validated, and refused when left behind under another value.
 
 SELECTOR_ACTIVATORS: tuple[tuple[str, str, str], ...] = (
     ("client_macs", "matching_target", "CLIENT"),
@@ -554,10 +555,32 @@ SELECTOR_ACTIVATORS: tuple[tuple[str, str, str], ...] = (
     ("port_group_id", "port_matching_type", "OBJECT"),
 )
 
+# Every selector the controller ignores outside its activating values, as
+# selector -> ((enum key, activating value), ...): active only while every pair
+# matches. The address selectors follow the same contract as the three above, but
+# only the three are refused when left behind: stored policies routinely carry a
+# stale ips or network_ids, a create or update that includes one is accepted today,
+# and refusing it would break those writes. retire_stale_selectors removes a stale
+# one when an update moves its activator instead.
+SELECTOR_ACTIVATION: Dict[str, tuple[tuple[str, str], ...]] = {
+    **{selector: ((key, value),) for selector, key, value in SELECTOR_ACTIVATORS},
+    "ips": (("matching_target", "IP"), ("matching_target_type", "SPECIFIC")),
+    "ip_group_id": (("matching_target", "IP"), ("matching_target_type", "OBJECT")),
+    "network_ids": (("matching_target", "NETWORK"),),
+}
+
+# Inversion flags that only mean something under one matching_target. Retired to
+# False, like match_opposite_ports, so a later switch back cannot silently invert.
+_TARGET_INVERSION_FLAGS: Dict[str, str] = {
+    "match_opposite_ips": "IP",
+    "match_opposite_networks": "NETWORK",
+}
+
 # The only endpoint keys retire_stale_selectors may set to None, and therefore the
 # only keys a None inside an endpoint is allowed to remove. Any other None is the
 # caller's own and must reach the controller, which rejects it loudly.
-RETIRABLE_SELECTORS: frozenset[str] = frozenset(selector for selector, _, _ in SELECTOR_ACTIVATORS)
+RETIRABLE_SELECTORS: frozenset[str] = frozenset(SELECTOR_ACTIVATION)
+_REFUSED_WHEN_LEFT_BEHIND: frozenset[str] = frozenset(selector for selector, _, _ in SELECTOR_ACTIVATORS)
 
 # The endpoint keys that make a caller responsible for a selector's error. An error
 # the stored policy already had is not an update's fault, unless the update wrote one
@@ -576,6 +599,7 @@ _SELECTOR_OWNER_KEYS: Dict[str, frozenset[str]] = {
 # rather than hiding a selector it may well be enforcing.
 _KNOWN_ACTIVATOR_VALUES: Dict[str, frozenset[str]] = {
     "matching_target": frozenset({"ANY", "IP", "NETWORK", "CLIENT"}),
+    "matching_target_type": frozenset({"SPECIFIC", "OBJECT"}),
     "port_matching_type": frozenset({"ANY", "SPECIFIC", "OBJECT"}),
 }
 
@@ -745,30 +769,63 @@ def validate_policy_selectors(fields: Dict[str, Any]) -> None:
             raise ValueError(errors[0][1])
 
 
+def _activation_ruled_out(selector: str, endpoint: Dict[str, Any]) -> bool:
+    """Whether ``endpoint``'s enums leave ``selector`` inactive.
+
+    A selector the leftover rule refuses is ruled out by any other value, so that
+    retiring it is never narrower than refusing it. The others are ruled out only
+    by a value this project knows: an unrecognised or missing enum may be a form
+    that still reads the selector, and dropping it there would lose data the
+    controller could be enforcing.
+    """
+    strict = selector in _REFUSED_WHEN_LEFT_BEHIND
+    for key, activating in SELECTOR_ACTIVATION[selector]:
+        value = endpoint.get(key)
+        if _activator_matches(value, activating):
+            continue
+        if strict or activator_is_known(key, value):
+            return True
+    return False
+
+
 def retire_stale_selectors(stored: Any, update: Any) -> Any:
     """Mark selectors a partial endpoint update deactivates for removal.
 
-    A partial update that moves ``port_matching_type`` or ``matching_target``
-    away from the value that activates a stored selector (``port``,
-    ``port_group_id``, ``client_macs``) would otherwise deep-merge into a
-    document carrying a selector the controller ignores. The returned copy of
+    A partial update that moves ``port_matching_type``, ``matching_target`` or
+    ``matching_target_type`` away from the values that activate a stored
+    selector (see :data:`SELECTOR_ACTIVATION`) would otherwise deep-merge into a
+    document carrying a selector the controller ignores, and that comes back
+    into force if the enum is ever switched back. The returned copy of
     ``update`` sets each such selector to ``None``; the manager drops ``None``
-    keys inside an endpoint before the PUT. Selectors the update sets itself
-    are left alone.
+    keys inside an endpoint before the PUT. A target's inversion flag is set to
+    ``False`` the same way. Only an activation change the update makes itself
+    retires anything, and selectors the update sets itself are left alone.
     """
     if not isinstance(stored, dict) or not isinstance(update, dict):
         return update
     retired = dict(update)
+    merged = {**stored, **update}
     if (
         _activator_matches(update.get("port_matching_type"), "ANY")
         and "match_opposite_ports" not in update
         and stored.get("match_opposite_ports")
     ):
         retired["match_opposite_ports"] = False
-    for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
-        if activator_key not in update or selector in update:
+    target = update.get("matching_target")
+    for flag, activating in _TARGET_INVERSION_FLAGS.items():
+        if (
+            flag not in update
+            and stored.get(flag)
+            and activator_is_known("matching_target", target)
+            and not _activator_matches(target, activating)
+        ):
+            retired[flag] = False
+    for selector, activators in SELECTOR_ACTIVATION.items():
+        if selector in update or stored.get(selector) is None:
             continue
-        if not _activator_matches(update[activator_key], activator_value) and stored.get(selector) is not None:
+        if not any(key in update for key, _ in activators):
+            continue
+        if _activation_ruled_out(selector, merged):
             retired[selector] = None
     return retired
 
@@ -793,7 +850,9 @@ def policy_update_targeting_error(current: Dict[str, Any], updates: Dict[str, An
     so each updated side is validated as merged. Sides the update does not
     touch are left alone, and errors the stored side already has (state this
     project did not author) are not held against an update that leaves them
-    in place.
+    in place. A stale address selector (``ips``, ``ip_group_id``,
+    ``network_ids``) is retired rather than refused, so it never reaches this
+    check as an error of its own.
     """
     for side in ("source", "destination"):
         if side not in updates:

@@ -6,13 +6,14 @@ from collections import Counter
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from aiounifi.errors import Forbidden, LoginRequired, NoPermission, TwoFaTokenRequired, Unauthorized
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.firewall_policy import FirewallPolicy
 from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
 from unifi_core.auth import UniFiAuth
-from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
+from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError, http_status
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.network_manager import NetworkManager
@@ -54,6 +55,11 @@ INTEGRATION_API_PAGE_SIZE = 200
 # still has both sides.
 V2_SYSTEM_DEFINED_POLICY_INDEX = 30000
 
+_AUTH_ERRORS = (LoginRequired, Forbidden, NoPermission, TwoFaTokenRequired, Unauthorized)
+# Statuses a single-policy read may answer for an id the controller does not hold,
+# or for a path an older controller does not serve; the full list settles which.
+_SINGLE_READ_MISS_STATUSES = frozenset({400, 404, 405})
+
 # A reorder reads the pair's order, checks the request against it and writes the
 # whole order back, so two overlapping reorders of one pair could each undo the
 # other. Locks are kept per connection, not per manager, because a server may
@@ -91,7 +97,39 @@ class FirewallManager:
         )
 
     async def get_firewall_policy_by_id(self, policy_id: str) -> FirewallPolicy:
-        """Return one V2 firewall policy from the complete policy inventory."""
+        """Return one V2 firewall policy, predefined ones included, read fresh.
+
+        Reads ``GET /firewall-policies/{id}``, which answers with a list of one
+        policy shaped like a full-list entry, rather than the whole inventory: a
+        site holds hundreds of policies and every update reads one first. Not
+        cached, because an update PUTs back the whole document and a stale copy
+        would undo changes made since.
+
+        Raises:
+            UniFiNotFoundError: If the policy does not exist.
+        """
+        path = f"/firewall-policies/{object_id(policy_id, 'firewall policy')}"
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        try:
+            response = await self._connection.request(ApiRequestV2(method="get", path=path))
+        except Exception as e:
+            if isinstance(e, _AUTH_ERRORS) or http_status(e) not in _SINGLE_READ_MISS_STATUSES:
+                raise
+            # How a missing id is refused, and whether an older controller serves
+            # the single read at all, are not pinned down; the inventory decides.
+            logger.info("Single firewall policy read refused (%s); checking the policy list", type(e).__name__)
+            return await self._find_firewall_policy_in_list(policy_id)
+        records = response if isinstance(response, list) else [response] if isinstance(response, dict) else None
+        if records is None or any(not isinstance(record, dict) for record in records):
+            raise UniFiOperationError("Firewall policy read returned an unexpected shape.")
+        match = next((record for record in records if record.get("_id") == policy_id), None)
+        if match is None:
+            raise UniFiNotFoundError("firewall_policy", policy_id)
+        return FirewallPolicy(match)
+
+    async def _find_firewall_policy_in_list(self, policy_id: str) -> FirewallPolicy:
+        """The policy with ``policy_id`` from the full inventory, or UniFiNotFoundError."""
         policies = await self.get_firewall_policies(include_predefined=True)
         match = next(
             (
@@ -402,32 +440,35 @@ class FirewallManager:
             UniFiNotFoundError: If the policy does not exist.
         """
         try:
-            policies = await self.get_firewall_policies(include_predefined=True)
-            policy: Optional[FirewallPolicy] = next(
-                (p for p in policies if isinstance(p.raw, dict) and p.raw.get("_id") == policy_id),
-                None,
-            )
-
-            if policy is None:
-                raise UniFiNotFoundError("firewall_policy", policy_id)
+            policy = await self.get_firewall_policy_by_id(policy_id)
 
             new_state = not policy.enabled
             logger.info("Toggling firewall policy %s to %s", policy_id, "enabled" if new_state else "disabled")
 
-            return await self.update_firewall_policy(policy_id, {"enabled": new_state})
+            return await self.update_firewall_policy(policy_id, {"enabled": new_state}, current=policy.raw)
         except Exception as e:
             logger.error("Error toggling firewall policy %s: %s", policy_id, e)
             raise
 
-    async def update_firewall_policy(self, policy_id: str, updates: Dict[str, Any]) -> bool:
+    async def update_firewall_policy(
+        self,
+        policy_id: str,
+        updates: Dict[str, Any],
+        current: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """Update specific fields of a firewall policy.
 
         Args:
             policy_id: ID of the policy to update.
             updates: Dictionary of fields and new values to apply.
+            current: The stored policy document the caller has just read, to merge
+                into without reading it again. Omitted, the policy is read fresh.
 
         Returns:
             bool: True if successful, False otherwise.
+
+        Raises:
+            UniFiNotFoundError: If ``current`` is omitted and the policy does not exist.
         """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
@@ -437,25 +478,19 @@ class FirewallManager:
             return False
 
         try:
-            all_policies = await self.get_firewall_policies(include_predefined=True)
-            policy_to_update: Optional[FirewallPolicy] = next(
-                (p for p in all_policies if isinstance(p.raw, dict) and p.raw.get("_id") == policy_id),
-                None,
-            )
+            if current is None:
+                current = (await self.get_firewall_policy_by_id(policy_id)).raw
 
-            if policy_to_update is None:
-                raise UniFiNotFoundError("firewall_policy", policy_id)
-
-            if not hasattr(policy_to_update, "raw") or not isinstance(policy_to_update.raw, dict):
+            if not isinstance(current, dict):
                 logger.error("Could not get raw data for policy %s. Update aborted.", policy_id)
                 return False
 
             # Shared MCP/API step: retire the selectors an activation change deactivates and
             # validate each updated side as merged. Raises ValueError before any PUT.
-            updates = prepare_policy_update(policy_to_update.raw, updates)
+            updates = prepare_policy_update(current, updates)
 
             # Deep merge preserves nested sub-objects (source, destination, schedule, etc.)
-            merged_data = deep_merge(policy_to_update.raw, updates)
+            merged_data = deep_merge(current, updates)
             # A retired selector is carried as None and must be REMOVED from the PUT body,
             # not sent as null. Only the keys THIS update retired: any other None is the
             # caller's own (the controller rejects it loudly rather than dropping a field)

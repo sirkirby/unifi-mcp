@@ -12,6 +12,7 @@ from unifi_core.network.models.firewall import (
     LEGACYFIREWALLRULE_MUTABLE_FIELDS,
     LEGACYFIREWALLRULE_READ_ONLY_FIELDS,
     MUTABLE_FIELDS,
+    RETIRABLE_SELECTORS,
     FirewallGroup,
     FirewallZone,
     LegacyFirewallRule,
@@ -396,6 +397,8 @@ class TestValidatePolicySelectors:
             ("port_matching_type", "OBJECT", True),
             ("port_matching_type", "PORT_GROUP", False),
             ("port_matching_type", None, False),
+            ("matching_target_type", "object", True),
+            ("matching_target_type", "RANGE", False),
             ("something_else", "ANY", False),
         ],
     )
@@ -701,6 +704,121 @@ class TestRetireStaleSelectors:
         }
         update = {"destination": retire_stale_selectors(current["destination"], {"port_matching_type": "ANY"})}
         assert policy_update_targeting_error(current, update) is None
+
+
+class TestRetireStaleAddressSelectors:
+    """ips, ip_group_id and network_ids follow the controller's selector contract too:
+    stored outside their activating values, they are ignored until the enum is switched
+    back, and then they silently apply again."""
+
+    _SPECIFIC = {"zone_id": "z", "matching_target": "IP", "matching_target_type": "SPECIFIC", "ips": ["192.0.2.1"]}
+    _OBJECT = {"zone_id": "z", "matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "g1"}
+
+    def test_the_address_selectors_are_retirable(self) -> None:
+        assert {"ips", "ip_group_id", "network_ids"} <= RETIRABLE_SELECTORS
+
+    def test_specific_to_object_retires_ips_and_keeps_the_new_group(self) -> None:
+        update = {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "g2"}
+        assert retire_stale_selectors(dict(self._SPECIFIC), update) == {**update, "ips": None}
+
+    def test_object_to_specific_retires_ip_group_id_and_keeps_the_new_ips(self) -> None:
+        update = {"matching_target_type": "SPECIFIC", "ips": ["192.0.2.2"]}
+        assert retire_stale_selectors(dict(self._OBJECT), update) == {**update, "ip_group_id": None}
+
+    def test_a_type_only_switch_is_judged_against_the_stored_target(self) -> None:
+        assert retire_stale_selectors(dict(self._SPECIFIC), {"matching_target_type": "OBJECT"}) == {
+            "matching_target_type": "OBJECT",
+            "ips": None,
+        }
+
+    def test_leaving_ip_retires_both_forms_and_the_inversion_flag(self) -> None:
+        stored = {**self._SPECIFIC, "ip_group_id": "g1", "match_opposite_ips": True}
+        assert retire_stale_selectors(stored, {"matching_target": "ANY"}) == {
+            "matching_target": "ANY",
+            "ips": None,
+            "ip_group_id": None,
+            "match_opposite_ips": False,
+        }
+
+    def test_switching_form_within_ip_keeps_the_inversion_flag(self) -> None:
+        stored = {**self._SPECIFIC, "match_opposite_ips": True}
+        update = {"matching_target_type": "OBJECT", "ip_group_id": "g1"}
+        assert retire_stale_selectors(stored, update) == {**update, "ips": None}
+
+    def test_leaving_network_retires_network_ids_and_the_inversion_flag(self) -> None:
+        stored = {
+            "zone_id": "z",
+            "matching_target": "NETWORK",
+            "matching_target_type": "OBJECT",
+            "network_ids": ["n1"],
+            "match_opposite_networks": True,
+        }
+        update = {"matching_target": "IP", "matching_target_type": "SPECIFIC", "ips": ["192.0.2.1"]}
+        assert retire_stale_selectors(stored, update) == {
+            **update,
+            "network_ids": None,
+            "match_opposite_networks": False,
+        }
+
+    def test_a_selector_the_update_sets_is_kept_while_the_other_form_retires(self) -> None:
+        """Clearing the old list by hand is the obvious workaround, and must still work."""
+        update = {"matching_target_type": "OBJECT", "ip_group_id": "g1", "ips": []}
+        assert retire_stale_selectors({**self._SPECIFIC, "ip_group_id": "g0"}, update) == update
+        assert retire_stale_selectors(dict(self._OBJECT), {"matching_target_type": "SPECIFIC", "ips": []}) == {
+            "matching_target_type": "SPECIFIC",
+            "ips": [],
+            "ip_group_id": None,
+        }
+
+    def test_an_unrecognised_or_missing_enum_retires_no_address_selector(self) -> None:
+        """A form this project has not seen may still read ips; the refused selectors
+        are retired under any other value, as before, so no update is newly refused."""
+        stored = {**self._SPECIFIC, "client_macs": ["aa:bb:cc:dd:ee:ff"]}
+        assert retire_stale_selectors(stored, {"matching_target": "REGION"}) == {
+            "matching_target": "REGION",
+            "client_macs": None,
+        }
+        assert retire_stale_selectors(dict(self._SPECIFIC), {"matching_target_type": "RANGE"}) == {
+            "matching_target_type": "RANGE"
+        }
+        untyped = {"zone_id": "z", "matching_target": "IP", "ips": ["192.0.2.1"], "ip_group_id": "g1"}
+        assert retire_stale_selectors(untyped, {"matching_target": "IP"}) == {"matching_target": "IP"}
+        assert retire_stale_selectors(untyped, {"matching_target": "NETWORK"}) == {
+            "matching_target": "NETWORK",
+            "ips": None,
+            "ip_group_id": None,
+        }
+
+    def test_an_update_that_does_not_move_the_address_activators_retires_nothing(self) -> None:
+        stale = {"zone_id": "z", "matching_target": "ANY", "ips": ["192.0.2.1"], "network_ids": ["n1"]}
+        assert retire_stale_selectors(stale, {"zone_id": "z2"}) == {"zone_id": "z2"}
+        assert retire_stale_selectors(stale, {"port_matching_type": "SPECIFIC", "port": "53"}) == {
+            "port_matching_type": "SPECIFIC",
+            "port": "53",
+        }
+
+    def test_stale_stored_address_selectors_never_refuse_an_update_or_a_create(self) -> None:
+        """Retire, never refuse: a stale ips the update leaves alone is not the caller's
+        error, and a create or update that carries one is accepted as before."""
+        current = {
+            "destination": {
+                "zone_id": "z",
+                "matching_target": "IP",
+                "matching_target_type": "OBJECT",
+                "ip_group_id": "g1",
+                "ips": ["192.0.2.1"],
+                "network_ids": ["n1"],
+            }
+        }
+        assert prepare_policy_update(current, {"destination": {"zone_id": "z2"}}) == {"destination": {"zone_id": "z2"}}
+        assert prepare_policy_update(current, {"name": "Renamed"}) == {"name": "Renamed"}
+        validate_policy_selectors(current)
+        assert normalize_policy_update(current) == current
+
+    def test_the_issue_switch_prepares_clean_and_drops_ips(self) -> None:
+        current = {"destination": dict(self._SPECIFIC)}
+        update = {"destination": {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "g1"}}
+        assert prepare_policy_update(current, update) == {"destination": {**update["destination"], "ips": None}}
 
 
 class TestFirewallGroupFromController:

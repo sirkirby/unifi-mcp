@@ -15,7 +15,7 @@ from typing import Any
 
 from unifi_core.network.models.clients import _is_online, client_from_controller
 from unifi_core.network.models.devices import normalize_radio_channel
-from unifi_core.network.models.firewall import SELECTOR_ACTIVATORS, _activator_matches, activator_is_known
+from unifi_core.network.models.firewall import SELECTOR_ACTIVATION, _activator_matches, activator_is_known
 from unifi_core.network.models.firewall import from_controller as firewall_policy_from_controller
 from unifi_core.network.models.networks import from_controller as network_from_controller
 from unifi_core.network.models.vouchers import voucher_from_controller
@@ -966,33 +966,36 @@ def shape_wlan_list(
     )
 
 
-# selector -> (activating enum key, value); a selector under any other value is not shown.
-# The write side validates and retires the three in SELECTOR_ACTIVATORS. The IP and
-# NETWORK selectors below follow the same contract on the controller but are not yet
-# validated or retired, so a stale one is routinely present — and showing `ips` beside
-# `matching_target: ANY` reports a zone-wide rule as if it were address-scoped, which
-# is the reading this summary must never produce.
-_SELECTOR_ACTIVATION = {
-    **{selector: (key, value) for selector, key, value in SELECTOR_ACTIVATORS},
-    "ips": ("matching_target", "IP"),
-    "ip_group_id": ("matching_target", "IP"),
-    "match_opposite_ips": ("matching_target", "IP"),
-    "network_ids": ("matching_target", "NETWORK"),
-    "match_opposite_networks": ("matching_target", "NETWORK"),
-    "match_opposite_ports": ("port_matching_type", "SPECIFIC"),
+# selector -> ((activating enum key, value), ...); a selector under any other value is
+# not shown. The selectors are the write side's SELECTOR_ACTIVATION, which retires them
+# when an update moves their activator, but a stale one survives on any policy last
+# written elsewhere — and showing `ips` beside `matching_target: ANY` reports a
+# zone-wide rule as if it were address-scoped, which is the reading this summary must
+# never produce. The inversion flags are gated here for display only.
+_SELECTOR_ACTIVATION: dict[str, tuple[tuple[str, str], ...]] = {
+    **SELECTOR_ACTIVATION,
+    "match_opposite_ips": (("matching_target", "IP"),),
+    "match_opposite_networks": (("matching_target", "NETWORK"),),
+    "match_opposite_ports": (("port_matching_type", "SPECIFIC"),),
 }
 
 
-def _selector_is_active(endpoint: dict[str, Any], activator: tuple[str, str]) -> bool:
+def _selector_is_active(endpoint: dict[str, Any], activators: tuple[tuple[str, str], ...]) -> bool:
     """Whether a stored selector is one the controller acts on, for display purposes."""
-    key, activating = activator
-    value = endpoint.get(key)
-    if value is not None and not activator_is_known(key, value):
-        # A target this project has not seen (App, Web, Region, ...). The controller
-        # may well be enforcing the selector, and reporting a narrow rule as broad is
-        # the worse error on the surface the firewall auditor reads.
-        return True
-    return _activator_matches(value, activating)
+    for position, (key, activating) in enumerate(activators):
+        value = endpoint.get(key)
+        if value is None and position:
+            # A refining enum (matching_target_type under IP) that is not stored does
+            # not say which address form is in force, so both stay shown.
+            continue
+        if value is not None and not activator_is_known(key, value):
+            # A target this project has not seen (App, Web, Region, ...). The controller
+            # may well be enforcing the selector, and reporting a narrow rule as broad is
+            # the worse error on the surface the firewall auditor reads.
+            return True
+        if not _activator_matches(value, activating):
+            return False
+    return True
 
 
 _FIREWALL_TARGETING_KEYS = (
