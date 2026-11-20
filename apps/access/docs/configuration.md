@@ -13,19 +13,21 @@ The Access server supports server-specific environment variables with the `UNIFI
 | Server-specific variable | Shared fallback | Required | Default | Description |
 |--------------------------|-----------------|----------|---------|-------------|
 | `UNIFI_ACCESS_HOST` | `UNIFI_HOST` | Yes | -- | Controller IP or hostname |
-| `UNIFI_ACCESS_USERNAME` | `UNIFI_USERNAME` | Yes* | -- | Local admin username (*required for proxy path) |
-| `UNIFI_ACCESS_PASSWORD` | `UNIFI_PASSWORD` | Yes* | -- | Admin password (*required for proxy path) |
+| `UNIFI_ACCESS_USERNAME` | `UNIFI_USERNAME` † | Yes* | -- | Local admin username (*required for proxy path) |
+| `UNIFI_ACCESS_PASSWORD` | `UNIFI_PASSWORD` † | Yes* | -- | Admin password (*required for proxy path) |
 | `UNIFI_ACCESS_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port (UniFi OS Console) |
 | `UNIFI_ACCESS_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | TLS certificate verification; see [Checking the controller's identity](../../../docs/tls-verification.md) |
 | `UNIFI_ACCESS_SSL_FINGERPRINT` | `UNIFI_SSL_FINGERPRINT` | No | none | SHA-256 fingerprint pinning the controller certificate; overrides verify_ssl |
 | `UNIFI_ACCESS_API_SSL_FINGERPRINT` | none | No | none | The same for the API key port, which can present a different certificate |
-| `UNIFI_ACCESS_API_KEY` | `UNIFI_API_KEY` | No | `""` | Official UniFi API key (for API-key auth path) |
+| `UNIFI_ACCESS_API_KEY` | `UNIFI_API_KEY` † | No | `""` | Official UniFi API key (for API-key auth path) |
 
 **Resolution order:** `UNIFI_ACCESS_*` > `UNIFI_*` > YAML config > hardcoded default.
 
+† **Credentials follow the host.** The shared `UNIFI_USERNAME`, `UNIFI_PASSWORD` and `UNIFI_API_KEY` (and their `_FILE` / `_COMMAND` spellings) are used only when `UNIFI_ACCESS_HOST` is unset or names the same console as `UNIFI_HOST`: the same host as written apart from letter case, on the same port (`UNIFI_ACCESS_PORT`, else `UNIFI_PORT`, else 443). No scheme, slash or space is stripped, and an IP address and a hostname for the same console count as different, so write both hosts the same way. When `UNIFI_ACCESS_HOST` names another console, set `UNIFI_ACCESS_USERNAME` and `UNIFI_ACCESS_PASSWORD` (and `UNIFI_ACCESS_API_KEY` if you use one): the server ignores the shared ones, says so at startup with a line such as `UNIFI_PASSWORD is set but not used: the host comes from UNIFI_ACCESS_HOST, which differs from UNIFI_HOST; set UNIFI_ACCESS_PASSWORD (or its _FILE/_COMMAND form).`, and its first login fails until they are set. Newer server releases do this; older releases sent the shared credentials to the other host instead, so the same setting is right for both. The other rows always fall back. See [credential providers](../../../docs/credential-providers.md#credentials-follow-the-host).
+
 ### Keeping the password out of the client environment
 
-`UNIFI_ACCESS_PASSWORD` and `UNIFI_ACCESS_API_KEY` (and their `UNIFI_*` fallbacks) each accept two indirect spellings, so the secret only ever exists inside the server process:
+`UNIFI_ACCESS_PASSWORD` and `UNIFI_ACCESS_API_KEY` (and their `UNIFI_*` fallbacks, where those apply) each accept two indirect spellings, so the secret only ever exists inside the server process:
 
 | Variable | Value |
 |----------|-------|

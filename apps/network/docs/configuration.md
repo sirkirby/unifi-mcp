@@ -13,9 +13,9 @@ The Network server supports server-specific environment variables with the `UNIF
 | Server-specific variable | Shared fallback | Required | Default | Description |
 |--------------------------|-----------------|----------|---------|-------------|
 | `UNIFI_NETWORK_HOST` | `UNIFI_HOST` | Yes | -- | Controller IP or hostname |
-| `UNIFI_NETWORK_USERNAME` | `UNIFI_USERNAME` | For session tools | `""` | Local admin username; omit for API-key-only inventory |
-| `UNIFI_NETWORK_PASSWORD` | `UNIFI_PASSWORD` | For session tools | `""` | Admin password; omit for API-key-only inventory |
-| `UNIFI_NETWORK_API_KEY` | `UNIFI_API_KEY` | No | `""` | Inventory reads and explicit Integration API tools; legacy mutations/full details may still require username/password. Public fallback has limited fields and separate UUIDs; see the README authentication section. |
+| `UNIFI_NETWORK_USERNAME` | `UNIFI_USERNAME` † | For session tools | `""` | Local admin username; omit for API-key-only inventory |
+| `UNIFI_NETWORK_PASSWORD` | `UNIFI_PASSWORD` † | For session tools | `""` | Admin password; omit for API-key-only inventory |
+| `UNIFI_NETWORK_API_KEY` | `UNIFI_API_KEY` † | No | `""` | Inventory reads and explicit Integration API tools; legacy mutations/full details may still require username/password. Public fallback has limited fields and separate UUIDs; see the README authentication section. |
 | `UNIFI_NETWORK_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port |
 | `UNIFI_NETWORK_SITE` | `UNIFI_SITE` | No | `default` | UniFi site name |
 | `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | TLS certificate verification; see [Checking the controller's identity](../../../docs/tls-verification.md) |
@@ -26,9 +26,11 @@ The Network server supports server-specific environment variables with the `UNIF
 
 **Resolution order:** `UNIFI_NETWORK_*` > `UNIFI_*` > YAML config > hardcoded default.
 
+† **Credentials follow the host.** The shared `UNIFI_USERNAME`, `UNIFI_PASSWORD` and `UNIFI_API_KEY` (and their `_FILE` / `_COMMAND` spellings) are used only when `UNIFI_NETWORK_HOST` is unset or names the same console as `UNIFI_HOST`: the same host as written apart from letter case, on the same port (`UNIFI_NETWORK_PORT`, else `UNIFI_PORT`, else 443). No scheme, slash or space is stripped, and an IP address and a hostname for the same console count as different, so write both hosts the same way. When `UNIFI_NETWORK_HOST` names another console, set `UNIFI_NETWORK_USERNAME` and `UNIFI_NETWORK_PASSWORD` (and `UNIFI_NETWORK_API_KEY` if you use one): the server ignores the shared ones, says so at startup with a line such as `UNIFI_PASSWORD is set but not used: the host comes from UNIFI_NETWORK_HOST, which differs from UNIFI_HOST; set UNIFI_NETWORK_PASSWORD (or its _FILE/_COMMAND form).`, and its first login fails until they are set. Newer server releases do this; older releases sent the shared credentials to the other host instead, so the same setting is right for both. The other rows always fall back. See [credential providers](../../../docs/credential-providers.md#credentials-follow-the-host).
+
 ### Keeping the password out of the client environment
 
-`UNIFI_NETWORK_PASSWORD` and `UNIFI_NETWORK_API_KEY` (and their `UNIFI_*` fallbacks) each accept two indirect spellings, so the secret only ever exists inside the server process:
+`UNIFI_NETWORK_PASSWORD` and `UNIFI_NETWORK_API_KEY` (and their `UNIFI_*` fallbacks, where those apply) each accept two indirect spellings, so the secret only ever exists inside the server process:
 
 | Variable | Value |
 |----------|-------|
@@ -194,14 +196,14 @@ The full config file lives at `src/unifi_network_mcp/config/config.yaml`. All va
 
 ```yaml
 unifi:
-  host: ${UNIFI_HOST}
-  username: ${UNIFI_USERNAME}
-  password: ${UNIFI_PASSWORD}
-  port: ${oc.env:UNIFI_PORT,443}
-  site: ${oc.env:UNIFI_SITE,default}
-  verify_ssl: ${oc.env:UNIFI_VERIFY_SSL,false}
-  controller_type: ${oc.env:UNIFI_CONTROLLER_TYPE,auto}
-  api_key: ${oc.env:UNIFI_API_KEY,""}
+  host: ${oc.env:UNIFI_NETWORK_HOST,""}
+  username: ${oc.env:UNIFI_NETWORK_USERNAME,""}
+  password: ${oc.env:UNIFI_NETWORK_PASSWORD,""}
+  port: ${oc.env:UNIFI_NETWORK_PORT,443}
+  site: ${oc.env:UNIFI_NETWORK_SITE,default}
+  verify_ssl: ${oc.env:UNIFI_NETWORK_VERIFY_SSL,false}
+  controller_type: ${oc.env:UNIFI_NETWORK_CONTROLLER_TYPE,auto}
+  api_key: ${oc.env:UNIFI_NETWORK_API_KEY,""}
 
 server:
   host: ${oc.env:UNIFI_MCP_HOST,127.0.0.1}

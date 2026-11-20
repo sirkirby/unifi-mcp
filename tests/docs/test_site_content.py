@@ -1065,6 +1065,25 @@ class ContentReconciliationTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertNotRegex(content, r"(?i)site manager[^\n]*not (?:yet )?(?:published|released)")
 
+    def test_console_credentials_follow_the_host_where_precedence_is_described(self):
+        warning = "is set but not used: the host comes from UNIFI_{p}_HOST, which differs from UNIFI_HOST"
+        surfaces = {
+            Path("docs/credential-providers.md"): ("### Credentials follow the host", warning.format(p="PROTECT")),
+            Path("README.md"): ("Credentials follow the host.", "#credentials-follow-the-host"),
+            **{
+                Path(f"apps/{app}/docs/configuration.md"): (
+                    "**Credentials follow the host.**",
+                    warning.format(p=app.upper()),
+                )
+                for app in ("network", "protect", "access")
+            },
+        }
+        for path, phrases in surfaces.items():
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+
     def test_site_manager_cloud_boundary_is_stated_where_servers_are_configured(self):
         surfaces = {
             Path("README.md"): ("https://api.ui.com", "UNIFI_SITEMANAGER_API_KEY", "no shared fallback"),

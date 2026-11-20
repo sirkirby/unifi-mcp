@@ -235,7 +235,7 @@ For Claude Desktop, add to your `claude_desktop_config.json`:
       "command": "uvx",
       "args": ["unifi-network-mcp@latest"],
       "env": {
-        // Server-specific vars take priority; UNIFI_* is the fallback
+        // Server-specific vars take priority; credentials follow the host (see Multi-controller setups)
         "UNIFI_NETWORK_HOST": "192.168.1.1",
         "UNIFI_NETWORK_USERNAME": "admin",
         "UNIFI_NETWORK_PASSWORD": "your-password"
@@ -263,7 +263,7 @@ For Claude Desktop, add to your `claude_desktop_config.json`:
 }
 ```
 
-> **Tip:** If all servers connect to the same controller, you can use the shared `UNIFI_HOST` / `UNIFI_USERNAME` / `UNIFI_PASSWORD` variables instead of repeating them per server.
+> **Tip:** If all servers connect to the same controller, you can use the shared `UNIFI_HOST` / `UNIFI_USERNAME` / `UNIFI_PASSWORD` variables instead of repeating them per server. A server given its own host that is not `UNIFI_HOST` needs its own username and password too; see [Multi-controller setups](#multi-controller-setups).
 
 ### Site Manager
 
@@ -337,19 +337,21 @@ To keep the secret out of the MCP client's environment (and out of every process
 
 ### Multi-controller setups
 
-Each server supports its own prefixed environment variables that take priority over the shared `UNIFI_*` variables. This lets you point the Network and Protect servers at different controllers (or different credentials) while keeping a single trusted env file explicitly loaded by the launcher:
+Each server supports its own prefixed environment variables that take priority over the shared `UNIFI_*` variables. This lets you point the Network and Protect servers at different controllers (or different credentials) while keeping a single trusted env file explicitly loaded by the launcher.
+
+Credentials follow the host. The shared username, password and API key (rows marked †) are used only when the server has no host of its own, or its host and port name the same console as `UNIFI_HOST` (compared as written apart from letter case: no scheme, slash or space is stripped, and an IP address and a hostname for the same console count as different). A server pointed at another host takes its credentials from its own variables, and logs at startup which shared variable it ignored. Older releases sent the shared credentials to any host, so give a server on another host its own credentials. The other rows always fall back. Details: [credential providers](docs/credential-providers.md#credentials-follow-the-host).
 
 | Shared (fallback) | Network server | Protect server | Access server |
 |--------------------|----------------|----------------|---------------|
 | `UNIFI_HOST` | `UNIFI_NETWORK_HOST` | `UNIFI_PROTECT_HOST` | `UNIFI_ACCESS_HOST` |
-| `UNIFI_USERNAME` | `UNIFI_NETWORK_USERNAME` | `UNIFI_PROTECT_USERNAME` | `UNIFI_ACCESS_USERNAME` |
-| `UNIFI_PASSWORD` | `UNIFI_NETWORK_PASSWORD` | `UNIFI_PROTECT_PASSWORD` | `UNIFI_ACCESS_PASSWORD` |
+| `UNIFI_USERNAME` † | `UNIFI_NETWORK_USERNAME` | `UNIFI_PROTECT_USERNAME` | `UNIFI_ACCESS_USERNAME` |
+| `UNIFI_PASSWORD` † | `UNIFI_NETWORK_PASSWORD` | `UNIFI_PROTECT_PASSWORD` | `UNIFI_ACCESS_PASSWORD` |
 | `UNIFI_PORT` | `UNIFI_NETWORK_PORT` | `UNIFI_PROTECT_PORT` | `UNIFI_ACCESS_PORT` |
 | `UNIFI_VERIFY_SSL` | `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_PROTECT_VERIFY_SSL` | `UNIFI_ACCESS_VERIFY_SSL` |
 | `UNIFI_SSL_FINGERPRINT` | `UNIFI_NETWORK_SSL_FINGERPRINT` | `UNIFI_PROTECT_SSL_FINGERPRINT` | `UNIFI_ACCESS_SSL_FINGERPRINT` |
-| `UNIFI_API_KEY` | `UNIFI_NETWORK_API_KEY` | `UNIFI_PROTECT_API_KEY` | `UNIFI_ACCESS_API_KEY` |
+| `UNIFI_API_KEY` † | `UNIFI_NETWORK_API_KEY` | `UNIFI_PROTECT_API_KEY` | `UNIFI_ACCESS_API_KEY` |
 
-**Single controller?** Just set the shared `UNIFI_*` variables -- all servers will use them. Server-specific variables are only needed when the servers talk to different controllers or use different credentials.
+**Single controller?** Just set the shared `UNIFI_*` variables -- all servers will use them. Server-specific variables are only needed when the servers talk to different controllers or use different credentials; a server whose host differs from `UNIFI_HOST` needs its own credentials as well.
 
 **Site Manager has no shared fallback.** Its only credential is `UNIFI_SITEMANAGER_API_KEY`, or its `_FILE` / `_COMMAND` form (set exactly one). It never reads `UNIFI_API_KEY`, any other shared `UNIFI_*` variable, `config.yaml` or `CONFIG_PATH`, and it takes no host, username or password. A console key and a Site Manager key reach different places, so neither is ever sent to the other's destination. See [Site Manager configuration](apps/sitemanager/docs/configuration.md).
 

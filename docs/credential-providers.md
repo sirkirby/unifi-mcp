@@ -43,15 +43,53 @@ server options; see
 This section applies to the three console servers. Network, Protect, and Access
 resolve non-empty product-specific values before shared values:
 `UNIFI_NETWORK_*`, `UNIFI_PROTECT_*`, or `UNIFI_ACCESS_*` > `UNIFI_*`. Empty
-variables count as unset. This applies to host, username, password, API key and
-other connection settings. The shared bootstrap overlays this rule after loading
-the bundled YAML, so the YAML variable names alone do not define precedence.
+variables count as unset. This applies to the host, port, site, TLS settings and
+other connection settings, and to the credentials as described below. The shared
+bootstrap overlays this rule after loading the bundled YAML, so the YAML variable
+names alone do not define precedence.
 
-For each secret, the first level with a non-empty spelling is selected. Exactly
-one of its plain, `_FILE`, or `_COMMAND` spellings may be set; ambiguity or a
-failing provider at that level refuses startup rather than falling back. Lower
-levels are ignored once a level is selected. Removing a product-specific provider
-can therefore reactivate a shared provider.
+### Credentials follow the host
+
+The username, password and API key belong to one console, so they come from the
+level the host came from:
+
+- **No product-specific host** (`UNIFI_PROTECT_HOST` unset or empty): the
+  credentials fall back to the shared level like every other setting.
+- **A product-specific host that names the same console as `UNIFI_HOST`**: the
+  shared credentials still apply. The two hosts are compared as written apart
+  from letter case, together with the effective port (`UNIFI_PROTECT_PORT`,
+  else `UNIFI_PORT`, else 443). Nothing else is normalised: the server connects
+  to the host as written, so `https://console`, `console/`, `console:443` and
+  ` console` are not the same console as `console`, and an IP address and a
+  hostname for the same console count as different.
+- **Any other product-specific host, or no `UNIFI_HOST` to compare against**: the
+  credentials come from the product level only. A shared `UNIFI_USERNAME`,
+  `UNIFI_PASSWORD` or `UNIFI_API_KEY`, or a `_FILE` / `_COMMAND` spelling of the
+  two secrets, is not read and not run. The server names each one it ignored in a
+  startup warning, without values, for example: `UNIFI_PASSWORD is set but not
+  used: the host comes from UNIFI_PROTECT_HOST, which differs from UNIFI_HOST;
+  set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form).` When the hosts
+  match and only the port differs, the line says instead `which names the
+  UNIFI_HOST console on another port (UNIFI_PROTECT_PORT or UNIFI_PORT)`. The
+  server still starts, and its first login fails until the product-level
+  credential is set.
+
+Port, site, `verify_ssl` and the TLS fingerprint keep falling back in every case.
+A host written in a `CONFIG_PATH` file is not an environment level and does not
+trigger the rule: the shared credentials then go to the file's host. A credential
+in a `CONFIG_PATH` file that equals the shared variable the server is not using
+(for example a file that interpolates `UNIFI_PASSWORD`) is dropped, with a
+warning that names the variable; a different value in the file is kept and used.
+This is the behaviour of newer server releases. Older releases sent the shared
+credentials to whatever host was configured, so whenever a server's host differs
+from `UNIFI_HOST`, give that server its own credentials.
+
+For each secret the server reads, the first level with a non-empty spelling is
+selected. Exactly one of its plain, `_FILE`, or `_COMMAND` spellings may be set;
+ambiguity or a failing provider at that level refuses startup rather than falling
+back. Lower levels are ignored once a level is selected. Removing a
+product-specific provider can therefore reactivate a shared provider, when the
+shared credentials apply to the server's host.
 
 Plugin setup switches saved spellings at the same level in one transaction.
 Selecting `_FILE`, for example, removes the saved plain and `_COMMAND` siblings.
@@ -85,7 +123,9 @@ unset. So a product-level spelling can come only from the plugin's options:
 
 - A `UNIFI_<SERVER>_*` value inherited from the environment or from older
   project settings cannot add a second spelling.
-- Shared `UNIFI_*` providers still apply when the product options are empty.
+- Shared `UNIFI_*` credentials still apply when the product options are empty
+  and the plugin's host option is empty or names the same console as
+  `UNIFI_HOST` (see [Credentials follow the host](#credentials-follow-the-host)).
 - Setting a second source in the options dialog refuses startup, the same as two
   environment spellings.
 
