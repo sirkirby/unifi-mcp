@@ -66,7 +66,7 @@ def get_config():
 def get_auth() -> UniFiAuth:
     """Create and cache the dual-auth instance."""
     settings = get_config().unifi
-    api_key = getattr(settings, "api_key", None) or os.environ.get("UNIFI_API_KEY")
+    api_key = getattr(settings, "api_key", None)
     return UniFiAuth(api_key=api_key if api_key else None)
 
 
@@ -172,7 +172,7 @@ def get_connection_manager() -> AccessConnectionManager:
     cfg = _unifi_settings()
     verify_ssl, fingerprint, api_fingerprint = _access_tls_settings(cfg)
     full_cfg = get_config()
-    api_key = getattr(cfg, "api_key", None) or os.environ.get("UNIFI_ACCESS_API_KEY") or os.environ.get("UNIFI_API_KEY")
+    api_key = getattr(cfg, "api_key", None)
     # Access-specific API port from config.yaml access.api_port (default 12445)
     api_port = 12445
     try:

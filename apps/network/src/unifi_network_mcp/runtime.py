@@ -83,7 +83,7 @@ def get_config():
 def get_auth() -> UniFiAuth:
     """Create and cache the dual-auth instance."""
     settings = get_config().unifi
-    api_key = getattr(settings, "api_key", None) or os.environ.get("UNIFI_API_KEY")
+    api_key = getattr(settings, "api_key", None)
     return UniFiAuth(api_key=api_key if api_key else None)
 
 

@@ -21,10 +21,11 @@ If the server starts, run `unifi_get_support_bundle(probe="summary")` and review
 **Symptoms:** 401 Unauthorized, "invalid credentials" errors.
 
 **Check:**
-1. Verify `UNIFI_USERNAME` and `UNIFI_PASSWORD` are correct
-2. Ensure the account is a **local admin** (not a Ubiquiti SSO account)
-3. Try logging into the controller web UI with the same credentials
-4. If using an API key: device, active-client, network and WLAN lists can run without username/password. Legacy-key support varies by controller; public fallback exposes limited fields and separate Integration UUIDs. Full details, legacy mutations and websockets may still require session credentials. Check each tool's auth requirement in the tool index.
+1. Look for a startup line `UNIFI_PASSWORD is set but not used` (or `UNIFI_USERNAME`, `UNIFI_API_KEY`). Newer server releases send the shared credentials only to the `UNIFI_HOST` console, so when `UNIFI_NETWORK_HOST` names another console (an IP address and a hostname for one console count as different) or `UNIFI_HOST` is unset, set `UNIFI_NETWORK_USERNAME` and `UNIFI_NETWORK_PASSWORD` (or `UNIFI_NETWORK_API_KEY`). See [credentials follow the host](configuration.md).
+2. Verify `UNIFI_USERNAME` and `UNIFI_PASSWORD` are correct
+3. Ensure the account is a **local admin** (not a Ubiquiti SSO account)
+4. Try logging into the controller web UI with the same credentials
+5. If using an API key: device, active-client, network and WLAN lists can run without username/password. Legacy-key support varies by controller; public fallback exposes limited fields and separate Integration UUIDs. Full details, legacy mutations and websockets may still require session credentials. Check each tool's auth requirement in the tool index.
 
 ### SSO/MFA auth fails but tools say "Not connected"
 

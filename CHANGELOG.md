@@ -11,6 +11,12 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-20 — unifi-network 1.12.3, unifi-protect 1.7.1, unifi-access 1.4.4, unifi-sitemanager 1.0.4
+
+- The Network, Protect and Access setup skills say a server whose host is not the `UNIFI_HOST` console needs its own username and password (or API key): newer server releases ignore the shared ones there and log which variable they ignored. `--migrate` copies shared credentials from project settings only when the plugin's host after migration is the project's `UNIFI_HOST`, and names any it leaves behind.
+- unifi-sitemanager ships the same setup helper; its setup is unchanged.
+
+
 ## 2026-11-20 — unifi-protect 1.7.0
 
 - Pins `unifi-protect-mcp` [0.14.0](https://github.com/sirkirby/unifi-mcp/releases/tag/protect/v0.14.0).

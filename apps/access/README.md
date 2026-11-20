@@ -99,7 +99,7 @@ UNIFI_ACCESS_PASSWORD=your-password # Admin password
 # UNIFI_ACCESS_SSL_FINGERPRINT=      # Pin the controller certificate by SHA-256
 ```
 
-**Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_ACCESS_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
+**Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_ACCESS_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need. On newer server releases, the shared username, password and API key are used only when `UNIFI_ACCESS_HOST` is unset or names the same console as `UNIFI_HOST`; a server pointed at another console needs its own `UNIFI_ACCESS_*` credentials (see [Configuration](docs/configuration.md)).
 
 ### MCP response size
 

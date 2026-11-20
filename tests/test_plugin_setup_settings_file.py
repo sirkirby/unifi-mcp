@@ -247,7 +247,90 @@ def test_console_legacy_settings_classify_cloud_keys_as_another_product(tmp_path
     patch = module.legacy_patch(
         owned, shared, {f"UNIFI_{product}_HOST": "host", "UNIFI_SITEMANAGER_API_KEY": "extra"}, product
     )
-    assert patch == {f"UNIFI_{product}_HOST": "192.0.2.1", f"UNIFI_{product}_API_KEY": "FAKE-shared-console-key"}
+    # No UNIFI_HOST to match, so the shared console key belongs to no host this plugin uses.
+    assert patch == {f"UNIFI_{product}_HOST": "192.0.2.1"}
+    assert module.unmigrated_shared_credentials(owned, shared, product) == ["UNIFI_API_KEY"]
+
+
+@pytest.mark.parametrize(
+    "legacy,saved,same",
+    [
+        ({"UNIFI_HOST": "192.0.2.1"}, {}, True),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_HOST": "192.0.2.1"}, {}, True),
+        ({"UNIFI_PROTECT_HOST": "Console.Example", "UNIFI_HOST": "console.example"}, {}, True),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_HOST": "192.0.2.1", "UNIFI_PORT": "8443"}, {}, True),
+        # After migration the plugin uses UNIFI_HOST as its host, whatever was saved before.
+        ({"UNIFI_HOST": "192.0.2.1"}, {"UNIFI_PROTECT_HOST": "192.0.2.9"}, True),
+        ({"UNIFI_HOST": "192.0.2.1"}, {"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_PROTECT_PORT": "443"}, True),
+        # No UNIFI_HOST in these settings: the shared credentials were meant for a host they do not name.
+        ({}, {}, False),
+        ({}, {"UNIFI_PROTECT_HOST": "nvr.other"}, False),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1"}, {}, False),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_HOST": "192.0.2.2"}, {}, False),
+        ({"UNIFI_PROTECT_HOST": " 192.0.2.1 ", "UNIFI_HOST": "192.0.2.1"}, {}, False),
+        ({"UNIFI_PROTECT_HOST": "https://192.0.2.1", "UNIFI_HOST": "192.0.2.1"}, {}, False),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1/", "UNIFI_HOST": "192.0.2.1"}, {}, False),
+        ({"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_HOST": "192.0.2.1", "UNIFI_PROTECT_PORT": "7443"}, {}, False),
+        # The saved port stays when these settings name none.
+        ({"UNIFI_HOST": "192.0.2.1"}, {"UNIFI_PROTECT_HOST": "192.0.2.1", "UNIFI_PROTECT_PORT": "7443"}, False),
+    ],
+)
+def test_migration_reuses_shared_credentials_only_for_the_shared_console(tmp_path, legacy, saved, same) -> None:
+    module = load_setup_config("protect")
+    owned = {k: v for k, v in legacy.items() if k.startswith("UNIFI_PROTECT_")}
+    owned["UNIFI_PROTECT_SITE"] = "default"  # something of this plugin's own to migrate
+    shared = {k: v for k, v in legacy.items() if k not in owned}
+    provider = str(tmp_path / "provider")
+    shared["UNIFI_USERNAME"] = "fake-user"
+    shared["UNIFI_PASSWORD_FILE"] = provider
+    mapping = {"UNIFI_PROTECT_HOST": "host", "UNIFI_PROTECT_USERNAME": "username", "UNIFI_PROTECT_SITE": "site"}
+    patch = module.legacy_patch(owned, shared, mapping, "PROTECT", saved)
+    carried = {"UNIFI_PROTECT_USERNAME": "fake-user", "UNIFI_PROTECT_PASSWORD_FILE": provider}
+    assert {k: patch.get(k) for k in carried} == (carried if same else dict.fromkeys(carried))
+    unmigrated = module.unmigrated_shared_credentials(owned, shared, "PROTECT", saved)
+    assert unmigrated == ([] if same else ["UNIFI_USERNAME", "UNIFI_PASSWORD_FILE"])
+
+
+# One table for the server's rule and the setup helper's copy of it: they cannot
+# import each other, so this keeps them in step.
+HOST_RULE = [
+    ("console.invalid", "console.invalid", {}, True),
+    ("Console.Invalid", "console.INVALID", {}, True),
+    ("console.invalid", "console.invalid", {"UNIFI_PORT": "8443"}, True),
+    ("console.invalid", "console.invalid", {"UNIFI_PORT": "8443", "UNIFI_PROTECT_PORT": "8443"}, True),
+    ("console.invalid", "console.invalid", {"UNIFI_PROTECT_PORT": "443"}, True),
+    ("console.invalid", "other.invalid", {}, False),
+    ("", "console.invalid", {}, False),
+    (" console.invalid ", "console.invalid", {}, False),
+    ("console.invalid", "console.invalid\t", {}, False),
+    ("  ", "  ", {}, False),
+    ("\u00c4.invalid", "\u00e4.invalid", {}, False),
+    ("console.invalid", "https://console.invalid", {}, False),
+    ("console.invalid", "console.invalid/", {}, False),
+    ("console.invalid", "console.invalid:443", {}, False),
+    ("console.invalid", "console.invalid", {"UNIFI_PROTECT_PORT": "7443"}, False),
+    ("console.invalid", "console.invalid", {"UNIFI_PORT": "8443", "UNIFI_PROTECT_PORT": "443"}, False),
+]
+
+
+@pytest.mark.parametrize("shared_host,product_host,ports,same", HOST_RULE)
+def test_setup_helper_and_server_agree_on_the_same_console(monkeypatch, shared_host, product_host, ports, same) -> None:
+    import logging
+    import os
+
+    from unifi_mcp_shared import bootstrap
+
+    legacy = {"UNIFI_PROTECT_HOST": product_host, **ports}
+    if shared_host:
+        legacy["UNIFI_HOST"] = shared_host
+    for name in [n for n in os.environ if n.startswith("UNIFI_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
+    for name, value in legacy.items():
+        monkeypatch.setenv(name, value)
+    cut, _ = bootstrap._host_level_cut(("host", "password"), (), env_prefix="PROTECT", logger=logging.getLogger("test"))
+    assert (not cut) is same
+    assert load_setup_config("protect").same_console(legacy, "PROTECT") is same
 
 
 @pytest.mark.parametrize("target", ["codex", "openclaw"])

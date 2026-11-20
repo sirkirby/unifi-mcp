@@ -104,7 +104,8 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 Camera HDR and microphone volume, plus floodlight power, brightness, PIR sensitivity,
 and duration now use the Protect public Integration API with `uiprotect` 16.x.
-Set `UNIFI_PROTECT_API_KEY` (or the shared fallback `UNIFI_API_KEY`) and restart
+Set `UNIFI_PROTECT_API_KEY` (or the shared `UNIFI_API_KEY`, when Protect runs on the
+console named by `UNIFI_HOST`) and restart
 the server before using these settings. Session credentials remain required for
 other Protect operations. Missing keys or incompatible public device IDs fail
 before any settings in the request are written.
@@ -121,7 +122,7 @@ validated before writing; controller failures can still leave a partial update.
 Failed updates return an error with the settings that applied, so callers can
 inspect the current state before retrying.
 
-**Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
+**Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need. On newer server releases, the shared username, password and API key are used only when `UNIFI_PROTECT_HOST` is unset or names the same console as `UNIFI_HOST`; a server pointed at another console needs its own `UNIFI_PROTECT_*` credentials (see [Configuration](docs/configuration.md)).
 
 ### MCP response size
 

@@ -1357,10 +1357,12 @@ class Fixtures:
             self.check(not list(legacy_path.parent.glob(".unifi-setup-*")), "retry leaves no replacement artifacts")
         # Another product can rely entirely on shared fallbacks, without leaving
         # any scoped keys to signal that its migration is still pending.
+        shared_provider = workspace / "shared-provider"
+        shared_provider.write_text("FAKE-shared-provider", encoding="utf-8")
         shared_fallbacks = {
             "UNIFI_HOST": "192.0.2.80",
             "UNIFI_USERNAME": "legacy-shared-user",
-            "UNIFI_PASSWORD_FILE": str(provider),
+            "UNIFI_PASSWORD_FILE": str(shared_provider),
         }
         legacy_path.write_text(
             json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.50", f"UNIFI_{upper}_USERNAME": "legacy-user"}}),
@@ -1381,9 +1383,27 @@ class Fixtures:
         )
         self.check(
             options()["host"] == "192.0.2.70"
-            and options()["username"] == "legacy-shared-user"
-            and options()["password_file"] == str(provider),
+            and options().get("username") != "legacy-shared-user"
+            and options().get("password_file") != str(shared_provider),
             "migration saves this plugin without deleting other consumers fallbacks",
+        )
+        self.check(
+            b"Not migrated: UNIFI_USERNAME, UNIFI_PASSWORD_FILE." in result.stdout
+            and b"legacy-shared-user" not in result.stdout
+            and str(shared_provider).encode() not in result.stdout,
+            "shared credentials for another console are named, not migrated",
+        )
+        legacy_path.write_text(
+            # The saved port option is 8443, so the shared console must be on 8443 too.
+            json.dumps({"env": {f"UNIFI_{upper}_HOST": "192.0.2.80", "UNIFI_PORT": "8443", **shared_fallbacks}}),
+            encoding="utf-8",
+        )
+        result = migrate(replace=True)
+        self.check(
+            options()["username"] == "legacy-shared-user"
+            and options()["password_file"] == str(shared_provider)
+            and b"Not migrated: UNIFI_" not in result.stdout,
+            "shared credentials migrate when the product host is the shared host",
         )
         self.check(
             all(key.encode() in result.stdout for key in shared_fallbacks)
@@ -1399,8 +1419,23 @@ class Fixtures:
         self.check(
             b"192.0.2.80" not in leftover.stdout
             and b"legacy-shared-user" not in leftover.stdout
-            and str(provider).encode() not in leftover.stdout,
+            and str(shared_provider).encode() not in leftover.stdout,
             "shared-key notice omits values",
+        )
+        # The saved options name a host and these settings name none, nor UNIFI_HOST:
+        # the shared password was meant for whatever host the shell supplied.
+        unmatched = "FAKE-shared-password-for-an-unnamed-host"
+        legacy_path.write_text(
+            json.dumps({"env": {f"UNIFI_{upper}_USERNAME": "legacy-user", "UNIFI_PASSWORD": unmatched}}),
+            encoding="utf-8",
+        )
+        result = migrate(replace=True)
+        self.check(
+            options()["host"] == "192.0.2.80"
+            and options().get("password") != unmatched
+            and b"Not migrated: UNIFI_PASSWORD." in result.stdout
+            and unmatched.encode() not in result.stdout,
+            "a shared password with no matching UNIFI_HOST is not migrated to the saved host",
         )
         # An apparent last migration still cannot prove shared consumers migrated.
         last = {
@@ -1428,7 +1463,10 @@ class Fixtures:
             },
             "the apparent last migration retains shared settings without consumer evidence",
         )
-        self.check(options()["api_key"] == sample_value, "the shared credential reached the options")
+        self.check(
+            options().get("api_key") != sample_value and b"Not migrated: UNIFI_API_KEY." in result.stdout,
+            "a shared credential with no shared host to match is named, not migrated",
+        )
         self.check(
             b"UNIFI_API_KEY" in result.stdout and b"UNIFI_CUSTOM_FIXTURE" in result.stdout, "removed names are reported"
         )

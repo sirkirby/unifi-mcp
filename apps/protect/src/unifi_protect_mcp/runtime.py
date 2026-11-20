@@ -70,7 +70,7 @@ def get_config():
 def get_auth() -> UniFiAuth:
     """Create and cache the dual-auth instance."""
     settings = get_config().unifi
-    api_key = getattr(settings, "api_key", None) or os.environ.get("UNIFI_API_KEY")
+    api_key = getattr(settings, "api_key", None)
     return UniFiAuth(api_key=api_key if api_key else None)
 
 
@@ -154,7 +154,7 @@ def _ssl_fingerprint(cfg: Any, key: str = "ssl_fingerprint") -> str | None:
 @lru_cache
 def get_connection_manager() -> ProtectConnectionManager:
     cfg = _unifi_settings()
-    api_key = getattr(cfg, "api_key", None) or os.environ.get("UNIFI_API_KEY")
+    api_key = getattr(cfg, "api_key", None)
     verify_ssl = str(cfg.verify_ssl).lower() in ("true", "1", "yes")
     fingerprint = _ssl_fingerprint(cfg)
     server_ssl_setting(logger, verify_ssl, fingerprint, product="Protect", env_prefix="PROTECT")

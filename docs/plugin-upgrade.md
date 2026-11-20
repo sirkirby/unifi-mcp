@@ -5,6 +5,39 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## Credentials follow the host (newer Network, Protect and Access server releases)
+
+Newer Network, Protect and Access server releases send the shared
+`UNIFI_USERNAME`, `UNIFI_PASSWORD` and `UNIFI_API_KEY` (and their `_FILE` /
+`_COMMAND` forms) only to the console `UNIFI_HOST` names; older releases send
+them to any host. The username and password part lives in `unifi-mcp-shared`,
+which a plugin's pinned server takes at its newest compatible version, so it
+reaches a plugin as soon as `uvx` resolves that shared release, before the
+plugin's server pin moves. The API key part arrives with the server pin. In Claude Code the plugins pass their `host` option as the
+server's own host (`UNIFI_<PRODUCT>_HOST`); in Codex, check
+`UNIFI_<PRODUCT>_HOST` in the settings file. Check this if you set only the
+host there and kept the username and password as shared `UNIFI_*` variables in
+your shell, launcher or project settings:
+
+- **The plugin's host is the `UNIFI_HOST` console**, written the same way
+  (letter case aside) and on the same port: nothing changes. An IP address and
+  a hostname for the same console count as different.
+- **The plugin's host is another console, or `UNIFI_HOST` is not set**: set
+  the plugin's own username and password (or API key) with the setup skill.
+  A server with the host rule starts, logs which shared variable it ignored,
+  and fails its first login until you do. An older server would send the
+  shared credentials to that other host, so the same setting is right for
+  both.
+
+unifi-network 1.12.3, unifi-protect 1.7.1 and unifi-access 1.4.4 ship the setup
+side of this: the setup skills say the above, and `set-env.sh --target claude
+--migrate` copies shared credentials from a project's
+`.claude/settings.local.json` only when that project sets `UNIFI_HOST` and the
+plugin's host after the migration names the same console. It names the ones
+it leaves behind, without values. These releases do not move the server pin.
+`unifi-sitemanager` 1.0.4 ships the same setup helper; Site Manager setup is
+unchanged.
+
 ## unifi-sitemanager 1.0.0
 
 The new `unifi-sitemanager` bundle pins `unifi-sitemanager-mcp==0.1.0` and
