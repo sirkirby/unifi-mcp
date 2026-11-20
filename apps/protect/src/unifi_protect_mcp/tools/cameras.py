@@ -6,7 +6,7 @@ snapshots, stream URLs, settings, recording, PTZ control, and reboots.
 
 import base64
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -431,9 +431,7 @@ async def protect_toggle_rtsp(
         "kind and id (from protect_list_camera_detection_areas). Only the name changes. "
         "Protect replaces the whole list on write, so the list is read fresh, sent back with "
         "just that name changed, then read again and checked against what was read before; "
-        "any difference is reported as an error. The new name is trimmed, and a name already "
-        "used by another area of the same kind on the camera is refused, ignoring case. If "
-        "someone edits another area of the same list in the Protect app between the read and "
+        "any difference is reported as an error. If someone edits another area of the same list in the Protect app between the read and "
         "the write, that edit is lost and not reported: the write sends the list as read, so "
         "the read-back matches it. The read-back only catches changes the controller makes "
         "on save. "
@@ -446,7 +444,7 @@ async def protect_toggle_rtsp(
 async def protect_rename_camera_detection_area(
     camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
     kind: Annotated[
-        str,
+        Literal["line", "zone", "loiter_zone"],
         Field(description="Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone."),
     ],
     area_id: Annotated[str, Field(description="Area id (from protect_list_camera_detection_areas)")],
