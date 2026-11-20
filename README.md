@@ -106,7 +106,7 @@ MCP HTTP is unauthenticated by default and intended for trusted local clients. S
 
 UniFi MCP keeps the standard MCP path primary: capable clients discover currently registered tools with `tools/list` and invoke them with `tools/call`. The default `lazy` mode keeps initial context small by exposing meta-tools first, while `eager` mode registers all selected domain tools directly for clients that prefer a full standard tool list.
 
-The lazy-loading meta-tools — `*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, and lazy-only `*_load_tools` — support filtered discovery, indirect execution, batch orchestration, and optional direct registration. They are independent of the protocol-version response compatibility policy below. See [MCP Discovery and Lazy-Loading Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
+The lazy-loading meta-tools — `*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, `*_batch_cancel`, and lazy-only `*_load_tools` — support filtered discovery, indirect execution, batch orchestration, and optional direct registration. They are independent of the protocol-version response compatibility policy below. See [MCP Discovery and Lazy-Loading Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
 
 ## MCP response size
 

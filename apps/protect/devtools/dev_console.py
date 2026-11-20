@@ -274,7 +274,7 @@ async def main_async() -> None:
     try:
         auto_load_tools(base_package="unifi_protect_mcp.tools")
 
-        # Register meta-tools (tool_index, execute, batch, batch_status) for dev console
+        # Register meta-tools (tool_index, execute, batch, batch_status, batch_cancel) for dev console
         register_meta_tools(
             server=server,
             tool_decorator=main_mod._original_tool_decorator,
