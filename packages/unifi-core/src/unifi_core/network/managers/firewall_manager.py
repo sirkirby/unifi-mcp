@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import logging
+import weakref
 from collections import Counter
 from typing import Any, Dict, List, Optional
 
@@ -45,6 +46,21 @@ CACHE_PREFIX_LEGACY_FIREWALL_RULES = "legacy_firewall_rules"
 FIREWALL_ZONE_WRITE_VERIFY_ATTEMPTS = 3
 FIREWALL_ZONE_WRITE_VERIFY_DELAY_SECONDS = 0.25
 INTEGRATION_API_PAGE_SIZE = 200
+# V2 policy indexes come in bands: user policies placed before the system-defined
+# ones from 10000, system-defined policies from 30000, user policies placed after
+# them from 40000, and a predefined default at 2147483647 that ends every zone
+# pair. A user policy's side is therefore its band, not its place relative to the
+# pair's predefined policies: a pair whose only predefined policy is the default
+# still has both sides.
+V2_SYSTEM_DEFINED_POLICY_INDEX = 30000
+
+# A reorder reads the pair's order, checks the request against it and writes the
+# whole order back, so two overlapping reorders of one pair could each undo the
+# other. Locks are kept per connection, not per manager, because a server may
+# build managers per request over one shared connection.
+_V2_POLICY_ORDER_LOCKS: "weakref.WeakKeyDictionary[Any, Dict[tuple[str, str, str], asyncio.Lock]]" = (
+    weakref.WeakKeyDictionary()
+)
 
 
 class FirewallManager:
@@ -583,6 +599,208 @@ class FirewallManager:
         except Exception as e:
             logger.error("Error reordering firewall policies: %s", e, exc_info=True)
             raise
+
+    # ---- Firewall policy order (V2 API) ----
+
+    def _v2_policy_order_lock(self, source_zone_id: str, destination_zone_id: str) -> asyncio.Lock:
+        """The lock serializing reorders of one zone pair on this connection."""
+        locks = _V2_POLICY_ORDER_LOCKS.setdefault(self._connection, {})
+        return locks.setdefault((self._connection.site, source_zone_id, destination_zone_id), asyncio.Lock())
+
+    async def _resolve_v2_zone_pair(self, source_zone_id: str, destination_zone_id: str) -> tuple[str, str]:
+        """Match both zones by their V2 ``_id`` from one zone-list read."""
+        known = {str(zone["_id"]) for zone in await self._get_v2_zones_full() if zone.get("_id") is not None}
+        resolved = []
+        for zone_id in (source_zone_id, destination_zone_id):
+            candidate = str(zone_id).strip()
+            if candidate not in known:
+                raise UniFiNotFoundError("firewall_zone", zone_id)
+            resolved.append(candidate)
+        return resolved[0], resolved[1]
+
+    async def _read_v2_firewall_policy_order(
+        self, source_zone_id: str, destination_zone_id: str
+    ) -> Dict[str, List[str]]:
+        response = await self._connection.request(ApiRequestV2(method="get", path="/firewall-policies"))
+        policies = response.get("data") if isinstance(response, dict) else response
+        if not isinstance(policies, list):
+            raise UniFiOperationError("The controller did not return a firewall policy list")
+
+        def zone_of(policy: Dict[str, Any], side: str) -> Any:
+            endpoint = policy.get(side)
+            return endpoint.get("zone_id") if isinstance(endpoint, dict) else None
+
+        def placeable(policy: Dict[str, Any]) -> bool:
+            index = policy.get("index")
+            has_index = isinstance(index, int) and not isinstance(index, bool)
+            policy_id = policy.get("_id")
+            return has_index and (bool(policy.get("predefined")) or (isinstance(policy_id, str) and bool(policy_id)))
+
+        in_pair = [
+            policy
+            for policy in policies
+            if isinstance(policy, dict)
+            and zone_of(policy, "source") == source_zone_id
+            and zone_of(policy, "destination") == destination_zone_id
+        ]
+        # Without an index a policy's place in the pair is unknown, and a guessed
+        # place would be written back by the next reorder.
+        unplaced = sorted(
+            str(policy.get("_id") or policy.get("name") or "?") for policy in in_pair if not placeable(policy)
+        )
+        if unplaced:
+            raise UniFiOperationError("Cannot order firewall policies without an index or ID: %s" % ", ".join(unplaced))
+
+        in_pair.sort(key=lambda policy: policy["index"])
+        before: List[str] = []
+        after: List[str] = []
+        for policy in in_pair:
+            if policy.get("predefined"):
+                continue
+            if policy["index"] < V2_SYSTEM_DEFINED_POLICY_INDEX:
+                before.append(policy["_id"])
+            else:
+                after.append(policy["_id"])
+        return {"before_predefined_ids": before, "after_predefined_ids": after}
+
+    async def get_firewall_policy_order_v2(
+        self,
+        source_zone_id: str,
+        destination_zone_id: str,
+    ) -> Dict[str, List[str]]:
+        """Return the order of the user policies between two zones from the V2 API.
+
+        Zones are matched by their V2 ``_id`` (``get_firewall_zones``) and the
+        returned IDs are V2 policy ``_id``s (``get_firewall_policies``), not
+        Integration API IDs. The order follows each policy's ``index``: user
+        policies indexed below ``V2_SYSTEM_DEFINED_POLICY_INDEX`` are
+        ``before_predefined_ids`` and the rest are ``after_predefined_ids``.
+        Needs only session credentials.
+        """
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        source_zone_id, destination_zone_id = await self._resolve_v2_zone_pair(source_zone_id, destination_zone_id)
+        try:
+            return await self._read_v2_firewall_policy_order(source_zone_id, destination_zone_id)
+        except Exception as e:
+            logger.error("Error getting V2 firewall policy order: %s", e, exc_info=True)
+            raise
+
+    @staticmethod
+    def _requested_v2_policy_ids(before_predefined_ids: Any, after_predefined_ids: Any) -> List[str]:
+        if not isinstance(before_predefined_ids, list) or not isinstance(after_predefined_ids, list):
+            raise ValueError("before_predefined_ids and after_predefined_ids must be arrays")
+        requested = before_predefined_ids + after_predefined_ids
+        if not all(isinstance(policy_id, str) and policy_id for policy_id in requested):
+            raise ValueError("before_predefined_ids and after_predefined_ids must contain only non-empty policy IDs")
+        duplicate_ids = sorted(policy_id for policy_id, count in Counter(requested).items() if count > 1)
+        if duplicate_ids:
+            raise ValueError("Reorder payload contains duplicate policy IDs: %s" % ", ".join(duplicate_ids))
+        return requested
+
+    @staticmethod
+    def _check_v2_policy_id_set(requested_ids: List[str], current: Dict[str, List[str]]) -> None:
+        requested_counts = Counter(requested_ids)
+        current_counts = Counter(current["before_predefined_ids"] + current["after_predefined_ids"])
+        if requested_counts != current_counts:
+            raise ValueError(
+                "Reorder payload must preserve the exact current policy ID set. Missing: %s; unexpected: %s"
+                % (
+                    ", ".join(sorted((current_counts - requested_counts).elements())) or "none",
+                    ", ".join(sorted((requested_counts - current_counts).elements())) or "none",
+                )
+            )
+
+    async def preview_reorder_firewall_policies_v2(
+        self,
+        source_zone_id: str,
+        destination_zone_id: str,
+        before_predefined_ids: List[str],
+        after_predefined_ids: List[str],
+    ) -> Dict[str, Dict[str, List[str]]]:
+        """Check a reorder against a fresh read and return the current and requested order, without writing."""
+        requested_ids = self._requested_v2_policy_ids(before_predefined_ids, after_predefined_ids)
+        current = await self.get_firewall_policy_order_v2(source_zone_id, destination_zone_id)
+        self._check_v2_policy_id_set(requested_ids, current)
+        return {
+            "current": current,
+            "requested": {
+                "before_predefined_ids": list(before_predefined_ids),
+                "after_predefined_ids": list(after_predefined_ids),
+            },
+        }
+
+    async def reorder_firewall_policies_v2(
+        self,
+        source_zone_id: str,
+        destination_zone_id: str,
+        before_predefined_ids: List[str],
+        after_predefined_ids: List[str],
+    ) -> Dict[str, List[str]]:
+        """Reorder the user policies between two zones through the V2 API.
+
+        The two lists together must hold exactly the pair's current user policy
+        IDs, as returned by ``get_firewall_policy_order_v2``. The order is read
+        fresh before the write and read back after it; the read-back is
+        returned, and ``UniFiOperationError`` is raised when it differs from the
+        request.
+
+        Reorders of one zone pair through this connection run one at a time.
+        ``batch-reorder`` is not conditional, so a policy added or removed
+        elsewhere (the Network UI, another client) between the fresh read and
+        the write is not caught before the write; the read-back then fails.
+        """
+        requested_ids = self._requested_v2_policy_ids(before_predefined_ids, after_predefined_ids)
+        requested = {
+            "before_predefined_ids": list(before_predefined_ids),
+            "after_predefined_ids": list(after_predefined_ids),
+        }
+
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        source_zone_id, destination_zone_id = await self._resolve_v2_zone_pair(source_zone_id, destination_zone_id)
+
+        async with self._v2_policy_order_lock(source_zone_id, destination_zone_id):
+            try:
+                current = await self._read_v2_firewall_policy_order(source_zone_id, destination_zone_id)
+            except Exception as e:
+                logger.error("Error reading V2 firewall policy order before a reorder: %s", e, exc_info=True)
+                raise
+            self._check_v2_policy_id_set(requested_ids, current)
+            if not requested_ids:
+                return current
+            try:
+                await self._connection.request(
+                    ApiRequestV2(
+                        method="put",
+                        path="/firewall-policies/batch-reorder",
+                        data={
+                            **requested,
+                            "source_zone_id": source_zone_id,
+                            "destination_zone_id": destination_zone_id,
+                        },
+                    )
+                )
+            except Exception as e:
+                logger.error("Error reordering firewall policies through the V2 API: %s", e, exc_info=True)
+                raise
+            finally:
+                self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
+                self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")
+                self._connection._invalidate_cache(CACHE_PREFIX_FIREWALL_POLICY_ORDERING)
+            try:
+                applied = await self._read_v2_firewall_policy_order(source_zone_id, destination_zone_id)
+            except Exception as e:
+                logger.error("Error reading back V2 firewall policy order after a reorder: %s", e, exc_info=True)
+                raise
+
+        if applied != requested:
+            raise UniFiOperationError(
+                "The controller accepted the reorder but reports a different order: "
+                "before_predefined_ids=%s, after_predefined_ids=%s"
+                % (applied["before_predefined_ids"], applied["after_predefined_ids"])
+            )
+        return applied
 
     async def get_traffic_routes(self) -> List[TrafficRoute]:
         """Get all traffic routes.
