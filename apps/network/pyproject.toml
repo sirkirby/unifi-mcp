@@ -49,7 +49,8 @@ dependencies = [
     # Device IP settings require Core 0.4.96.
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
     # Reading and setting the V2 firewall policy order requires Core 0.4.100.
-    "unifi-core[network]>=0.4.100,<0.5",
+    # Reading one firewall policy per update requires Core 0.4.101.
+    "unifi-core[network]>=0.4.101,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
