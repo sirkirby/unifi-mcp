@@ -7355,6 +7355,10 @@
             },
             "group_by": {
               "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+              "enum": [
+                "by_app",
+                "by_cat"
+              ],
               "type": "string"
             },
             "mac_address": {
@@ -9418,6 +9422,10 @@
           "properties": {
             "detail": {
               "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "enum": [
+                "view",
+                "full"
+              ],
               "type": "string"
             },
             "device_macs": {
@@ -11276,6 +11284,10 @@
             },
             "group_by": {
               "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+              "enum": [
+                "by_app",
+                "by_cat"
+              ],
               "type": "string"
             },
             "start": {
@@ -12475,6 +12487,11 @@
             },
             "sort_by": {
               "description": "Rank by 'total' (default), 'upload' (client sent) or 'download' (client received)",
+              "enum": [
+                "total",
+                "upload",
+                "download"
+              ],
               "type": "string"
             },
             "start": {
@@ -14330,6 +14347,11 @@
             },
             "filter_type": {
               "description": "Filter clients by connection type: 'all' (default), 'wired', or 'wireless'",
+              "enum": [
+                "all",
+                "wired",
+                "wireless"
+              ],
               "type": "string"
             },
             "include_offline": {
@@ -14545,6 +14567,13 @@
           "properties": {
             "device_type": {
               "description": "Filter by device type: 'all' (default), 'ap' (access points), 'switch', 'gateway', or 'pdu'",
+              "enum": [
+                "all",
+                "ap",
+                "switch",
+                "gateway",
+                "pdu"
+              ],
               "type": "string"
             },
             "fields": {
@@ -14565,6 +14594,15 @@
             },
             "status": {
               "description": "Filter by device status: 'all' (default), 'online', 'offline', 'pending', 'adopting', 'provisioning', or 'upgrading'",
+              "enum": [
+                "all",
+                "online",
+                "offline",
+                "pending",
+                "adopting",
+                "provisioning",
+                "upgrading"
+              ],
               "type": "string"
             },
             "summary": {
@@ -18480,6 +18518,10 @@
             },
             "mode": {
               "description": "'dhcp', or 'static' to give the device a fixed address",
+              "enum": [
+                "dhcp",
+                "static"
+              ],
               "type": "string"
             },
             "netmask": {
@@ -18722,6 +18764,11 @@
             },
             "mode": {
               "description": "Outdoor mode override: 'default' (the model's own setting), 'on' or 'off'",
+              "enum": [
+                "default",
+                "on",
+                "off"
+              ],
               "type": "string"
             }
           },

@@ -3,7 +3,7 @@
 import asyncio
 import inspect
 import logging
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -709,6 +709,20 @@ class TestInferInputSchema:
             "minProperties": 1,
             "maxProperties": 5,
         }
+
+    def test_infers_literal_choices(self):
+        async def tool(
+            kind: Annotated[Literal["line", "zone"], Field(description="Kind")],
+            window: Annotated[Literal["24h", "7d"] | None, Field(description="Window")] = None,
+            mode: Literal["only"] = "only",
+        ):
+            pass
+
+        schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
+
+        assert schema["properties"]["kind"] == {"type": "string", "description": "Kind", "enum": ["line", "zone"]}
+        assert schema["properties"]["window"] == {"type": "string", "description": "Window", "enum": ["24h", "7d"]}
+        assert schema["properties"]["mode"] == {"type": "string", "const": "only"}
 
     def test_constraint_inference_failure_degrades_per_parameter(self):
         async def tool(

@@ -10,6 +10,8 @@ from pydantic import TypeAdapter
 
 _VALIDATION_SCHEMA_KEYWORDS = frozenset(
     {
+        "enum",
+        "const",
         "minimum",
         "maximum",
         "exclusiveMinimum",
