@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 65 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 67 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -17,16 +17,18 @@ In lazy mode, an additional meta-tool is available:
 
 - `protect_load_tools` -- Load a set of tools by category or name for direct calling
 
-## Cameras (12 tools)
+## Cameras (14 tools)
 
 - `protect_list_cameras` -- List all cameras with name, model, state, recording mode
 - `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ. Listed directly in lazy mode so read-only clients can read a camera's MAC.
 - `protect_get_snapshot` -- Fetch JPEG snapshot (base64 or resource reference)
 - `protect_get_camera_streams` -- RTSP/RTSPS stream URLs by channel (High/Medium/Low)
 - `protect_get_camera_analytics` -- Motion and smart detection analytics with timestamps
+- `protect_list_camera_detection_areas` -- List a camera's crossing lines, smart-detect zones and loiter zones with id, name, kind, object types and line direction, read fresh from the NVR
 - `protect_update_camera_settings` -- Update IR, HDR, mic, speaker, status light, motion detection (confirm required)
 - `protect_toggle_recording` -- Enable/disable recording on a camera (confirm required)
 - `protect_toggle_rtsp` -- Enable/disable the RTSP/RTSPS stream on a camera channel (high/medium/low; confirm required)
+- `protect_rename_camera_detection_area` -- Rename one crossing line, smart-detect zone or loiter zone by kind and id; only the name changes, the new name is trimmed and must not match another area of that kind ignoring case, and the result is read back and checked; an edit made in the Protect app between the read and the write is lost without a report (confirm required)
 - `protect_ptz_move` -- Move PTZ camera pan/tilt with normalized speeds (confirm required)
 - `protect_ptz_zoom` -- Zoom PTZ camera with normalized speed (confirm required)
 - `protect_ptz_preset` -- Move PTZ camera to a saved preset position (confirm required)

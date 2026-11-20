@@ -52,6 +52,7 @@ from unifi_api.graphql.types.protect.alarms import (
 from unifi_api.graphql.types.protect.cameras import (
     Camera,
     CameraAnalytics,
+    CameraDetectionAreas,
     CameraStreams,
     Snapshot,
 )
@@ -268,6 +269,34 @@ async def _fetch_camera_analytics(
                 "protect",
             )
             return await mgr.get_camera_analytics(camera_id)
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_camera_detection_areas(
+    ctx: GraphQLContext,
+    controller: str,
+    camera_id: str,
+) -> Any:
+    key = f"protect/camera-detection-areas/{controller}/{camera_id}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "camera_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            try:
+                return await mgr.list_camera_detection_areas(camera_id)
+            except UniFiNotFoundError:
+                return None
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1114,6 +1143,25 @@ class ProtectQuery:
         if raw is None:
             return None
         return CameraAnalytics.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List a camera's crossing lines, smart-detect zones and loiter zones "
+            "(id, name, kind, objectTypes, and direction for lines), read fresh from the NVR."
+        ),
+    )
+    async def camera_detection_areas(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        id: strawberry.ID,
+    ) -> CameraDetectionAreas | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_camera_detection_areas(ctx, controller, id)
+        if raw is None:
+            return None
+        return CameraDetectionAreas.from_manager_output(raw)
 
     @strawberry.field(
         permission_classes=[IsRead],

@@ -1389,6 +1389,29 @@
       }
     },
     {
+      "name": "protect_list_camera_detection_areas",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "camera_manager",
+      "manager_method": "list_camera_detection_areas",
+      "input_schema": {
+        "properties": {
+          "camera_id": {
+            "description": "Camera UUID (from protect_list_cameras)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "camera_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "protect_list_cameras",
       "product": "protect",
       "category": "cameras",
@@ -1880,6 +1903,44 @@
             "type": "integer"
           }
         },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "protect_rename_camera_detection_area",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "camera_manager",
+      "manager_method": "apply_rename_camera_detection_area",
+      "input_schema": {
+        "properties": {
+          "area_id": {
+            "description": "Area id (from protect_list_camera_detection_areas)",
+            "type": "string"
+          },
+          "camera_id": {
+            "description": "Camera UUID (from protect_list_cameras)",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone.",
+            "type": "string"
+          },
+          "new_name": {
+            "description": "New name for the area. Leading and trailing spaces are removed; it must differ, ignoring case, from every other area of that kind on the camera.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "camera_id",
+          "kind",
+          "area_id",
+          "new_name"
+        ],
         "type": "object",
         "additionalProperties": false
       }

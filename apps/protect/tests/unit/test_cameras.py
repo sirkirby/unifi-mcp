@@ -1255,3 +1255,110 @@ async def test_settings_failure_is_not_success(mock_camera_manager, applied):
     assert result["success"] is False
     assert "setting failed" in result["error"]
     assert result["data"]["applied"] == applied
+
+
+class TestProtectListCameraDetectionAreasTool:
+    @pytest.mark.asyncio
+    async def test_success(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_list_camera_detection_areas
+
+        payload = {
+            "camera_id": "cam-1",
+            "camera_name": "Front Door",
+            "areas": [{"id": "1", "name": "Driveway", "kind": "line", "object_types": ["person"], "direction": "AB"}],
+            "count": 1,
+        }
+        mock_camera_manager.list_camera_detection_areas = AsyncMock(return_value=payload)
+        result = await protect_list_camera_detection_areas("cam-1")
+        assert result == {"success": True, "data": payload}
+        mock_camera_manager.list_camera_detection_areas.assert_awaited_once_with("cam-1")
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_list_camera_detection_areas
+
+        mock_camera_manager.list_camera_detection_areas = AsyncMock(side_effect=UniFiNotFoundError("camera", "nope"))
+        result = await protect_list_camera_detection_areas("nope")
+        assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_value_error_returns_the_plain_message(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_list_camera_detection_areas
+
+        mock_camera_manager.list_camera_detection_areas = AsyncMock(side_effect=ValueError("bad camera"))
+        result = await protect_list_camera_detection_areas("cam-1")
+        assert result == {"success": False, "error": "bad camera"}
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_list_camera_detection_areas
+
+        mock_camera_manager.list_camera_detection_areas = AsyncMock(side_effect=RuntimeError("boom"))
+        result = await protect_list_camera_detection_areas("cam-1")
+        assert result["success"] is False
+        assert "boom" in result["error"]
+
+
+class TestProtectRenameCameraDetectionAreaTool:
+    _preview = {
+        "camera_id": "cam-1",
+        "camera_name": "Front Door",
+        "kind": "line",
+        "area_id": "1",
+        "current_name": "Driveway",
+        "proposed_name": "Street",
+    }
+
+    @pytest.mark.asyncio
+    async def test_preview_does_not_apply(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_rename_camera_detection_area
+
+        mock_camera_manager.rename_camera_detection_area = AsyncMock(return_value=self._preview)
+        mock_camera_manager.apply_rename_camera_detection_area = AsyncMock()
+        result = await protect_rename_camera_detection_area("cam-1", "line", "1", "Street")
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["action"] == "rename"
+        assert result["preview"]["current"] == {"kind": "line", "area_id": "1", "name": "Driveway"}
+        assert result["preview"]["proposed"] == {"name": "Street"}
+        mock_camera_manager.apply_rename_camera_detection_area.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_confirm_applies(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_rename_camera_detection_area
+
+        applied = {**self._preview, "previous_name": "Driveway", "name": "Street", "changed": True, "verified": True}
+        mock_camera_manager.rename_camera_detection_area = AsyncMock(return_value=self._preview)
+        mock_camera_manager.apply_rename_camera_detection_area = AsyncMock(return_value=applied)
+        result = await protect_rename_camera_detection_area("cam-1", "line", "1", "Street", confirm=True)
+        assert result == {"success": True, "data": applied}
+        mock_camera_manager.apply_rename_camera_detection_area.assert_awaited_once_with("cam-1", "line", "1", "Street")
+
+    @pytest.mark.asyncio
+    async def test_invalid_kind_rejected_before_manager(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_rename_camera_detection_area
+
+        result = await protect_rename_camera_detection_area("cam-1", "motion_zone", "1", "Street")
+        assert result["success"] is False
+        assert "Invalid input" in result["error"]
+        mock_camera_manager.rename_camera_detection_area.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refusal_is_reported(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_rename_camera_detection_area
+
+        mock_camera_manager.rename_camera_detection_area = AsyncMock(side_effect=ValueError("already named"))
+        result = await protect_rename_camera_detection_area("cam-1", "line", "1", "Street")
+        assert result == {"success": False, "error": "already named"}
+
+    @pytest.mark.asyncio
+    async def test_readback_mismatch_is_reported(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_rename_camera_detection_area
+
+        mock_camera_manager.rename_camera_detection_area = AsyncMock(return_value=self._preview)
+        mock_camera_manager.apply_rename_camera_detection_area = AsyncMock(
+            side_effect=RuntimeError("read-back differs: item 1 sensitivity")
+        )
+        result = await protect_rename_camera_detection_area("cam-1", "line", "1", "Street", confirm=True)
+        assert result["success"] is False
+        assert "sensitivity" in result["error"]

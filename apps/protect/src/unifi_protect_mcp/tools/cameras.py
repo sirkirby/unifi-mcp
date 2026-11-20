@@ -6,7 +6,7 @@ snapshots, stream URLs, settings, recording, PTZ control, and reboots.
 
 import base64
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -18,6 +18,7 @@ from unifi_core.protect.models._actions import (
     PtzPresetInput,
     PtzZoomInput,
     RebootCameraInput,
+    RenameCameraDetectionAreaInput,
     ToggleRecordingInput,
     ToggleRtspInput,
 )
@@ -81,6 +82,31 @@ async def protect_get_camera(
     except Exception as e:
         logger.error("Error getting camera %s: %s", camera_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to get camera: {e}"}
+
+
+@server.tool(
+    name="protect_list_camera_detection_areas",
+    description=(
+        "Lists a camera's crossing lines, smart-detect zones and loiter zones, read fresh "
+        "from the NVR. Each area has its id, name, kind (line, zone or loiter_zone), "
+        "object_types and, for a line, its direction. Motion zones are not included. "
+        "Use the ids with protect_rename_camera_detection_area."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def protect_list_camera_detection_areas(
+    camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
+) -> Dict[str, Any]:
+    """List a camera's crossing lines and smart-detect zones."""
+    logger.info("protect_list_camera_detection_areas tool called for %s", camera_id)
+    try:
+        data = await camera_manager.list_camera_detection_areas(camera_id)
+        return {"success": True, "data": data}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error listing detection areas for camera %s: %s", camera_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to list detection areas: {e}"}
 
 
 @server.tool(
@@ -399,6 +425,83 @@ async def protect_toggle_rtsp(
 
 
 @server.tool(
+    name="protect_rename_camera_detection_area",
+    description=(
+        "Renames one crossing line, smart-detect zone or loiter zone on a camera, chosen by "
+        "kind and id (from protect_list_camera_detection_areas). Only the name changes. "
+        "Protect replaces the whole list on write, so the list is read fresh, sent back with "
+        "just that name changed, then read again and checked against what was read before; "
+        "any difference is reported as an error. If someone edits another area of the same list in the Protect app between the read and "
+        "the write, that edit is lost and not reported: the write sends the list as read, so "
+        "the read-back matches it. The read-back only catches changes the controller makes "
+        "on save. "
+        "Requires confirm=True to apply."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="camera",
+    permission_action="update",
+)
+async def protect_rename_camera_detection_area(
+    camera_id: Annotated[str, Field(description="Camera UUID (from protect_list_cameras)")],
+    kind: Annotated[
+        Literal["line", "zone", "loiter_zone"],
+        Field(description="Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone."),
+    ],
+    area_id: Annotated[str, Field(description="Area id (from protect_list_camera_detection_areas)")],
+    new_name: Annotated[
+        str,
+        Field(
+            description=(
+                "New name for the area. Leading and trailing spaces are removed; it must differ, "
+                "ignoring case, from every other area of that kind on the camera."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, executes the mutation. When false (default), returns a preview of the changes."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Rename a camera detection area with preview/confirm."""
+    logger.info(
+        "protect_rename_camera_detection_area tool called for %s (kind=%s, area_id=%s, confirm=%s)",
+        camera_id,
+        kind,
+        area_id,
+        confirm,
+    )
+    try:
+        try:
+            RenameCameraDetectionAreaInput(camera_id=camera_id, kind=kind, area_id=area_id, new_name=new_name)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+        preview_data = await camera_manager.rename_camera_detection_area(camera_id, kind, area_id, new_name)
+
+        if not confirm:
+            return preview_response(
+                action="rename",
+                resource_type="camera_detection_area",
+                resource_id=camera_id,
+                current_state={
+                    "kind": preview_data["kind"],
+                    "area_id": preview_data["area_id"],
+                    "name": preview_data["current_name"],
+                },
+                proposed_changes={"name": preview_data["proposed_name"]},
+                resource_name=preview_data["camera_name"],
+            )
+
+        result = await camera_manager.apply_rename_camera_detection_area(camera_id, kind, area_id, new_name)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error renaming detection area on camera %s: %s", camera_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to rename detection area: {e}"}
+
+
+@server.tool(
     name="protect_ptz_move",
     description=(
         "Moves a PTZ camera using normalized pan/tilt speeds. "
@@ -637,6 +740,7 @@ async def protect_reboot_camera(
 logger.info(
     "Camera tools registered: protect_list_cameras, protect_get_camera, "
     "protect_get_snapshot, protect_get_camera_streams, protect_get_camera_analytics, "
+    "protect_list_camera_detection_areas, protect_rename_camera_detection_area, "
     "protect_update_camera_settings, protect_toggle_recording, "
     "protect_ptz_move, protect_ptz_zoom, protect_ptz_preset, protect_reboot_camera"
 )

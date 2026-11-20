@@ -196,6 +196,41 @@ async def get_camera_analytics(
 
 
 @router.get(
+    "/sites/{site_id}/cameras/{camera_id}/detection-areas",
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["protect/cameras"],
+)
+async def list_camera_detection_areas(
+    request: Request,
+    site_id: str,
+    camera_id: str,
+    controller=Depends(resolve_controller),
+) -> dict:
+    require_capability(controller, "protect")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    try:
+        async with sm() as session:
+            mgr = await factory.get_domain_manager(
+                session,
+                controller.id,
+                "protect",
+                "camera_manager",
+            )
+            cm = await factory.get_connection_manager(session, controller.id, "protect")
+            await _maybe_set_site(cm, site_id)
+            areas = await mgr.list_camera_detection_areas(camera_id)
+    except UniFiNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    type_class, kind = request.app.state.type_registry.lookup_tool("protect_list_camera_detection_areas")
+    return {
+        "data": type_class.from_manager_output(areas).to_dict(),
+        "render_hint": type_class.render_hint(kind),
+    }
+
+
+@router.get(
     "/sites/{site_id}/cameras/{camera_id}/streams",
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["protect/cameras"],

@@ -262,6 +262,9 @@ from unifi_api.graphql.types.protect.cameras import (
     CameraAnalytics as ProtectCameraAnalyticsType,
 )
 from unifi_api.graphql.types.protect.cameras import (
+    CameraDetectionAreas as ProtectCameraDetectionAreasType,
+)
+from unifi_api.graphql.types.protect.cameras import (
     CameraStreams as ProtectCameraStreamsType,
 )
 from unifi_api.graphql.types.protect.cameras import (
@@ -635,6 +638,11 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "protect_get_camera_analytics",
         ProtectCameraAnalyticsType,
+        "detail",
+    )
+    reg.register_tool_type(
+        "protect_list_camera_detection_areas",
+        ProtectCameraDetectionAreasType,
         "detail",
     )
     reg.register_tool_type(

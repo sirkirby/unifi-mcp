@@ -31,6 +31,7 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
         "protect_reboot_camera": {"kind": RenderKind.DETAIL},
         "protect_toggle_recording": {"kind": RenderKind.DETAIL},
         "protect_toggle_rtsp": {"kind": RenderKind.DETAIL},
+        "protect_rename_camera_detection_area": {"kind": RenderKind.DETAIL},
         "protect_update_camera_settings": {"kind": RenderKind.DETAIL},
     },
 )
