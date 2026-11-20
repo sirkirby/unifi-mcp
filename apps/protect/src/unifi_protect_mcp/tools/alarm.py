@@ -300,8 +300,8 @@ async def protect_alarm_get_catalog(
     description=(
         "Fires every alarm rule whose Webhook trigger has the given trigger_id (the "
         "rule's own webhook id, not a catalog trigger_id), as if the webhook had been "
-        "called; the rules' actions run for real. Needs a Protect API key "
-        "(UNIFI_PROTECT_API_KEY or UNIFI_API_KEY). "
+        "called; the rules' actions run for real. Needs a Protect API key: "
+        "UNIFI_PROTECT_API_KEY, or UNIFI_API_KEY on the UNIFI_HOST console. "
         "Requires confirm=True to apply — otherwise returns a preview."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),

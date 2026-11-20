@@ -2235,7 +2235,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and session authentication. Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_create_firewall_zone",
       "permission_action": "create",
       "permission_category": "firewall",
@@ -5413,7 +5413,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_delete_firewall_zone",
       "permission_action": "delete",
       "permission_category": "firewall",
@@ -9210,7 +9210,7 @@
         "readOnlyHint": true
       },
       "auth_method": "both",
-      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
+      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_get_firewall_policy_ordering",
       "schema": {
         "input": {
@@ -14917,7 +14917,7 @@
         "readOnlyHint": true
       },
       "auth_method": "api_key_only",
-      "description": "List DPI applications available for use in firewall rules and OON policies. Returns application names and their compound IDs. Supports name-based search. NOTE: The official API currently only returns categories 0-1 (IM, P2P). Streaming, social media, and other categories are not yet populated by Ubiquiti. For apps not found here, add via the UniFi UI and read back the IDs from the policy. Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
+      "description": "List DPI applications available for use in firewall rules and OON policies. Returns application names and their compound IDs. Supports name-based search. NOTE: The official API currently only returns categories 0-1 (IM, P2P). Streaming, social media, and other categories are not yet populated by Ubiquiti. For apps not found here, add via the UniFi UI and read back the IDs from the policy. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
       "name": "unifi_list_dpi_applications",
       "schema": {
         "input": {
@@ -15029,7 +15029,7 @@
         "readOnlyHint": true
       },
       "auth_method": "api_key_only",
-      "description": "List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', 'Media streaming services'). Categories group applications for DPI classification. Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
+      "description": "List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', 'Media streaming services'). Categories group applications for DPI classification. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
       "name": "unifi_list_dpi_categories",
       "schema": {
         "input": {
@@ -18104,7 +18104,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
+      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation, UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_reorder_firewall_policies",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -22374,7 +22374,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_update_firewall_zone",
       "permission_action": "update",
       "permission_category": "firewall",

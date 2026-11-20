@@ -94,7 +94,7 @@ async def protect_list_viewers() -> Dict[str, Any]:
         "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from "
         "protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped "
         "to the Protect viewer/liveview tool family - do not pass them to camera, sensor, or chime tools. "
-        "Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Requires a Protect public API key: UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). "
         "Requires confirm=True to apply. Pass only the fields you want to change - current values are "
         "automatically preserved. Supported keys: name, liveview_id, clear_liveview. Set clear_liveview=True "
         "to remove the current liveview assignment."
