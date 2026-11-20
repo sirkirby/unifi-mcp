@@ -89,6 +89,7 @@ updates:
       - "/apps/network"
       - "/apps/protect"
       - "/apps/sitemanager"
+      - "/apps/drive"
       - "/packages/unifi-mcp-relay"
     schedule:
       interval: "weekly"

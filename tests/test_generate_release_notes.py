@@ -297,6 +297,13 @@ def test_sitemanager_tag_parsing() -> None:
         parse_release_tag("sitemanager/0.1.0")
 
 
+def test_drive_tag_parsing_and_scope() -> None:
+    tag = parse_release_tag("drive/v0.1.0")
+    assert tag == ReleaseTag(tag="drive/v0.1.0", package_key="drive", version="0.1.0")
+    assert "drive" in _mod.PRODUCT_KEYS
+    assert APP_CONFIGS["drive"].path_groups[0].patterns == ("apps/drive/",)
+
+
 @pytest.mark.parametrize(
     "path,group",
     [

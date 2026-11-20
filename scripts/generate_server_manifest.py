@@ -8,6 +8,7 @@ Usage:
     python scripts/generate_server_manifest.py --app protect [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app access [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app sitemanager [--version X.Y.Z]
+    python scripts/generate_server_manifest.py --app drive [--version X.Y.Z]
 
 Output:
     apps/{app}/server.json — MCP Registry manifest (committed to git)
@@ -90,6 +91,41 @@ APP_CONFIGS = {
                 "description": "Site Manager API key from unifi.ui.com > Settings > API Keys",
                 "isRequired": True,
                 "isSecret": True,
+            },
+        ],
+    },
+    "drive": {
+        "title": "UniFi Drive MCP",
+        "description": "Read UniFi NAS storage, disk health, shared drives and SMB/NFS file services via MCP.",
+        # No bare "v" fallback: plain v* tags are Network's legacy releases.
+        "tag_prefixes": ["drive/v"],
+        # A UNAS is its own console, usually not the gateway UNIFI_HOST names,
+        # and it has no API key: offer the Drive-specific settings only.
+        "controller_env_vars": False,
+        "extra_env_vars": [
+            {"name": "UNIFI_DRIVE_HOST", "description": "UniFi NAS (UNAS) IP/hostname", "isRequired": True},
+            {
+                "name": "UNIFI_DRIVE_USERNAME",
+                "description": "Local UniFi OS username on the NAS",
+                "isRequired": True,
+            },
+            {
+                "name": "UNIFI_DRIVE_PASSWORD",
+                "description": "Local UniFi OS password on the NAS",
+                "isRequired": True,
+                "isSecret": True,
+            },
+            {"name": "UNIFI_DRIVE_PORT", "description": "NAS HTTPS port", "isRequired": False, "default": "443"},
+            {
+                "name": "UNIFI_DRIVE_VERIFY_SSL",
+                "description": "SSL certificate verification",
+                "isRequired": False,
+                "default": "false",
+            },
+            {
+                "name": "UNIFI_DRIVE_SSL_FINGERPRINT",
+                "description": "SHA-256 fingerprint pinning the NAS certificate (overrides UNIFI_DRIVE_VERIFY_SSL)",
+                "isRequired": False,
             },
         ],
     },
