@@ -408,6 +408,7 @@ class TestHostLevelCredentials:
             if name.startswith("UNIFI_") or name == "CONFIG_PATH":
                 monkeypatch.delenv(name, raising=False)
         monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
+        monkeypatch.setattr(bootstrap, "_CREDENTIAL_CUT_NOTES", {})
         self.tmp_path = tmp_path
         self.monkeypatch = monkeypatch
         self._config('unifi:\n  host: ""\n  username: ""\n  password: ""\n  api_key: ""\n  port: 443\n')
@@ -818,3 +819,87 @@ class TestHostLevelCredentials:
         with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as exc:
             self._load(keys=("host", "password"))
         assert exc.value.code == EXIT_SECRET_UNRESOLVED
+
+    # -- the cut warnings are kept for the server's login-failure error ---------
+
+    @pytest.mark.parametrize(
+        ("variables", "why"),
+        [
+            ({"UNIFI_HOST": "gateway.invalid"}, ", which differs from UNIFI_HOST"),
+            ({}, " and UNIFI_HOST is not set"),
+            (
+                {"UNIFI_HOST": "nas.invalid", "UNIFI_PROTECT_PORT": "7443"},
+                ", which names the UNIFI_HOST console on another port (UNIFI_PROTECT_PORT or UNIFI_PORT)",
+            ),
+        ],
+        ids=["differs", "no-shared-host", "port"],
+    )
+    def test_cut_credentials_are_kept_as_the_warning_text(self, caplog, variables, why):
+        from unifi_mcp_shared.bootstrap import credential_cut_hint
+
+        self._shared_credentials()
+        self._env(UNIFI_PROTECT_HOST="nas.invalid", **variables)
+        with caplog.at_level(logging.WARNING):
+            self._load()
+        hint = credential_cut_hint("PROTECT")
+        assert hint == " ".join(self._warnings(caplog))
+        assert hint == (
+            f"UNIFI_USERNAME is set but not used: the host comes from UNIFI_PROTECT_HOST{why}; "
+            "set UNIFI_PROTECT_USERNAME. "
+            f"UNIFI_PASSWORD is set but not used: the host comes from UNIFI_PROTECT_HOST{why}; "
+            "set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form). "
+            f"UNIFI_API_KEY is set but not used: the host comes from UNIFI_PROTECT_HOST{why}; "
+            "set UNIFI_PROTECT_API_KEY (or its _FILE/_COMMAND form)."
+        )
+        for value in [*self.shared.values(), "nas.invalid", "gateway.invalid", "7443"]:
+            assert value not in hint
+
+    def test_cut_hint_names_only_the_shared_spellings_that_are_set(self):
+        from unifi_mcp_shared.bootstrap import credential_cut_hint
+
+        self._env(UNIFI_HOST="gateway.invalid", UNIFI_PROTECT_HOST="nas.invalid", UNIFI_PASSWORD_FILE="/nonexistent")
+        self._load()
+        assert credential_cut_hint("PROTECT") == (
+            "UNIFI_PASSWORD_FILE is set but not used: the host comes from UNIFI_PROTECT_HOST, which differs "
+            "from UNIFI_HOST; set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form)."
+        )
+
+    @pytest.mark.parametrize(
+        "variables",
+        [
+            {"UNIFI_HOST": "console.invalid", "UNIFI_PROTECT_HOST": "console.invalid"},
+            {"UNIFI_HOST": "console.invalid"},
+            {"UNIFI_HOST": "gateway.invalid", "UNIFI_PROTECT_HOST": "nas.invalid", "UNIFI_PROTECT_PASSWORD": "own"},
+        ],
+        ids=["same-console", "no-product-host", "own-credentials"],
+    )
+    def test_no_cut_hint_when_nothing_was_ignored(self, variables):
+        from unifi_mcp_shared.bootstrap import credential_cut_hint
+
+        self._env(UNIFI_PASSWORD=self.shared["UNIFI_PASSWORD"], **variables)
+        self._load(keys=("host", "password"))
+        assert credential_cut_hint("PROTECT") is None
+
+    def test_no_cut_hint_when_the_config_file_supplies_its_own_value(self):
+        from unifi_mcp_shared.bootstrap import credential_cut_hint
+
+        self._config('unifi:\n  host: ""\n  password: operator-value\n')
+        self._shared_credentials()
+        self._env(UNIFI_HOST="gateway.invalid", UNIFI_PROTECT_HOST="nas.invalid")
+        assert self._load(keys=("host", "password")).unifi.password == "operator-value"
+        assert credential_cut_hint("PROTECT") is None
+
+    def test_cut_hint_follows_the_latest_load_of_each_server(self):
+        from unifi_mcp_shared.bootstrap import credential_cut_hint
+
+        self._shared_credentials()
+        self._env(UNIFI_HOST="gateway.invalid", UNIFI_PROTECT_HOST="nas.invalid")
+        self._load()
+        self._load("NETWORK")
+        assert credential_cut_hint("PROTECT") is not None
+        assert credential_cut_hint("NETWORK") is None
+        assert credential_cut_hint("ACCESS") is None
+
+        self._env(UNIFI_PROTECT_HOST="gateway.invalid")
+        self._load()
+        assert credential_cut_hint("PROTECT") is None
