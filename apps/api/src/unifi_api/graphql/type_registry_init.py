@@ -119,6 +119,9 @@ from unifi_api.graphql.types.network.firewall import (
     FirewallGroup as NetworkFirewallGroupType,
 )
 from unifi_api.graphql.types.network.firewall import (
+    FirewallPolicyOrder as NetworkFirewallPolicyOrderType,
+)
+from unifi_api.graphql.types.network.firewall import (
     FirewallPolicyOrdering as NetworkFirewallPolicyOrderingType,
 )
 from unifi_api.graphql.types.network.firewall import (
@@ -432,6 +435,7 @@ def build_type_registry() -> TypeRegistry:
     reg.register_type("network", "firewall/rules", NetworkFirewallRuleType)
     reg.register_type("network", "firewall/rules/{id}", NetworkFirewallRuleType)
     reg.register_type("network", "firewall/policy-ordering", NetworkFirewallPolicyOrderingType)
+    reg.register_type("network", "firewall/policy-order", NetworkFirewallPolicyOrderType)
     reg.register_tool_type(
         "unifi_list_firewall_policies",
         NetworkFirewallRuleType,
@@ -465,6 +469,11 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "unifi_get_firewall_policy_ordering",
         NetworkFirewallPolicyOrderingType,
+        "detail",
+    )
+    reg.register_tool_type(
+        "unifi_get_firewall_policy_order",
+        NetworkFirewallPolicyOrderType,
         "detail",
     )
 

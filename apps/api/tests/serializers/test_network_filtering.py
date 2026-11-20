@@ -88,6 +88,15 @@ def test_firewall_policy_ordering_detail_shape() -> None:
     assert FirewallPolicyOrdering.render_hint("detail")["kind"] == "detail"
 
 
+def test_firewall_policy_order_detail_shape() -> None:
+    from unifi_api.graphql.types.network.firewall import FirewallPolicyOrder
+
+    sample = {"before_predefined_ids": ["policy-a"], "after_predefined_ids": ["policy-b"]}
+    out = FirewallPolicyOrder.from_manager_output(sample).to_dict()
+    assert out == {"before_predefined_ids": ["policy-a"], "after_predefined_ids": ["policy-b"]}
+    assert FirewallPolicyOrder.render_hint("detail")["kind"] == "detail"
+
+
 # ---- Firewall mutation acks ----
 
 
@@ -99,6 +108,7 @@ def test_firewall_mutation_ack_dispatches_for_all_mutations() -> None:
         "unifi_delete_firewall_policy",
         "unifi_toggle_firewall_policy",
         "unifi_reorder_firewall_policies",
+        "unifi_set_firewall_policy_order",
         "unifi_create_firewall_group",
         "unifi_update_firewall_group",
         "unifi_delete_firewall_group",

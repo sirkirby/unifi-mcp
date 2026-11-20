@@ -875,6 +875,14 @@ type FirewallGroupPage {
 }
 
 """
+Order of the user-defined firewall policies for a source/destination zone pair, read through the V2 API. These IDs are scoped to the V2 firewall policy tool family — do not pass them to the Integration API ordering queries or actions.
+"""
+type FirewallPolicyOrder {
+  beforePredefinedIds: [String!]!
+  afterPredefinedIds: [String!]!
+}
+
+"""
 User-defined firewall policy ordering for a source/destination zone pair. Policy IDs in this object are UniFi integration-API UUIDs scoped to the ordering tool family — use them only with the matching reorder mutation. They do NOT correspond to the policy IDs returned by other controller-API firewall queries.
 """
 type FirewallPolicyOrdering {
@@ -1502,6 +1510,11 @@ type NetworkQuery {
   Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
   """
   firewallPolicyOrdering(controller: ID!, sourceFirewallZoneId: String!, destinationFirewallZoneId: String!, site: String! = "default"): FirewallPolicyOrdering!
+
+  """
+  Get the order of the user-defined firewall policies for a source/destination zone pair through the V2 API. Requires Network session credentials. These IDs are scoped to the V2 firewall policy tool family — do not pass them to the Integration API ordering queries or actions.
+  """
+  firewallPolicyOrder(controller: ID!, sourceZoneId: String!, destinationZoneId: String!, site: String! = "default"): FirewallPolicyOrder!
 
   """List QoS rules on the given controller/site (paginated)."""
   qosRules(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): QosRulePage!
@@ -3257,6 +3270,7 @@ Read-only access to UniFi Network resources.
 - `firewallGroups: FirewallGroupPage!`  — List firewall address/port groups (paginated).
 - `firewallPolicies: FirewallRulePage!`  — List firewall policies/rules on the given controller/site (paginated).
 - `firewallPolicy: FirewallRule`  — Look up a single firewall policy/rule by id.
+- `firewallPolicyOrder: FirewallPolicyOrder!`  — Get the order of the user-defined firewall policies for a source/destination zone pair through the V2 API. Requires Network session credentials. These IDs are scoped to the V2 firewall policy tool family — do not pass them to the Integration API ordering queries or actions.
 - `firewallPolicyOrdering: FirewallPolicyOrdering!`  — Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
 - `gatewaySettings: GatewaySettings`  — Get gateway (USG) security / NAT / connection-tracking settings.

@@ -802,6 +802,108 @@ async def reorder_firewall_policies(
         return {"success": False, "error": f"Failed to reorder firewall policies: {e}"}
 
 
+_V2_ORDER_SCOPE = (
+    "These IDs are scoped to the V2 firewall policy tool family — do not pass them to "
+    "unifi_get_firewall_policy_ordering, unifi_reorder_firewall_policies or other Integration API tools."
+)
+_V2_ZONE_ID = "V2 firewall zone ID from unifi_list_firewall_zones"
+
+
+@server.tool(
+    name="unifi_get_firewall_policy_order",
+    auth="local_only",
+    description=(
+        "Get the order of the user-defined firewall policies between two zones through the V2 API, "
+        "as V2 policy IDs split into before_predefined_ids and after_predefined_ids. "
+        "Requires Network session credentials. " + _V2_ORDER_SCOPE
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def get_firewall_policy_order(
+    source_zone_id: Annotated[str, Field(description="Source " + _V2_ZONE_ID)],
+    destination_zone_id: Annotated[str, Field(description="Destination " + _V2_ZONE_ID)],
+) -> Dict[str, Any]:
+    """Get the V2 order of the user-defined firewall policies for a zone pair."""
+    try:
+        order = await firewall_manager.get_firewall_policy_order_v2(source_zone_id, destination_zone_id)
+        return {
+            "success": True,
+            "source_zone_id": source_zone_id,
+            "destination_zone_id": destination_zone_id,
+            "order": order,
+        }
+    except Exception as e:
+        logger.error("Error getting V2 firewall policy order: %s", e, exc_info=True)
+        return {"success": False, "error": "Failed to get firewall policy order: %s" % e}
+
+
+@server.tool(
+    name="unifi_set_firewall_policy_order",
+    auth="local_only",
+    description=(
+        "Reorder the user-defined firewall policies between two zones through the V2 API, with a "
+        "read-back of the applied order. Pass every current policy ID from "
+        "unifi_get_firewall_policy_order. Requires confirmation and Network session credentials. " + _V2_ORDER_SCOPE
+    ),
+    permission_category="firewall_policies",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def set_firewall_policy_order(
+    source_zone_id: Annotated[str, Field(description="Source " + _V2_ZONE_ID)],
+    destination_zone_id: Annotated[str, Field(description="Destination " + _V2_ZONE_ID)],
+    before_predefined_ids: Annotated[
+        list[str],
+        Field(description="V2 policy IDs to place before the predefined policies, first match first"),
+    ],
+    after_predefined_ids: Annotated[
+        list[str],
+        Field(
+            description=(
+                "V2 policy IDs to place after the predefined policies, first match first. Together with "
+                "before_predefined_ids, exactly the pair's current user policy IDs"
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the reorder. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Reorder the user-defined firewall policies for a zone pair through the V2 API."""
+    try:
+        if not confirm:
+            preview = await firewall_manager.preview_reorder_firewall_policies_v2(
+                source_zone_id,
+                destination_zone_id,
+                before_predefined_ids,
+                after_predefined_ids,
+            )
+            return update_preview(
+                resource_type="firewall_policy_order",
+                resource_id=f"{source_zone_id}->{destination_zone_id}",
+                resource_name="Firewall policy order",
+                current_state=preview["current"],
+                updates=preview["requested"],
+            )
+
+        order = await firewall_manager.reorder_firewall_policies_v2(
+            source_zone_id,
+            destination_zone_id,
+            before_predefined_ids,
+            after_predefined_ids,
+        )
+        return {
+            "success": True,
+            "source_zone_id": source_zone_id,
+            "destination_zone_id": destination_zone_id,
+            "order": order,
+        }
+    except Exception as e:
+        logger.error("Error reordering firewall policies through the V2 API: %s", e, exc_info=True)
+        return {"success": False, "error": "Failed to reorder firewall policies: %s" % e}
+
+
 @server.tool(
     name="unifi_list_firewall_zones",
     auth="either",

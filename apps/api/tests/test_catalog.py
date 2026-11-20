@@ -58,6 +58,8 @@ async def test_catalog_tools(tmp_path, monkeypatch) -> None:
     assert requirements["unifi_create_firewall_zone"] == "both"
     assert requirements["unifi_get_firewall_policy_ordering"] == "both"
     assert requirements["unifi_reorder_firewall_policies"] == "both"
+    assert requirements["unifi_get_firewall_policy_order"] == "local_only"
+    assert requirements["unifi_set_firewall_policy_order"] == "local_only"
     assert requirements["access_lock_door"] == "either"
 
 
