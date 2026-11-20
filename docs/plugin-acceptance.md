@@ -46,6 +46,18 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   from this profile: it would be written to the shared keychain. Configure the
   password and API key only through `_FILE` or `_COMMAND` provider references,
   which are saved as ordinary options.
+- **Claude Code keychain:** the symlinked keychain is the real one, so a
+  sensitive option your own profile saved for a plugin is visible here under the
+  same plugin id: `claude plugin configure <plugin>@unifi-plugins --json`
+  reports it as configured, and the install counts one fewer unset option.
+  Setup that moves that credential to a provider reference would clear it from
+  the shared keychain, and `claude plugin uninstall` clears every option the
+  plugin has, keychain included. When your profile holds such a secret, install
+  from a loopback mirror (see [Pin a marketplace ref](#pin-a-marketplace-ref))
+  carrying one mirror-only commit that changes only the `name` in
+  `.claude-plugin/marketplace.json` (for example `unifi-plugins-acc`). The
+  plugin id then has no keychain entry. Record the rename, and never configure,
+  clear or uninstall the real plugin id from the isolated profile.
 - **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home` and
   `HOME=$ACC/home`, and symlink (never copy) `~/.codex/auth.json` into
   `CODEX_HOME`. Codex setup reads both: it writes the settings file under
@@ -86,7 +98,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   is refused. Shared
   `UNIFI_POLICY_*` forms and per-category overrides are refused by design. The
   gates already default to `false` and the permission mode to `confirm`; set
-  them explicitly anyway so the record shows them.
+  them explicitly anyway. Setup does not save an option equal to its default,
+  so the saved configuration lists only the others; record the values from the
+  running server's environment (`ps -E` on macOS), names only.
 
 ## Pin a marketplace ref
 
@@ -103,7 +117,8 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
 1. **Install the prior version.** Add the marketplace, install the plugin, and
    keep the command output.
 2. **Discovery.** `claude plugin list` and `claude plugin details <plugin>`, or
-   `codex plugin list`, show the plugin installed and enabled with its skills
+   `codex plugin list -m <marketplace> --json` (the unfiltered list can hang),
+   show the plugin installed and enabled with its skills
    and MCP server. Ask an in-session prompt to list the plugin's skills.
    Before setup, start one session and confirm the unconfigured server
    answers `initialize` in setup mode, offers only its read-only
@@ -146,8 +161,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    From 1.0.0 Codex setup writes no `config.toml` entry: it saves the settings in
    `$HOME/.config/unifi-mcp/<product>.env` (mode 600), which the bundled entry in
    `.mcp.codex.json` names with `UNIFI_SETTINGS_FILE`, so the upgrade needs no
-   action. Record that the settings file and `config.toml` are byte-identical
-   afterwards. A prior ref before 1.0.0 wrote a `[mcp_servers.<plugin>]` entry
+   action. Record that the settings file is byte-identical afterwards and that
+   `config.toml` differs at most in its `[marketplaces]` table, which removing
+   and re-adding the marketplace rewrites. A prior ref before 1.0.0 wrote a `[mcp_servers.<plugin>]` entry
    that shadows the bundled server and pins its package. Run the new plugin's
    `scripts/check-prereqs.sh --target codex` and record that it names the entry
    and the refresh. Then run `scripts/set-env.sh --target codex --refresh`
@@ -339,6 +355,11 @@ separately.
 
 Stop the loopback server, delete `ACC`, check `git status` shows no scratch
 files, and compare the `shasum` output with the value recorded at the start.
+Do not uninstall plugins to clean up: deleting `ACC` removes the isolated
+profiles, and an uninstall under the real plugin id clears that plugin's
+keychain options for your own profile too. `~/.claude.json` may still differ:
+running Claude Code sessions rewrite it, so check that it names neither `ACC`
+nor the scratch marketplace rather than comparing its hash.
 
 ## Site Manager scenarios
 
