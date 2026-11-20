@@ -536,3 +536,40 @@ async def test_forwarder_open_and_close_lifecycle(server_infos):
     await fwd.close()
     for client in fwd._clients.values():
         client.close.assert_awaited_once()
+
+
+@pytest.mark.parametrize("tool", ["unifi_batch_status", "unifi_batch_cancel"])
+async def test_job_ids_sent_as_a_json_string_are_checked_like_a_list(server_infos, tool):
+    """The server JSON-decodes a string sent for a list parameter, so the scope check
+    must read it the same way rather than skip it."""
+    server_infos[0].tools.extend(
+        ToolInfo(name=name, description=name, server_origin="unifi-network-mcp")
+        for name in ("unifi_batch", "unifi_batch_status", "unifi_batch_cancel")
+    )
+    fwd = ToolForwarder(server_infos)
+
+    with patch.object(fwd, "_call", new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = {"jobs": [{"jobId": "relay-job"}]}
+        await fwd.forward_with_error("unifi_batch", {"operations": [{"tool": "unifi_list_devices"}]})
+        mock_call.reset_mock()
+        mock_call.return_value = {"jobs": []}
+        foreign = await fwd.forward_with_error(tool, {"jobIds": json.dumps(["someone-elses-job"])})
+        undecodable = await fwd.forward_with_error(tool, {"jobIds": "not json"})
+        not_a_list = await fwd.forward_with_error(tool, {"jobIds": {"id": "relay-job"}})
+        own = await fwd.forward_with_error(tool, {"jobIds": json.dumps(["relay-job"])})
+
+    for rejected in (foreign, undecodable, not_a_list):
+        assert "only for jobs started through this relay connection" in rejected
+    assert own == {"jobs": []}
+    assert [call.args[1] for call in mock_call.await_args_list] == [tool]
+
+
+async def test_batch_cancel_is_never_lazy_loaded_even_on_an_older_shared(server_infos):
+    server_infos[0].lazy_load_tool_name = "unifi_load_tools"
+    server_infos[0].tools.append(
+        ToolInfo(name="unifi_batch_cancel", description="Cancel", server_origin="unifi-network-mcp")
+    )
+    with patch("unifi_mcp_relay.forwarder._is_meta_tool", side_effect=lambda name: name.endswith("_batch")):
+        fwd = ToolForwarder(server_infos)
+
+    assert "unifi_batch_cancel" not in fwd._lazy_advertised_tools_by_url["http://localhost:3000"]
