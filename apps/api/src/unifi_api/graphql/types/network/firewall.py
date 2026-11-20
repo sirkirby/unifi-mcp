@@ -13,6 +13,8 @@ Phase 6 PR2 Task 22 migration target. Three read shapes that used to live in
                       the policy-count matrix before this layer sees it)
 - ``FirewallPolicyOrdering`` — get_firewall_policy_ordering
                                (Integration API zone-pair ordering object)
+- ``FirewallPolicyOrder`` — get_firewall_policy_order_v2
+                            (V2 zone-pair order of user policy IDs)
 
 The mutation ack serializer (``FirewallMutationAckSerializer``) is preserved
 in the original module since it covers create/update/delete/toggle for both
@@ -249,6 +251,37 @@ class FirewallPolicyOrdering:
     def from_manager_output(cls, obj: Any) -> "FirewallPolicyOrdering":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
         return cls(ordering=raw.get("orderedFirewallPolicyIds", raw))
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@strawberry.type(
+    description=(
+        "Order of the user-defined firewall policies for a source/destination zone pair, read "
+        "through the V2 API. "
+        "These IDs are scoped to the V2 firewall policy tool family — do not pass them to the "
+        "Integration API ordering queries or actions."
+    )
+)
+class FirewallPolicyOrder:
+    before_predefined_ids: list[str]
+    after_predefined_ids: list[str]
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {
+            "kind": kind,
+            "display_columns": ["before_predefined_ids", "after_predefined_ids"],
+        }
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "FirewallPolicyOrder":
+        raw = obj if isinstance(obj, dict) else {}
+        return cls(
+            before_predefined_ids=list(raw.get("before_predefined_ids", [])),
+            after_predefined_ids=list(raw.get("after_predefined_ids", [])),
+        )
 
     def to_dict(self) -> dict:
         return asdict(self)

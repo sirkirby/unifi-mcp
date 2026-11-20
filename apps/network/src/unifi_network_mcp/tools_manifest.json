@@ -1,5 +1,5 @@
 {
-  "count": 214,
+  "count": 216,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -74,6 +74,7 @@
     "unifi_get_event_types": "unifi_network_mcp.tools.events",
     "unifi_get_firewall_group_details": "unifi_network_mcp.tools.firewall",
     "unifi_get_firewall_policy_details": "unifi_network_mcp.tools.firewall",
+    "unifi_get_firewall_policy_order": "unifi_network_mcp.tools.firewall",
     "unifi_get_firewall_policy_ordering": "unifi_network_mcp.tools.firewall",
     "unifi_get_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
     "unifi_get_gateway_stats": "unifi_network_mcp.tools.stats",
@@ -162,6 +163,7 @@
     "unifi_set_device_ip_settings": "unifi_network_mcp.tools.devices",
     "unifi_set_device_led": "unifi_network_mcp.tools.devices",
     "unifi_set_device_outdoor_mode": "unifi_network_mcp.tools.devices",
+    "unifi_set_firewall_policy_order": "unifi_network_mcp.tools.firewall",
     "unifi_set_jumbo_frames": "unifi_network_mcp.tools.switch",
     "unifi_set_outlet_state": "unifi_network_mcp.tools.devices",
     "unifi_set_site_leds": "unifi_network_mcp.tools.devices",
@@ -9088,6 +9090,118 @@
         }
       },
       "title": "Get Firewall Policy Details"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Get the order of the user-defined firewall policies between two zones through the V2 API, as V2 policy IDs split into before_predefined_ids and after_predefined_ids. Requires Network session credentials. These IDs are scoped to the V2 firewall policy tool family \u2014 do not pass them to unifi_get_firewall_policy_ordering, unifi_reorder_firewall_policies or other Integration API tools.",
+      "name": "unifi_get_firewall_policy_order",
+      "schema": {
+        "input": {
+          "properties": {
+            "destination_zone_id": {
+              "description": "Destination V2 firewall zone ID from unifi_list_firewall_zones",
+              "type": "string"
+            },
+            "source_zone_id": {
+              "description": "Source V2 firewall zone ID from unifi_list_firewall_zones",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_zone_id",
+            "destination_zone_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Firewall Policy Order"
     },
     {
       "annotations": {
@@ -18862,6 +18976,135 @@
         }
       },
       "title": "Set Device Outdoor Mode"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Reorder the user-defined firewall policies between two zones through the V2 API, with a read-back of the applied order. Pass every current policy ID from unifi_get_firewall_policy_order. Requires confirmation and Network session credentials. These IDs are scoped to the V2 firewall policy tool family \u2014 do not pass them to unifi_get_firewall_policy_ordering, unifi_reorder_firewall_policies or other Integration API tools.",
+      "name": "unifi_set_firewall_policy_order",
+      "permission_action": "update",
+      "permission_category": "firewall_policies",
+      "schema": {
+        "input": {
+          "properties": {
+            "after_predefined_ids": {
+              "description": "V2 policy IDs to place after the predefined policies, first match first. Together with before_predefined_ids, exactly the pair's current user policy IDs",
+              "type": "array"
+            },
+            "before_predefined_ids": {
+              "description": "V2 policy IDs to place before the predefined policies, first match first",
+              "type": "array"
+            },
+            "confirm": {
+              "description": "When true, applies the reorder. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "destination_zone_id": {
+              "description": "Destination V2 firewall zone ID from unifi_list_firewall_zones",
+              "type": "string"
+            },
+            "source_zone_id": {
+              "description": "Source V2 firewall zone ID from unifi_list_firewall_zones",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_zone_id",
+            "destination_zone_id",
+            "before_predefined_ids",
+            "after_predefined_ids"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Set Firewall Policy Order"
     },
     {
       "annotations": {

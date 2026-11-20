@@ -407,7 +407,7 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 303
+    assert len(payload["actions"]) == 305
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_get_incident_evidence",

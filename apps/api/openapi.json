@@ -1633,6 +1633,31 @@
         "title": "Detail[FirewallGroupModel]",
         "type": "object"
       },
+      "Detail_FirewallPolicyOrderModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FirewallPolicyOrderModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[FirewallPolicyOrderModel]",
+        "type": "object"
+      },
       "Detail_FirewallPolicyOrderingModel_": {
         "additionalProperties": true,
         "properties": {
@@ -3136,6 +3161,27 @@
           }
         },
         "title": "FirewallGroupModel",
+        "type": "object"
+      },
+      "FirewallPolicyOrderModel": {
+        "additionalProperties": true,
+        "properties": {
+          "after_predefined_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "After Predefined Ids",
+            "type": "array"
+          },
+          "before_predefined_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Before Predefined Ids",
+            "type": "array"
+          }
+        },
+        "title": "FirewallPolicyOrderModel",
         "type": "object"
       },
       "FirewallPolicyOrderingModel": {
@@ -18570,6 +18616,85 @@
           }
         },
         "summary": "List Legacy Firewall Rules",
+        "tags": [
+          "network/firewall"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/firewall/policy-order": {
+      "get": {
+        "description": "Returns the order of the user-defined firewall policies for a source/destination zone pair, read through the V2 API with Network session credentials. These IDs are scoped to the V2 firewall policy tool family \u2014 do not pass them to the Integration API ordering queries or actions.",
+        "operationId": "get_firewall_policy_order_v1_sites__site_id__firewall_policy_order_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_zone_id",
+            "required": true,
+            "schema": {
+              "title": "Source Zone Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "destination_zone_id",
+            "required": true,
+            "schema": {
+              "title": "Destination Zone Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_FirewallPolicyOrderModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get the V2 firewall policy order for a zone pair",
         "tags": [
           "network/firewall"
         ]

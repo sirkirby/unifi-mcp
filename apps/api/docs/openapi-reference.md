@@ -591,6 +591,22 @@ Get a UniFi Access Developer API visitor by a UUID returned from the visitor fam
 
 **Returns:** `Page_LegacyFirewallRuleModel_`
 
+### `GET /v1/sites/{site_id}/firewall/policy-order` — Get the V2 firewall policy order for a zone pair
+
+
+Returns the order of the user-defined firewall policies for a source/destination zone pair, read through the V2 API with Network session credentials. These IDs are scoped to the V2 firewall policy tool family — do not pass them to the Integration API ordering queries or actions.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `source_zone_id` (query) (required)
+- `destination_zone_id` (query) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_FirewallPolicyOrderModel_`
+
 ### `GET /v1/sites/{site_id}/firewall/policy-ordering` — Get firewall policy ordering for a zone pair (integration API)
 
 

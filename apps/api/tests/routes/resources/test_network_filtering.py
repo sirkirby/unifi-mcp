@@ -243,6 +243,61 @@ async def test_get_firewall_policy_ordering_happy_path(tmp_path, monkeypatch) ->
     assert body["data"]["ordering"]["beforeSystemDefined"] == ["allow-1"]
 
 
+@pytest.mark.asyncio
+async def test_get_firewall_policy_order_happy_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+    calls = []
+
+    async def fake_get(self, source_zone_id, destination_zone_id):
+        calls.append((source_zone_id, destination_zone_id))
+        return {"before_predefined_ids": ["allow-1"], "after_predefined_ids": ["block-1"]}
+
+    from unifi_core.network.managers.firewall_manager import FirewallManager
+
+    monkeypatch.setattr(FirewallManager, "get_firewall_policy_order_v2", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            (
+                f"/v1/sites/default/firewall/policy-order?controller={cid}"
+                "&source_zone_id=zone-src&destination_zone_id=zone-dst"
+            ),
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert calls == [("zone-src", "zone-dst")]
+    assert body["render_hint"]["kind"] == "detail"
+    assert body["data"] == {"before_predefined_ids": ["allow-1"], "after_predefined_ids": ["block-1"]}
+
+
+@pytest.mark.asyncio
+async def test_get_firewall_policy_order_unknown_zone_is_404(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    from unifi_core.exceptions import UniFiNotFoundError
+    from unifi_core.network.managers.firewall_manager import FirewallManager
+
+    async def fake_get(self, source_zone_id, destination_zone_id):
+        raise UniFiNotFoundError("firewall_zone", source_zone_id)
+
+    monkeypatch.setattr(FirewallManager, "get_firewall_policy_order_v2", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            (
+                f"/v1/sites/default/firewall/policy-order?controller={cid}"
+                "&source_zone_id=zone-x&destination_zone_id=zone-dst"
+            ),
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 404, r.text
+
+
 # ---------- QoS rules ----------
 
 

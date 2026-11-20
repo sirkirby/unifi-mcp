@@ -4860,6 +4860,34 @@
       }
     },
     {
+      "name": "unifi_get_firewall_policy_order",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_policy_order_v2",
+      "input_schema": {
+        "properties": {
+          "destination_zone_id": {
+            "description": "Destination V2 firewall zone ID from unifi_list_firewall_zones",
+            "type": "string"
+          },
+          "source_zone_id": {
+            "description": "Source V2 firewall zone ID from unifi_list_firewall_zones",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_zone_id",
+          "destination_zone_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_firewall_policy_ordering",
       "product": "network",
       "category": "firewall",
@@ -6979,6 +7007,44 @@
         "required": [
           "mac_address",
           "mode"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_set_firewall_policy_order",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "firewall_manager",
+      "manager_method": "reorder_firewall_policies_v2",
+      "input_schema": {
+        "properties": {
+          "after_predefined_ids": {
+            "description": "V2 policy IDs to place after the predefined policies, first match first. Together with before_predefined_ids, exactly the pair's current user policy IDs",
+            "type": "array"
+          },
+          "before_predefined_ids": {
+            "description": "V2 policy IDs to place before the predefined policies, first match first",
+            "type": "array"
+          },
+          "destination_zone_id": {
+            "description": "Destination V2 firewall zone ID from unifi_list_firewall_zones",
+            "type": "string"
+          },
+          "source_zone_id": {
+            "description": "Source V2 firewall zone ID from unifi_list_firewall_zones",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_zone_id",
+          "destination_zone_id",
+          "before_predefined_ids",
+          "after_predefined_ids"
         ],
         "type": "object",
         "additionalProperties": false

@@ -60,6 +60,7 @@ from unifi_api.graphql.types.network.dynamic_dns import DynamicDns
 from unifi_api.graphql.types.network.event import EventLog
 from unifi_api.graphql.types.network.firewall import (
     FirewallGroup,
+    FirewallPolicyOrder,
     FirewallPolicyOrdering,
     FirewallRule,
     FirewallZone,
@@ -712,6 +713,29 @@ async def _fetch_firewall_policy_ordering(
                     destination_firewall_zone_id,
                 )
             )
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_firewall_policy_order(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+) -> dict:
+    key = f"network/firewall-policy-order/{controller}/{site}/{source_zone_id}/{destination_zone_id}"
+
+    async def _do() -> dict:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "firewall_manager",
+                site=site,
+            )
+            return dict(await mgr.get_firewall_policy_order_v2(source_zone_id, destination_zone_id))
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -2906,6 +2930,27 @@ class NetworkQuery:
             destination_firewall_zone_id,
         )
         return FirewallPolicyOrdering.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Get the order of the user-defined firewall policies for a source/destination zone pair "
+            "through the V2 API. Requires Network session credentials. "
+            "These IDs are scoped to the V2 firewall policy tool family — do not pass them to the "
+            "Integration API ordering queries or actions."
+        ),
+    )
+    async def firewall_policy_order(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        source_zone_id: str,
+        destination_zone_id: str,
+        site: str = "default",
+    ) -> FirewallPolicyOrder:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_firewall_policy_order(ctx, controller, site, source_zone_id, destination_zone_id)
+        return FirewallPolicyOrder.from_manager_output(raw)
 
     # ---- QoS domain ------------------------------------------------------
 

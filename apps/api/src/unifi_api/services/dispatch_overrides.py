@@ -110,6 +110,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
     "unifi_update_firewall_group": ("firewall_manager", "update_firewall_group"),
     "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
+    "unifi_set_firewall_policy_order": ("firewall_manager", "reorder_firewall_policies_v2"),
     "unifi_update_firewall_zone": ("firewall_manager", "update_firewall_zone"),
     "unifi_delete_firewall_zone": ("firewall_manager", "delete_firewall_zone"),
     # Toggle tools: tool body needs current enabled flag to compute new state.
