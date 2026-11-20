@@ -1651,3 +1651,29 @@ def test_support_phase_on_sitemanager_is_unsupported_not_a_bundle(monkeypatch, t
     assert (payload["server"], payload["status"], payload["success"]) == ("sitemanager", "unsupported", None)
     assert "bundle" not in {key for key in payload if key != "reason"}
     assert support_smoke.PRODUCTS == ("network", "protect", "access")
+
+
+def test_live_smoke_previews_skip_meta_tools_that_are_not_read_only():
+    """Batch cancel is the first meta tool without readOnlyHint; previews must not call
+    it with confirm, which it does not take."""
+    import asyncio
+
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.server_key = "network"
+    runner.args = SimpleNamespace(tool=None)
+    runner.report = live_smoke.SmokeReport(server="network", started_at="now")
+    runner.manifest = {
+        "tools": [{"name": "unifi_batch_cancel", "annotations": {"readOnlyHint": False}}],
+    }
+    called = []
+
+    async def call(name, args, phase):
+        called.append(name)
+
+    runner.call = call
+    asyncio.run(runner.run_previews())
+
+    assert called == []
+    assert [(r.tool, r.status) for r in runner.report.records] == [("unifi_batch_cancel", "skipped")]
