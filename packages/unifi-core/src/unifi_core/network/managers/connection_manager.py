@@ -24,7 +24,7 @@ from aiounifi.models.configuration import Configuration
 
 from unifi_core.auth import AuthenticationStatus, UniFiAuth
 from unifi_core.connect_attempt import ConnectAttempt
-from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
+from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
 from unifi_core.redaction import (
@@ -541,6 +541,7 @@ class ConnectionManager:
         auth: UniFiAuth | None = None,
         ssl_fingerprint: str | None = None,
         tls_env_prefix: str | None = None,
+        auth_failure_hint: str | None = None,
     ):
         """Initialize the Connection Manager.
 
@@ -548,6 +549,9 @@ class ConnectionManager:
         precedence over ``verify_ssl``; see :mod:`unifi_core.tls`. ``tls_env_prefix``
         names the settings a certificate error points at, e.g. ``"NETWORK"``; leave
         it unset for a consumer that does not read those variables.
+        ``auth_failure_hint`` is fixed text appended to the stored failure when the
+        controller rejects the credentials, and to no other failure; it is shown
+        to callers verbatim, so it must not carry a secret.
 
         Raises:
             ValueError: ``ssl_fingerprint`` is set but malformed.
@@ -561,6 +565,7 @@ class ConnectionManager:
         self.verify_ssl = verify_ssl
         self.ssl_fingerprint = ssl_fingerprint
         self.tls_env_prefix = tls_env_prefix
+        self.auth_failure_hint = auth_failure_hint
         ssl_setting(verify_ssl, ssl_fingerprint)  # A malformed pin fails here, not on the first request.
         self.cache_timeout = cache_timeout
         self._max_retries = max_retries
@@ -745,14 +750,19 @@ class ConnectionManager:
     def _record_connection_error(self, error: BaseException) -> str:
         category = ErrorCategory.AUTHENTICATION if self._is_mfa_required_error(error) else None
         self._support_attempt = connection_attempt_failed(error, category=category)
-        self._last_connection_error = self._sanitize_connection_error(error)
+        failure = connection_failure("Connecting to the Network controller failed.", error, category=category)
+        message = self._sanitize_connection_error(error)
+        if isinstance(failure, ControllerAuthFailed):
+            message = self._with_auth_failure_hint(message)
+        self._last_connection_error = message
         if is_certificate_error(error):
             logger.warning("%s", certificate_error_hint(env_prefix=self.tls_env_prefix))
-        self._last_connection_failure = (
-            self._last_connection_error,
-            connection_failure("Connecting to the Network controller failed.", error, category=category),
-        )
-        return self._last_connection_error
+        self._last_connection_failure = (message, failure)
+        return message
+
+    def _with_auth_failure_hint(self, message: str) -> str:
+        """``message`` followed by the configured hint for a rejected login, if any."""
+        return f"{message} {self.auth_failure_hint}" if self.auth_failure_hint else message
 
     @property
     def last_connection_error(self) -> Optional[str]:
@@ -1179,7 +1189,7 @@ class ConnectionManager:
             except UniFiAuthError:
                 continue
         self._integration_prefix = None
-        self._last_connection_error = (
+        self._last_connection_error = self._with_auth_failure_hint(
             "No usable Network authentication path. Verify the API key or session credentials."
         )
         return False

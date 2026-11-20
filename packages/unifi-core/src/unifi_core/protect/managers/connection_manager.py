@@ -21,7 +21,7 @@ from uiprotect.exceptions import NotAuthorized, NvrError
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.connect_attempt import ConnectAttempt
-from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
+from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
@@ -139,6 +139,10 @@ class ProtectConnectionManager:
     bootstrap_refresh_seconds:
         How often the bootstrap is fetched again after :meth:`initialize`;
         ``0`` turns the re-fetch off.
+    auth_failure_hint:
+        Fixed text appended to the not-connected error when the controller
+        rejected the credentials, and to no other failure. It is shown to
+        callers verbatim, so it must not carry a secret.
     """
 
     def __init__(
@@ -153,6 +157,7 @@ class ProtectConnectionManager:
         bootstrap_refresh_seconds: float = BOOTSTRAP_REFRESH_SECONDS,
         ssl_fingerprint: str | None = None,
         tls_env_prefix: str | None = None,
+        auth_failure_hint: str | None = None,
     ):
         self.host = host
         self.username = username
@@ -162,6 +167,7 @@ class ProtectConnectionManager:
         self.verify_ssl = verify_ssl
         self.ssl_fingerprint = ssl_fingerprint
         self.tls_env_prefix = tls_env_prefix
+        self.auth_failure_hint = auth_failure_hint
         ssl_setting(verify_ssl, ssl_fingerprint)  # A malformed pin fails here, not on the first request.
         self._api_key = api_key
 
@@ -462,6 +468,13 @@ class ProtectConnectionManager:
 
     def _not_connected_message(self) -> str:
         """Why no client is available: exception class and fixed guidance only."""
+        message = self._not_connected_reason()
+        rejected = isinstance(self._initialization_failure, ControllerAuthFailed)
+        if self.auth_failure_hint and rejected and not (self._closed or self._attempt.in_progress):
+            return f"{message} {self.auth_failure_hint}"
+        return message
+
+    def _not_connected_reason(self) -> str:
         if self._closed:
             return "UniFi Protect connection is not initialized: the connection was closed."
         if self._attempt.in_progress:
