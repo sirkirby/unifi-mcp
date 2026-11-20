@@ -93,3 +93,28 @@ def test_connection_manager_gets_the_cut_credential_warnings(monkeypatch, shared
         "UNIFI_PASSWORD is set but not used: the host comes from UNIFI_PROTECT_HOST, which differs from "
         "UNIFI_HOST; set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form)."
     )
+
+
+@pytest.mark.asyncio
+async def test_a_failed_start_names_the_ignored_shared_credentials(monkeypatch):
+    """Shared credentials only, another host: no login is sent and the error names what to set."""
+    for name in [n for n in os.environ if n.startswith("UNIFI_") or n == "CONFIG_PATH"]:
+        monkeypatch.delenv(name, raising=False)
+    run = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(shared_bootstrap, "_TRUSTED_VARS", None)
+    shared = {"UNIFI_USERNAME": f"user-{run}", "UNIFI_PASSWORD": f"pw-{run}"}
+    for var, value in {**shared, "UNIFI_HOST": "gateway.invalid", "UNIFI_PROTECT_HOST": "other.invalid"}.items():
+        monkeypatch.setenv(var, value)
+    monkeypatch.setattr(runtime, "get_config", runtime.get_config.__wrapped__)
+    manager = runtime.get_connection_manager.__wrapped__()
+
+    assert await manager.initialize() is False
+
+    error = manager.last_connection_error
+    assert "no UniFi Protect credentials are configured" in error
+    assert error.endswith(
+        "UNIFI_USERNAME is set but not used: the host comes from UNIFI_PROTECT_HOST, which differs from UNIFI_HOST; "
+        "set UNIFI_PROTECT_USERNAME. UNIFI_PASSWORD is set but not used: the host comes from UNIFI_PROTECT_HOST, which "
+        "differs from UNIFI_HOST; set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form)."
+    )
+    assert not any(value in error for value in [*shared.values(), "gateway.invalid", "other.invalid"])
