@@ -143,6 +143,10 @@ class AccessConnectionManager:
         Optional API key for the official Access API (port ``api_port``).
     api_port:
         Port for the ``py-unifi-access`` API (default 12445).
+    auth_failure_hint:
+        Fixed text appended to the connection failure when the controller
+        rejected the credentials or none are configured, and to no other
+        failure. It is shown to callers verbatim, so it must not carry a secret.
     """
 
     def __init__(
@@ -157,6 +161,7 @@ class AccessConnectionManager:
         ssl_fingerprint: str | None = None,
         tls_env_prefix: str | None = None,
         api_ssl_fingerprint: str | None = None,
+        auth_failure_hint: str | None = None,
     ) -> None:
         self.host = host
         self.username = username
@@ -166,6 +171,7 @@ class AccessConnectionManager:
         self.ssl_fingerprint = ssl_fingerprint
         self.api_ssl_fingerprint = api_ssl_fingerprint
         self.tls_env_prefix = tls_env_prefix
+        self.auth_failure_hint = auth_failure_hint
         # A malformed pin fails here, not on the first request.
         ssl_setting(verify_ssl, ssl_fingerprint)
         ssl_setting(verify_ssl, api_ssl_fingerprint)
@@ -292,7 +298,9 @@ class AccessConnectionManager:
         self._support_attempt = connection_attempt_started()
         if not self._credentials_configured():
             error = UniFiConnectionError(
-                "No UniFi Access credentials are configured. Set an API key or a username and password."
+                self._with_auth_failure_hint(
+                    "No UniFi Access credentials are configured. Set an API key or a username and password."
+                )
             )
             self._record_connect_failure(error)
             return False
@@ -501,12 +509,16 @@ class AccessConnectionManager:
         return message
 
     def _rejected_message(self) -> str:
-        message = (
+        message = self._with_auth_failure_hint(
             "UniFi Access rejected the configured credentials "
             f"(tried {' and '.join(self._configured_paths())}). Check the username/password or API key."
         )
         note = self._certificate_failure_note()
         return f"{message} {note}" if note else message
+
+    def _with_auth_failure_hint(self, message: str) -> str:
+        """``message`` followed by the configured hint for a credential failure, if any."""
+        return f"{message} {self.auth_failure_hint}" if self.auth_failure_hint else message
 
     @property
     def last_connection_error(self) -> str | None:

@@ -292,3 +292,17 @@ async def test_rate_limit_stops_capability_negotiation(monkeypatch, public):
         assert not await cm.initialize()
         assert "rate limited" in cm.last_connection_error
         assert not await cm.initialize()
+
+
+@pytest.mark.asyncio
+async def test_rejected_key_route_carries_the_auth_failure_hint(monkeypatch):
+    monkeypatch.setenv("UNIFI_CONTROLLER_TYPE", "direct")
+    hint = "UNIFI_PASSWORD is set but not used; set UNIFI_NETWORK_PASSWORD."
+    cm = ConnectionManager("controller.test", "", "", auth=UniFiAuth(api_key="synthetic-key"), auth_failure_hint=hint)
+    with responses() as http:
+        http.get("https://controller.test/api/self/sites", status=401)
+        http.get("https://controller.test/integration/v1/sites?limit=1&offset=0", status=401)
+        assert not await cm.initialize()
+    assert cm.last_connection_error == (
+        f"No usable Network authentication path. Verify the API key or session credentials. {hint}"
+    )
