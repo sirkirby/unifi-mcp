@@ -10,6 +10,9 @@ from unifi_mcp_shared.meta_tools import is_meta_tool
 RELAY_EXCLUDED_TOOL_SUFFIXES: tuple[str, ...] = ("_get_support_bundle",)
 RELAY_EXCLUDED_ERROR = "Support bundle tools are unavailable through the relay; call the direct product MCP server."
 RELAY_NESTED_META_ERROR = "Relay execute and batch wrappers may target domain tools only."
+# Meta tools a wrapper must not target even when the installed shared package
+# predates them: a wrapped cancel would bypass the relay's job scoping.
+_RELAY_META_SUFFIXES: tuple[str, ...] = ("_batch_cancel",)
 
 _MAX_WRAPPER_DEPTH = 8
 
@@ -48,7 +51,7 @@ def _relay_call_rejection(tool_name: object, arguments: object, *, depth: int, n
     # Meta-tools remain directly callable through the relay, but allowing one
     # execution wrapper to target another makes the effective operation opaque
     # to relay policy and response filtering. Keep wrappers domain-only.
-    if nested and is_meta_tool(tool_name):
+    if nested and (is_meta_tool(tool_name) or tool_name.endswith(_RELAY_META_SUFFIXES)):
         return RELAY_NESTED_META_ERROR
     if depth >= _MAX_WRAPPER_DEPTH and tool_name.endswith(("_execute", "_batch")):
         return RELAY_NESTED_META_ERROR

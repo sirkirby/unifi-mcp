@@ -15,6 +15,9 @@ logger = logging.getLogger("unifi-mcp-relay")
 
 _MAX_RELAY_BATCH_JOBS = 1_000
 _RELAY_BATCH_STATUS_ERROR = "Batch status is available only for jobs started through this relay connection."
+_RELAY_BATCH_CANCEL_ERROR = "Batch cancel is available only for jobs started through this relay connection."
+# Job tools a caller may use only on jobs this relay started, and the error for each.
+_RELAY_JOB_TOOL_ERRORS = {"_batch_status": _RELAY_BATCH_STATUS_ERROR, "_batch_cancel": _RELAY_BATCH_CANCEL_ERROR}
 
 # Scope provenance to the backend URL as well as the product status tool.
 type RelayBatchJobs = dict[tuple[str, str], dict[str, None]]
@@ -179,7 +182,8 @@ class ToolForwarder:
         rejection = relay_call_rejection(tool_name, arguments)
         if rejection is not None:
             return rejection
-        if not tool_name.endswith("_batch_status"):
+        suffix = next((suffix for suffix in _RELAY_JOB_TOOL_ERRORS if tool_name.endswith(suffix)), None)
+        if suffix is None:
             return None
 
         job_ids: list[object] = []
@@ -190,10 +194,12 @@ class ToolForwarder:
         if not job_ids:
             return None
 
+        # Jobs are recorded under the product's status tool; cancel shares that scope.
+        status_name = f"{tool_name[: -len(suffix)]}_batch_status"
         url = self.get_server_url(tool_name)
-        known = self._relay_batch_jobs.get((url, tool_name), {}) if url is not None else {}
+        known = self._relay_batch_jobs.get((url, status_name), {}) if url is not None else {}
         if any(not isinstance(job_id, str) or job_id not in known for job_id in job_ids):
-            return _RELAY_BATCH_STATUS_ERROR
+            return _RELAY_JOB_TOOL_ERRORS[suffix]
         return None
 
     def _record_batch_jobs(self, tool_name: str, result: Any) -> None:
