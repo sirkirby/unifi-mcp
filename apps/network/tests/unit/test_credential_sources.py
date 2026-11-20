@@ -55,3 +55,13 @@ def test_shared_variables_alone_still_configure_network(shared):
     assert unifi.site == shared["UNIFI_SITE"]
     assert unifi.verify_ssl is True
     assert unifi.controller_type == "proxy"
+
+
+@pytest.mark.parametrize("configured", ["", "configured-key"])
+def test_api_key_comes_only_from_config(shared, monkeypatch, configured):
+    from unifi_network_mcp import runtime
+
+    cfg = OmegaConf.create({"unifi": {"api_key": configured}})
+    monkeypatch.setattr(runtime, "get_config", lambda: cfg)
+
+    assert runtime.get_auth.__wrapped__().has_api_key is bool(configured)
