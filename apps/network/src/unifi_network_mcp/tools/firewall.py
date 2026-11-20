@@ -295,9 +295,11 @@ def _selector_applied(key: str, expected: Any, actual: Dict[str, Any]) -> bool:
     removes the key from the PUT body, so the controller may answer with the key gone
     or with its own empty default. Both mean retired; only a surviving value does not.
     A caller clearing a selector with ``[]`` or ``""`` gets the same answer: the
-    controller drops an empty selector rather than storing it.
+    controller drops an empty selector rather than storing it. So does an inversion
+    flag set to ``False``, by the caller or by retirement when the update leaves the
+    target it belongs to: under the new target the controller drops the key.
     """
-    if expected is None or expected == [] or expected == "":
+    if expected is None or expected is False or expected == [] or expected == "":
         return not actual.get(key)
     return actual.get(key) == expected
 

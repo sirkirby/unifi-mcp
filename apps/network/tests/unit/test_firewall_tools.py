@@ -824,6 +824,46 @@ class TestUpdatePreviewAndVerification:
         assert result["success"] is True, result.get("error")
 
     @pytest.mark.asyncio
+    async def test_a_retired_inversion_flag_the_controller_drops_is_applied(self):
+        """Leaving NETWORK retires match_opposite_networks to False; under ANY the
+        controller drops the key, which is the flag's default, not a failed write."""
+        raw = self._stored(matching_target="NETWORK", network_ids=["net1"], match_opposite_networks=True)
+        reread = copy.deepcopy(raw)
+        reread["destination"] = {"zone_id": "z2", "matching_target": "ANY"}
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(reread)])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001", update_data={"destination": {"matching_target": "ANY"}}, confirm=True
+            )
+
+        sent = mock_fm.update_firewall_policy.await_args.args[1]["destination"]
+        assert sent["match_opposite_networks"] is False
+        assert result["success"] is True, result.get("error")
+
+    @pytest.mark.asyncio
+    async def test_an_inversion_flag_the_controller_kept_set_is_not_applied(self):
+        raw = self._stored(matching_target="NETWORK", network_ids=["net1"], match_opposite_networks=True)
+        reread = copy.deepcopy(raw)
+        reread["destination"] = {"zone_id": "z2", "matching_target": "ANY", "match_opposite_networks": True}
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(reread)])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001", update_data={"destination": {"matching_target": "ANY"}}, confirm=True
+            )
+
+        assert result["success"] is False
+
+    @pytest.mark.asyncio
     async def test_a_cleared_selector_the_controller_kept_is_still_not_applied(self):
         raw = self._stored(matching_target="IP", matching_target_type="SPECIFIC", ips=["192.0.2.10"])
         reread = copy.deepcopy(raw)
