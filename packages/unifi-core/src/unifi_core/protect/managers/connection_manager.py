@@ -22,7 +22,7 @@ from uiprotect.exceptions import NotAuthorized, NvrError
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
-from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.redaction import append_exception_hint, strip_origins_from_methods
@@ -96,6 +96,9 @@ _FORBIDDEN_HINT = (
 # requesting data from <host>", ``_raise_for_status`` raises status failures
 # quoting the absolute request URL.
 _SDK_REQUEST_METHODS = ("request", "_raise_for_status")
+
+# A blank login tells the console nothing, and some answer it with 403.
+_NO_CREDENTIALS = "no UniFi Protect credentials are configured; set a username and password, or an API key."
 
 
 def _hint_forbidden(error: BaseException) -> None:
@@ -247,6 +250,9 @@ class ProtectConnectionManager:
                 return True
             self._closed = False
             self._support_attempt = connection_attempt_started()
+            if not self._credentials_configured():
+                self._fail_without_credentials()
+                return False
             try:
                 await retry_with_backoff(_connect, policy=policy)
             except Exception as exc:
@@ -301,6 +307,9 @@ class ProtectConnectionManager:
                 return False
             logger.info("[protect-cm] Not connected to UniFi Protect; attempting to reconnect.")
             self._support_attempt = connection_attempt_started()
+            if not self._credentials_configured():
+                self._fail_without_credentials()
+                return False
             try:
                 async with asyncio.timeout(self._reconnect_attempt_timeout):
                     await self._connect_once()
@@ -430,6 +439,14 @@ class ProtectConnectionManager:
         if _is_terminal_auth_error(error):
             self._block_automatic_reconnect(error)
 
+    def _credentials_configured(self) -> bool:
+        return bool(self.username and self.password) or bool(self._api_key)
+
+    def _fail_without_credentials(self) -> None:
+        """Fail as a rejected login would, without sending one."""
+        self._connection_failed(UniFiAuthError(_NO_CREDENTIALS))
+        logger.error("[protect-cm] Not connecting to UniFi Protect: %s", _NO_CREDENTIALS)
+
     def _reconnect_allowed(self) -> bool:
         if self._closed or self._reconnect_block_active():
             return False
@@ -468,13 +485,6 @@ class ProtectConnectionManager:
 
     def _not_connected_message(self) -> str:
         """Why no client is available: exception class and fixed guidance only."""
-        message = self._not_connected_reason()
-        rejected = isinstance(self._initialization_failure, ControllerAuthFailed)
-        if self.auth_failure_hint and rejected and not (self._closed or self._attempt.in_progress):
-            return f"{message} {self.auth_failure_hint}"
-        return message
-
-    def _not_connected_reason(self) -> str:
         if self._closed:
             return "UniFi Protect connection is not initialized: the connection was closed."
         if self._attempt.in_progress:
@@ -483,6 +493,21 @@ class ProtectConnectionManager:
                 "which has not answered yet. Check that the controller is reachable from this machine; "
                 "the attempt continues in the background and a later call uses the connection once it succeeds."
             )
+        return self.last_connection_error or "ProtectConnectionManager is not initialized. Call initialize() first."
+
+    @property
+    def last_connection_error(self) -> str | None:
+        """Why the last connection attempt failed, or ``None`` after a success; fixed text only."""
+        if self._closed or self._last_failure_class is None:
+            return None
+        message = self._failure_reason()
+        if self.auth_failure_hint and isinstance(self._initialization_failure, ControllerAuthFailed):
+            return f"{message} {self.auth_failure_hint}"
+        return message
+
+    def _failure_reason(self) -> str:
+        if not self._credentials_configured():
+            return f"UniFi Protect connection is not initialized: {_NO_CREDENTIALS}"
         if self._reconnect_block_active():
             remaining = max(0.0, self._reconnect_block_until - self._clock())
             return (
@@ -496,13 +521,11 @@ class ProtectConnectionManager:
                 f"({self._last_failure_class}). {certificate_error_hint(env_prefix=self.tls_env_prefix)} "
                 "A later call tries to connect again."
             )
-        if self._last_failure_class is not None:
-            return (
-                "UniFi Protect connection is not initialized: the last connection attempt failed "
-                f"({self._last_failure_class}). Check that the controller is reachable; "
-                "a later call tries to connect again."
-            )
-        return "ProtectConnectionManager is not initialized. Call initialize() first."
+        return (
+            "UniFi Protect connection is not initialized: the last connection attempt failed "
+            f"({self._last_failure_class}). Check that the controller is reachable; "
+            "a later call tries to connect again."
+        )
 
     @property
     def initialization_failure(self) -> ControllerConnectionFailed | None:

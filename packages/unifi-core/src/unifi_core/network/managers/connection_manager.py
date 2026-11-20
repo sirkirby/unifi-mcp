@@ -524,6 +524,9 @@ def _handler_obj_id(handler: APIHandler, row: Any) -> Optional[str]:
     return None if key is None else row[key]
 
 
+_NO_CREDENTIALS = "no Network controller credentials are configured; set a username and password, or an API key."
+
+
 class ConnectionManager:
     """Manages the connection and session with the Unifi Network Controller."""
 
@@ -759,6 +762,22 @@ class ConnectionManager:
             logger.warning("%s", certificate_error_hint(env_prefix=self.tls_env_prefix))
         self._last_connection_failure = (message, failure)
         return message
+
+    def _fail_without_credentials(self) -> None:
+        """Fail as a rejected login would, without sending one.
+
+        A blank login tells the controller nothing, and UniFi OS answers it with
+        403, which reads as a permission failure rather than missing credentials.
+        """
+        error = UniFiAuthError(_NO_CREDENTIALS)
+        self._support_attempt = connection_attempt_failed(error)
+        message = self._with_auth_failure_hint(_NO_CREDENTIALS)
+        self._last_connection_error = message
+        self._last_connection_failure = (
+            message,
+            connection_failure("Connecting to the Network controller failed.", error),
+        )
+        logger.error("Not connecting to the Unifi controller: %s", _NO_CREDENTIALS)
 
     def _with_auth_failure_hint(self, message: str) -> str:
         """``message`` followed by the configured hint for a rejected login, if any."""
@@ -1314,6 +1333,9 @@ class ConnectionManager:
 
     async def _initialize_session(self, *, rate_limit_login: bool = False) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
+        if not (self.username and self.password) and not self.unifi_auth.has_api_key:
+            self._fail_without_credentials()
+            return False
         blocked = self._reconnect_block_active()
         if blocked:
             logger.error("Automatic reconnect remains blocked after authentication failure; waiting for cooldown.")
