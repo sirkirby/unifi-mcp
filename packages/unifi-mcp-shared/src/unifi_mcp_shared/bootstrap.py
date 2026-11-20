@@ -641,6 +641,80 @@ def resolve_env(key: str, *, env_prefix: str, logger: logging.Logger, shared_fal
     return None
 
 
+# Credentials meant for one console. A shared value of these is sent only to the
+# shared host; see load_server_config.
+_HOST_BOUND_KEYS = ("username", "password", "api_key")
+
+
+def _host_identity(host: str, port: str) -> tuple[str, str]:
+    """What two host settings must share to name the same console.
+
+    The host as written, with ASCII case folded; nothing else. The Network,
+    Protect and Access cores put a scheme in front of the host as written, so
+    ``https://console`` connects to a host named ``https``, and ``console/``,
+    ``console:443`` or `` console`` are other strings again: none of them may
+    borrow the credentials meant for ``console``. A blank host names no console.
+    """
+    if not host.strip():
+        return "", port
+    return (host.lower() if host.isascii() else host), port
+
+
+def _shared_spellings(key: str) -> list[str]:
+    """The shared spellings of ``key`` that are set, by name only.
+
+    Nothing is read or run: a shared credential the server will not use must not
+    start a helper or open a file.
+    """
+    base = f"UNIFI_{key.upper()}"
+    names = [base]
+    if is_sensitive_key(key):
+        names += [f"{base}{suffix}" for suffix, _ in _SECRET_READERS]
+    return [name for name in names if os.getenv(name)]
+
+
+def _warn_host_cut(logger: logging.Logger, key: str, env_prefix: str, spellings: list[str], why: str) -> None:
+    """Name the shared spellings of a cut credential and the server-level variable to set.
+
+    ``why`` is the clause :func:`_host_level_cut` returned. Only variable names are logged.
+    """
+    names = [_origin(name) for name in spellings]
+    subject = f"{names[0]} is" if len(names) == 1 else _listed(names)
+    product = f"UNIFI_{env_prefix}_{key.upper()}"
+    remedy = f"{product} (or its _FILE/_COMMAND form)" if is_sensitive_key(key) else product
+    logger.warning(
+        "%s set but not used: the host comes from UNIFI_%s_HOST%s; set %s.", subject, env_prefix, why, remedy
+    )
+
+
+def _host_level_cut(
+    keys: Sequence[str], isolated_keys: Sequence[str], *, env_prefix: str, logger: logging.Logger
+) -> tuple[frozenset[str], str]:
+    """The credential keys that must not fall back, and the clause that says why.
+
+    Nothing is cut when the server loads no host, isolates it, or sets none at its
+    own level. Otherwise the shared credentials stay only when the server's host
+    and effective port name the same console as ``UNIFI_HOST`` and its port.
+    """
+    if "host" not in keys or "host" in isolated_keys:
+        return frozenset(), ""
+    product_host = resolve_env("host", env_prefix=env_prefix, logger=logger, shared_fallback=False)
+    if product_host is None:
+        return frozenset(), ""
+    shared_port = os.getenv("UNIFI_PORT") or "443"
+    product = _host_identity(product_host, os.getenv(f"UNIFI_{env_prefix}_PORT") or shared_port)
+    shared = _host_identity(os.getenv("UNIFI_HOST") or "", shared_port)
+    if product[0] and product == shared:
+        return frozenset(), ""
+    if not shared[0]:
+        why = " and UNIFI_HOST is not set"
+    elif product[0] == shared[0]:
+        why = f", which names the UNIFI_HOST console on another port (UNIFI_{env_prefix}_PORT or UNIFI_PORT)"
+    else:
+        why = ", which differs from UNIFI_HOST"
+    return frozenset(_HOST_BOUND_KEYS).intersection(keys).difference(isolated_keys), why
+
+
 def load_server_config(
     *,
     package_name: str,
@@ -661,6 +735,25 @@ def load_server_config(
     Then merges server-specific env vars (e.g. ``UNIFI_NETWORK_HOST``)
     with fallback to shared vars (e.g. ``UNIFI_HOST``) via :func:`resolve_env`.
     Secret keys may also be supplied as ``..._FILE`` or ``..._COMMAND``.
+
+    Credentials follow the host. When the host comes from the server's own level
+    (``UNIFI_PROTECT_HOST``) and does not name the same console as ``UNIFI_HOST``
+    (host compared as written apart from ASCII case, plus the effective port; an
+    IP address and a hostname for one console differ), ``username``,
+    ``password`` and ``api_key`` are read from the
+    server's level only. Shared spellings of those keys are then detected by name
+    and never read or run, so a broken shared ``_FILE`` or ``_COMMAND`` does not
+    refuse startup; each one that is set is named in a warning, without values,
+    when the credential ends up empty.
+    The server still starts, because setup mode keys off the host, and its first
+    login fails until the server-level credential is set. Port, site, TLS settings
+    and every other key keep falling back. A host from a ``CONFIG_PATH`` file is
+    not an environment level and changes nothing here.
+
+    A cut or isolated credential that the config file supplies with the shared
+    variable's value (a file that interpolates ``UNIFI_PASSWORD``) is blanked,
+    with a warning that names the variable; a different value written in an
+    operator's file is kept.
 
     Args:
         package_name: Dotted package name for importlib.resources
@@ -718,10 +811,34 @@ def load_server_config(
 
     cfg = OmegaConf.load(str(resolved_path))
 
-    # Merge env vars: server-specific (e.g. UNIFI_NETWORK_HOST) > shared (UNIFI_HOST)
+    # Merge env vars: server-specific (e.g. UNIFI_NETWORK_HOST) > shared (UNIFI_HOST),
+    # except that credentials follow the host (see _host_level_cut).
+    host_cut, cut_why = _host_level_cut(keys, isolated_keys, env_prefix=env_prefix, logger=logger)
+    no_fallback = host_cut.union(isolated_keys)
     unifi_env_overrides: dict[str, Any] = {}
     for key in keys:
-        val = resolve_env(key, env_prefix=env_prefix, logger=logger, shared_fallback=key not in isolated_keys)
+        val = resolve_env(key, env_prefix=env_prefix, logger=logger, shared_fallback=key not in no_fallback)
+        if val is None and key in _HOST_BOUND_KEYS and key in no_fallback:
+            # A file can interpolate the shared variable itself, so compare values,
+            # whatever the file's syntax. Only the plain variable can be interpolated.
+            file_value = OmegaConf.select(cfg, f"unifi.{key}", default=None, throw_on_resolution_failure=False)
+            shared_value = os.getenv(f"UNIFI_{key.upper()}")
+            blanked = bool(shared_value) and file_value is not None and str(file_value) == shared_value
+            if blanked:
+                unifi_env_overrides[key] = ""
+                logger.warning(
+                    "unifi.%s in the config file has the value of %s, which this server does not use for it; "
+                    "the value is ignored. Set %s.",
+                    key,
+                    _origin(f"UNIFI_{key.upper()}"),
+                    f"UNIFI_{env_prefix}_{key.upper()}",
+                )
+            # Warn only when the credential ends up empty: a different value in the
+            # operator's config file is kept and used.
+            if key in host_cut and (blanked or not file_value):
+                if spellings := _shared_spellings(key):
+                    _warn_host_cut(logger, key, env_prefix, spellings, cut_why)
+            continue
         if val is not None:
             if key == "verify_ssl":
                 val = val.lower() in {"1", "true", "yes"}
