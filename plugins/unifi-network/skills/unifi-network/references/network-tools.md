@@ -1,4 +1,4 @@
-# Network Server Tool Reference (214 tools)
+# Network Server Tool Reference (216 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -113,12 +113,13 @@ Always available, regardless of registration mode.
 ## Firewall
 
 <!-- AUTO:tools:firewall -->
-18 tools.
+20 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_firewall_group_details` | Read | Get detailed configuration for a specific firewall group by ID. |
 | `unifi_get_firewall_policy_details` | Read | Get detailed configuration for a specific firewall policy by ID. |
+| `unifi_get_firewall_policy_order` | Read | Get the order of the user-defined firewall policies between two zones through the V2 API, as V2 policy IDs split into before_predefined_i... |
 | `unifi_get_firewall_policy_ordering` | Read | Get user-defined firewall policy ordering for a source/destination firewall zone pair. |
 | `unifi_list_firewall_groups` | Read | List firewall groups (address and port groups) used as reusable objects in firewall policies. |
 | `unifi_list_firewall_policies` | Read | List firewall policies configured on the Unifi Network controller. |
@@ -131,6 +132,7 @@ Always available, regardless of registration mode.
 | `unifi_delete_firewall_policy` | Mutate | Delete a firewall policy by ID. |
 | `unifi_delete_firewall_zone` | Mutate | Delete a firewall zone by ID. |
 | `unifi_reorder_firewall_policies` | Mutate | Reorder user-defined firewall policies for a source/destination firewall zone pair. |
+| `unifi_set_firewall_policy_order` | Mutate | Reorder the user-defined firewall policies between two zones through the V2 API, with a read-back of the applied order. |
 | `unifi_toggle_firewall_policy` | Mutate | Enable or disable a specific firewall policy by ID. |
 | `unifi_update_firewall_group` | Mutate | Update an existing firewall group. |
 | `unifi_update_firewall_policy` | Mutate | Update specific fields of an existing V2 zone-based firewall policy by ID. |
