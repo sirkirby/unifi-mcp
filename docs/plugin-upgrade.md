@@ -10,8 +10,10 @@ prerequisites and verification status are in the
 Newer Network, Protect and Access server releases send the shared
 `UNIFI_USERNAME`, `UNIFI_PASSWORD` and `UNIFI_API_KEY` (and their `_FILE` /
 `_COMMAND` forms) only to the console `UNIFI_HOST` names; older releases send
-them to any host. A plugin picks this up when its server pin moves to one of
-those releases. In Claude Code the plugins pass their `host` option as the
+them to any host. The username and password part lives in `unifi-mcp-shared`,
+which a plugin's pinned server takes at its newest compatible version, so it
+reaches a plugin as soon as `uvx` resolves that shared release, before the
+plugin's server pin moves. The API key part arrives with the server pin. In Claude Code the plugins pass their `host` option as the
 server's own host (`UNIFI_<PRODUCT>_HOST`); in Codex, check
 `UNIFI_<PRODUCT>_HOST` in the settings file. Check this if you set only the
 host there and kept the username and password as shared `UNIFI_*` variables in

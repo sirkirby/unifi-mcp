@@ -76,10 +76,12 @@ level the host came from:
 
 Port, site, `verify_ssl` and the TLS fingerprint keep falling back in every case.
 A host written in a `CONFIG_PATH` file is not an environment level and does not
-trigger the rule: the shared credentials then go to the file's host. A credential
-in a `CONFIG_PATH` file that equals the shared variable the server is not using
-(for example a file that interpolates `UNIFI_PASSWORD`) is dropped, with a
+trigger the rule: the shared credentials then go to the file's host. A password or
+API key in a `CONFIG_PATH` file that equals the shared variable the server is not
+using (for example a file that interpolates `UNIFI_PASSWORD`) is dropped, with a
 warning that names the variable; a different value in the file is kept and used.
+A username is dropped only when the file interpolates it; a username written
+literally in the file is kept.
 This is the behaviour of newer server releases. Older releases sent the shared
 credentials to whatever host was configured, so whenever a server's host differs
 from `UNIFI_HOST`, give that server its own credentials.

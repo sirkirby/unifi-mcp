@@ -571,6 +571,16 @@ class TestHostLevelCredentials:
         ]
         self._assert_no_secret_logged(caplog)
 
+    def test_literal_username_in_a_config_file_is_kept_when_it_matches_the_shared_one(self, caplog):
+        """A username is no secret; only an interpolated one is blanked."""
+        self._config(f'unifi:\n  host: ""\n  username: {self.shared["UNIFI_USERNAME"]}\n  password: file-pass\n')
+        self._shared_credentials()
+        self._env(UNIFI_HOST="gateway.invalid", UNIFI_PROTECT_HOST="other.invalid")
+        with caplog.at_level(logging.WARNING):
+            unifi = self._load(keys=("host", "username", "password")).unifi
+        assert (unifi.username, unifi.password) == (self.shared["UNIFI_USERNAME"], "file-pass")
+        assert self._warnings(caplog) == []
+
     def test_operator_value_in_a_config_file_is_kept_when_it_is_not_the_shared_one(self, caplog):
         self._config('unifi:\n  host: ""\n  password: operator-file-value\n')
         self._shared_credentials()

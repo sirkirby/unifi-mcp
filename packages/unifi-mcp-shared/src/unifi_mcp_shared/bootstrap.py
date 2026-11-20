@@ -750,10 +750,11 @@ def load_server_config(
     and every other key keep falling back. A host from a ``CONFIG_PATH`` file is
     not an environment level and changes nothing here.
 
-    A cut or isolated credential that the config file supplies with the shared
-    variable's value (a file that interpolates ``UNIFI_PASSWORD``) is blanked,
-    with a warning that names the variable; a different value written in an
-    operator's file is kept.
+    A cut or isolated password or API key that the config file supplies with the
+    shared variable's value (a file that interpolates ``UNIFI_PASSWORD``) is
+    blanked, with a warning that names the variable; a different value written in
+    an operator's file is kept. A username is blanked only when the file
+    interpolates it, since a literal one is the operator's own.
 
     Args:
         package_name: Dotted package name for importlib.resources
@@ -824,6 +825,11 @@ def load_server_config(
             file_value = OmegaConf.select(cfg, f"unifi.{key}", default=None, throw_on_resolution_failure=False)
             shared_value = os.getenv(f"UNIFI_{key.upper()}")
             blanked = bool(shared_value) and file_value is not None and str(file_value) == shared_value
+            if blanked and not is_sensitive_key(key):
+                # A username is no secret, and a common one ("admin") is often written
+                # literally: keep the operator's literal, blank only an interpolation.
+                section = OmegaConf.select(cfg, "unifi", default=None, throw_on_resolution_failure=False)
+                blanked = OmegaConf.is_config(section) and OmegaConf.is_interpolation(section, key)
             if blanked:
                 unifi_env_overrides[key] = ""
                 logger.warning(
