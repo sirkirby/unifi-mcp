@@ -834,6 +834,8 @@ class TestUpdateFirewallPolicyV2Fields:
         updated_raw["action"] = "BLOCK"
         updated_raw["source"]["zone_id"] = "wan"
         updated_raw["source"]["matching_target"] = "ANY"
+        # Leaving NETWORK retires the stored network_ids, so the re-read no longer has them.
+        del updated_raw["source"]["network_ids"]
         mock_updated = _make_policy(updated_raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:

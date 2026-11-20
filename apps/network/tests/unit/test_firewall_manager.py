@@ -296,7 +296,7 @@ class TestUpdateFirewallPolicyEndpoint:
         """PUT should target /firewall-policies/{id}, not /firewall-policies/batch."""
         policy = _make_firewall_policy()
 
-        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+        with patch.object(firewall_manager, "get_firewall_policy_by_id", new_callable=AsyncMock, return_value=policy):
             result = await firewall_manager.update_firewall_policy("pol001", {"logging": True})
 
         assert result is True
@@ -311,7 +311,7 @@ class TestUpdateFirewallPolicyEndpoint:
         policy = _make_firewall_policy()
         original_raw = copy.deepcopy(policy.raw)
 
-        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+        with patch.object(firewall_manager, "get_firewall_policy_by_id", new_callable=AsyncMock, return_value=policy):
             await firewall_manager.update_firewall_policy("pol001", {"logging": True})
 
         assert policy.raw == original_raw
@@ -330,7 +330,7 @@ class TestToggleFirewallPolicyPayload:
         policy = _make_firewall_policy()  # raw enabled=True
         policy.enabled = True  # explicit: helper uses MagicMock attrs which are truthy by default
 
-        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+        with patch.object(firewall_manager, "get_firewall_policy_by_id", new_callable=AsyncMock, return_value=policy):
             await firewall_manager.toggle_firewall_policy("pol001")
 
         api_request = mock_connection.request.call_args[0][0]
@@ -351,19 +351,20 @@ class TestToggleFirewallPolicyPayload:
     async def test_flips_enabled_state(self, firewall_manager, mock_connection):
         disabled = _make_firewall_policy({**SAMPLE_POLICY_RAW, "enabled": False})
         disabled.enabled = False
-        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[disabled]):
+        with patch.object(firewall_manager, "get_firewall_policy_by_id", new_callable=AsyncMock, return_value=disabled):
             await firewall_manager.toggle_firewall_policy("pol001")
 
         payload = mock_connection.request.call_args[0][0].data
         assert payload["enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_raises_when_policy_missing(self, firewall_manager):
+    async def test_raises_when_policy_missing(self, firewall_manager, mock_connection):
         from unifi_core.exceptions import UniFiNotFoundError
 
-        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[]):
-            with pytest.raises(UniFiNotFoundError):
-                await firewall_manager.toggle_firewall_policy("does-not-exist")
+        mock_connection.request = AsyncMock(return_value=[])
+        with pytest.raises(UniFiNotFoundError):
+            await firewall_manager.toggle_firewall_policy("does-not-exist")
+        mock_connection.request.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

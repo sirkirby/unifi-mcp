@@ -593,11 +593,47 @@ def test_shape_firewall_policy_list_summary_keeps_selectors_under_an_unknown_tar
 
 def test_summary_suppression_covers_exactly_the_write_side_selectors() -> None:
     """A canary on the write-side table, not a test of the shaper: read_views imports
-    SELECTOR_ACTIVATORS, so adding a row there changes every list response. Fail here
+    SELECTOR_ACTIVATION, so adding a row there changes every list response. Fail here
     and decide deliberately what the summary should do with the new selector."""
-    from unifi_core.network.models.firewall import SELECTOR_ACTIVATORS
+    from unifi_core.network.models.firewall import SELECTOR_ACTIVATION
 
-    assert {selector for selector, _, _ in SELECTOR_ACTIVATORS} == {"client_macs", "port", "port_group_id"}
+    assert set(SELECTOR_ACTIVATION) == {"client_macs", "port", "port_group_id", "ips", "ip_group_id", "network_ids"}
+
+
+@pytest.mark.parametrize(
+    ("matching_target_type", "shown"),
+    [
+        ("SPECIFIC", {"ips"}),
+        ("OBJECT", {"ip_group_id"}),
+        (None, {"ips", "ip_group_id"}),
+        ("RANGE", {"ips", "ip_group_id"}),
+    ],
+    ids=["specific", "object", "unset", "unrecognised"],
+)
+def test_shape_firewall_policy_list_summary_shows_only_the_ip_form_in_force(
+    matching_target_type: str | None, shown: set[str]
+) -> None:
+    """Under IP the address form is chosen by matching_target_type; the other form's
+    selector is stored but ignored. An endpoint that does not say which form, or names
+    one this project has not seen, keeps both shown rather than hiding one in force."""
+    destination = {"zone_id": "z2", "matching_target": "IP", "ips": ["192.0.2.9"], "ip_group_id": "grp"}
+    if matching_target_type:
+        destination["matching_target_type"] = matching_target_type
+    policies = [
+        {
+            "_id": "p1",
+            "name": "Address form",
+            "enabled": True,
+            "action": "BLOCK",
+            "index": 1,
+            "source": {"zone_id": "z1", "matching_target": "ANY"},
+            "destination": destination,
+        }
+    ]
+
+    entry = shape_firewall_policy_list(policies, site="default", summary=True)["policies"][0]
+
+    assert {key for key in ("ips", "ip_group_id") if key in entry["destination"]} == shown
 
 
 def test_shape_firewall_policy_list_summary_hides_address_selectors_under_another_target() -> None:

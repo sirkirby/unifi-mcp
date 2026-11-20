@@ -12,18 +12,25 @@ from unifi_core.network.managers.stats_manager import StatsManager
 
 @pytest.mark.asyncio
 async def test_get_firewall_policy_by_id_returns_matching_policy() -> None:
-    manager = FirewallManager(MagicMock())
-    wanted = MagicMock(raw={"_id": "policy-2"})
-    manager.get_firewall_policies = AsyncMock(return_value=[MagicMock(raw={"_id": "policy-1"}), wanted])
+    connection = MagicMock()
+    connection.ensure_connected = AsyncMock(return_value=True)
+    connection.request = AsyncMock(return_value=[{"_id": "policy-2", "name": "Wanted"}])
+    manager = FirewallManager(connection)
+    manager.get_firewall_policies = AsyncMock()
 
-    assert await manager.get_firewall_policy_by_id("policy-2") is wanted
-    manager.get_firewall_policies.assert_awaited_once_with(include_predefined=True)
+    policy = await manager.get_firewall_policy_by_id("policy-2")
+
+    assert policy.raw == {"_id": "policy-2", "name": "Wanted"}
+    assert connection.request.await_args.args[0].path == "/firewall-policies/policy-2"
+    manager.get_firewall_policies.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_get_firewall_policy_by_id_raises_for_missing_policy() -> None:
-    manager = FirewallManager(MagicMock())
-    manager.get_firewall_policies = AsyncMock(return_value=[])
+    connection = MagicMock()
+    connection.ensure_connected = AsyncMock(return_value=True)
+    connection.request = AsyncMock(return_value=[])
+    manager = FirewallManager(connection)
 
     with pytest.raises(UniFiNotFoundError):
         await manager.get_firewall_policy_by_id("missing")
