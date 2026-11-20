@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import logging
+import random
 
 import pytest
-from unifi_core.jobs import JOBS, JobStore, cancel_job, current_job_id, get_job_status, start_async_tool
-from unifi_core.operation_gate import GateSettings, OperationGate
+from unifi_core.jobs import (
+    JOBS,
+    TERMINAL_JOB_STATUSES,
+    JobStore,
+    cancel_job,
+    current_job_id,
+    get_job_status,
+    start_async_tool,
+)
+from unifi_core.operation_gate import GateSettings, OperationGate, signal_admitted
 
 
 class _Clock:
@@ -291,7 +301,9 @@ async def test_a_job_granted_but_not_yet_resumed_can_still_be_cancelled() -> Non
     release.set()
     await asyncio.sleep(0)  # the holder releases and hands its turn to "second"
     assert gate.write_held
-    assert (await store.status(second))["status"] == "queued"
+    granted_not_resumed = await store.status(second)
+    assert granted_not_resumed["status"] == "queued"
+    assert granted_not_resumed["position"] == 0
     assert (await store.cancel(second))["cancelled"] is True
 
     assert (await _wait_for_terminal(store, third))["status"] == "done"
@@ -319,22 +331,26 @@ async def test_a_job_cancelled_after_its_write_ran_is_reported_as_an_error() -> 
     assert not gate.write_held
 
 
-async def test_chained_job_waits_queued_and_cancelling_it_lets_the_chain_continue() -> None:
+@pytest.mark.parametrize("how", ["cancel", "task_cancel"])
+async def test_cancelling_a_middle_chained_job_keeps_the_rest_in_order(how: str) -> None:
     store = JobStore()
     gate = _gate()
     release = asyncio.Event()
     started: list[str] = []
+    granted: list[str] = []
     pre_gate = asyncio.Event()
 
     async def slow_to_reach_the_gate() -> str:
         started.append("first")
-        await pre_gate.wait()
+        await pre_gate.wait()  # a lazy tool load or a reconnect
         async with gate.write():
+            granted.append("first")
             return "first"
 
     async def quick(name: str) -> str:
         started.append(name)
         async with gate.write():
+            granted.append(name)
             return name
 
     holder = await store.start(_hold(gate, release))
@@ -347,19 +363,34 @@ async def test_chained_job_waits_queued_and_cancelling_it_lets_the_chain_continu
     second_status = await store.status(second)
     assert second_status["status"] == "queued"
     assert second_status["position"] is None
-    assert (await store.cancel(second))["cancelled"] is True
+    if how == "cancel":
+        assert (await store.cancel(second))["cancelled"] is True
+    else:
+        # The runner itself cancelled (a shutdown) while it waits for "first".
+        store._runs[second].task.cancel()
     await _settle()
-    # Cancelling "second" admits it, so "third" may start; "first" has not
-    # reached the gate, so nothing else moved.
-    assert started == ["first", "third"]
-    assert (await store.status(third))["position"] == 1
+    # "second" held no place at the gate, and "first" has not reached it yet:
+    # "third" must keep waiting behind "first".
+    assert started == ["first"]
+    assert (await store.status(second))["status"] == "cancelled"
+    assert (await store.status(third))["status"] == "queued"
+    waiting_on_second = asyncio.create_task(store.wait_admitted(second))
+    await _settle()
+    assert not waiting_on_second.done()
 
     pre_gate.set()
+    await _settle()
+    assert started == ["first", "third"]
+    assert waiting_on_second.done()
     release.set()
     assert (await _wait_for_terminal_slowly(store, third))["result"] == "third"
     assert (await _wait_for_terminal_slowly(store, first))["result"] == "first"
+    assert granted == ["first", "third"]
     assert (await store.status(holder))["status"] == "done"
     assert (await store.status(second))["status"] == "cancelled"
+    await _settle()
+    assert store._runs == {}
+    assert store._tasks == set()
 
 
 @pytest.mark.parametrize("chained", [True, False])
@@ -481,3 +512,192 @@ async def test_module_helpers_chain_and_cancel_through_the_global_store() -> Non
     assert (await _wait_for_terminal(JOBS, first["jobId"]))["result"] == "changed"
     assert (await _wait_for_terminal(JOBS, holder["jobId"]))["status"] == "done"
     assert (await get_job_status(chained["jobId"]))["status"] == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# Regressions: terminal states, jobs started inside a write, early cancellation
+# ---------------------------------------------------------------------------
+
+
+async def test_a_cancelled_job_stays_cancelled_even_if_its_coroutine_swallows_the_cancel() -> None:
+    store = JobStore()
+    gate = _gate()
+    release = asyncio.Event()
+    await store.start(_hold(gate, release))
+    await _settle()
+
+    async def tolerant() -> dict:
+        try:
+            async with gate.write():
+                return {"success": True}
+        except asyncio.CancelledError:
+            return {"success": False, "error": "cancelled"}
+
+    job_id = await store.start(tolerant())
+    await _settle()
+    assert (await store.cancel(job_id))["cancelled"] is True
+    await _settle()
+    status = await store.status(job_id)
+    assert status["status"] == "cancelled"
+    assert status["result"] is None
+    release.set()
+    await _settle()
+    assert (await store.status(job_id))["status"] == "cancelled"
+    assert store._runs == {}
+
+
+async def test_a_job_started_inside_a_held_write_queues_for_the_gate() -> None:
+    store = JobStore()
+    gate = _gate()
+
+    async def change() -> str:
+        async with gate.write():
+            return "job wrote"
+
+    async with gate.write():
+        job_id = await store.start(change())
+        await _settle()
+        status = await store.status(job_id)
+        assert status["status"] == "queued"
+        assert status["position"] == 1
+
+    assert (await _wait_for_terminal(store, job_id))["result"] == "job wrote"
+
+
+async def test_a_runner_cancelled_before_its_first_step_finishes_cancelled_and_passes_admission_on() -> None:
+    store = JobStore()
+    gate = _gate()
+    release = asyncio.Event()
+    await store.start(_hold(gate, release))
+    await _settle()
+    granted: list[str] = []
+    pre_gate = asyncio.Event()
+
+    async def change(name: str, wait: asyncio.Event | None = None) -> str:
+        if wait is not None:
+            await wait.wait()
+        async with gate.write():
+            granted.append(name)
+            return name
+
+    first = await store.start(change("first", pre_gate))
+    second = await store.start(change("second"), after=first)
+    third = await store.start(change("third"), after=second)
+    # Cancel "second" before its runner has taken a single step.
+    store._runs[second].task.cancel()
+    await _settle()
+
+    assert (await store.status(second))["status"] == "cancelled"
+    assert (await store.status(third))["status"] == "queued"
+    assert (await store.status(third))["position"] is None
+    pre_gate.set()
+    release.set()
+    assert (await _wait_for_terminal_slowly(store, third))["result"] == "third"
+    assert granted == ["first", "third"]
+    await _settle()
+    assert store._runs == {} and store._tasks == set()
+
+
+# ---------------------------------------------------------------------------
+# Randomised job chains (fixed seeds)
+# ---------------------------------------------------------------------------
+
+
+async def _random_job_run(seed: int) -> None:
+    rng = random.Random(seed)
+    store = JobStore(retention_seconds=10_000, max_completed_jobs=rng.choice([0, 3, 1000]))
+    gate = OperationGate(GateSettings(read_cap=rng.randint(1, 3)), name="stress")
+    gate_order: list[int] = []
+    ran: set[int] = set()
+    hang = asyncio.Event()
+
+    def make(index: int, kind: str):
+        async def operation():
+            for _ in range(rng.randint(0, 3)):
+                await asyncio.sleep(0)
+            if kind == "raise_early":
+                raise ValueError("before the gate")
+            if kind == "no_gate":
+                if rng.random() < 0.5:
+                    signal_admitted()
+                ran.add(index)
+                return index
+            if kind == "read":
+                async with gate.read():
+                    gate_order.append(index)
+                    ran.add(index)
+                    for _ in range(rng.randint(0, 4)):
+                        await asyncio.sleep(0)
+                return index
+            if kind == "hang_pre_gate":
+                await hang.wait()
+                return index
+            async with gate.write(label=str(index)):
+                gate_order.append(index)
+                ran.add(index)
+                for _ in range(rng.randint(0, 6)):
+                    await asyncio.sleep(0)
+                if rng.random() < 0.2:
+                    raise RuntimeError("body")
+            return index
+
+        return operation
+
+    ids: list[str] = []
+    kinds: dict[int, str] = {}
+    chained: dict[int, bool] = {}
+    cancelled: set[int] = set()
+    previous = None
+    for index in range(rng.randint(3, 15)):
+        kinds[index] = rng.choices(["write", "read", "raise_early", "no_gate", "hang_pre_gate"], [6, 2, 1, 1, 0.5])[0]
+        chained[index] = rng.random() < 0.9
+        job_id = await store.start(make(index, kinds[index])(), after=previous if chained[index] else None)
+        ids.append(job_id)
+        previous = job_id
+        for _ in range(rng.randint(0, 2)):
+            await asyncio.sleep(0)
+        if rng.random() < 0.3:
+            victim = rng.randrange(len(ids))
+            if (await store.cancel(ids[victim]))["cancelled"]:
+                cancelled.add(victim)
+        if rng.random() < 0.05:
+            run = store._runs.get(ids[rng.randrange(len(ids))])
+            if run is not None and run.task is not None:
+                run.task.cancel()
+
+    for step in range(400):
+        await asyncio.sleep(0)
+        if all(store._jobs.get(job_id, {"status": "done"})["status"] in TERMINAL_JOB_STATUSES for job_id in ids):
+            break
+        if step > 100:
+            hang.set()
+    else:
+        raise AssertionError(f"seed {seed}: jobs never finished; kinds={kinds}")
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+    assert not store._runs, f"seed {seed}: runs leaked"
+    assert not store._tasks, f"seed {seed}: tasks leaked"
+    for index in cancelled:
+        assert index not in ran, f"seed {seed}: job {index} reported cancelled but ran"
+        job = store._jobs.get(ids[index])
+        assert job is None or job["status"] == "cancelled", f"seed {seed}: job {index} left cancelled"
+    # Along an unbroken chain, writes reach the gate in submission order,
+    # whatever was cancelled in between.
+    writes = [index for index in gate_order if kinds[index] == "write"]
+    place = {index: order for order, index in enumerate(writes)}
+    for earlier in writes:
+        for later in writes:
+            if earlier < later and all(chained[x] for x in range(earlier + 1, later + 1)):
+                assert place[earlier] < place[later], f"seed {seed}: writes {writes}, chained {chained}"
+    snapshot = gate.snapshot()
+    assert not (snapshot["write_held"] or snapshot["queue_depth"] or snapshot["reads_in_use"]), f"seed {seed}"
+
+
+async def test_random_job_chains_keep_submission_order_through_cancellations() -> None:
+    logging.disable(logging.CRITICAL)
+    try:
+        for seed in range(300):
+            await _random_job_run(seed)
+    finally:
+        logging.disable(logging.NOTSET)

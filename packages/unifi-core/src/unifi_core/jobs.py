@@ -19,7 +19,9 @@ Ordering: each job runs inside an observer (``unifi_core.operation_gate``) that
 marks it *admitted* once it joins a gate, or when it finishes. A job started
 with ``after=<job id>`` waits for that job's admission before its coroutine
 starts, so a batch of jobs reaches the gate's queue in submission order no
-matter what each one awaits first.
+matter what each one awaits first. A job cancelled before it started takes no
+place in the queue and is admitted only with its predecessor, so the jobs
+chained behind it still follow that predecessor.
 
 Example:
     job_id = await JOBS.start(some_async_operation())
@@ -34,7 +36,7 @@ import time
 from contextvars import ContextVar
 from typing import Any, Callable, Coroutine, Dict
 
-from unifi_core.operation_gate import WriteTicket, observing_operations
+from unifi_core.operation_gate import WriteTicket, observing_operations, ungated_context
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +54,33 @@ def current_job_id() -> str | None:
 
 
 class _JobRun:
-    """What the store needs while a job is live; dropped once it finishes."""
+    """What the store needs while a job is live; dropped once it is finished and admitted.
 
-    __slots__ = ("admitted", "coro", "coro_started", "task", "ticket", "write_granted")
+    ``predecessor`` is the run this one was chained ``after``. A job that
+    never starts (cancelled while it waited) holds no place of its own at the
+    gate, so it is admitted only when its predecessor is: the jobs chained
+    behind it keep their place behind the predecessor. ``followers`` are the
+    runs waiting to be admitted with this one.
+    """
 
-    def __init__(self, coro: Coroutine[Any, Any, Any]) -> None:
+    __slots__ = (
+        "admitted",
+        "coro",
+        "coro_started",
+        "followers",
+        "job_id",
+        "predecessor",
+        "task",
+        "ticket",
+        "write_granted",
+    )
+
+    def __init__(self, job_id: str, coro: Coroutine[Any, Any, Any], predecessor: "_JobRun | None") -> None:
+        self.job_id = job_id
         self.coro = coro
         self.coro_started = False
+        self.predecessor = predecessor
+        self.followers: list[_JobRun] = []
         self.admitted = asyncio.Event()
         self.task: asyncio.Task[None] | None = None
         self.ticket: WriteTicket | None = None
@@ -155,24 +177,51 @@ class JobStore:
     # with another on the event loop.
     # ------------------------------------------------------------------
 
-    def _finish(self, job_id: str, status: str, *, result: Any = None, error: str | None = None) -> None:
+    def _finish(self, job_id: str, status: str, *, result: Any = None, error: str | None = None) -> bool:
+        """Record a job's outcome once; a job already finished keeps its state."""
         job = self._jobs.get(job_id)
-        run = self._runs.pop(job_id, None)
-        if run is not None:
-            run.admitted.set()
-        if job is None:
-            return
+        if job is None or job["status"] in TERMINAL_JOB_STATUSES:
+            return False
         completed = self._clock()
         job["status"] = status
         job["result"] = result
         job["error"] = error
         job["completed"] = completed
+        run = self._runs.get(job_id)
+        if run is not None:
+            run.ticket = None
+            self._drop_if_settled(run)
         self._prune_locked(completed)
+        return True
+
+    def _drop_if_settled(self, run: _JobRun) -> None:
+        job = self._jobs.get(run.job_id)
+        if run.admitted.is_set() and (job is None or job["status"] in TERMINAL_JOB_STATUSES):
+            if self._runs.get(run.job_id) is run:
+                del self._runs[run.job_id]
+
+    def _admit(self, run: _JobRun) -> None:
+        """Mark ``run`` admitted, and with it every run that was waiting to pass it on."""
+        if run.admitted.is_set():
+            return
+        run.admitted.set()
+        self._drop_if_settled(run)
+        followers, run.followers = run.followers, []
+        for follower in followers:
+            self._admit(follower)
+
+    def _release_admission(self, run: _JobRun) -> None:
+        """Admit a run that is ending: at once if it started, else with its predecessor."""
+        predecessor = run.predecessor
+        if run.coro_started or predecessor is None or predecessor.admitted.is_set():
+            self._admit(run)
+        elif run not in predecessor.followers:
+            predecessor.followers.append(run)
 
     def _mark_admitted(self, job_id: str) -> None:
         run = self._runs.get(job_id)
         if run is not None:
-            run.admitted.set()
+            self._admit(run)
 
     def _mark_queued(self, job_id: str, ticket: WriteTicket) -> None:
         job, run = self._jobs.get(job_id), self._runs.get(job_id)
@@ -211,8 +260,10 @@ class JobStore:
             A unique job identifier (16-character hex string)
         """
         job_id = secrets.token_hex(8)
-        run = _JobRun(coro)
         predecessor = self._runs.get(after) if after is not None else None
+        if predecessor is not None and predecessor.admitted.is_set():
+            predecessor = None
+        run = _JobRun(job_id, coro, predecessor)
 
         async with self._lock:
             now = self._clock()
@@ -259,28 +310,40 @@ class JobStore:
                     logger.info("Background job %s cancelled", job_id)
                 raise
             except Exception as e:
-                self._finish(job_id, "error", error=str(e))
-                logger.error("Background job %s failed with error: %s", job_id, e, exc_info=True)
+                if self._finish(job_id, "error", error=str(e)):
+                    logger.error("Background job %s failed with error: %s", job_id, e, exc_info=True)
             else:
-                self._finish(job_id, "done", result=result)
-                logger.info("Background job %s completed successfully", job_id)
+                if self._finish(job_id, "done", result=result):
+                    logger.info("Background job %s completed successfully", job_id)
             finally:
-                # Whatever happened, a later job chained to this one may go.
-                run.admitted.set()
+                # Whatever happened, a later job chained to this one may go,
+                # in its turn.
+                self._release_admission(run)
+
+        def _task_done(task: asyncio.Task[None]) -> None:
+            self._tasks.discard(task)
+            # A task cancelled before its first step never ran the body above.
+            if not run.coro_started:
+                run.coro.close()
+            self._finish(job_id, "cancelled")
+            self._release_admission(run)
 
         # Keep a reference until the task finishes: the event loop holds only
         # a weak one, and an unreferenced task can be collected mid-flight.
-        task = asyncio.create_task(_runner(), name=f"unifi-job-{job_id}")
+        # The runner starts outside any gate the caller holds, so a job
+        # started from inside a write queues for the gate like any other.
+        task = asyncio.create_task(_runner(), name=f"unifi-job-{job_id}", context=ungated_context())
         run.task = task
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        task.add_done_callback(_task_done)
 
         return job_id
 
     async def wait_admitted(self, job_id: str) -> None:
-        """Return once the job has joined a controller gate, or finished.
+        """Return once the job is admitted: it joined a controller gate, or finished.
 
-        Returns at once for an unknown or finished job.
+        A job cancelled before it started is admitted with its predecessor.
+        Returns at once for an unknown job or one already admitted.
         """
         run = self._runs.get(job_id)
         if run is not None:
@@ -320,6 +383,10 @@ class JobStore:
         if task is not None:
             task.cancel()
         self._finish(job_id, "cancelled")
+        if not run.coro_started:
+            # Never started, so it holds no place at the gate: the jobs chained
+            # behind it go once its predecessor is admitted, not before.
+            self._release_admission(run)
         logger.info("Background job %s cancelled while queued", job_id)
         return {"jobId": job_id, "cancelled": True, "status": "cancelled"}
 
@@ -337,7 +404,8 @@ class JobStore:
             - result: The return value of the job (if completed successfully)
             - error: Error message (if failed)
             - position: Write operations ahead of it (only while queued;
-              ``None`` while it waits for an earlier job)
+              ``None`` while it waits for an earlier job, ``0`` once its turn
+              is granted and it is about to run)
         """
         async with self._lock:
             self._prune_locked(self._clock())
@@ -350,7 +418,8 @@ class JobStore:
             if status["status"] == "queued":
                 run = self._runs.get(job_id)
                 ticket = run.ticket if run is not None else None
-                status["position"] = ticket.position if ticket is not None and ticket.waiting else None
+                # 0 once the turn is granted and the job is about to resume.
+                status["position"] = ticket.position if ticket is not None else None
             return status
 
 
