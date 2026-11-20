@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (65 tools)
+# Protect Server Tool Reference (67 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -36,7 +36,7 @@ Always available, regardless of registration mode.
 ## Cameras
 
 <!-- AUTO:tools:cameras -->
-12 tools.
+14 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -44,11 +44,13 @@ Always available, regardless of registration mode.
 | `protect_get_camera_analytics` | Read | Returns motion and smart detection analytics for a camera including current detection state, last-detected timestamps for each type (pers... |
 | `protect_get_camera_streams` | Read | Returns RTSP/RTSPS stream URLs for a camera organized by channel (High, Medium, Low). |
 | `protect_get_snapshot` | Read | Fetches a JPEG snapshot from a camera. |
+| `protect_list_camera_detection_areas` | Read | Lists a camera's crossing lines, smart-detect zones and loiter zones, read fresh from the NVR. |
 | `protect_list_cameras` | Read | Lists all cameras adopted by the Protect NVR with their name, model, connection state, recording mode, and whether they are currently rec... |
 | `protect_ptz_move` | Mutate | Moves a PTZ camera using normalized pan/tilt speeds. |
 | `protect_ptz_preset` | Mutate | Moves a PTZ camera to a saved preset position by slot number. |
 | `protect_ptz_zoom` | Mutate | Zooms a PTZ camera using normalized zoom speed. |
 | `protect_reboot_camera` | Mutate | Reboots a camera. |
+| `protect_rename_camera_detection_area` | Mutate | Renames one crossing line, smart-detect zone or loiter zone on a camera, chosen by kind and id (from protect_list_camera_detection_areas). |
 | `protect_toggle_recording` | Mutate | Enables or disables recording on a camera. |
 | `protect_toggle_rtsp` | Mutate | Enables or disables the RTSP/RTSPS stream on a camera channel. |
 | `protect_update_camera_settings` | Mutate | Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. |
