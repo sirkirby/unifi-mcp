@@ -576,15 +576,57 @@ def recovery(name):
     )
 
 
-def legacy_patch(owned, shared, mapping, product):
+def same_console(legacy, product, saved=None):
+    """Whether shared credentials in *legacy* belong to the host this product uses after migration.
+
+    That host is the legacy product host, else the legacy UNIFI_HOST (which the
+    migration copies); its port falls back to the saved option. The servers apply
+    the same rule: a host that is not the UNIFI_HOST console, compared as written
+    apart from ASCII case and on the effective port, takes no shared username,
+    password or API key. With no UNIFI_HOST in *legacy* nothing says where they
+    were meant to go.
+    """
+
+    # Mirrors _host_identity in unifi_mcp_shared.bootstrap, which this standalone
+    # script cannot import; a root test runs one table through both.
+    def identity(host, port):
+        if not host.strip():
+            return "", port
+        return (host.lower() if host.isascii() else host), port
+
+    shared_host = legacy.get("UNIFI_HOST")
+    if not shared_host:
+        return False
+    host = legacy.get(f"UNIFI_{product}_HOST") or shared_host
+    shared_port = legacy.get("UNIFI_PORT") or "443"
+    port = legacy.get(f"UNIFI_{product}_PORT") or legacy.get("UNIFI_PORT") or (saved or {}).get(f"UNIFI_{product}_PORT")
+    mine = identity(host, port or "443")
+    return bool(mine[0]) and mine == identity(shared_host, shared_port)
+
+
+def unmigrated_shared_credentials(owned, shared, product, saved=None):
+    """Shared credential spellings left behind because this product's host is another console."""
+    legacy = dict(shared, **owned)
+    if same_console(legacy, product, saved):
+        return []
+    names = []
+    for credential in ("USERNAME", "PASSWORD", "API_KEY"):
+        suffixes = ("",) if credential == "USERNAME" else ("", "_FILE", "_COMMAND")
+        if not any(legacy.get(f"UNIFI_{product}_{credential}{suffix}") for suffix in suffixes):
+            names += [f"UNIFI_{credential}{suffix}" for suffix in suffixes if legacy.get(f"UNIFI_{credential}{suffix}")]
+    return names
+
+
+def legacy_patch(owned, shared, mapping, product, saved=None):
     """Translate console settings only; cloud credentials never use console fallbacks."""
     if product == "SITEMANAGER":
         refuse(CLOUD_MIGRATION_ERROR)
     legacy = dict(shared, **owned)
+    reuse = same_console(legacy, product, saved)
     patch = {}
     for credential in ("PASSWORD", "API_KEY"):
         product_base = f"UNIFI_{product}_{credential}"
-        for base in (product_base, f"UNIFI_{credential}"):
+        for base in (product_base, f"UNIFI_{credential}") if reuse else (product_base,):
             spellings = [base + suffix for suffix in ("", "_FILE", "_COMMAND")]
             if any(legacy.get(key) for key in spellings):
                 for key in spellings:
@@ -594,7 +636,9 @@ def legacy_patch(owned, shared, mapping, product):
     for variable in mapping:
         if secret_base(variable, product) or variable in patch:
             continue
-        value = legacy.get(variable) or legacy.get(shared_name(variable, product))
+        value = legacy.get(variable)
+        if not value and (reuse or variable != f"UNIFI_{product}_USERNAME"):
+            value = legacy.get(shared_name(variable, product))
         if value:
             patch[variable] = value
     return patch
@@ -682,7 +726,9 @@ def claude_main(args, root, name, product):
             "set-env.sh --target claude --migrate (PowerShell: set-env.ps1 -Target claude -Migrate)."
         )
         try:
-            conflicts = option_conflicts(saved, legacy_patch(owned, shared, mapping, product), mapping, schema, product)
+            conflicts = option_conflicts(
+                saved, legacy_patch(owned, shared, mapping, product, saved), mapping, schema, product
+            )
         except SetupError:
             conflicts = []  # The migration itself reports a malformed legacy value.
         if conflicts:
@@ -714,7 +760,7 @@ def claude_main(args, root, name, product):
             refuse("Cannot read .claude/settings.local.json in this project; repair it and rerun the migration.")
         if not owned:
             refuse("No legacy settings for this plugin were found in .claude/settings.local.json; nothing to migrate.")
-        patch = legacy_patch(owned, shared, mapping, product)
+        patch = legacy_patch(owned, shared, mapping, product, saved)
         if not patch:
             refuse("The legacy settings hold no value this plugin's Claude Code options can use; run setup instead.")
         replaced = option_conflicts(saved, patch, mapping, schema, product)
@@ -939,6 +985,14 @@ def claude_main(args, root, name, product):
         dropped = sorted(k for k in owned if k not in patch)
         if dropped:
             print("Not migrated (no Claude Code option): " + ", ".join(dropped) + ".")
+        unmigrated = unmigrated_shared_credentials(owned, shared, product, saved)
+        if unmigrated:
+            print(
+                "Not migrated: " + ", ".join(unmigrated) + ". Shared credentials belong to the console UNIFI_HOST "
+                "names, and this plugin's host after the migration is a different one (or these settings do not set "
+                "UNIFI_HOST), so newer servers do not send them there. Set this plugin's own username and password "
+                "(or API key) with setup. Values are omitted."
+            )
         kept = sorted(set(shared) - removed)
         if kept:
             print(

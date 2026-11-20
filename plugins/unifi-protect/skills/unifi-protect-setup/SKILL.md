@@ -61,13 +61,15 @@ If the script exits non-zero, stop and report the error. Do not proceed to crede
 
 Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
-If another UniFi MCP server is already configured, ask whether Protect is on the same controller. Inspect a sanitized summary of the existing host and variable names only. Do not print full settings or raw `mcp list/get/show` output: these can contain stored credentials.
+If another UniFi MCP server is already configured, ask whether Protect is on the same controller. If it is, use the same host value as `UNIFI_HOST`, written the same way, so shared credentials still apply; if not, Protect needs its own credentials in Step 2. Inspect a sanitized summary of the existing host and variable names only. Do not print full settings or raw `mcp list/get/show` output: these can contain stored credentials.
 
 ## Step 2: Credentials
 
-Shared credentials can be reused deliberately; prefer explicit product-scoped
-providers when configuring this plugin. Apply the precedence rules below before
-assuming an existing shared credential will be selected.
+Shared credentials can be reused deliberately, but only on the console
+`UNIFI_HOST` names; a Protect host on another console needs Protect's own
+credentials. Prefer explicit product-scoped providers when configuring this
+plugin. Apply the precedence rules below before assuming an existing shared
+credential will be selected.
 
 Ask for the username, using a local admin account rather than a Ubiquiti SSO
 account. Never ask the user to send the password in chat, and never place it in a
@@ -83,9 +85,19 @@ the system keychain.
 
 All three servers apply the same precedence: non-empty `UNIFI_<PRODUCT>_*`
 values override shared `UNIFI_*` values; empty values count as unset. This applies
-to host, username and credentials even where bundled YAML defaults name different
-variables. Shared providers are fallback only. Multiple non-empty spellings
-(plain, `_FILE`, `_COMMAND`) at the selected level refuse startup.
+to host, port, site and TLS settings even where bundled YAML defaults name
+different variables. Shared providers are fallback only. Multiple non-empty
+spellings (plain, `_FILE`, `_COMMAND`) at the selected level refuse startup.
+
+Credentials follow the host. Whenever this server's host is set and is not the
+console `UNIFI_HOST` names (or `UNIFI_HOST` is unset), set Protect's own username
+and password, or API key. Newer releases then ignore a shared `UNIFI_USERNAME`,
+`UNIFI_PASSWORD` or `UNIFI_API_KEY` (and their `_FILE`/`_COMMAND` forms) and log
+which one they ignored; older releases would send the shared ones to this host.
+Shared credentials apply only when the host is empty, or names the same console
+as `UNIFI_HOST` on the same port (compared as written apart from letter case;
+`https://`, a trailing `/`, a space, or an IP address for a console named by
+hostname makes it a different host).
 
 The setup helper switches providers atomically: selecting one spelling removes
 its saved siblings at the same level while preserving unrelated settings. To
@@ -93,7 +105,8 @@ remove an authentication path, pipe a JSON patch setting all three saved
 spellings to `null` (for example `UNIFI_PROTECT_PASSWORD`,
 `UNIFI_PROTECT_PASSWORD_FILE`, `UNIFI_PROTECT_PASSWORD_COMMAND`). Remove or
 override shared fallback settings deliberately too; deleting product settings
-alone can reactivate shared credentials. Inherited environment providers must
+alone can reactivate shared credentials when the host is empty or names the
+`UNIFI_HOST` console. Inherited environment providers must
 also be corrected in the launcher. Never delete a working provider in a separate
 preparatory write.
 
