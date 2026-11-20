@@ -638,7 +638,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Fires every alarm rule whose Webhook trigger has the given trigger_id (the rule's own webhook id, not a catalog trigger_id), as if the webhook had been called; the rules' actions run for real. Needs a Protect API key (UNIFI_PROTECT_API_KEY or UNIFI_API_KEY). Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Fires every alarm rule whose Webhook trigger has the given trigger_id (the rule's own webhook id, not a catalog trigger_id), as if the webhook had been called; the rules' actions run for real. Needs a Protect API key: UNIFI_PROTECT_API_KEY, or UNIFI_API_KEY on the UNIFI_HOST console. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_fire_webhook",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -6537,7 +6537,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. Requires confirm=True to apply. HDR and microphone volume require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Supported keys: ir_led_mode, hdr_mode, mic_enabled, mic_volume, status_light_on, speaker_volume, name, motion_detection.",
+      "description": "Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. Requires confirm=True to apply. HDR and microphone volume require UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). Supported keys: ir_led_mode, hdr_mode, mic_enabled, mic_volume, status_light_on, speaker_volume, name, motion_detection.",
       "name": "protect_update_camera_settings",
       "permission_action": "update",
       "permission_category": "camera",
@@ -6656,7 +6656,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Updates chime settings. Without camera_id, updates global speaker volume (0-100), repeat times (1-6), or device name. With camera_id, updates that camera's ring volume or repeat_times while preserving other camera ring settings. Per-camera ring settings require a Protect API key configured via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Supported global keys: volume, repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times.",
+      "description": "Updates chime settings. Without camera_id, updates global speaker volume (0-100), repeat times (1-6), or device name. With camera_id, updates that camera's ring volume or repeat_times while preserving other camera ring settings. Per-camera ring settings require a Protect API key: UNIFI_PROTECT_API_KEY, or UNIFI_API_KEY on the UNIFI_HOST console. Requires confirm=True to apply. Supported global keys: volume, repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times.",
       "name": "protect_update_chime",
       "permission_action": "update",
       "permission_category": "chime",
@@ -7081,7 +7081,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Updates light settings such as on/off state, LED brightness level (1-6), PIR motion sensitivity (0-100), motion-triggered duration (15-900 seconds), status indicator light, and device name. Requires confirm=True to apply. Power, brightness, sensitivity and duration require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Supported keys: light_on (alias is_light_on), led_level, sensitivity, duration_seconds, status_light, name.",
+      "description": "Updates light settings such as on/off state, LED brightness level (1-6), PIR motion sensitivity (0-100), motion-triggered duration (15-900 seconds), status indicator light, and device name. Requires confirm=True to apply. Power, brightness, sensitivity and duration require UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). Supported keys: light_on (alias is_light_on), led_level, sensitivity, duration_seconds, status_light, name.",
       "name": "protect_update_light",
       "permission_action": "update",
       "permission_category": "light",
@@ -7200,7 +7200,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example motion_settings.sensitivity_when_armed or light_settings.low_threshold.",
+      "description": "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. Requires a Protect public API key: UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example motion_settings.sensitivity_when_armed or light_settings.low_threshold.",
       "name": "protect_update_sensor_settings",
       "permission_action": "update",
       "permission_category": "sensor",
@@ -7319,7 +7319,7 @@
         "readOnlyHint": false
       },
       "auth_method": "both",
-      "description": "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped to the Protect viewer/liveview tool family - do not pass them to camera, sensor, or chime tools. Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Pass only the fields you want to change - current values are automatically preserved. Supported keys: name, liveview_id, clear_liveview. Set clear_liveview=True to remove the current liveview assignment.",
+      "description": "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped to the Protect viewer/liveview tool family - do not pass them to camera, sensor, or chime tools. Requires a Protect public API key: UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). Requires confirm=True to apply. Pass only the fields you want to change - current values are automatically preserved. Supported keys: name, liveview_id, clear_liveview. Set clear_liveview=True to remove the current liveview assignment.",
       "name": "protect_update_viewer",
       "permission_action": "update",
       "permission_category": "system",

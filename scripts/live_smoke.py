@@ -1174,7 +1174,7 @@ class LiveSmokeRunner:
 
     def protect_sensor_settings_preview_args(self) -> tuple[dict[str, Any] | None, str]:
         if not self.protect_has_api_key():
-            return None, "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY"
+            return None, "requires UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)"
         sensors = self.cache.items_from_tool("protect_list_sensors", "sensors") or self.cache.items("sensors")
         for sensor in sensors:
             sensor_id = first_value(sensor, ("id", "_id", "sensor_id", "uuid"))
@@ -1220,7 +1220,7 @@ class LiveSmokeRunner:
 
     def protect_viewer_preview_args(self) -> tuple[dict[str, Any] | None, str]:
         if not self.protect_has_api_key():
-            return None, "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY"
+            return None, "requires UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)"
         viewers = self.cache.items_from_tool("protect_list_viewers", "viewers") or self.cache.items("viewers")
         for viewer in viewers:
             viewer_id = first_value(viewer, ("id", "_id", "viewer_id", "uuid"))

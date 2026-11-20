@@ -5,7 +5,7 @@ Provides read-only access to the UniFi DPI application and category database
 via the official integration API. Use these to find application IDs for use
 in OON policies and firewall rules.
 
-Requires an API key (UNIFI_API_KEY or UNIFI_NETWORK_API_KEY).
+Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).
 
 NOTE: As of Network App 10.1.85, the official API only returns categories 0-1
 (instant messengers, P2P — ~2,100 apps). Categories 4+ (streaming, social
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
     "NOTE: The official API currently only returns categories 0-1 (IM, P2P). "
     "Streaming, social media, and other categories are not yet populated by Ubiquiti. "
     "For apps not found here, add via the UniFi UI and read back the IDs from the policy. "
-    "Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
+    "Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dpi_applications(
@@ -98,7 +98,7 @@ async def list_dpi_applications(
     auth="api_key_only",
     description="List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', "
     "'Media streaming services'). Categories group applications for DPI classification. "
-    "Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
+    "Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_dpi_categories(

@@ -67,7 +67,8 @@ async def protect_list_lights() -> Dict[str, Any]:
         "Updates light settings such as on/off state, LED brightness level (1-6), "
         "PIR motion sensitivity (0-100), motion-triggered duration (15-900 seconds), "
         "status indicator light, and device name. Requires confirm=True to apply. "
-        "Power, brightness, sensitivity and duration require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Power, brightness, sensitivity and duration require UNIFI_PROTECT_API_KEY "
+        "(or UNIFI_API_KEY on the UNIFI_HOST console). "
         "Supported keys: light_on (alias is_light_on), led_level, sensitivity, duration_seconds, status_light, name."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -165,7 +166,7 @@ async def protect_list_sensors() -> Dict[str, Any]:
     auth="both",
     description=(
         "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. "
-        "Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Requires a Protect public API key: UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). "
         "Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, "
         "temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, "
         "arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example "
@@ -250,8 +251,8 @@ async def protect_list_chimes() -> Dict[str, Any]:
         "Updates chime settings. Without camera_id, updates global speaker volume (0-100), "
         "repeat times (1-6), or device name. With camera_id, updates that camera's ring "
         "volume or repeat_times while preserving other camera ring settings. Per-camera "
-        "ring settings require a Protect API key configured via UNIFI_PROTECT_API_KEY or "
-        "UNIFI_API_KEY. Requires confirm=True to apply. Supported global keys: volume, "
+        "ring settings require a Protect API key: UNIFI_PROTECT_API_KEY, or UNIFI_API_KEY "
+        "on the UNIFI_HOST console. Requires confirm=True to apply. Supported global keys: volume, "
         "repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),

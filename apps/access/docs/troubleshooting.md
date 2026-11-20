@@ -21,7 +21,7 @@ If the server starts, run `access_get_support_bundle(probe="summary")` and revie
 **Symptoms:** 401 Unauthorized on port 443, "invalid credentials" errors.
 
 **Check:**
-1. Look for a startup line `UNIFI_PASSWORD is set but not used` (or `UNIFI_USERNAME`, `UNIFI_API_KEY`). Newer server releases send the shared credentials only to the `UNIFI_HOST` console, so when `UNIFI_ACCESS_HOST` names another console (an IP address and a hostname for one console count as different) or `UNIFI_HOST` is unset, set `UNIFI_ACCESS_USERNAME` and `UNIFI_ACCESS_PASSWORD` (or `UNIFI_ACCESS_API_KEY`). See [credentials follow the host](configuration.md).
+1. Look for `UNIFI_PASSWORD is set but not used` (or `UNIFI_USERNAME`, `UNIFI_API_KEY`) in the login error a tool call returns or in the startup log. Newer server releases send the shared credentials only to the `UNIFI_HOST` console, so when `UNIFI_ACCESS_HOST` names another console (an IP address and a hostname for one console count as different) or `UNIFI_HOST` is unset, set `UNIFI_ACCESS_USERNAME` and `UNIFI_ACCESS_PASSWORD` (or `UNIFI_ACCESS_API_KEY`). See [credentials follow the host](configuration.md).
 2. Verify `UNIFI_ACCESS_USERNAME` and `UNIFI_ACCESS_PASSWORD` are correct
 3. Ensure the account is a **local admin** (not a Ubiquiti SSO account)
 4. Try logging into the UniFi OS Console web UI with the same credentials

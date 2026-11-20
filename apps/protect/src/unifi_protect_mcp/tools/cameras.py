@@ -228,7 +228,7 @@ async def protect_get_camera_analytics(
     description=(
         "Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, "
         "status light, and motion detection. Requires confirm=True to apply. "
-        "HDR and microphone volume require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "HDR and microphone volume require UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). "
         "Supported keys: ir_led_mode, hdr_mode, mic_enabled, mic_volume, "
         "status_light_on, speaker_volume, name, motion_detection."
     ),

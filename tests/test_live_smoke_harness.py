@@ -1134,7 +1134,7 @@ def test_live_smoke_protect_api_key_preview_skip_when_missing():
     )
     assert runner.preview_args("protect_update_sensor_settings") == (
         None,
-        "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY",
+        "requires UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)",
     )
 
 

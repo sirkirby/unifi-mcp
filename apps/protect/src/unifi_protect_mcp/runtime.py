@@ -27,7 +27,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
 from unifi_core.tls import server_ssl_setting
-from unifi_mcp_shared.bootstrap import resolve_env
+from unifi_mcp_shared.bootstrap import credential_cut_hint, resolve_env
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
 from unifi_mcp_shared.server import UniFiMCPServer, resolve_allowed_hosts
@@ -168,6 +168,7 @@ def get_connection_manager() -> ProtectConnectionManager:
         api_key=api_key if api_key else None,
         ssl_fingerprint=fingerprint,
         tls_env_prefix="PROTECT",
+        auth_failure_hint=credential_cut_hint("PROTECT"),
     )
 
 

@@ -98,9 +98,9 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_list_dpi_applications` — List/search DPI applications by name (requires API key)
 - `unifi_list_dpi_categories` — List DPI application categories (requires API key)
 
-> **Note:** DPI lookup requires `UNIFI_API_KEY` or `UNIFI_NETWORK_API_KEY`. As of Network App 10.1.85,
-> the official API only returns categories 0-1 (~2,100 apps). Categories 4+ (streaming, social media)
-> are not yet populated by Ubiquiti.
+> **Note:** DPI lookup requires `UNIFI_NETWORK_API_KEY` (or `UNIFI_API_KEY` on the `UNIFI_HOST` console).
+> As of Network App 10.1.85, the official API only returns categories 0-1 (~2,100 apps).
+> Categories 4+ (streaming, social media) are not yet populated by Ubiquiti.
 
 ## Client Groups (5 tools)
 

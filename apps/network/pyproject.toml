@@ -12,7 +12,8 @@ dependencies = [
     # Keeping an unknown write outcome (mutation_applied: null) in structured responses requires Shared 0.6.35.
     # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
     # Taking credentials only from the level the host came from requires Shared 0.6.44.
-    "unifi-mcp-shared>=0.6.44,<0.7",
+    # Naming ignored shared credentials in the login error requires Shared 0.6.45.
+    "unifi-mcp-shared>=0.6.45,<0.7",
     # Network managers in unifi-core import aiounifi; the [network] extra
     # declares the compatibility floor for library consumers. This deployable
     # app also pins the auth client exactly so one MCP release always resolves
@@ -50,7 +51,8 @@ dependencies = [
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
     # Reading and setting the V2 firewall policy order requires Core 0.4.100.
     # Reading one firewall policy per update requires Core 0.4.101.
-    "unifi-core[network]>=0.4.101,<0.5",
+    # Naming ignored shared credentials in the login error requires Core 0.4.102.
+    "unifi-core[network]>=0.4.102,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

@@ -49,7 +49,7 @@ from unifi_core.access.managers.system_manager import SystemManager
 from unifi_core.access.managers.visitor_manager import VisitorManager
 from unifi_core.auth import UniFiAuth
 from unifi_core.tls import parse_fingerprint, server_ssl_setting
-from unifi_mcp_shared.bootstrap import resolve_env
+from unifi_mcp_shared.bootstrap import credential_cut_hint, resolve_env
 
 # ---------------------------------------------------------------------------
 # Core singletons
@@ -190,6 +190,7 @@ def get_connection_manager() -> AccessConnectionManager:
         ssl_fingerprint=fingerprint,
         api_ssl_fingerprint=api_fingerprint,
         tls_env_prefix="ACCESS",
+        auth_failure_hint=credential_cut_hint("ACCESS"),
     )
 
 
