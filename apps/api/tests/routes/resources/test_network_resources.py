@@ -462,3 +462,42 @@ async def test_list_firewall_rules_happy_path(tmp_path, monkeypatch) -> None:
     body = r.json()
     assert {item["id"] for item in body["items"]} == {"r-0", "r-1", "r-2"}
     assert body["render_hint"]["kind"] == "list"
+
+
+@pytest.mark.asyncio
+async def test_get_firewall_rule_reads_only_that_policy(tmp_path, monkeypatch) -> None:
+    """A detail read must not download every policy on the site to find one."""
+    from unifi_core.exceptions import UniFiNotFoundError
+    from unifi_core.network.managers.firewall_manager import FirewallManager
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+    requested: list[str] = []
+
+    async def fake_get_by_id(self, policy_id):
+        requested.append(policy_id)
+        if policy_id != "r-1":
+            raise UniFiNotFoundError("firewall_policy", policy_id)
+        return _FakeRaw({"_id": "r-1", "name": "rule-1", "action": "allow", "enabled": True, "predefined": False})
+
+    async def full_list(self, *a, **kw):
+        raise AssertionError("the full policy list was read")
+
+    monkeypatch.setattr(FirewallManager, "get_firewall_policy_by_id", fake_get_by_id)
+    monkeypatch.setattr(FirewallManager, "get_firewall_policies", full_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        found = await c.get(
+            f"/v1/sites/default/firewall/rules/r-1?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        missing = await c.get(
+            f"/v1/sites/default/firewall/rules/r-9?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert found.status_code == 200, found.text
+    assert found.json()["data"]["id"] == "r-1"
+    assert missing.status_code == 404
+    assert requested == ["r-1", "r-9"]

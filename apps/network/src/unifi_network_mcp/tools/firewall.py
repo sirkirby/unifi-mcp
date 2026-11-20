@@ -11,6 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.firewall import (
     FirewallGroup,
     firewall_group_from_controller,
@@ -155,9 +156,7 @@ async def get_firewall_policy_details(
     try:
         if not policy_id:
             return {"success": False, "error": "policy_id is required"}
-        policies = await firewall_manager.get_firewall_policies(include_predefined=True)
-        policies_raw = [p.raw if hasattr(p, "raw") else p for p in policies]
-        policy = next((p for p in policies_raw if p.get("_id") == policy_id), None)
+        policy = await _read_policy(policy_id)
         if not policy:
             return {
                 "success": False,
@@ -219,14 +218,12 @@ async def toggle_firewall_policy(
     }
     """
     try:
-        policies = await firewall_manager.get_firewall_policies(include_predefined=True)
-        policy_obj = next((p for p in policies if p.id == policy_id), None)
-        if not policy_obj or not policy_obj.raw:
+        policy = await _read_policy(policy_id)
+        if not policy:
             return {
                 "success": False,
                 "error": f"Firewall policy with ID '{policy_id}' not found.",
             }
-        policy = policy_obj.raw
 
         current_state = policy.get("enabled", False)
         policy_name = policy.get("name", policy_id)
@@ -249,11 +246,8 @@ async def toggle_firewall_policy(
         success = await firewall_manager.toggle_firewall_policy(policy_id)
 
         if success:
-            toggled_policy_obj = next(
-                (p for p in await firewall_manager.get_firewall_policies(include_predefined=True) if p.id == policy_id),
-                None,
-            )
-            final_state = toggled_policy_obj.enabled if toggled_policy_obj else new_state
+            toggled_policy = await _read_policy(policy_id)
+            final_state = toggled_policy.get("enabled", False) if toggled_policy else new_state
 
             logger.info("Successfully toggled firewall policy '%s' (%s) to %s", policy_name, policy_id, final_state)
             return {
@@ -264,11 +258,8 @@ async def toggle_firewall_policy(
             }
         else:
             logger.error("Failed to toggle firewall policy '%s' (%s). Manager returned false.", policy_name, policy_id)
-            policy_after_toggle_obj = next(
-                (p for p in await firewall_manager.get_firewall_policies(include_predefined=True) if p.id == policy_id),
-                None,
-            )
-            state_after = policy_after_toggle_obj.enabled if policy_after_toggle_obj else "unknown"
+            policy_after_toggle = await _read_policy(policy_id)
+            state_after = policy_after_toggle.get("enabled", False) if policy_after_toggle else "unknown"
             return {
                 "success": False,
                 "policy_id": policy_id,
@@ -303,10 +294,23 @@ def _selector_applied(key: str, expected: Any, actual: Dict[str, Any]) -> bool:
     ``prepare_policy_update`` marks a retired selector with ``None`` and the manager
     removes the key from the PUT body, so the controller may answer with the key gone
     or with its own empty default. Both mean retired; only a surviving value does not.
+    A caller clearing a selector with ``[]`` or ``""`` gets the same answer: the
+    controller drops an empty selector rather than storing it. So does an inversion
+    flag set to ``False``, by the caller or by retirement when the update leaves the
+    target it belongs to: under the new target the controller drops the key.
     """
-    if expected is None:
+    if expected is None or expected is False or expected == [] or expected == "":
         return not actual.get(key)
     return actual.get(key) == expected
+
+
+async def _read_policy(policy_id: str) -> Dict[str, Any] | None:
+    """The stored policy document, or None when the controller has no such policy."""
+    try:
+        policy = await firewall_manager.get_firewall_policy_by_id(policy_id)
+    except UniFiNotFoundError:
+        return None
+    return policy.raw if isinstance(policy.raw, dict) else None
 
 
 @server.tool(
@@ -518,8 +522,9 @@ async def update_firewall_policy(
                 "logging, connection_state_type, connection_states, schedule. "
                 "Partial source/destination dicts are merged with the current policy; "
                 "port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and "
-                "switching to another port_matching_type (or a side off CLIENT) retires the "
-                "stored port/port_group_id/client_macs automatically. "
+                "switching port_matching_type, matching_target or matching_target_type "
+                "retires the stored selectors the new values no longer use "
+                "(port/port_group_id/client_macs/ips/ip_group_id/network_ids) automatically. "
                 "index is not accepted here; use unifi_reorder_firewall_policies to change order."
             )
         ),
@@ -545,14 +550,12 @@ async def update_firewall_policy(
     updated_fields_list = list(validated_data.keys())
 
     try:
-        policies = await firewall_manager.get_firewall_policies(include_predefined=True)
-        current_policy_obj = next((p for p in policies if p.id == policy_id), None)
-        if not current_policy_obj or not current_policy_obj.raw:
+        current = await _read_policy(policy_id)
+        if not current:
             return {
                 "success": False,
                 "error": "Firewall policy with ID '%s' not found." % policy_id,
             }
-        current = current_policy_obj.raw
 
         # Retire deactivated selectors and validate each updated side as merged. The
         # manager runs the same step before its PUT; it is repeated here so the preview
@@ -576,14 +579,12 @@ async def update_firewall_policy(
 
         logger.info("Updating firewall policy '%s' fields: %s", policy_id, ", ".join(updated_fields_list))
 
-        success = await firewall_manager.update_firewall_policy(policy_id, validated_data)
+        # The stored document just read is passed on, so the manager merges into it
+        # without reading the policy a second time.
+        success = await firewall_manager.update_firewall_policy(policy_id, validated_data, current=current)
 
         if success:
-            updated_policy_obj = next(
-                (p for p in await firewall_manager.get_firewall_policies(include_predefined=True) if p.id == policy_id),
-                None,
-            )
-            updated_details = updated_policy_obj.raw if updated_policy_obj else {}
+            updated_details = await _read_policy(policy_id) or {}
 
             # Verify the controller actually applied the requested changes.
             # For nested dicts (source, destination, schedule), check that each

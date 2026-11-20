@@ -100,21 +100,8 @@ async def get_firewall_rule(
                 "firewall_manager",
                 site=site_id,
             )
-            # firewall_manager exposes get_firewall_policies (list) but not a
-            # singular get_firewall_policy_details. Fetch the list and filter
-            # by id; the manager already caches/normalizes the response.
-            all_rules = await mgr.get_firewall_policies(include_predefined=True)
-    except UniFiNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    rule = None
-    for r in all_rules:
-        raw = getattr(r, "raw", r if isinstance(r, dict) else {})
-        rid = raw.get("_id") or raw.get("id")
-        if rid == rule_id:
-            rule = r
-            break
-    if rule is None:
+            rule = await mgr.get_firewall_policy_by_id(rule_id)
+    except UniFiNotFoundError:
         raise HTTPException(status_code=404, detail="firewall rule not found")
 
     type_class = request.app.state.type_registry.lookup("network", "firewall/rules/{id}")
