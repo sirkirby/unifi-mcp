@@ -27,6 +27,7 @@ from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
+from unifi_core.operation_gate import WriteRequestTimeout, write_request_bound
 from unifi_core.redaction import (
     collect_secret_values,
     sanitize_exception,
@@ -1754,7 +1755,9 @@ class ConnectionManager:
         try:
             return await self._request_with_reauthentication(api_request)
         except Exception as error:
-            if isinstance(error, (SettingsControllerRejection, CertificateVerificationError)):
+            # A write-budget timeout carries fixed text only, and its guidance
+            # (read back before retrying) must reach the caller intact.
+            if isinstance(error, (SettingsControllerRejection, CertificateVerificationError, WriteRequestTimeout)):
                 raise
             if api_request.path.startswith(_SETTINGS_PATH_PREFIXES):
                 # Domain managers and tools may log the returned error and its
@@ -1799,8 +1802,10 @@ class ConnectionManager:
         try:
             # Diagnostics: capture timing and payloads without leaking secrets
             start_ts = _time.perf_counter()
+            # Inside a held write, bounded by what is left of its hold budget.
             with prepaid_attempt():
-                response = await request_method(api_request)
+                async with write_request_bound():
+                    response = await request_method(api_request)
             duration_ms = (_time.perf_counter() - start_ts) * 1000.0
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
@@ -1836,7 +1841,8 @@ class ConnectionManager:
                 try:
                     start_ts = _time.perf_counter()
                     with prepaid_attempt():
-                        retry_response = await request_method(api_request)
+                        async with write_request_bound():
+                            retry_response = await request_method(api_request)
                     duration_ms = (_time.perf_counter() - start_ts) * 1000.0
                     try:
                         from unifi_core.diagnostics import diagnostics_enabled, log_api_request

@@ -35,6 +35,7 @@ import aiohttp
 from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiRateLimitError
+from unifi_core.operation_gate import write_request_bound
 from unifi_core.redaction import (
     append_exception_hint,
     strip_exception_url_origins,
@@ -792,9 +793,12 @@ class AccessConnectionManager:
 
         A rejected re-login drops the proxy session and opens the auth
         circuit, so later calls do not repeat the login against the account.
+        The proxy session has no request timeout of its own; inside a held
+        write the request is bounded by what is left of the write's budget.
         """
         try:
-            return await self._proxy_request_with_reauth(method, url, label, **kwargs)
+            async with write_request_bound():
+                return await self._proxy_request_with_reauth(method, url, label, **kwargs)
         except (UniFiAuthError, UniFiRateLimitError):
             await self._drop_rejected_proxy_session()
             raise self.unavailable_error(f"{label} re-authentication failed") from None
