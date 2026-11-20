@@ -22,9 +22,11 @@ DEFAULT_TASK_POLL_INTERVAL_MS = 1_000
 TaskStatus = Literal["working", "input_required", "completed", "failed", "cancelled"]
 
 _JOB_STATUS_TO_TASK_STATUS: dict[str, TaskStatus] = {
+    "queued": "working",
     "running": "working",
     "done": "completed",
     "error": "failed",
+    "cancelled": "cancelled",
     "unknown": "failed",
 }
 
@@ -53,6 +55,8 @@ def _datetime_to_protocol_timestamp(value: datetime) -> str:
 def _status_message(job_status: dict[str, Any], task_status: TaskStatus) -> str:
     if task_status == "failed":
         return str(job_status.get("error") or "Operation failed.")
+    if job_status.get("status") == "queued":
+        return "Operation is queued for its turn at the controller."
     return _TASK_STATUS_TO_MESSAGE.get(task_status, "Operation requires additional input.")
 
 

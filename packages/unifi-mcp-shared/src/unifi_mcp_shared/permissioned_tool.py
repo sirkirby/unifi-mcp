@@ -28,6 +28,7 @@ from unifi_mcp_shared.preview_token import (
     set_preview_token_mode,
     takes_preview_token,
 )
+from unifi_mcp_shared.tool_gate import GateProvider, gating_tool_decorator, make_call_classifier
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
 
 # Registration kwargs this package understands and FastMCP does not.
@@ -138,6 +139,8 @@ def setup_permissioned_tool(
     diagnostics_enabled_fn: Callable[[], bool],
     wrap_tool_fn: Callable,
     logger: Any,
+    gate_provider: GateProvider | None = None,
+    connection_decorator: Callable[[Callable], Callable] | None = None,
 ) -> Callable:
     """One-call setup: create a permissioned_tool decorator and install it on *server*.
 
@@ -158,6 +161,8 @@ def setup_permissioned_tool(
         diagnostics_enabled_fn=diagnostics_enabled_fn,
         wrap_tool_fn=wrap_tool_fn,
         logger=logger,
+        gate_provider=gate_provider,
+        connection_decorator=connection_decorator,
     )
     server.tool = pt  # type: ignore[assignment]
     return pt
@@ -172,6 +177,8 @@ def create_permissioned_tool(
     diagnostics_enabled_fn: Callable[[], bool],
     wrap_tool_fn: Callable,
     logger: Any,
+    gate_provider: GateProvider | None = None,
+    connection_decorator: Callable[[Callable], Callable] | None = None,
 ) -> Callable:
     """Create a permissioned_tool decorator for a specific MCP server.
 
@@ -183,6 +190,17 @@ def create_permissioned_tool(
         diagnostics_enabled_fn: Callable returning whether diagnostics are enabled.
         wrap_tool_fn: Function to wrap a tool with diagnostics logging.
         logger: Logger instance for permission messages.
+        gate_provider: Returns the controller's ``OperationGate`` (or ``None``
+            while there is none, e.g. in setup mode). Every tool call then
+            enters the gate as its outermost layer, as a write or a read (see
+            ``unifi_mcp_shared.tool_gate``). Omitted, no tool is gated and
+            calls behave exactly as before.
+        connection_decorator: A ``tool(...)`` decorator transformer to apply
+            inside the gate, such as an app's ``reconnecting_tool_decorator``
+            (``lambda d: reconnecting_tool_decorator(d, connection_manager)``).
+            Pass it here instead of pre-applying it to
+            ``original_tool_decorator``, so a call takes its gate turn before
+            it waits for the controller connection.
 
     Returns:
         A ``permissioned_tool`` decorator function that acts like ``@server.tool``.
@@ -196,6 +214,17 @@ def create_permissioned_tool(
     check_preview_token_settings(server_prefix, logger)
     preview_tokens = PreviewTokenStore(preview_token_ttl_seconds()) if preview_token_required(server_prefix) else None
     set_preview_token_mode(preview_tokens is not None)
+
+    def registrar(tool_name: str, classify: Callable[[dict[str, Any]], Any]) -> Callable:
+        """The ``tool(...)`` decorator one tool registers through: gate, then connection, then MCP."""
+        tool_decorator = original_tool_decorator
+        if gate_provider is not None:
+            tool_decorator = gating_tool_decorator(
+                tool_decorator, tool_name=tool_name, gate_provider=gate_provider, classify=classify
+            )
+        if connection_decorator is not None:
+            tool_decorator = connection_decorator(tool_decorator)
+        return tool_decorator
 
     def permissioned_tool(*d_args, **d_kwargs):
         """Decorator that registers the tool and checks policy gates at call time."""
@@ -250,7 +279,8 @@ def create_permissioned_tool(
                     else func
                 )
                 wrapped = apply_unifi_tool_response_signature(wrapped)
-                return original_tool_decorator(*d_args, **d_kwargs)(wrapped)
+                read_only = make_call_classifier(action=None, parameters=None, bypass_mode=lambda: False)
+                return registrar(str(tool_name), read_only)(*d_args, **d_kwargs)(wrapped)
 
             func_sig = inspect.signature(func)
             uses_preview_token = preview_tokens is not None and takes_preview_token(action, func_sig.parameters)
@@ -347,9 +377,15 @@ def create_permissioned_tool(
                 else gated_func
             )
             wrapped = apply_unifi_tool_response_signature(wrapped)
+            classify = make_call_classifier(
+                action=action,
+                parameters=func_sig.parameters,
+                bypass_mode=lambda: resolve_permission_mode(server_prefix) == "bypass",
+                policy_allows=lambda: policy_gate_checker.check(category, action),
+            )
 
             # ALWAYS register with MCP
-            return original_tool_decorator(*d_args, **d_kwargs)(wrapped)
+            return registrar(str(tool_name), classify)(*d_args, **d_kwargs)(wrapped)
 
         return decorator
 

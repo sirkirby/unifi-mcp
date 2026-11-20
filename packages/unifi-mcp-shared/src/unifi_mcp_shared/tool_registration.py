@@ -76,6 +76,7 @@ async def register_tools_for_mode(
     auto_load_tools: Callable | None = None,
     include_meta_tools: bool = True,
     lazy_direct_tools: Sequence[str] = (),
+    cancel_job: Callable | None = None,
 ) -> None:
     """Register meta-tools and domain tools based on *mode*.
 
@@ -104,6 +105,8 @@ async def register_tools_for_mode(
         lazy_direct_tools: Read-only tools lazy mode lists directly at startup
             (see :func:`register_lazy_direct_tools`). Ignored in other modes:
             eager lists every tool and meta_only lists none.
+        cancel_job: Handler that cancels a queued job, for ``*_batch_cancel``
+            (``unifi_core.jobs.cancel_job`` when omitted).
     """
     if not include_meta_tools and mode != "eager":
         raise ValueError("meta-tools can be disabled only in eager registration mode")
@@ -132,6 +135,8 @@ async def register_tools_for_mode(
     )
     if support_bundle_handler is not None:
         meta_kwargs["support_bundle_handler"] = support_bundle_handler
+    if cancel_job is not None:
+        meta_kwargs["cancel_job"] = cancel_job
     if prefix:
         meta_kwargs["prefix"] = prefix
         meta_kwargs["server_label"] = server_label
@@ -147,7 +152,8 @@ async def register_tools_for_mode(
     if mode == "meta_only":
         logger.info("Tool registration mode: meta_only")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status%s",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_batch_cancel%s",
+            tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,
@@ -163,7 +169,8 @@ async def register_tools_for_mode(
     elif mode == "lazy":
         logger.info("Tool registration mode: lazy")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools%s",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_batch_cancel, %s_load_tools%s",
+            tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,

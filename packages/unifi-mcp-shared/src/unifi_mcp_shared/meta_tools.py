@@ -1,7 +1,7 @@
 """Meta-tools registration helper.
 
-Provides a unified way to register meta-tools (tool_index, execute, batch, job_status)
-that work in both MCP server mode and dev console mode.
+Provides a unified way to register meta-tools (tool_index, execute, batch,
+batch_status, batch_cancel) that work in both MCP server mode and dev console mode.
 
 Generic version extracted from the network app. All app-specific references
 (like TOOL_MODULE_MAP) are injected as parameters rather than imported.
@@ -13,6 +13,7 @@ servers are loaded simultaneously:
 - Access:  ``access_tool_index``, ``access_execute``, ...
 """
 
+import inspect
 import logging
 import time
 import uuid
@@ -35,9 +36,33 @@ META_TOOL_SUFFIXES: tuple[str, ...] = (
     "_execute",
     "_batch",
     "_batch_status",
+    "_batch_cancel",
     "_load_tools",
     "_get_support_bundle",
 )
+
+# Job states a batch job reports; ``position`` accompanies ``queued``.
+BATCH_JOB_STATUSES: tuple[str, ...] = ("queued", "running", "done", "error", "cancelled", "unknown")
+
+BATCH_ORDERING_NOTE = (
+    "Writes execute one at a time in submission order; reads run concurrently, up to a cap. "
+    "Queued jobs can be cancelled. Arguments are fixed at submission, and a batch does not stop on failure."
+)
+
+
+def _accepts_after(start_async_tool: Callable) -> bool:
+    """Whether an injected job starter can chain a job after another (newer cores can)."""
+    try:
+        parameters = inspect.signature(start_async_tool).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(p.name == "after" or p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters)
+
+
+def _default_cancel_job() -> Callable:
+    from unifi_core.jobs import cancel_job
+
+    return cancel_job
 
 
 def is_meta_tool(name: str) -> bool:
@@ -77,15 +102,20 @@ def register_meta_tools(
     domain_hint: str | None = None,
     *,
     support_bundle_handler: Callable | None = None,
+    cancel_job: Callable | None = None,
 ) -> None:
     """Register meta-tools with the MCP server.
 
     Tools registered (using the configured prefix):
     - {prefix}_tool_index: Discover available tools
     - {prefix}_execute: Execute a single tool (returns result directly)
-    - {prefix}_batch: Execute multiple tools in parallel (returns job IDs)
+    - {prefix}_batch: Start several tools as jobs (returns job IDs)
     - {prefix}_batch_status: Check batch job progress
+    - {prefix}_batch_cancel: Cancel batch jobs that have not started their change
     - {prefix}_get_support_bundle: Generate privacy-bounded support evidence
+
+    Meta tools register with the plain ``tool_decorator``, never through
+    ``permissioned_tool``, so they never enter a controller operation gate.
 
     Args:
         server: FastMCP server instance (for call_tool access)
@@ -96,6 +126,8 @@ def register_meta_tools(
         register_tool: Function to register in tool index
         support_bundle_handler: Optional runtime callback. Omit for legacy apps
             that do not expose support bundles.
+        cancel_job: Cancels one job by id (``unifi_core.jobs.cancel_job`` when
+            omitted, which serves jobs in the process-wide job store).
         prefix: Tool name prefix (e.g. "unifi", "protect", "access").
         server_label: Human-readable server name for descriptions
                       (e.g. "UniFi Network", "UniFi Protect").
@@ -106,13 +138,17 @@ def register_meta_tools(
     exec_name = f"{prefix}_execute"
     batch_name = f"{prefix}_batch"
     status_name = f"{prefix}_batch_status"
+    cancel_name = f"{prefix}_batch_cancel"
     support_name = f"{prefix}_get_support_bundle"
+    cancel_job = cancel_job or _default_cancel_job()
+    chain_jobs = _accepts_after(start_async_tool)
 
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
     idx_title = f"{server_label} Tool Index"
     exec_title = f"{server_label} Execute Tool"
     batch_title = f"{server_label} Batch Execute"
     status_title = f"{server_label} Batch Status"
+    cancel_title = f"{server_label} Batch Cancel"
     support_title = f"{server_label} Support Bundle"
     read_annotations = ToolAnnotations(
         readOnlyHint=True,
@@ -124,6 +160,12 @@ def register_meta_tools(
         readOnlyHint=False,
         destructiveHint=False,
         idempotentHint=False,
+        openWorldHint=False,
+    )
+    cancel_annotations = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
         openWorldHint=False,
     )
 
@@ -374,20 +416,27 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel through an indirect execution wrapper. "
+            f"Run several {server_label} tools as background jobs through an indirect execution wrapper. "
+            f"{BATCH_ORDERING_NOTE} "
             f"Use {idx_name} to discover tool names in lazy mode when they are not directly registered. "
-            f"Returns job IDs for each operation. Use {status_name} to check progress and get results. "
+            f"Returns job IDs for each operation. Use {status_name} to check progress and get results, "
+            f"and {cancel_name} to cancel queued jobs. "
             f"For single operations, use {exec_name} instead (returns result directly)."
         ),
         annotations=action_annotations,
     )
     async def batch_handler(operations: List[dict], ctx: Context | None = None) -> dict:
-        """Execute multiple operations in parallel."""
+        """Start each operation as a job, each joining the controller's queue after the one before."""
         if not operations:
             return {"error": "No operations specified", "jobs": []}
 
         jobs = []
         errors = []
+        # Each job starts once the job before it has joined the controller's
+        # gate (or finished), so writes queue in submission order whatever
+        # each one awaits first. The jobs are all created now; this call
+        # returns at once.
+        previous_job_id: str | None = None
 
         for i, op in enumerate(operations):
             tool = op.get("tool")
@@ -407,7 +456,12 @@ def register_meta_tools(
                     return _execute
 
                 executor = await _make_executor(tool, arguments)
-                job_result = await start_async_tool(executor, {})
+                if chain_jobs and previous_job_id is not None:
+                    job_result = await start_async_tool(executor, {}, after=previous_job_id)
+                else:
+                    job_result = await start_async_tool(executor, {})
+                if isinstance(job_result.get("jobId"), str):
+                    previous_job_id = job_result["jobId"]
 
                 jobs.append(
                     {
@@ -430,8 +484,9 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel through the indirect execution wrapper. "
-            f"Returns job IDs; use {status_name} to check progress."
+            f"Run several {server_label} tools as background jobs through the indirect execution wrapper. "
+            f"{BATCH_ORDERING_NOTE} Returns job IDs; use {status_name} to check progress and "
+            f"{cancel_name} to cancel queued jobs."
         ),
         input_schema={
             "type": "object",
@@ -496,7 +551,8 @@ def register_meta_tools(
         title=status_title,
         description=(
             f"Check status of {server_label} operations started with {batch_name}. "
-            f"Returns status ('running', 'done', 'error'), result (if done), or error (if failed). "
+            f"Returns status ('queued' with its queue position, 'running', 'done', 'error' or 'cancelled'), "
+            f"result (if done), or error (if failed). "
             f"Can check multiple jobs at once by passing an array of job IDs."
         ),
         annotations=read_annotations,
@@ -529,7 +585,8 @@ def register_meta_tools(
         name=status_name,
         title=status_title,
         description=(
-            f"Check status of {server_label} batch operations. Returns status, result (if done), or error (if failed)."
+            f"Check status of {server_label} batch operations. Returns status (with the queue position "
+            "while queued), result (if done), or error (if failed)."
         ),
         input_schema={
             "type": "object",
@@ -547,8 +604,18 @@ def register_meta_tools(
             "properties": {
                 "status": {
                     "type": "string",
-                    "enum": ["running", "done", "error", "unknown"],
-                    "description": "Current job status",
+                    "enum": list(BATCH_JOB_STATUSES),
+                    "description": (
+                        "Current job status. 'queued' waits for an earlier job or its write turn; "
+                        "'cancelled' never ran."
+                    ),
+                },
+                "position": {
+                    "type": ["integer", "null"],
+                    "description": (
+                        "While queued: write operations ahead of this job (1 = next; 0 = starting). "
+                        "Null while it waits for an earlier job in its batch."
+                    ),
                 },
                 "result": {"description": "Job result (present when status is 'done')"},
                 "error": {"type": "string", "description": "Error message (present when status is 'error')"},
@@ -561,7 +628,79 @@ def register_meta_tools(
         annotations=normalize_tool_annotations(read_annotations),
     )
 
-    names = [idx_name, exec_name, batch_name, status_name]
+    # =========================================================================
+    # BATCH CANCEL: {prefix}_batch_cancel
+    # =========================================================================
+    @tool_decorator(
+        name=cancel_name,
+        title=cancel_title,
+        description=(
+            f"Cancel {server_label} jobs started with {batch_name} that have not started their change. "
+            "A queued job is withdrawn and never runs. A running or finished job is not cancelled: "
+            "a change already sent to the controller cannot be recalled. "
+            "Pass one jobId or an array of jobIds."
+        ),
+        annotations=cancel_annotations,
+    )
+    async def batch_cancel_handler(jobId: str = None, jobIds: List[str] = None) -> dict:
+        """Cancel one or more queued jobs."""
+
+        async def _cancel(job_id: str) -> dict:
+            try:
+                outcome = await cancel_job(job_id)
+            except Exception as e:
+                logger.error("Error cancelling job '%s': %s", job_id, e, exc_info=True)
+                return {"jobId": job_id, "cancelled": False, "status": "unknown", "reason": str(e)}
+            return {"jobId": job_id, **outcome}
+
+        if jobId and not jobIds:
+            return await _cancel(jobId)
+        if jobIds:
+            return {"jobs": [await _cancel(job_id) for job_id in jobIds]}
+        return {"error": "Provide jobId or jobIds parameter"}
+
+    cancel_outcome_schema = {
+        "type": "object",
+        "properties": {
+            "jobId": {"type": "string"},
+            "cancelled": {"type": "boolean", "description": "True when the job was withdrawn before it ran"},
+            "status": {"type": "string", "enum": list(BATCH_JOB_STATUSES), "description": "Status after the call"},
+            "reason": {"type": "string", "description": "Why the job was not cancelled"},
+        },
+    }
+    register_tool(
+        name=cancel_name,
+        title=cancel_title,
+        description=(
+            f"Cancel queued {server_label} batch jobs. Jobs already running or finished are reported, not cancelled."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "jobId": {"type": "string", "description": "Single job ID to cancel"},
+                "jobIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Multiple job IDs to cancel at once",
+                },
+            },
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                **cancel_outcome_schema["properties"],
+                "jobs": {
+                    "type": "array",
+                    "items": cancel_outcome_schema,
+                    "description": "Outcome per job (when using jobIds parameter)",
+                },
+                "error": {"type": "string"},
+            },
+        },
+        annotations=normalize_tool_annotations(cancel_annotations),
+    )
+
+    names = [idx_name, exec_name, batch_name, status_name, cancel_name]
     if support_bundle_handler is not None:
         names.append(support_name)
     logger.info("Registered meta-tools: %s", ", ".join(names))
