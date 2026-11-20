@@ -793,18 +793,20 @@ class AccessConnectionManager:
 
         A rejected re-login drops the proxy session and opens the auth
         circuit, so later calls do not repeat the login against the account.
-        The proxy session has no request timeout of its own; inside a held
-        write the request is bounded by what is left of the write's budget.
         """
         try:
-            async with write_request_bound():
-                return await self._proxy_request_with_reauth(method, url, label, **kwargs)
+            return await self._proxy_request_with_reauth(method, url, label, **kwargs)
         except (UniFiAuthError, UniFiRateLimitError):
             await self._drop_rejected_proxy_session()
             raise self.unavailable_error(f"{label} re-authentication failed") from None
 
     async def _proxy_request_with_reauth(self, method: str, url: str, label: str, **kwargs: Any) -> Dict[str, Any]:
         """Send one proxy request, re-authenticating once on HTTP 401.
+
+        The proxy session has no request timeout of its own. Inside a held
+        write each request is bounded by what is left of the write's budget;
+        the re-login between them is not, so a timeout never cuts a login off
+        between its cookie and its CSRF token.
 
         Parameters
         ----------
@@ -820,40 +822,43 @@ class AccessConnectionManager:
         headers = {"X-CSRF-Token": self._csrf_token}
         token_before = self._csrf_token
 
-        async with self._proxy_session.request(method, url, headers=headers, **kwargs) as resp:
-            if resp.status == 401:
-                async with self._auth_lock:
-                    # Double-check: skip re-auth if another coroutine already refreshed
-                    if not self._proxy_available:
-                        raise self.unavailable_error(f"{label} re-authentication failed")
-                    if self._csrf_token == token_before:
-                        logger.info("[access-cm] %s session expired, re-authenticating...", label)
-                        await self._proxy_login()
-
-                retry_headers = {"X-CSRF-Token": self._csrf_token}
-                async with self._proxy_session.request(method, url, headers=retry_headers, **kwargs) as retry_resp:
-                    if retry_resp.status != 200:
+        async with write_request_bound():
+            async with self._proxy_session.request(method, url, headers=headers, **kwargs) as resp:
+                if resp.status != 401:
+                    if resp.status != 200:
+                        body = ""
+                        try:
+                            body = await resp.text()
+                        except Exception:
+                            pass
                         raise self._proxy_status_error(
-                            f"{label} request failed after re-auth: HTTP {retry_resp.status} {method} {url}",
-                            retry_resp.status,
+                            f"{label} request failed: HTTP {resp.status} {method} {url}"
+                            f"{(' — ' + body[:200]) if body else ''}",
+                            resp.status,
                         )
-                    payload = await retry_resp.json()
+                    payload = await resp.json()
                     self._raise_for_api_error(payload, method, self._safe_text(url), label)
                     return payload
 
-            if resp.status != 200:
-                body = ""
-                try:
-                    body = await resp.text()
-                except Exception:
-                    pass
-                raise self._proxy_status_error(
-                    f"{label} request failed: HTTP {resp.status} {method} {url}{(' — ' + body[:200]) if body else ''}",
-                    resp.status,
-                )
-            payload = await resp.json()
-            self._raise_for_api_error(payload, method, self._safe_text(url), label)
-            return payload
+        async with self._auth_lock:
+            # Double-check: skip re-auth if another coroutine already refreshed
+            if not self._proxy_available:
+                raise self.unavailable_error(f"{label} re-authentication failed")
+            if self._csrf_token == token_before:
+                logger.info("[access-cm] %s session expired, re-authenticating...", label)
+                await self._proxy_login()
+
+        retry_headers = {"X-CSRF-Token": self._csrf_token}
+        async with write_request_bound():
+            async with self._proxy_session.request(method, url, headers=retry_headers, **kwargs) as retry_resp:
+                if retry_resp.status != 200:
+                    raise self._proxy_status_error(
+                        f"{label} request failed after re-auth: HTTP {retry_resp.status} {method} {url}",
+                        retry_resp.status,
+                    )
+                payload = await retry_resp.json()
+                self._raise_for_api_error(payload, method, self._safe_text(url), label)
+                return payload
 
     def _hosts(self) -> tuple[str, ...]:
         """The configured console address, as error text may quote it bare."""

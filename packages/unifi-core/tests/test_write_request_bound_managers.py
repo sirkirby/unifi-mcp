@@ -108,3 +108,37 @@ async def test_access_proxy_request_inside_a_held_write_stops_at_the_budget() ->
             await cm.proxy_request("PUT", "doors/1", json={"name": "x"})
     # The proxy session survives: a timed-out write is not an auth failure.
     assert cm._proxy_session is session
+
+
+def _plain_response(status: int) -> AsyncMock:
+    response = AsyncMock()
+    response.status = status
+    response.json = AsyncMock(return_value={"code": 0, "data": {"ok": True}})
+    response.text = AsyncMock(return_value="")
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=False)
+    return response
+
+
+async def test_access_re_login_runs_outside_the_write_budget() -> None:
+    cm = AccessConnectionManager(host="access.example", username="admin", password="pw")
+    session = MagicMock()
+    session.request = MagicMock(side_effect=[_plain_response(401), _plain_response(200)])
+    cm._proxy_session = session
+    cm._proxy_available = True
+    cm._csrf_token = "old"
+
+    async def slow_login() -> None:
+        # Longer than the write has left: a login cut off here could leave
+        # the cookie and CSRF token mismatched.
+        await asyncio.sleep(0.05)
+        cm._csrf_token = "new"
+
+    cm._proxy_login = slow_login
+    gate, clock = _nearly_spent_gate()
+
+    async with gate.write():
+        clock.value = 9.98
+        payload = await cm.proxy_request("PUT", "doors/1", json={"name": "x"})
+    assert payload["data"] == {"ok": True}
+    assert session.request.call_args_list[1].kwargs["headers"] == {"X-CSRF-Token": "new"}
