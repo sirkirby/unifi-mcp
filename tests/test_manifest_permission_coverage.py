@@ -41,3 +41,22 @@ def test_ungated_tools_are_read_only(server):
     assert ungated_mutating == [], (
         f"{server} tools with no permission_action that are not annotated readOnlyHint=True: {ungated_mutating}"
     )
+
+
+@pytest.mark.parametrize("server", sorted(MANIFESTS))
+def test_mutating_tools_declare_confirm(server):
+    """A create, update or delete tool is a write only once confirmed.
+
+    The controller operation gate admits a preview (``confirm=false``) as a
+    read and a confirmed call as a write. A mutating tool without ``confirm``
+    would take the exclusive write turn for every call, and would skip the
+    preview-then-confirm contract.
+    """
+    unconfirmed = [
+        tool["name"]
+        for tool in _tools(server)
+        if str(tool.get("permission_action") or "").lower() in {"create", "update", "delete"}
+        and "confirm" not in ((tool.get("schema") or {}).get("input") or {}).get("properties", {})
+    ]
+
+    assert unconfirmed == [], f"{server} mutating tools without a confirm parameter: {unconfirmed}"
