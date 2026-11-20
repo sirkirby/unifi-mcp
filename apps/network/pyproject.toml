@@ -48,7 +48,8 @@ dependencies = [
     # Static LAN IPv6 subnets, AP antenna selection and outdoor mode require Core 0.4.94.
     # Device IP settings require Core 0.4.96.
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
-    "unifi-core[network]>=0.4.99,<0.5",
+    # Reading and setting the V2 firewall policy order requires Core 0.4.100.
+    "unifi-core[network]>=0.4.100,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

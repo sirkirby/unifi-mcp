@@ -39,7 +39,8 @@ dependencies = [
     # Protect and Access errors require Core 0.4.94. Device IP settings require Core 0.4.96.
     # Camera crossing lines and smart-detect zones require Core 0.4.97.
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
-    "unifi-core[network,protect,access]>=0.4.99,<0.5",
+    # Reading and setting the V2 firewall policy order requires Core 0.4.100.
+    "unifi-core[network,protect,access]>=0.4.100,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
