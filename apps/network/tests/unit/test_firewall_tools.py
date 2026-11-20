@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.redaction import REDACTED
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
@@ -240,7 +241,7 @@ class TestFirewallToolRedaction:
         mock_policy = _make_policy(policy_raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
 
             from unifi_network_mcp.tools.firewall import get_firewall_policy_details
 
@@ -260,7 +261,7 @@ class TestFirewallToolRedaction:
         mock_policy = _make_policy(policy_raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
 
@@ -554,7 +555,7 @@ class TestCreatePortAndClientTargetingValidation:
         mock_policy = _make_policy(raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -575,7 +576,7 @@ class TestCreatePortAndClientTargetingValidation:
         mock_policy = _make_policy(raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -595,7 +596,7 @@ class TestCreatePortAndClientTargetingValidation:
         mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -621,7 +622,7 @@ class TestCreatePortAndClientTargetingValidation:
         updated["destination"].update({"port_matching_type": "SPECIFIC", "port": "53"})
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[mock_policy], [_make_policy(updated)]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[mock_policy, _make_policy(updated)])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -651,7 +652,7 @@ class TestUpdatePreviewAndVerification:
         mock_policy = _make_policy(self._stored(port_matching_type="ANY"))
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
 
@@ -667,7 +668,7 @@ class TestUpdatePreviewAndVerification:
         mock_policy = _make_policy(self._stored(port_matching_type="SPECIFIC", port="53"))
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
 
@@ -690,7 +691,7 @@ class TestUpdatePreviewAndVerification:
         after["destination"] = {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "ANY", **echoed}
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[_make_policy(raw)], [_make_policy(after)]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(after)])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -723,7 +724,7 @@ class TestUpdatePreviewAndVerification:
         after["destination"].update(after_destination)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[_make_policy(raw)], [_make_policy(after)]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(after)])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -742,7 +743,7 @@ class TestUpdatePreviewAndVerification:
         after["destination"] = None
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[_make_policy(raw)], [_make_policy(after)]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(after)])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -764,7 +765,7 @@ class TestUpdatePreviewAndVerification:
         after = copy.deepcopy(raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[_make_policy(raw)], [_make_policy(after)]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(after)])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -779,6 +780,149 @@ class TestUpdatePreviewAndVerification:
         assert result["success"] is False
         assert "11:22:33:44:55:66" not in caplog.text
         assert "aa:bb:cc:dd:ee:ff" not in caplog.text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("stored", "endpoint_update", "after"),
+        [
+            (
+                {"matching_target": "IP", "matching_target_type": "SPECIFIC", "ips": ["192.0.2.10"]},
+                {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "grp1", "ips": []},
+                {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "grp1"},
+            ),
+            (
+                {"matching_target": "CLIENT", "client_macs": ["aa:bb:cc:dd:ee:ff"]},
+                {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "grp1", "client_macs": []},
+                {"matching_target": "IP", "matching_target_type": "OBJECT", "ip_group_id": "grp1"},
+            ),
+            (
+                {"matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"},
+                {"port_matching_type": "ANY", "port": ""},
+                {"matching_target": "ANY", "port_matching_type": "ANY"},
+            ),
+        ],
+        ids=["ips_cleared", "client_macs_cleared", "port_cleared"],
+    )
+    async def test_a_selector_cleared_by_hand_is_applied_when_the_reread_drops_it(self, stored, endpoint_update, after):
+        """Clearing the old list explicitly is the obvious way to switch selectors. The
+        controller drops the empty list, and reporting that as 'did not apply' made
+        callers retry or report failure for a change that landed."""
+        raw = self._stored(**stored)
+        reread = copy.deepcopy(raw)
+        reread["destination"] = {"zone_id": "z2", **after}
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(reread)])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001", update_data={"destination": endpoint_update}, confirm=True
+            )
+
+        assert result["success"] is True, result.get("error")
+
+    @pytest.mark.asyncio
+    async def test_a_cleared_selector_the_controller_kept_is_still_not_applied(self):
+        raw = self._stored(matching_target="IP", matching_target_type="SPECIFIC", ips=["192.0.2.10"])
+        reread = copy.deepcopy(raw)
+        reread["destination"].update({"matching_target_type": "OBJECT", "ip_group_id": "grp1"})
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(reread)])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"matching_target_type": "OBJECT", "ip_group_id": "grp1", "ips": []}},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "did not apply changes to: destination" in result["error"]
+
+
+class TestFirewallPolicyToolsReadOnePolicy:
+    """Tools acting on one policy read that policy, never the full inventory: a bulk
+    rename read hundreds of policies up to three times per call and stalled the
+    controller while it was re-provisioning."""
+
+    @staticmethod
+    def _manager(mock_fm, *reads):
+        mock_fm.get_firewall_policies = AsyncMock(side_effect=AssertionError("the full policy list was read"))
+        mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=list(reads))
+
+    @pytest.mark.asyncio
+    async def test_update_reads_the_policy_once_and_hands_it_to_the_manager(self):
+        renamed = {**SAMPLE_ZONE_POLICY_RAW, "name": "Renamed"}
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            self._manager(mock_fm, _make_policy(SAMPLE_ZONE_POLICY_RAW), _make_policy(renamed))
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001", update_data={"name": "Renamed"}, confirm=True
+            )
+
+        assert result["success"] is True
+        assert result["details"]["name"] == "Renamed"
+        assert [call.args for call in mock_fm.get_firewall_policy_by_id.await_args_list] == [
+            ("pol_zone_001",),
+            ("pol_zone_001",),
+        ]
+        mock_fm.update_firewall_policy.assert_awaited_once_with(
+            "pol_zone_001", {"name": "Renamed"}, current=SAMPLE_ZONE_POLICY_RAW
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("confirm", [False, True])
+    async def test_update_of_a_missing_policy_reports_not_found(self, confirm):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            self._manager(mock_fm, UniFiNotFoundError("firewall_policy", "missing"))
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(policy_id="missing", update_data={"name": "x"}, confirm=confirm)
+
+        assert result == {"success": False, "error": "Firewall policy with ID 'missing' not found."}
+        mock_fm.update_firewall_policy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_details_reads_the_one_policy(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            self._manager(mock_fm, _make_policy(SAMPLE_ZONE_POLICY_RAW), UniFiNotFoundError("firewall_policy", "x"))
+
+            from unifi_network_mcp.tools.firewall import get_firewall_policy_details
+
+            found = await get_firewall_policy_details("pol_zone_001")
+            missing = await get_firewall_policy_details("missing")
+
+        assert found["success"] is True
+        assert found["details"]["name"] == SAMPLE_ZONE_POLICY_RAW["name"]
+        assert missing == {"success": False, "error": "Firewall policy with ID 'missing' not found."}
+
+    @pytest.mark.asyncio
+    async def test_toggle_reads_the_one_policy_before_and_after(self):
+        disabled = {**SAMPLE_ZONE_POLICY_RAW, "enabled": False}
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            self._manager(mock_fm, _make_policy(SAMPLE_ZONE_POLICY_RAW), _make_policy(disabled))
+            mock_fm.toggle_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import toggle_firewall_policy
+
+            result = await toggle_firewall_policy(policy_id="pol_zone_001", confirm=True)
+
+        assert result["success"] is True
+        assert result["enabled"] is False
+        assert mock_fm.get_firewall_policy_by_id.await_count == 2
+        mock_fm.toggle_firewall_policy.assert_awaited_once_with("pol_zone_001")
 
 
 class TestLegacyFieldMigration:
@@ -839,7 +983,7 @@ class TestUpdateFirewallPolicyV2Fields:
         mock_updated = _make_policy(updated_raw)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[mock_policy], [mock_updated]])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[mock_policy, mock_updated])
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
@@ -867,7 +1011,7 @@ class TestUpdateFirewallPolicyV2Fields:
         from unifi_network_mcp.tools.firewall import update_firewall_policy
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[])
+            mock_fm.get_firewall_policy_by_id = AsyncMock()
             mock_fm.update_firewall_policy = AsyncMock(return_value=True)
 
             result = await update_firewall_policy(
@@ -879,7 +1023,7 @@ class TestUpdateFirewallPolicyV2Fields:
         assert result["success"] is False
         assert "index" in result["error"]
         assert "unifi_reorder_firewall_policies" in result["error"]
-        mock_fm.get_firewall_policies.assert_not_awaited()
+        mock_fm.get_firewall_policy_by_id.assert_not_awaited()
         mock_fm.update_firewall_policy.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -951,7 +1095,7 @@ class TestUpdateFirewallPolicyV2Fields:
         mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.get_firewall_policy_by_id = AsyncMock(return_value=mock_policy)
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
 
