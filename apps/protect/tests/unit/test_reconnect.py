@@ -120,6 +120,9 @@ async def test_down_at_start_then_up_the_next_tool_call_starts_the_listener(scra
         "_clock": lambda: now[0],
         "_last_connect_attempt_at": None,
         "_last_failure_class": None,
+        # A configured server: without credentials the manager fails before building a client.
+        "username": "test-user",
+        "password": "test-pass",
     }.items():
         monkeypatch.setattr(cm, attr, value)
     monkeypatch.setattr(main.event_manager, "_ws_unsub", None)
