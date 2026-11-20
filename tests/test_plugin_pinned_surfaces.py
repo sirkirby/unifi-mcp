@@ -203,14 +203,16 @@ def sitemanager_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_sitemanager_pinned_surface_has_nine_domain_tools_and_five_meta_tools(sitemanager_repo: Path) -> None:
+def test_sitemanager_pinned_surface_has_nine_domain_tools_and_six_meta_tools(sitemanager_repo: Path) -> None:
     tag, pinned = refs.pinned_manifest(sitemanager_repo, "sitemanager")
     assert tag == SITEMANAGER_TAG
     domain = set(pinned["module_map"])
     names = {tool["name"] for tool in pinned["tools"]}
     assert len(domain) == 9
-    assert names - domain == {f"sitemanager_{name}" for name in refs.META_TOOLS}
-    assert len(names) == 14
+    # batch_cancel is listed by the manifest of every release that serves it;
+    # META_TOOLS names only what every release serves.
+    assert names - domain == {f"sitemanager_{name}" for name in refs.META_TOOLS} | {"sitemanager_batch_cancel"}
+    assert len(names) == 15
     assert "sitemanager_get_support_bundle" not in names
     assert "sitemanager_fixture_future" not in names
     for tool in pinned["tools"]:
@@ -231,7 +233,7 @@ def test_sitemanager_reference_generator_handles_multiword_title(sitemanager_rep
     assert generator.run(sitemanager_repo, check_mode=True) == 1
     assert generator.run(sitemanager_repo, check_mode=False) == 0
     text = (sitemanager_repo / reference).read_text()
-    assert "# Site Manager Server Tool Reference (9 read-only domain tools, plus 5 meta-tools)" in text
+    assert "# Site Manager Server Tool Reference (9 read-only domain tools, plus 6 meta-tools)" in text
     assert "sitemanager_fixture_future" not in text
     assert generator.run(sitemanager_repo, check_mode=True) == 0
 

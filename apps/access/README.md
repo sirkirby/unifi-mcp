@@ -185,7 +185,7 @@ No additional configuration is required — if both plugins are active, the skil
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Access-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 37 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 38 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, WebSocket buffer, polling
 - [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, dual auth debugging, missing tools
 

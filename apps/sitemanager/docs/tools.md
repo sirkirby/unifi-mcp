@@ -431,6 +431,7 @@ An unknown id returns `{"success": false, "error": "Failed to get SD-WAN configu
 | `sitemanager_execute` | every mode | Run one tool by name |
 | `sitemanager_batch` | every mode | Run several tools in the background |
 | `sitemanager_batch_status` | every mode | Check background jobs by `jobId` or `jobIds` |
+| `sitemanager_batch_cancel` | every mode | Cancel background jobs that are still queued |
 | `sitemanager_load_tools` | lazy mode | Register tools for direct calling |
 
 In the default lazy mode all nine tools are also listed directly, so most clients never need the meta-tools. Call a tool by name when you can: `sitemanager_execute` and `sitemanager_batch` are not marked read-only, so a client may ask for approval before them or refuse them. See [permissions.md](permissions.md#meta-tools-and-read-only-clients).

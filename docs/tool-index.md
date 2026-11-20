@@ -30,10 +30,10 @@ Each app exposes the following lazy-loading meta-tools:
 
 | App | Prefix | Meta-tools |
 |-----|--------|------------|
-| Network | `unifi_` | `unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_batch_status`, `unifi_load_tools` in lazy mode |
-| Protect | `protect_` | `protect_tool_index`, `protect_execute`, `protect_batch`, `protect_batch_status`, `protect_load_tools` in lazy mode |
-| Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_load_tools` in lazy mode |
-| Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_load_tools` in lazy mode |
+| Network | `unifi_` | `unifi_tool_index`, `unifi_execute`, `unifi_batch`, `unifi_batch_status`, `unifi_batch_cancel`, `unifi_load_tools` in lazy mode |
+| Protect | `protect_` | `protect_tool_index`, `protect_execute`, `protect_batch`, `protect_batch_status`, `protect_batch_cancel`, `protect_load_tools` in lazy mode |
+| Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_batch_cancel`, `access_load_tools` in lazy mode |
+| Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_batch_cancel`, `sitemanager_load_tools` in lazy mode |
 
 These tools are not replacements for `tools/list`. They are UniFi-specific
 extensions for clients and models that need a compact, filterable catalog or
@@ -97,8 +97,9 @@ Example:
 }
 ```
 
-`*_batch` and `*_batch_status` provide the same indirect execution path
-for multiple parallel operations.
+`*_batch`, `*_batch_status` and `*_batch_cancel` provide the same indirect execution path
+for several operations. Writes run one at a time in submission order; reads run
+concurrently, up to a cap. `*_batch_cancel` withdraws jobs that are still queued.
 
 ### Load Tools
 

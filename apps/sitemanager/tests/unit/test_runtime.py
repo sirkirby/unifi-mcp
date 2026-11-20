@@ -51,7 +51,7 @@ def test_timeout_falls_back_to_the_default(monkeypatch, configured, expected):
 def test_manifest_lists_only_tools_the_server_serves():
     names = {tool["name"] for tool in MANIFEST["tools"]}
 
-    assert MANIFEST["count"] == len(names) == 14
+    assert MANIFEST["count"] == len(names) == 15
     assert "sitemanager_get_support_bundle" not in names
     assert set(TOOL_MODULE_MAP) == set(LAZY_DIRECT_TOOLS) == {name for name in names if name in TOOL_MODULE_MAP}
     assert len(TOOL_MODULE_MAP) == 9

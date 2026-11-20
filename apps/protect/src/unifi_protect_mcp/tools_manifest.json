@@ -1,5 +1,5 @@
 {
-  "count": 67,
+  "count": 68,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -1383,7 +1383,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Execute multiple UniFi Protect tools in parallel through the indirect execution wrapper. Returns job IDs; use protect_batch_status to check progress.",
+      "description": "Run several UniFi Protect tools as background jobs through the indirect execution wrapper. Writes execute one at a time in submission order; reads run concurrently, up to a cap. Queued jobs can be cancelled. Arguments are fixed at submission, and a batch does not stop on failure. Returns job IDs; use protect_batch_status to check progress and protect_batch_cancel to cancel queued jobs.",
       "name": "protect_batch",
       "schema": {
         "input": {
@@ -1452,10 +1452,103 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Cancel queued UniFi Protect batch jobs. Jobs already running or finished are reported, not cancelled.",
+      "name": "protect_batch_cancel",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to cancel",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to cancel at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "cancelled": {
+              "description": "True when the job was withdrawn before it ran",
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Outcome per job (when using jobIds parameter)",
+              "items": {
+                "properties": {
+                  "cancelled": {
+                    "description": "True when the job was withdrawn before it ran",
+                    "type": "boolean"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Why the job was not cancelled",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Status after the call",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "done",
+                      "error",
+                      "cancelled",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "description": "Why the job was not cancelled",
+              "type": "string"
+            },
+            "status": {
+              "description": "Status after the call",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi Protect Batch Cancel"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Check status of UniFi Protect batch operations. Returns status, result (if done), or error (if failed).",
+      "description": "Check status of UniFi Protect batch operations. Returns status (with the queue position while queued), result (if done), or error (if failed).",
       "name": "protect_batch_status",
       "schema": {
         "input": {
@@ -1484,15 +1577,24 @@
               "description": "Status of multiple jobs (when using jobIds parameter)",
               "type": "array"
             },
+            "position": {
+              "description": "While queued: write operations ahead of this job (1 = next; 0 = starting). Null while it waits for an earlier job in its batch.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "result": {
               "description": "Job result (present when status is 'done')"
             },
             "status": {
-              "description": "Current job status",
+              "description": "Current job status. 'queued' waits for an earlier job or its write turn; 'cancelled' never ran.",
               "enum": [
+                "queued",
                 "running",
                 "done",
                 "error",
+                "cancelled",
                 "unknown"
               ],
               "type": "string"

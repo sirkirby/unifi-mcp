@@ -202,6 +202,7 @@ def validate_meta_tool_surface(spec: ServerSpec, tools: list[Any]) -> None:
         f"{spec.prefix}_execute",
         f"{spec.prefix}_batch",
         f"{spec.prefix}_batch_status",
+        f"{spec.prefix}_batch_cancel",
     }
     missing = sorted(required_meta_tools - set(by_name))
     if missing:
@@ -306,6 +307,7 @@ def validate_index_catalog(spec: ServerSpec, payload: dict[str, Any], *, registr
             f"{spec.prefix}_execute",
             f"{spec.prefix}_batch",
             f"{spec.prefix}_batch_status",
+            f"{spec.prefix}_batch_cancel",
         }
         missing = sorted(required_meta_tools - set(by_name))
         if missing:

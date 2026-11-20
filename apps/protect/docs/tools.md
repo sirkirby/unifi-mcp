@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 67 tools (including 6 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 68 tools (including 7 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -10,8 +10,9 @@ These are always registered regardless of mode:
 
 - `protect_tool_index` -- Discover tools (names+descriptions by default; use `category`/`search`/`include_schemas` to filter)
 - `protect_execute` -- Execute a tool by name (for lazy/meta_only modes)
-- `protect_batch` -- Execute multiple tools in parallel
+- `protect_batch` -- Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap
 - `protect_batch_status` -- Check batch job status
+- `protect_batch_cancel` -- Cancel batch jobs that are still queued
 
 In lazy mode, an additional meta-tool is available:
 

@@ -24,6 +24,7 @@ META_TOOLS = {
     "unifi_execute",
     "unifi_batch",
     "unifi_batch_status",
+    "unifi_batch_cancel",
     "unifi_load_tools",
     "unifi_get_support_bundle",
 }
