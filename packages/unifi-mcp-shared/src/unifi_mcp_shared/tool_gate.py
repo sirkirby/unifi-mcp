@@ -19,11 +19,21 @@ calls made by a batch job wait as long as the queue keeps moving. A call that
 cannot get its turn returns the tool error contract with the busy reason,
 having sent nothing to the controller.
 
+Every domain tool signals its admission to a batch job runner, gate or not: a
+server that wires no gate provider gets an admission-only wrapper, so its batch
+jobs, which start one after another once the job before is admitted, still run
+side by side. A read job waiting for a read slot reports ``running`` and cannot
+be cancelled; only a write waiting for its turn shows ``queued``.
+
 Settings come from the environment, server level first, then shared:
 
     UNIFI_<SERVER>_WRITE_HOLD_SECONDS  / UNIFI_WRITE_HOLD_SECONDS   (default 120)
     UNIFI_<SERVER>_CALL_WAIT_SECONDS   / UNIFI_CALL_WAIT_SECONDS    (default 25)
     UNIFI_<SERVER>_READ_CONCURRENCY    / UNIFI_READ_CONCURRENCY     (default 8)
+
+A value that does not parse or is out of bounds refuses startup (exit code 7),
+unlike the preview-token TTL, which is clamped: a lock budget set wrong is a
+misconfiguration to fix, not a value to guess at.
 
 The guarantee is per server process.
 """
@@ -90,7 +100,8 @@ def _count(key: str, env_prefix: str, default: int, bounds: tuple[int, int], log
         return default
     expected = f"a whole number from {bounds[0]} to {bounds[1]}"
     text = raw.strip()
-    if not text.isdigit():
+    # ASCII digits only: str.isdigit() also accepts "²", which int() refuses.
+    if not (text.isascii() and text.isdigit()):
         _refuse(logger, _source(key, env_prefix), raw, expected)
     value = int(text)
     if not bounds[0] <= value <= bounds[1]:
@@ -107,6 +118,7 @@ def gate_settings_from_env(env_prefix: str, *, logger: logging.Logger) -> GateSe
     does not parse or is out of bounds refuses startup with a message naming
     the variable.
     """
+    env_prefix = env_prefix.upper()
     defaults = GateSettings()
     settings = GateSettings(
         hold_budget_seconds=_seconds(HOLD_KEY, env_prefix, defaults.hold_budget_seconds, HOLD_BOUNDS, logger),
@@ -201,9 +213,24 @@ def gate_tool_call(
         except ControllerBusyError as exc:
             if entered:
                 raise
-            return {"success": False, "error": f"Failed to run {tool_name}: {exc}"}
+            refusal: dict[str, Any] = {"success": False, "error": f"Failed to run {tool_name}: {exc}"}
+            if mode == "write":
+                # Nothing was sent: the confirmed change certainly did not take effect.
+                refusal["mutation_applied"] = False
+            return refusal
 
     return gated_call
+
+
+def _no_gate() -> None:
+    return None
+
+
+def admission_tool_decorator(tool_decorator: Callable[..., Any], *, tool_name: str) -> Callable[..., Any]:
+    """A ``tool(...)`` decorator that only signals batch admission: for a server with no gate."""
+    return gating_tool_decorator(
+        tool_decorator, tool_name=tool_name, gate_provider=_no_gate, classify=lambda _kwargs: None
+    )
 
 
 def gating_tool_decorator(

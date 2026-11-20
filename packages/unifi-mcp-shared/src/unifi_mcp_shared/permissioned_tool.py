@@ -28,7 +28,12 @@ from unifi_mcp_shared.preview_token import (
     set_preview_token_mode,
     takes_preview_token,
 )
-from unifi_mcp_shared.tool_gate import GateProvider, gating_tool_decorator, make_call_classifier
+from unifi_mcp_shared.tool_gate import (
+    GateProvider,
+    admission_tool_decorator,
+    gating_tool_decorator,
+    make_call_classifier,
+)
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
 
 # Registration kwargs this package understands and FastMCP does not.
@@ -194,7 +199,7 @@ def create_permissioned_tool(
             while there is none, e.g. in setup mode). Every tool call then
             enters the gate as its outermost layer, as a write or a read (see
             ``unifi_mcp_shared.tool_gate``). Omitted, no tool is gated and
-            calls behave exactly as before.
+            calls behave as before; each still signals batch admission.
         connection_decorator: A ``tool(...)`` decorator transformer to apply
             inside the gate, such as an app's ``reconnecting_tool_decorator``
             (``lambda d: reconnecting_tool_decorator(d, connection_manager)``).
@@ -216,12 +221,18 @@ def create_permissioned_tool(
     set_preview_token_mode(preview_tokens is not None)
 
     def registrar(tool_name: str, classify: Callable[[dict[str, Any]], Any]) -> Callable:
-        """The ``tool(...)`` decorator one tool registers through: gate, then connection, then MCP."""
+        """The ``tool(...)`` decorator one tool registers through: gate, then connection, then MCP.
+
+        With no gate provider the tool still signals batch admission, or a
+        batch's chained jobs would each wait for the one before to finish.
+        """
         tool_decorator = original_tool_decorator
         if gate_provider is not None:
             tool_decorator = gating_tool_decorator(
                 tool_decorator, tool_name=tool_name, gate_provider=gate_provider, classify=classify
             )
+        else:
+            tool_decorator = admission_tool_decorator(tool_decorator, tool_name=tool_name)
         if connection_decorator is not None:
             tool_decorator = connection_decorator(tool_decorator)
         return tool_decorator

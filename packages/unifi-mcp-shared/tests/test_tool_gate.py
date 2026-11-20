@@ -74,8 +74,9 @@ class Harness:
         prefix: str = "unifi",
         connection_decorator=None,
         legacy_original=None,
+        server=None,
     ) -> None:
-        self.server = FastMCP(f"{prefix}-gate-test")
+        self.server = server or FastMCP(f"{prefix}-gate-test")
         # Meta tools register with the plain decorator, never permissioned_tool.
         self.plain_tool = self.server.tool
         self.gate = gate or OperationGate(GateSettings(), name="network")
@@ -84,7 +85,7 @@ class Harness:
         self.events: list[str] = []
         self.release = asyncio.Event()
         self.server.tool = create_permissioned_tool(
-            original_tool_decorator=legacy_original or self.server.tool,
+            original_tool_decorator=legacy_original(self.server.tool) if legacy_original else self.server.tool,
             policy_gate_checker=PolicyGateChecker(server_prefix="test"),
             server_prefix="TEST",
             register_tool_fn=Mock(),
@@ -708,3 +709,161 @@ def test_invalid_settings_refuse_startup_naming_the_variable(clean_gate_env, cap
             gate_settings_from_env("NETWORK", logger=LOGGER)
     assert refused.value.code == EXIT_GATE_SETTINGS_INVALID
     assert variable in caplog.text
+
+
+@pytest.mark.parametrize("value", ["²", "٣", "1²"])
+def test_non_ascii_digits_refuse_startup_instead_of_crashing(clean_gate_env, caplog, value):
+    clean_gate_env.setenv("UNIFI_NETWORK_READ_CONCURRENCY", value)
+    with pytest.raises(SystemExit) as refused:
+        gate_settings_from_env("NETWORK", logger=LOGGER)
+    assert refused.value.code == EXIT_GATE_SETTINGS_INVALID
+
+
+def test_a_lowercase_prefix_still_reads_the_server_level_variable(clean_gate_env):
+    clean_gate_env.setenv("UNIFI_READ_CONCURRENCY", "2")
+    clean_gate_env.setenv("UNIFI_NETWORK_READ_CONCURRENCY", "5")
+    assert gate_settings_from_env("network", logger=LOGGER).read_cap == 5
+
+
+async def test_a_busy_refusal_of_a_confirmed_write_says_nothing_was_applied():
+    clock = FakeClock()
+    gate = OperationGate(GateSettings(direct_call_wait_seconds=1, read_cap=1), name="network", clock=clock)
+    harness = Harness(gate=gate)
+    holder = await harness.hold_write()
+    write = asyncio.create_task(harness.server.call_tool("unifi_update_thing", {"name": "a", "confirm": True}))
+    await settle()
+    await clock.advance(1)
+    refused = await write
+    assert _payload(refused)["mutation_applied"] is False
+    assert refused.structured_content["mutation_applied"] is False
+    harness.release.set()
+    await holder
+
+    # A read refused as busy carries no mutation outcome.
+    slot_free = asyncio.Event()
+
+    async def fill_the_read_slot() -> None:
+        async with gate.read():
+            await slot_free.wait()
+
+    filler = asyncio.create_task(fill_the_read_slot())
+    await settle()
+    read = asyncio.create_task(harness.server.call_tool("unifi_list_things", {}))
+    await settle()
+    await clock.advance(1)
+    read_refusal = _payload(await read)
+    assert read_refusal["success"] is False and "mutation_applied" not in read_refusal
+    slot_free.set()
+    await filler
+
+
+# ---------------------------------------------------------------------------
+# Admission without a gate, and operations that never reach a tool wrapper
+# ---------------------------------------------------------------------------
+
+
+def _main_style_reconnect(order: list[str]):
+    """The connection wait as main's apps apply it: pre-wrapped around the raw decorator."""
+
+    def reconnecting(tool_decorator):
+        def tool(*d_args, **d_kwargs):
+            register = tool_decorator(*d_args, **d_kwargs)
+
+            def decorator(func):
+                @wraps(func)
+                async def connected(*args, **kwargs):
+                    order.append("connect")
+                    return await func(*args, **kwargs)
+
+                register(connected)
+                return func
+
+            return decorator
+
+        return tool
+
+    return reconnecting
+
+
+async def test_a_batch_on_an_app_without_a_gate_provider_still_runs_side_by_side():
+    order: list[str] = []
+    # Built exactly as main's apps build it today: no gate provider, no connection_decorator.
+    harness = Harness(provider=False, legacy_original=_main_style_reconnect(order))
+    harness.register_meta()
+    slow = asyncio.Event()
+
+    @harness.server.tool(name="unifi_slow_read", annotations={"readOnlyHint": True})
+    async def slow_read() -> dict:
+        await slow.wait()
+        return {"success": True, "data": "slow"}
+
+    operations = [
+        {"tool": "unifi_slow_read"},
+        {"tool": "unifi_get_status"},
+        {"tool": "unifi_create_thing", "arguments": {"name": "w"}},
+        {"tool": "unifi_list_things"},
+    ]
+    payload = _payload(await harness.server.call_tool("unifi_batch", {"operations": operations}))
+    job_ids = [job["jobId"] for job in payload["jobs"]]
+    await settle()
+
+    statuses = [(await harness.store.status(job_id))["status"] for job_id in job_ids]
+    assert statuses == ["running", "done", "done", "done"]
+    assert order == ["connect"] * 4
+    slow.set()
+    await settle()
+    assert (await harness.store.status(job_ids[0]))["status"] == "done"
+
+
+@pytest.mark.parametrize("provider", [True, False])
+async def test_operations_that_fail_before_any_tool_wrapper_do_not_stall_the_batch(tmp_path, monkeypatch, provider):
+    from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
+
+    monkeypatch.setenv("UNIFI_POLICY_TEST_UPDATE", "false")
+    manifest = tmp_path / "tools_manifest.json"
+    manifest.write_text(
+        json.dumps({"tools": [{"name": "unifi_create_thing", "schema": {"input": {"properties": {"name": {}}}}}]})
+    )
+    server = StrictKwargFastMCP("strict-gate-test", tools_manifest_path=manifest)
+    harness = Harness(provider=provider, server=server)
+    harness.register_meta()
+
+    operations = [
+        {"tool": "unifi_no_such_tool"},  # unknown tool
+        {"tool": "unifi_create_thing", "arguments": {"name": "x", "typo": 1}},  # strict-dispatch rejection
+        {"tool": "unifi_update_thing", "arguments": {"name": "denied", "confirm": True}},  # policy denial
+        {"tool": "unifi_execute", "arguments": {"tool": "unifi_get_status", "arguments": {}}},  # execute
+        {"tool": "unifi_batch_status", "arguments": {"jobId": "missing"}},  # a meta tool
+        {"tool": "unifi_create_thing", "arguments": {"name": "last"}},
+    ]
+    payload = _payload(await harness.server.call_tool("unifi_batch", {"operations": operations}))
+    job_ids = [job["jobId"] for job in payload["jobs"]]
+    await settle(80)
+
+    statuses = [(await harness.store.status(job_id))["status"] for job_id in job_ids]
+    assert statuses == ["error", "error", "done", "done", "done", "done"]
+    assert "create:last:" + ("write" if provider else "read") in harness.events
+
+
+async def test_execute_in_a_batch_is_admitted_by_its_inner_tool():
+    harness = Harness()
+    harness.register_meta()
+    holder = await harness.hold_write()
+    operations = [
+        {
+            "tool": "unifi_execute",
+            "arguments": {"tool": "unifi_update_thing", "arguments": {"name": "a", "confirm": True}},
+        },
+        {"tool": "unifi_create_thing", "arguments": {"name": "b"}},
+    ]
+    job_ids = [
+        job["jobId"]
+        for job in _payload(await harness.server.call_tool("unifi_batch", {"operations": operations}))["jobs"]
+    ]
+    await settle()
+    # The execute job joined the queue through its inner write, so the next job started and queued behind it.
+    assert [(await harness.store.status(job_id))["position"] for job_id in job_ids] == [1, 2]
+    harness.release.set()
+    await holder
+    await settle()
+    assert [event.split(":")[1] for event in harness.events] == ["a", "b"]

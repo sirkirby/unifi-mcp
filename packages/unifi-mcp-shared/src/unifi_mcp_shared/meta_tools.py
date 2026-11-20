@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Callable, List, Literal
 from mcp.server.mcpserver import Context
 from mcp.types import ToolAnnotations
 from pydantic import SkipValidation
+from unifi_core.operation_gate import signal_admitted
 
 from unifi_mcp_shared.response_serialization import normalize_call_tool_result
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
@@ -116,6 +117,8 @@ def register_meta_tools(
 
     Meta tools register with the plain ``tool_decorator``, never through
     ``permissioned_tool``, so they never enter a controller operation gate.
+    Run as a batch job, the ones that reach no domain tool signal admission
+    at once; ``*_execute`` is admitted by the domain tool it runs.
 
     Args:
         server: FastMCP server instance (for call_tool access)
@@ -192,6 +195,8 @@ def register_meta_tools(
             probe: SkipValidation[Literal["summary", "connectivity", "resource_shape"]] = "summary",
             resource: SkipValidation[str | None] = None,
         ) -> dict:
+            # Never queues at a controller gate: a batch may start its next job.
+            signal_admitted()
             # Preserve the advertised schema, but validate only inside the service's
             # privacy boundary: Pydantic errors otherwise echo rejected input values.
             try:
@@ -277,6 +282,7 @@ def register_meta_tools(
         include_schemas: bool = False,
         name: str | None = None,
     ) -> dict:
+        signal_admitted()
         args = {}
         if name is not None:
             args["name"] = name
@@ -559,6 +565,7 @@ def register_meta_tools(
     )
     async def batch_status_handler(jobId: str = None, jobIds: List[str] = None) -> dict:
         """Check status of one or more jobs."""
+        signal_admitted()
         # Handle single job ID
         if jobId and not jobIds:
             try:
@@ -644,6 +651,7 @@ def register_meta_tools(
     )
     async def batch_cancel_handler(jobId: str = None, jobIds: List[str] = None) -> dict:
         """Cancel one or more queued jobs."""
+        signal_admitted()
 
         async def _cancel(job_id: str) -> dict:
             try:
