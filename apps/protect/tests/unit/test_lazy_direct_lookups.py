@@ -22,6 +22,7 @@ META_TOOLS = {
     "protect_execute",
     "protect_batch",
     "protect_batch_status",
+    "protect_batch_cancel",
     "protect_load_tools",
     "protect_get_support_bundle",
 }

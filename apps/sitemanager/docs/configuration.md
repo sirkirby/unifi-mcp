@@ -80,7 +80,7 @@ There are no console settings (host, port, username, password, TLS verification 
 | `compat` | Always the full JSON in `content`. Use it for a client that reads results only from `content`, whatever revision it advertises. |
 | `compact` | Always the short text plus the full result in `structuredContent`. |
 
-The meta-tools (`sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status` and `sitemanager_load_tools`) return their result in `content` in every mode. For a tool run through `sitemanager_execute` or `sitemanager_batch_status`, `content` holds one JSON payload.
+The meta-tools (`sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_batch_cancel` and `sitemanager_load_tools`) return their result in `content` in every mode. For a tool run through `sitemanager_execute` or `sitemanager_batch_status`, `content` holds one JSON payload.
 
 ## HTTP transport
 

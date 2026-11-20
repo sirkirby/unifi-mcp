@@ -11,7 +11,8 @@ dependencies = [
     "unifi-mcp-shared>=0.6.41,<0.7",
     # Key scrubbing in errors and the validated read inputs require Core 0.4.90.
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
-    "unifi-core>=0.4.99,<0.5",
+    # The shared operation gate it runs on requires Core 0.4.103.
+    "unifi-core>=0.4.103,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

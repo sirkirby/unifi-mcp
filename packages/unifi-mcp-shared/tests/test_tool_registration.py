@@ -224,7 +224,14 @@ _FIXTURE_TOOLS = {
     "unifi_get_stray": "stray",
     "unifi_sneaky": "stray",
 }
-_LAZY_META_TOOLS = {"unifi_tool_index", "unifi_execute", "unifi_batch", "unifi_batch_status", "unifi_load_tools"}
+_LAZY_META_TOOLS = {
+    "unifi_tool_index",
+    "unifi_execute",
+    "unifi_batch",
+    "unifi_batch_status",
+    "unifi_batch_cancel",
+    "unifi_load_tools",
+}
 
 
 @pytest.fixture

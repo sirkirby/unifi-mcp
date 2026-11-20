@@ -67,6 +67,7 @@ def _meta_tools(spec, **overrides):
         SimpleNamespace(name=f"{spec.prefix}_execute"),
         SimpleNamespace(name=f"{spec.prefix}_batch"),
         SimpleNamespace(name=f"{spec.prefix}_batch_status"),
+        SimpleNamespace(name=f"{spec.prefix}_batch_cancel"),
     ]
 
 

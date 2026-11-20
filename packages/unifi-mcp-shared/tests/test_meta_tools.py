@@ -157,7 +157,9 @@ async def test_legacy_positional_meta_registration_does_not_advertise_support(pr
             "legacy domain",
         )
     names = {tool.name for tool in await server.list_tools()}
-    assert names == {f"{prefix}_{suffix}" for suffix in ("tool_index", "execute", "batch", "batch_status")}
+    assert names == {
+        f"{prefix}_{suffix}" for suffix in ("tool_index", "execute", "batch", "batch_status", "batch_cancel")
+    }
     assert {call.kwargs["name"] for call in registered.call_args_list} == names
     assert "get_support_bundle" not in caplog.text
 

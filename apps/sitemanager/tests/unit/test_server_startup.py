@@ -26,6 +26,7 @@ META_TOOLS = {
     "sitemanager_execute",
     "sitemanager_batch",
     "sitemanager_batch_status",
+    "sitemanager_batch_cancel",
 }
 SETUP_TOOLS = {"sitemanager_setup_status"}
 

@@ -61,7 +61,7 @@ Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`.
 
 ### apps/network
 
-The UniFi Network MCP server. 216 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
+The UniFi Network MCP server. 217 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
 
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -76,7 +76,7 @@ The UniFi Network MCP server. 216 tools covering firewall, clients, devices, net
 
 ### apps/protect
 
-The UniFi Protect MCP server. 67 tools across 9 categories covering cameras (including crossing line and smart-detect zone names), events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
+The UniFi Protect MCP server. 68 tools across 9 categories covering cameras (including crossing line and smart-detect zone names), events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
 
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -92,7 +92,7 @@ The UniFi Protect MCP server. 67 tools across 9 categories covering cameras (inc
 
 ### apps/access
 
-The UniFi Access MCP server. 37 tools across 7 categories covering doors, policies, credentials, visitors, events, devices, and system. Uses a **dual-path authentication** model: API key auth on the dedicated Access port (12445) via `py-unifi-access`, and a local proxy session on port 443 for mutations.
+The UniFi Access MCP server. 38 tools across 7 categories covering doors, policies, credentials, visitors, events, devices, and system. Uses a **dual-path authentication** model: API key auth on the dedicated Access port (12445) via `py-unifi-access`, and a local proxy session on port 443 for mutations.
 
 - `src/unifi_access_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch

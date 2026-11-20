@@ -21,7 +21,8 @@ dependencies = [
     "unifi-mcp-shared>=0.6.18,<0.7",
     # The relay imports no unifi_core module; unifi-mcp-shared does. Declare the
     # floor so relay installs get controller credential redaction (Core 0.4.51).
-    "unifi-core>=0.4.51,<0.5",
+    # The shared operation gate it runs on requires Core 0.4.103.
+    "unifi-core>=0.4.103,<0.5",
 ]
 
 [project.scripts]

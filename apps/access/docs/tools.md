@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Access MCP server exposes 37 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Access MCP server exposes 38 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `access_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_access_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -10,8 +10,9 @@ These are always registered regardless of mode:
 
 - `access_tool_index` -- Discover tools (names+descriptions by default; use `category`/`search`/`include_schemas` to filter)
 - `access_execute` -- Execute a tool by name (for lazy/meta_only modes)
-- `access_batch` -- Execute multiple tools in parallel
+- `access_batch` -- Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap
 - `access_batch_status` -- Check batch job status
+- `access_batch_cancel` -- Cancel batch jobs that are still queued
 
 In lazy mode, an additional meta-tool is available:
 

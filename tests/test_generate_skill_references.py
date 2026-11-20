@@ -131,8 +131,8 @@ def test_sitemanager_reference_uses_multiword_title_and_domain_count(cloud_repo:
     assert path.read_text().startswith("# Site Manager Server Tool Reference (14 tools)")
     assert generator.run(cloud_repo, check_mode=False) == 0
     text = path.read_text()
-    assert text.startswith("# Site Manager Server Tool Reference (9 read-only domain tools, plus 5 meta-tools)\n")
-    assert skill.read_text() == "It provides 9 read-only domain tools, plus 5 meta-tools.\n"
+    assert text.startswith("# Site Manager Server Tool Reference (9 read-only domain tools, plus 6 meta-tools)\n")
+    assert skill.read_text() == "It provides 9 read-only domain tools, plus 6 meta-tools.\n"
     manifest = json.loads((ROOT / sys.modules["plugin_tool_refs"].manifest_path("sitemanager")).read_text())
     expected_names = set(manifest["module_map"])
     assert len(expected_names) == 9

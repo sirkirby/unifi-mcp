@@ -20,7 +20,7 @@ The meta-tools carry conservative annotations, because a dispatcher's hint has t
 | Tool | `readOnlyHint` |
 |---|---|
 | `sitemanager_tool_index`, `sitemanager_batch_status` | `true` |
-| `sitemanager_execute`, `sitemanager_batch`, `sitemanager_load_tools` | `false` |
+| `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_cancel`, `sitemanager_load_tools` | `false` |
 
 A client that asks for approval before tools that are not read-only will ask before `sitemanager_execute` and `sitemanager_batch`, even though everything they can run here only reads. A client that allows only read-only tools cannot call them at all. That is why the default lazy mode lists all nine tools directly: call them by name and no approval for a dispatcher is needed. In `meta_only` mode the nine tools are reachable only through `sitemanager_execute`, so read-only-only clients reach nothing.
 
