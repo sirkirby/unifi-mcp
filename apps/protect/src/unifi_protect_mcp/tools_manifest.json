@@ -3112,6 +3112,10 @@
             },
             "detail": {
               "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "enum": [
+                "view",
+                "full"
+              ],
               "type": "string"
             },
             "end": {
@@ -5764,6 +5768,11 @@
             },
             "kind": {
               "description": "Kind of area: line (crossing line), zone (smart-detect zone) or loiter_zone.",
+              "enum": [
+                "line",
+                "zone",
+                "loiter_zone"
+              ],
               "type": "string"
             },
             "new_name": {

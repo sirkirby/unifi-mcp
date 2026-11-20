@@ -312,6 +312,11 @@
             },
             "duration": {
               "description": "Window ending now: 24h for 5m metrics; 7d or 30d for 1h metrics. Omit for the shortest.",
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
               "type": "string"
             },
             "end_timestamp": {
@@ -320,6 +325,10 @@
             },
             "metric_type": {
               "description": "Interval of each period: 5m (kept for 24 hours) or 1h (kept for 30 days).",
+              "enum": [
+                "5m",
+                "1h"
+              ],
               "type": "string"
             },
             "period_limit": {
@@ -1136,6 +1145,10 @@
           "properties": {
             "metric_type": {
               "description": "Interval of each period: 5m (kept for 24 hours) or 1h (kept for 30 days).",
+              "enum": [
+                "5m",
+                "1h"
+              ],
               "type": "string"
             },
             "period_limit": {
