@@ -6,7 +6,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-network-mcp==0.49.0"
+        "unifi-network-mcp==0.49.1"
       ],
       "env": {
         "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/network.env"
