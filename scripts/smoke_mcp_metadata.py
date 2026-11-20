@@ -84,10 +84,19 @@ SERVER_SPECS = {
         representative_tool="sitemanager_list_hosts",
         representative_direct=True,
     ),
+    "drive": ServerSpec(
+        package="unifi-drive-mcp",
+        command="unifi-drive-mcp",
+        expected_name="unifi-drive-mcp",
+        prefix="drive",
+        index_tool="drive_tool_index",
+        expected_index_title="UniFi Drive Tool Index",
+        representative_tool="drive_list_disks",
+    ),
 }
 
 EXPECTED_ICON_SIZES = [["48x48"], ["96x96"], ["192x192"]]
-OFFLINE_SERVER_NAMES = ("network", "protect", "access", "sitemanager")
+OFFLINE_SERVER_NAMES = ("network", "protect", "access", "sitemanager", "drive")
 
 
 def _field(obj: Any, name: str) -> Any:
@@ -349,6 +358,9 @@ def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[
                 "UNIFI_ACCESS_HOST": "127.0.0.1",
                 "UNIFI_ACCESS_USERNAME": "metadata-smoke",
                 "UNIFI_ACCESS_PASSWORD": "metadata-smoke",
+                "UNIFI_DRIVE_HOST": "127.0.0.1",
+                "UNIFI_DRIVE_USERNAME": "metadata-smoke",
+                "UNIFI_DRIVE_PASSWORD": "metadata-smoke",
             }
         )
     # Site Manager serves setup mode without its key. The smoke lists tools and

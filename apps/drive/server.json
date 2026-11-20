@@ -1,0 +1,57 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sirkirby/unifi-drive-mcp",
+  "title": "UniFi Drive MCP",
+  "description": "Read UniFi NAS storage, disk health and shared drives; manage SMB/NFS file services via MCP.",
+  "version": "0.0.0",
+  "repository": {
+    "url": "https://github.com/sirkirby/unifi-mcp",
+    "source": "github",
+    "subfolder": "apps/drive"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "unifi-drive-mcp",
+      "version": "0.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "UNIFI_DRIVE_HOST",
+          "description": "UniFi NAS (UNAS) IP/hostname",
+          "isRequired": true
+        },
+        {
+          "name": "UNIFI_DRIVE_USERNAME",
+          "description": "Local UniFi OS username on the NAS",
+          "isRequired": true
+        },
+        {
+          "name": "UNIFI_DRIVE_PASSWORD",
+          "description": "Local UniFi OS password on the NAS",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "UNIFI_DRIVE_PORT",
+          "description": "NAS HTTPS port",
+          "isRequired": false,
+          "default": "443"
+        },
+        {
+          "name": "UNIFI_DRIVE_VERIFY_SSL",
+          "description": "SSL certificate verification",
+          "isRequired": false,
+          "default": "false"
+        },
+        {
+          "name": "UNIFI_DRIVE_SSL_FINGERPRINT",
+          "description": "SHA-256 fingerprint pinning the NAS certificate (overrides UNIFI_DRIVE_VERIFY_SSL)",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
