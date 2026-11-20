@@ -15,9 +15,31 @@ logger = logging.getLogger("unifi-mcp-relay")
 
 _MAX_RELAY_BATCH_JOBS = 1_000
 _RELAY_BATCH_STATUS_ERROR = "Batch status is available only for jobs started through this relay connection."
+_RELAY_BATCH_CANCEL_ERROR = "Batch cancel is available only for jobs started through this relay connection."
+# Job tools a caller may use only on jobs this relay started, and the error for each.
+_RELAY_JOB_TOOL_ERRORS = {"_batch_status": _RELAY_BATCH_STATUS_ERROR, "_batch_cancel": _RELAY_BATCH_CANCEL_ERROR}
 
 # Scope provenance to the backend URL as well as the product status tool.
 type RelayBatchJobs = dict[tuple[str, str], dict[str, None]]
+
+
+def _job_id_list(value: object) -> list[object] | None:
+    """The jobIds a server would act on, or None when the relay cannot tell.
+
+    The MCP server JSON-decodes a string sent for a list parameter, so a check
+    that skipped strings would forward IDs it never inspected.
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return None
+    return value if isinstance(value, list) else None
+
+
+def _is_relay_meta_tool(name: str) -> bool:
+    """Meta tools, including batch cancel on a shared package that predates it."""
+    return _is_meta_tool(name) or name.endswith("_batch_cancel")
 
 
 class ToolForwarder:
@@ -40,7 +62,7 @@ class ToolForwarder:
             if info.lazy_load_tool_name:
                 self._lazy_load_tool_by_url[info.url] = info.lazy_load_tool_name
                 self._lazy_advertised_tools_by_url[info.url] = {
-                    tool.name for tool in info.tools if not _is_meta_tool(tool.name)
+                    tool.name for tool in info.tools if not _is_relay_meta_tool(tool.name)
                 }
                 self._loaded_lazy_tools_by_url.setdefault(info.url, set())
             if info.url not in self._clients:
@@ -179,21 +201,27 @@ class ToolForwarder:
         rejection = relay_call_rejection(tool_name, arguments)
         if rejection is not None:
             return rejection
-        if not tool_name.endswith("_batch_status"):
+        suffix = next((suffix for suffix in _RELAY_JOB_TOOL_ERRORS if tool_name.endswith(suffix)), None)
+        if suffix is None:
             return None
 
         job_ids: list[object] = []
         if arguments.get("jobId") is not None:
             job_ids.append(arguments["jobId"])
-        if isinstance(arguments.get("jobIds"), list):
-            job_ids.extend(arguments["jobIds"])
+        if arguments.get("jobIds") is not None:
+            listed = _job_id_list(arguments["jobIds"])
+            if listed is None:
+                return _RELAY_JOB_TOOL_ERRORS[suffix]
+            job_ids.extend(listed)
         if not job_ids:
             return None
 
+        # Jobs are recorded under the product's status tool; cancel shares that scope.
+        status_name = f"{tool_name[: -len(suffix)]}_batch_status"
         url = self.get_server_url(tool_name)
-        known = self._relay_batch_jobs.get((url, tool_name), {}) if url is not None else {}
+        known = self._relay_batch_jobs.get((url, status_name), {}) if url is not None else {}
         if any(not isinstance(job_id, str) or job_id not in known for job_id in job_ids):
-            return _RELAY_BATCH_STATUS_ERROR
+            return _RELAY_JOB_TOOL_ERRORS[suffix]
         return None
 
     def _record_batch_jobs(self, tool_name: str, result: Any) -> None:

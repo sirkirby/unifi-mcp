@@ -102,6 +102,9 @@ def test_nested_meta_tool_composition_is_rejected_while_direct_meta_calls_remain
         ),
         ("unifi_execute", {"tool": "unifi_tool_index", "arguments": {"include_schemas": True}}),
         ("unifi_batch", {"operations": [{"tool": "unifi_batch_status", "arguments": {"jobId": "job"}}]}),
+        # A wrapped cancel would skip the relay's job scoping, whatever the shared package knows.
+        ("unifi_execute", {"tool": "unifi_batch_cancel", "arguments": {"jobId": "job"}}),
+        ("protect_batch", {"operations": [{"tool": "protect_batch_cancel", "arguments": {"jobIds": ["job"]}}]}),
     ]
 
     for tool_name, arguments in nested_calls:
