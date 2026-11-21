@@ -12,9 +12,13 @@ from typing import Any, Dict, Protocol
 
 from aiounifi.models.api import ApiRequestV2
 
+from unifi_core.exceptions import UniFiAuthError
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.traffic_flows import (
+    DPI_NAMES_API_KEY_REQUIRED,
+    DPI_NAMES_CATALOGUE_UNAVAILABLE,
     TrafficFlowQuery,
+    dpi_name_resolution_unavailable,
     enrich_traffic_flow_statistics_dpi_names,
     traffic_flow_from_controller,
     traffic_flow_statistics_from_controller,
@@ -165,16 +169,23 @@ class TrafficFlowManager:
             response = {}
 
         statistics = traffic_flow_statistics_from_controller(response)
-        if self._dpi_manager is not None and statistics.top_applications:
+        if self._dpi_manager is None:
+            statistics = dpi_name_resolution_unavailable(statistics, reason=DPI_NAMES_CATALOGUE_UNAVAILABLE)
+        elif statistics.top_applications:
             try:
                 dpi_catalog = await self._dpi_manager.get_full_dpi_catalog()
+            except UniFiAuthError as exc:
+                logger.info("Traffic-flow DPI names unresolved: %s", type(exc).__name__)
+                statistics = dpi_name_resolution_unavailable(statistics, reason=DPI_NAMES_API_KEY_REQUIRED)
+            except Exception as exc:
+                logger.warning("Failed to enrich traffic-flow DPI names: %s", type(exc).__name__)
+                statistics = dpi_name_resolution_unavailable(statistics, reason=DPI_NAMES_CATALOGUE_UNAVAILABLE)
+            else:
                 statistics = enrich_traffic_flow_statistics_dpi_names(
                     statistics,
                     applications=dpi_catalog.get("applications", []),
                     categories=dpi_catalog.get("categories", []),
                 )
-            except Exception as exc:
-                logger.warning("Failed to enrich traffic-flow DPI names: %s", exc)
 
         result = statistics.model_dump()
         self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)

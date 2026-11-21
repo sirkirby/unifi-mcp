@@ -255,6 +255,34 @@ class TrafficFlowTopPolicy(BaseModel):
     policy_type: Optional[str] = Field(default=None, description="Policy type", json_schema_extra={"mutable": False})
 
 
+class TrafficFlowDpiNameResolution(BaseModel):
+    """Why ``top_applications`` names are or are not resolved.
+
+    ``status`` is ``resolved`` (every entry named), ``partial`` (some named),
+    ``unresolved`` (catalogue read but no entry matched) or ``unavailable``
+    (catalogue not read). ``reason`` and ``remediation`` are fixed text set only
+    when names are missing; IDs and byte counts are never affected.
+    """
+
+    status: str = Field(
+        description="resolved, partial, unresolved or unavailable", json_schema_extra={"mutable": False}
+    )
+    resolved_count: int = Field(
+        default=0, description="Top applications with a resolved name", json_schema_extra={"mutable": False}
+    )
+    total_count: int = Field(
+        default=0, description="Top applications in the ranking", json_schema_extra={"mutable": False}
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Machine-readable cause when names are missing",
+        json_schema_extra={"mutable": False},
+    )
+    remediation: Optional[str] = Field(
+        default=None, description="What would let names resolve", json_schema_extra={"mutable": False}
+    )
+
+
 class TrafficFlowStatistics(BaseModel):
     """Aggregated Insights > Flows summary (v2 /traffic-flow-latest-statistics).
 
@@ -294,6 +322,11 @@ class TrafficFlowStatistics(BaseModel):
     top_blocked_policies: list[TrafficFlowTopPolicy] = Field(
         default_factory=list,
         description="Top blocking policies by blocked-flow count",
+        json_schema_extra={"mutable": False},
+    )
+    dpi_name_resolution: Optional[TrafficFlowDpiNameResolution] = Field(
+        default=None,
+        description="DPI name resolution outcome for top_applications (null when there are none)",
         json_schema_extra={"mutable": False},
     )
 
@@ -407,4 +440,46 @@ def enrich_traffic_flow_statistics_dpi_names(
                 }
             )
         )
-    return statistics.model_copy(update={"top_applications": top_applications})
+    resolved = sum(1 for application in top_applications if application.application_name is not None)
+    total = len(top_applications)
+    if resolved == total:
+        resolution = TrafficFlowDpiNameResolution(status="resolved", resolved_count=resolved, total_count=total)
+    else:
+        resolution = TrafficFlowDpiNameResolution(
+            status="partial" if resolved else "unresolved",
+            resolved_count=resolved,
+            total_count=total,
+            reason=DPI_NAMES_NOT_IN_CATALOGUE,
+            remediation=DPI_NAMES_NOT_IN_CATALOGUE_REMEDIATION,
+        )
+    return statistics.model_copy(update={"top_applications": top_applications, "dpi_name_resolution": resolution})
+
+
+def dpi_name_resolution_unavailable(statistics: TrafficFlowStatistics, *, reason: str) -> TrafficFlowStatistics:
+    """Mark ``top_applications`` names as unresolved because the catalogue could not be read."""
+    if not statistics.top_applications:
+        return statistics
+    remediation = (
+        DPI_NAMES_API_KEY_REMEDIATION if reason == DPI_NAMES_API_KEY_REQUIRED else DPI_NAMES_CATALOGUE_REMEDIATION
+    )
+    resolution = TrafficFlowDpiNameResolution(
+        status="unavailable",
+        resolved_count=0,
+        total_count=len(statistics.top_applications),
+        reason=reason,
+        remediation=remediation,
+    )
+    return statistics.model_copy(update={"dpi_name_resolution": resolution})
+
+
+DPI_NAMES_API_KEY_REQUIRED = "network_api_key_required"
+DPI_NAMES_CATALOGUE_UNAVAILABLE = "dpi_catalogue_unavailable"
+DPI_NAMES_NOT_IN_CATALOGUE = "not_in_dpi_catalogue"
+DPI_NAMES_API_KEY_REMEDIATION = (
+    "Configure a Network API key (UNIFI_NETWORK_API_KEY) so the DPI catalogue can be read; "
+    "application/category IDs and byte counts are complete without it."
+)
+DPI_NAMES_CATALOGUE_REMEDIATION = "The DPI catalogue could not be read; retry later. IDs and byte counts are complete."
+DPI_NAMES_NOT_IN_CATALOGUE_REMEDIATION = (
+    "The controller's public DPI catalogue does not list these applications; IDs and byte counts are complete."
+)
