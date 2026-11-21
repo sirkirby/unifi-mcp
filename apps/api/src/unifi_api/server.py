@@ -498,7 +498,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         """The controller's application answered 503 (restarting or busy): a retryable 503.
 
         The message names the route template and nothing else: the exception
-        text carries the controller's address and its response.
+        text quotes the controller request URL and path.
         """
         route = request.scope.get("route")
         target = getattr(route, "path", None) or "controller route"
