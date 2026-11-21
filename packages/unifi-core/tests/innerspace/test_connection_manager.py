@@ -1078,3 +1078,30 @@ async def test_internal_routes_near_the_write_routes_stay_refused(connected, con
         await connected.request("POST", path, operation=OP)
 
     assert len(console.requests) == sent_before
+
+
+async def test_reconnect_blocked_latches_on_a_refused_login_until_one_succeeds(manager, console):
+    """Like Network's: the API heals a cached connection with this flag once a probe proves the login works."""
+    clock = _Clock()
+    manager._clock = clock
+    assert manager.reconnect_blocked is False
+
+    console.reject_logins()
+    assert await manager.initialize() is False
+    assert manager.reconnect_blocked is True
+
+    # The cool-down running out does not clear it: only a login that succeeds does.
+    clock.now += 3600
+    assert manager.reconnect_blocked is True
+
+    console.reject_logins(False)
+    assert await manager.reconnect() is True
+    assert manager.reconnect_blocked is False
+
+
+async def test_a_console_that_is_down_does_not_latch_reconnect_blocked(manager, console):
+    console.reply("POST", LOGIN, status=503)
+
+    assert await manager.initialize() is False
+
+    assert manager.reconnect_blocked is False

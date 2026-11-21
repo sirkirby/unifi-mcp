@@ -462,6 +462,16 @@ class InnerSpaceConnectionManager:
             return True
         return self._clock() - self._last_attempt_at >= _RECONNECT_MIN_INTERVAL_SECONDS
 
+    @property
+    def reconnect_blocked(self) -> bool:
+        """Whether the console refused the last login and none has succeeded since.
+
+        It stays set when the cool-down runs out, so a caller that has proved the
+        login works again (the API's probe) can drop this cached manager instead of
+        waiting the cool-down out.
+        """
+        return self._reconnect_block_count > 0
+
     def _credentials_configured(self) -> bool:
         return self._origin is not None and bool(self._username and self._password)
 
