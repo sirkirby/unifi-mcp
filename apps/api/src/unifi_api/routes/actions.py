@@ -7,6 +7,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from unifi_core.operation_gate import ControllerBusyError, WriteRequestTimeout
 from unifi_core.redaction import collect_secret_values, redact_sensitive_fields, scrub_secret_values
 
 from unifi_api.auth.middleware import require_scope
@@ -269,6 +270,33 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             )
             await session.commit()
             raise HTTPException(status_code=403, detail=str(e))
+        except ControllerBusyError as e:
+            await write_audit(
+                session,
+                key_id_prefix=key_prefix,
+                controller=body.controller,
+                target=tool_name,
+                outcome="error",
+                error_kind="controller_busy",
+            )
+            await session.commit()
+            raise HTTPException(
+                status_code=503,
+                detail={"kind": "controller_busy", "reason": e.reason, "message": str(e)},
+                headers={"Retry-After": str(e.retry_after)},
+            )
+        except WriteRequestTimeout as e:
+            await write_audit(
+                session,
+                key_id_prefix=key_prefix,
+                controller=body.controller,
+                target=tool_name,
+                outcome="error",
+                error_kind="write_request_timeout",
+            )
+            await session.commit()
+            # Fixed text: the change may or may not have reached the controller.
+            return {"success": False, "error": f"Failed to execute action: {e}", "mutation_applied": None}
         except actions_svc.CapabilityMismatch:
             await write_audit(
                 session,

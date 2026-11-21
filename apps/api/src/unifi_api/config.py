@@ -46,12 +46,37 @@ class PolicyConfig:
     response: ResponsePolicyConfig = field(default_factory=ResponsePolicyConfig)
 
 
+# Bounds for the operation-gate settings, the same as the MCP servers apply.
+_GATE_BOUNDS = {
+    "write_hold_seconds": (10.0, 3_600.0),
+    "call_wait_seconds": (1.0, 3_600.0),
+    "read_concurrency": (1, 64),
+}
+
+
+@dataclass(frozen=True)
+class GateConfig:
+    """Controller operation-gate limits, per controller application.
+
+    Writes to one controller application run one at a time in request order;
+    reads share ``read_concurrency`` slots. ``write_hold_seconds`` is how long a
+    write may hold its turn before queued requests are refused as busy, and
+    ``call_wait_seconds`` how long a request waits for its turn. The guarantee
+    is per API server process.
+    """
+
+    write_hold_seconds: float = 120.0
+    call_wait_seconds: float = 25.0
+    read_concurrency: int = 8
+
+
 @dataclass(frozen=True)
 class ApiConfig:
     http: HttpConfig
     logging: LoggingConfig
     db: DbConfig
     policy: PolicyConfig = field(default_factory=PolicyConfig)
+    gate: GateConfig = field(default_factory=GateConfig)
 
     @staticmethod
     def read_db_key() -> str:
@@ -89,7 +114,39 @@ def load_config(yaml_path: Path) -> ApiConfig:
                 redact_sensitive_fields=should_redact_sensitive_fields("api", config=container),
             ),
         ),
+        gate=_gate_config(container.get("gate") or {}),
     )
+
+
+def _gate_config(section: dict) -> GateConfig:
+    """Validate the operation-gate section; a bad value refuses startup naming its variable.
+
+    Set through ``UNIFI_API_GATE_WRITE_HOLD_SECONDS``, ``UNIFI_API_GATE_CALL_WAIT_SECONDS``
+    and ``UNIFI_API_GATE_READ_CONCURRENCY`` (or the ``gate:`` section of the YAML).
+    """
+    defaults = GateConfig()
+    values: dict[str, float | int] = {}
+    for key, (low, high) in _GATE_BOUNDS.items():
+        raw = section.get(key)
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            values[key] = getattr(defaults, key)
+            continue
+        variable = f"UNIFI_API_GATE_{key.upper()}"
+        whole = isinstance(low, int)
+        try:
+            if isinstance(raw, bool):
+                raise ValueError
+            text = str(raw).strip()
+            if whole and not (text.isascii() and text.isdigit()):
+                raise ValueError
+            value = int(text) if whole else float(text)
+        except ValueError:
+            value = None
+        if value is None or not (value == value) or not low <= value <= high:
+            kind = "a whole number" if whole else "a number of seconds"
+            raise ValueError(f"{variable} (gate.{key}) must be {kind} from {low:g} to {high:g}, got {raw!r}")
+        values[key] = value
+    return GateConfig(**values)  # type: ignore[arg-type]
 
 
 def _extract_env_overrides() -> dict:

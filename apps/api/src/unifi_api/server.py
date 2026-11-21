@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
@@ -21,6 +21,7 @@ from starlette.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
+from unifi_core.operation_gate import ControllerBusyError, GateSettings
 
 from unifi_api._version import __version__ as _api_version
 from unifi_api.auth.cache import ArgonVerifyCache
@@ -242,12 +243,14 @@ from unifi_api.routes.streams import (
     protect_per_camera as protect_per_camera_routes,
 )
 from unifi_api.serializers._registry import discover_serializers
+from unifi_api.services.audit import write_audit
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
 from unifi_api.services.controllers import list_controllers
 from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
+from unifi_api.services.operation_gate import configure_gate_settings, hold_controller_read_slots
 from unifi_api.services.settings import SettingsService
 from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 from unifi_api.services.sitemanager_managers import SiteManagerFactory
@@ -323,6 +326,11 @@ async def _request_validation_error(request: Request, exc: RequestValidationErro
         )
     detail = [{key: error[key] for key in ("type", "loc", "msg") if key in error} for error in exc.errors()]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
+
+
+# Console resource routes and GraphQL read controllers under a read slot of the
+# controller application's operation gate; see unifi_api.services.operation_gate.
+_CONTROLLER_READ_ROUTE = [Depends(hold_controller_read_slots)]
 
 
 def create_app(config: ApiConfig) -> FastAPI:
@@ -458,6 +466,31 @@ def create_app(config: ApiConfig) -> FastAPI:
     )
     app.add_exception_handler(RequestValidationError, _request_validation_error)
 
+    @app.exception_handler(ControllerBusyError)
+    async def _controller_busy(request: Request, exc: ControllerBusyError):
+        """A read route found the controller busy: 503 with Retry-After, and an audit row.
+
+        Nothing was sent to the controller. The audit target is the route
+        template, which carries no MAC or other caller value.
+        """
+        route = request.scope.get("route")
+        target = getattr(route, "path", None) or "read route"
+        async with app.state.sessionmaker() as session:
+            await write_audit(
+                session,
+                key_id_prefix=getattr(request.state, "api_key_prefix", "(unknown)"),
+                controller=getattr(exc, "controller_id", None),
+                target=target,
+                outcome="error",
+                error_kind="controller_busy",
+            )
+            await session.commit()
+        return JSONResponse(
+            status_code=503,
+            content={"detail": {"kind": "controller_busy", "reason": exc.reason, "message": str(exc)}},
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+
     @app.exception_handler(SiteManagerAPIError)
     async def _sitemanager_error(request: Request, exc: SiteManagerAPIError):
         return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
@@ -543,6 +576,13 @@ def create_app(config: ApiConfig) -> FastAPI:
     app.state.sitemanager_factory = SiteManagerFactory(app.state.sessionmaker, cipher)
     app.state.cipher = cipher
     app.state.subscriber_pool = SubscriberPool()
+    configure_gate_settings(
+        GateSettings(
+            hold_budget_seconds=config.gate.write_hold_seconds,
+            direct_call_wait_seconds=config.gate.call_wait_seconds,
+            read_cap=config.gate.read_concurrency,
+        )
+    )
     app.state.manager_factory = ManagerFactory(
         app.state.sessionmaker, cipher, on_manager_discard=app.state.subscriber_pool.disconnect_manager
     )
@@ -631,7 +671,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_events_routes,
         net_system_routes,
     ):
-        app.include_router(r.router, prefix="/v1")
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (
         protect_cameras_routes,
         protect_events_routes,
@@ -644,7 +684,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         protect_recognition_routes,
         protect_system_routes,
     ):
-        app.include_router(r.router, prefix="/v1")
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (
         access_doors_routes,
         access_users_routes,
@@ -656,7 +696,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         access_events_routes,
         access_system_routes,
     ):
-        app.include_router(r.router, prefix="/v1")
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (
         net_streams_routes,
         protect_streams_routes,
@@ -725,6 +765,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         context_getter=_graphql_context,
         graphql_ide="graphiql",
     )
-    app.include_router(graphql_app, prefix="/v1/graphql")
+    # GraphQL reads take controller read slots the same way as the resource routes.
+    app.include_router(graphql_app, prefix="/v1/graphql", dependencies=_CONTROLLER_READ_ROUTE)
 
     return app

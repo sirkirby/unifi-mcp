@@ -34,6 +34,7 @@ from unifi_core.request_budget import create_uncharged_task
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
+from unifi_api.services.operation_gate import gate_for, take_read_slot
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +345,16 @@ class ManagerFactory:
         suffix = f": {detail}" if detail else ""
         raise ConnectionError(f"Failed to initialize {product} controller connection{suffix}")
 
+    @staticmethod
+    def gate_for(controller_id: str, product: str) -> Any:
+        """The controller operation gate for ``controller_id``'s ``product``.
+
+        Keyed by the stored controller id plus product, not by connection
+        manager: the managers cached here are replaced on invalidation and
+        healing, while the gate lasts for the life of the process.
+        """
+        return gate_for(controller_id, product)
+
     async def get_connection_manager(
         self,
         session: AsyncSession,
@@ -352,6 +363,9 @@ class ManagerFactory:
         *,
         site: str | None = None,
     ) -> Any:
+        # Under a read route, this request takes its read slot on the
+        # controller application's gate before reaching the controller.
+        await take_read_slot(controller_id, product, label=f"{product} read")
         site_scope = self._site_scope(product, site)
         key = (controller_id, product, site_scope)
         cm = self._connection_cache.get(key)
@@ -482,6 +496,7 @@ class ManagerFactory:
         Acquiring the lock here would deadlock — it's non-reentrant and
         get_connection_manager acquires the same lock.
         """
+        await take_read_slot(controller_id, product, label=f"{product} read")
         site_scope = self._site_scope(product, site)
         key = (controller_id, product, attr_name, site_scope)
         cached = self._domain_cache.get(key)

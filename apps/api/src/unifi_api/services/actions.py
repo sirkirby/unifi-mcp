@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from unifi_core.confirmation import create_preview, delete_preview, preview_response
+from unifi_core.operation_gate import write_request_bound
 from unifi_core.policy import PolicyGateChecker, resolve_read_only
 from unifi_core.redaction import redaction_marker_paths
 
@@ -23,6 +24,7 @@ from unifi_api.services.dispatch_overrides import (
 )
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry, ToolEntry
+from unifi_api.services.operation_gate import gate_for
 
 _MUTATING_PERMISSION_ACTIONS = frozenset({"create", "update", "delete"})
 _READ_PERMISSION_ACTIONS = frozenset({"", "read"})
@@ -332,25 +334,35 @@ async def dispatch_action(
         if handled:
             return direct_result
 
-    manager = await factory.get_domain_manager(
-        session=session,
-        controller_id=controller_id,
-        product=entry.product,
-        attr_name=binding.manager_attr,
-        site=site,
-    )
+    # The controller operation gate, outermost: a confirmed mutation holds the
+    # controller application's write turn (one at a time, in request order),
+    # anything else takes a read slot. Raises ControllerBusyError, with nothing
+    # sent, when the turn does not come in time.
+    gate = gate_for(controller_id, entry.product)
+    enter = gate.write if action_kind == "mutation" else gate.read
+    async with enter(wait_budget=gate.settings.direct_call_wait_seconds, label=tool_name):
+        # Inside a held write the whole operation is bounded by what is left of
+        # the write's hold budget; a no-op for reads.
+        async with write_request_bound():
+            manager = await factory.get_domain_manager(
+                session=session,
+                controller_id=controller_id,
+                product=entry.product,
+                attr_name=binding.manager_attr,
+                site=site,
+            )
 
-    method = getattr(manager, binding.method, None)
-    if method is None or not callable(method):
-        raise DispatchEntryMissing(
-            f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
-        )
+            method = getattr(manager, binding.method, None)
+            if method is None or not callable(method):
+                raise DispatchEntryMissing(
+                    f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
+                )
 
-    result = await _resolve_result(method(*positional, **keyword))
-    result_adapter = DISPATCH_RESULT_ADAPTERS.get(tool_name)
-    if result_adapter is not None:
-        result = result_adapter(result, dict(args), manager)
-        result = await _resolve_result(result)
+            result = await _resolve_result(method(*positional, **keyword))
+            result_adapter = DISPATCH_RESULT_ADAPTERS.get(tool_name)
+            if result_adapter is not None:
+                result = result_adapter(result, dict(args), manager)
+                result = await _resolve_result(result)
     if action_kind == "mutation" and (result is None or result is False):
         returned = "None" if result is None else "False"
         raise ValueError(f"tool '{tool_name}' reported failure (Core manager returned {returned})")
