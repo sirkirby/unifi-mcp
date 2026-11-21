@@ -52,7 +52,7 @@ class InnerSpaceProjectManager:
     async def _plan_read(self, operation: str, plan_id: str, unit: Unit | None) -> tuple[Any, PlanGeometry, Unit]:
         raw, geometry, resolved = await self._read(operation, unit)
         if plan_id not in plan_ids_from_api(raw):
-            raise UniFiNotFoundError("floor plan", "InnerSpace", f"{operation}: no such floor plan")
+            raise UniFiNotFoundError("floor plan", plan_id, f"{operation}: no such floor plan")
         return raw, geometry.get(plan_id, NO_GEOMETRY), resolved
 
     async def list_walls(self, plan_id: str, *, limit: int = 500, unit: Unit | None = None) -> WallPage:

@@ -265,8 +265,16 @@ class InnerSpaceFloorPlanManager:
         unit = await read_project_unit(self._cm, operation=operation)
         return [floor_plan_from_api(row, unit=unit, image_map=maps.get(text(row.get("id")))) for row in rows]
 
-    async def get_plan_asset(self, plan_id: str, *, include_image: bool = False) -> dict[str, Any]:
+    async def get_plan_asset(
+        self, plan_id: str, *, include_image: bool = False, image_type: str | None = None
+    ) -> dict[str, Any]:
         """A plan's image metadata and, with ``include_image``, the image itself as base64.
+
+        With ``image_type`` too, the image is downloaded only when the plan's image is that
+        type; otherwise the metadata comes back without it, so a caller that serves one type
+        learns the plan's type from this one pass instead of reading the metadata twice. A
+        mismatch is not an error: ``include_image`` is then not applied, so compare the returned
+        ``content_type`` with ``image_type``. Without ``include_image``, ``image_type`` changes nothing.
 
         The address is only the plan's own ``image_url`` from its floor-plan row, and it is
         fetched only when it matches the fixed asset pattern and equals the image address of
@@ -275,12 +283,12 @@ class InnerSpaceFloorPlanManager:
         image scale and offset, which place plan positions on the image (see ``FloorPlan``).
         """
         operation = "get InnerSpace plan asset"
-        args = InnerSpaceAssetInput(plan_id=plan_id, include_image=include_image)
+        args = InnerSpaceAssetInput(plan_id=plan_id, include_image=include_image, image_type=image_type)
         await self._cm.ensure_app_running(operation)
         rows = await read_floor_plan_rows(self._cm, operation=operation)
         row = next((r for r in rows if r.get("id") == args.plan_id), None)
         if row is None:
-            raise UniFiNotFoundError("floor plan", "InnerSpace", f"{operation}: no such floor plan")
+            raise UniFiNotFoundError("floor plan", args.plan_id, f"{operation}: no such floor plan")
         image_map = (await read_plan_maps(self._cm, operation=operation)).get(args.plan_id)
         unit = await read_project_unit(self._cm, operation=operation)
         plan = floor_plan_from_api(row, unit=unit, image_map=image_map)
@@ -299,7 +307,7 @@ class InnerSpaceFloorPlanManager:
             "image_offset": plan.image_offset,
             "unit": unit,
         }
-        if args.include_image:
+        if args.include_image and args.image_type in (None, content_type):
             body, result["content_type"] = await self._cm.request_bytes(
                 url, operation=operation, max_bytes=PLAN_ASSET_MAX_BYTES, allowed_types=(content_type,)
             )

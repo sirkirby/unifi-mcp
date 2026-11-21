@@ -9,9 +9,15 @@ from unifi_core.exceptions import UniFiMalformedResponseError
 
 Unit = Literal["metric", "imperial"]
 
-# The app's own factors.
+# The factor the InnerSpace app itself uses when it shows imperial lengths, so converted
+# lengths match what the app displays.
 FEET_PER_METRE = 3.2808
 SQ_FEET_PER_SQ_METRE = 10.7639
+
+UNIT_DESCRIPTION = (
+    "Length unit of this result: metric lengths are metres, imperial lengths are feet "
+    f"({FEET_PER_METRE} feet per metre, the factor the InnerSpace app displays with)"
+)
 
 
 def from_metres(value: float | None, unit: Unit) -> float | None:

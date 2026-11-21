@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from unifi_core.innerspace.units import Unit
@@ -48,6 +50,7 @@ class InnerSpaceUnitInput(InnerSpaceInput):
 
 class InnerSpaceAssetInput(InnerSpacePlanInput):
     include_image: bool = False
+    image_type: Literal["image/png", "image/jpeg"] | None = None
 
 
 class InnerSpaceProjectInput(InnerSpaceUnitInput):

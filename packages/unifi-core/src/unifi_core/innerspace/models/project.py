@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from unifi_core.exceptions import UniFiMalformedResponseError
 from unifi_core.innerspace.models._coerce import as_dict, as_list, finite, flag, length, number, text, whole_or_number
 from unifi_core.innerspace.models.floor_plans import NO_GEOMETRY, PlanGeometry, image_transform, scale_per_unit
-from unifi_core.innerspace.units import Unit, plan_units_to_metres
+from unifi_core.innerspace.units import UNIT_DESCRIPTION, Unit, plan_units_to_metres
 from unifi_core.mac import canonical_mac
 
 WallVariant = Literal[
@@ -57,7 +57,7 @@ class Project(BaseModel):
 
     id: str | None = None
     title: str | None = None
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -77,7 +77,9 @@ class PlanSummary(BaseModel):
     site_id: str | None = None
     scale_per_unit: float | None = Field(default=None, description="Plan units per metre, or per foot when imperial")
     scale_missing: bool
-    image_scale: float | None = Field(description="The plan map's horizontal image scale, or None when not sent")
+    image_scale: float | None = Field(
+        description="The plan map's image scale, or None when not sent or when its y scale differs from x"
+    )
     image_offset: tuple[float, float] | None = Field(description="The plan map's image offset (x, y), or None")
     shape_counts: dict[str, int] = Field(default_factory=dict)
 
@@ -124,7 +126,7 @@ class PlacedDevice(BaseModel):
 
 class ProjectSummary(BaseModel):
     project: Project
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
     plans: list[PlanSummary]
     wall_types: list[WallType]
     attenuation_object_types: list[dict[str, Any]]
@@ -132,7 +134,7 @@ class ProjectSummary(BaseModel):
 
 
 class WallPage(BaseModel):
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
     plan_id: str
     walls: list[Wall]
     total: int
@@ -142,7 +144,7 @@ class WallPage(BaseModel):
 
 
 class PlacedDevicePage(BaseModel):
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
     plan_id: str
     devices: list[PlacedDevice]
     total: int
