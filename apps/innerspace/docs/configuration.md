@@ -41,7 +41,7 @@ Settings are read once at startup. Restart the server, or start a new client ses
 
 ## Console operation gate
 
-Every tool call, and every read of the plan image resource, takes a read slot at this server's operation gate for the console before it reaches the console. Reads run side by side up to a cap. The guarantee is per server process: two servers, or two copies of one, pointed at the same console do not coordinate.
+Every tool call, and every read of a plan image resource, takes a read slot at this server's operation gate for the console before it reaches the console. Reads run side by side up to a cap. The guarantee is per server process: two servers, or two copies of one, pointed at the same console do not coordinate.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

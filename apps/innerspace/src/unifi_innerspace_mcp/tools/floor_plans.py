@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from mcp.types import ToolAnnotations
 
-from unifi_innerspace_mcp.arguments import IncludeImage, PlanId, SiteId
+from unifi_innerspace_mcp.arguments import PlanId, SiteId
 from unifi_innerspace_mcp.resources.uris import plan_image_uri
 from unifi_innerspace_mcp.runtime import floor_plan_manager, server, tool_failure, tool_success
 
@@ -39,23 +39,22 @@ async def innerspace_list_floor_plans(site_id: SiteId = None) -> Dict[str, Any]:
     name="innerspace_get_plan_asset",
     title="Get InnerSpace Plan Image",
     description=(
-        "Returns one floor plan's image metadata and, for a PNG, the resource URI to read the image from; "
-        "include_image also returns the image. Read-only. These IDs are scoped to the InnerSpace tool family — "
-        "do not pass them to other products' tools."
+        "Returns one floor plan's image metadata and the resource URI to read the image from. Read-only. "
+        "These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     permission_category="floor_plans",
     permission_action="read",
     auth="local_only",
 )
-async def innerspace_get_plan_asset(plan_id: PlanId, include_image: IncludeImage = False) -> Dict[str, Any]:
-    """Get a plan's image metadata, and optionally the image."""
+async def innerspace_get_plan_asset(plan_id: PlanId) -> Dict[str, Any]:
+    """Get a plan's image metadata and the resource URI its image is read from."""
     logger.info("innerspace_get_plan_asset tool called")
     try:
-        asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=include_image)
-        # The resource serves PNG only; another type is read with include_image.
-        if asset["content_type"] == "image/png":
-            asset = {**asset, "resource_uri": plan_image_uri(plan_id)}
+        asset = await floor_plan_manager.get_plan_asset(plan_id)
+        uri = plan_image_uri(plan_id, asset["content_type"])
+        if uri is not None:
+            asset = {**asset, "resource_uri": uri}
         return tool_success(asset)
     except Exception as e:
         return tool_failure("get InnerSpace plan asset", e)

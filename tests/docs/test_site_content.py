@@ -1260,6 +1260,8 @@ class ContentReconciliationTests(unittest.TestCase):
         self.assertNotRegex(permissions, r"(?i)always redacted")
         self.assertIn("image_offset", tools)
         self.assertIn("innerspace://plans/{plan_id}/image", tools)
+        self.assertIn("innerspace://plans/{plan_id}/image.jpg", tools)
+        self.assertNotIn("include_image", tools)
         self.assertIn(
             "never returns image bytes", " ".join(Path("apps/api/README.md").read_text(encoding="utf-8").split())
         )
@@ -1276,7 +1278,7 @@ class ContentReconciliationTests(unittest.TestCase):
         for phrase in (
             "`innerspace`",
             "username and password",
-            "not supported by the typed API action endpoint",
+            "innerspace://plans/{plan_id}/image.jpg",
             "BAD_REQUEST",
             "UPSTREAM_ERROR",
         ):

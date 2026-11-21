@@ -51,4 +51,4 @@ Responses pass through the same redaction as the other servers. Fields whose nam
 
 Redaction matches field names, not meaning. MAC addresses are not redacted, and neither are serial numbers, device and plan names or the geometry of a plan. A floor plan describes a building, so treat the whole result as sensitive and review it before sharing.
 
-The plan image returned by `innerspace_get_plan_asset` with `include_image` is binary data, not a field, and is not covered by redaction. Read the image only where you would show the floor plan itself.
+The plan image served by the plan image resources is binary data, not a field, and is not covered by redaction. Read the image only where you would show the floor plan itself.

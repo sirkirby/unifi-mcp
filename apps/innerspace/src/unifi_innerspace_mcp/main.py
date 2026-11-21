@@ -64,7 +64,7 @@ async def connect_at_startup() -> bool:
 
 
 async def plan_image_resource_enabled() -> bool:
-    """Whether the plan image resource is served: only beside ``innerspace_get_plan_asset``.
+    """Whether the plan image resources are served: only beside ``innerspace_get_plan_asset``.
 
     The category and tool filters apply in eager mode only; there, the resource
     follows whether the filtered registration kept that tool.

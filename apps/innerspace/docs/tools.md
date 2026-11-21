@@ -4,7 +4,7 @@ Nine read-only domain tools (9, without the six meta-tools) over a console's Uni
 
 The examples use made-up ids and values. Responses leave out any single value the console did not send, so a real response may have fewer fields than shown.
 
-This server has no write tools, no events, no event stream and no support-bundle tool. It has one MCP resource, the [plan image](#the-plan-image-resource).
+This server has no write tools, no events, no event stream and no support-bundle tool. It has two MCP resources, the [plan image resources](#the-plan-image-resources), one per image type.
 
 ## IDs
 
@@ -92,12 +92,11 @@ The floor plans, with scale, image size, image file name and the image's scale a
 
 ### `innerspace_get_plan_asset`
 
-The image metadata of one plan (file name, content type, pixel size, scale, image scale and offset, unit) and, when the image is a PNG, the `resource_uri` it is read from. With `include_image` set, it also returns the image as base64 in `image_base64`.
+The image metadata of one plan (file name, content type, pixel size, scale, image scale and offset, unit) and the `resource_uri` the image is read from: `innerspace://plans/{plan_id}/image` for a PNG, `innerspace://plans/{plan_id}/image.jpg` for a JPEG. No tool returns the image itself; read it through [the plan image resources](#the-plan-image-resources).
 
 | Argument | Type | Default |
 |---|---|---|
 | `plan_id` | string, required | |
-| `include_image` | boolean | `false` |
 
 ```json
 {"success": true, "data": {
@@ -107,7 +106,7 @@ The image metadata of one plan (file name, content type, pixel size, scale, imag
 }}
 ```
 
-The image is capped at 8,000,000 bytes. A larger image, or a response that is not an image of the type the plan's address promises (checked by content type and file header), is refused with fixed text rather than returned. Only the plan's own image address is ever requested, and only when it matches the console's asset address pattern and the plan's map in the project; no file name comes from the caller. `include_image` works on MCP only: [`unifi-api-server`](../../api/README.md#innerspace-console-product) rejects it and never returns image bytes.
+[`unifi-api-server`](../../api/README.md#innerspace-console-product) returns the same metadata and never returns image bytes.
 
 ## Devices
 
@@ -162,9 +161,13 @@ With `s = 1` and `(ox, oy) = (0, 0)` this reduces to `px = x*k` and `py = y*k`. 
 
 This is geometry only. It does not show that a device is where the plan says it is, and it says nothing about radio coverage.
 
-## The plan image resource
+## The plan image resources
 
-`innerspace://plans/{plan_id}/image` is a resource template that returns a plan's image. It is fetched on demand, uses the same checks and size cap as `innerspace_get_plan_asset`, and does not support subscriptions. The template declares `image/png`: the plan's metadata is read first, and a plan whose image is another type is refused with fixed text before anything is downloaded; its image is available from `innerspace_get_plan_asset` with `include_image`. The resource is registered only beside `innerspace_get_plan_asset`: in eager mode, a category or tool filter that leaves that tool out leaves the resource out too. In setup mode no resource is registered.
+Two resource templates return a plan's image, one per image type, since a template declares one MIME type: `innerspace://plans/{plan_id}/image` (`image/png`) and `innerspace://plans/{plan_id}/image.jpg` (`image/jpeg`). `innerspace_get_plan_asset` returns the right URI for each plan. They are fetched on demand and do not support subscriptions. The plan's metadata is read first, and a plan whose image is the other type is refused with fixed text naming the template that serves it, before anything is downloaded.
+
+The image is capped at 8,000,000 bytes. A larger image, or a response that is not an image of the type the plan's address promises (checked by content type and file header), is refused with fixed text rather than returned. Only the plan's own image address is ever requested, and only when it matches the console's asset address pattern and the plan's map in the project; no file name comes from the caller. Each read takes a read slot at the console's operation gate, like a tool call.
+
+The resources are registered only beside `innerspace_get_plan_asset`: in eager mode, a category or tool filter that leaves that tool out leaves them out too. In setup mode no resource is registered.
 
 ## Meta-tools
 

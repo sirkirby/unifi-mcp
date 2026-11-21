@@ -48,12 +48,3 @@ IncludeShapes = Annotated[
     bool,
     Field(description="When true, also returns every shape of the project with converted geometry (large)."),
 ]
-IncludeImage = Annotated[
-    bool,
-    Field(
-        description=(
-            "When true, also returns the image as a capped, base64-encoded string. When false (default), returns "
-            "the resource URI to read the image from."
-        )
-    ),
-]

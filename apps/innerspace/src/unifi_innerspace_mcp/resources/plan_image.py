@@ -1,14 +1,14 @@
-"""Floor plan image resource for UniFi InnerSpace.
+"""Floor plan image resources for UniFi InnerSpace.
 
-A resource template at ``innerspace://plans/{plan_id}/image`` that returns the
-plan's image. It is fetched on demand through the same manager call as
-``innerspace_get_plan_asset``: only the plan's own image address is ever
-requested, and the size cap and the type and content checks apply here too.
+Two resource templates return a plan's image: ``innerspace://plans/{plan_id}/image``
+for a PNG and ``innerspace://plans/{plan_id}/image.jpg`` for a JPEG, since a
+template declares one MIME type. The image is fetched on demand through the same
+manager call as ``innerspace_get_plan_asset``: only the plan's own image address
+is ever requested, and the size cap and the type and content checks apply here too.
 
-The template declares ``image/png``. The plan's metadata is read first, and a
-plan whose image is another type is refused with fixed text before anything
-is downloaded; its image is available from ``innerspace_get_plan_asset`` with
-``include_image``.
+The plan's metadata is read first, and a plan whose image is the other type is
+refused with fixed text naming the template that serves it, before anything is
+downloaded. No tool returns the image inline.
 
 The server registers the template with :func:`register_plan_image_resource`
 only when ``innerspace_get_plan_asset`` is enabled, since both read the same
@@ -25,7 +25,7 @@ from mcp.server.mcpserver.exceptions import ResourceError
 from mcp.types import Annotations
 
 from unifi_core.operation_gate import ControllerBusyError
-from unifi_innerspace_mcp.resources.uris import PLAN_IMAGE_URI_TEMPLATE
+from unifi_innerspace_mcp.resources.uris import PLAN_IMAGE_TYPES, PLAN_IMAGE_URI_TEMPLATE
 from unifi_innerspace_mcp.runtime import floor_plan_manager, get_operation_gate, server, tool_failure
 
 PLAN_IMAGE_RESOURCE_META = {
@@ -35,7 +35,6 @@ PLAN_IMAGE_RESOURCE_META = {
     "io.unifi.relatedTools": ["innerspace_get_plan_asset", "innerspace_list_floor_plans"],
 }
 
-_PNG = "image/png"
 _OPERATION = "read InnerSpace plan image"
 # The MCP SDK logs a read with the requested URI, which carries the caller's plan id: a failed read in the
 # server (in its message arguments, and inside the error text) and every read in the resource manager (as an
@@ -58,12 +57,12 @@ class _PlanImageUriFilter(logging.Filter):
         return True
 
 
-async def _fetch(plan_id: str) -> tuple[str, str | None]:
-    """The plan's content type, and its base64 image when that type is PNG."""
+async def _fetch(plan_id: str, content_type: str) -> tuple[str, str | None]:
+    """The plan's image type, and its base64 image when that is ``content_type``."""
     try:
-        content_type = (await floor_plan_manager.get_plan_asset(plan_id))["content_type"]
-        if content_type != _PNG:
-            return content_type, None
+        found = (await floor_plan_manager.get_plan_asset(plan_id))["content_type"]
+        if found != content_type:
+            return found, None
         asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=True)
         return asset["content_type"], asset["image_base64"]
     except Exception as e:
@@ -71,8 +70,8 @@ async def _fetch(plan_id: str) -> tuple[str, str | None]:
         raise ResourceError(tool_failure(_OPERATION, e)["error"]) from None
 
 
-async def plan_image(plan_id: str) -> bytes:
-    """Fetch a plan's image bytes, after checking from its metadata that it is a PNG.
+async def _read_plan_image(plan_id: str, content_type: str) -> bytes:
+    """Fetch a plan's image bytes, after checking from its metadata that it is ``content_type``.
 
     A resource read is not a tool call, so it takes its own read slot at the
     console's operation gate, with a direct call's wait budget.
@@ -85,33 +84,47 @@ async def plan_image(plan_id: str) -> bytes:
     )
     try:
         async with slot:
-            content_type, image = await _fetch(plan_id)
+            found, image = await _fetch(plan_id, content_type)
     except ControllerBusyError as e:
         # The gate's text is fixed; nothing was sent to the console.
         raise ResourceError(f"Failed to {_OPERATION}: {e}") from None
-    if content_type != _PNG:
-        raise ResourceError(
-            f"Failed to {_OPERATION}: the image is not a PNG; read it with innerspace_get_plan_asset and include_image"
-        )
-    return base64.b64decode(image)
+    if found != content_type:
+        name, other = PLAN_IMAGE_TYPES.get(found, ("other type", None))
+        where = f"read {other}" if other else "no resource serves it"
+        raise ResourceError(f"Failed to {_OPERATION}: the image is a {name}; {where}")
+    try:
+        return base64.b64decode(image, validate=True)
+    except (TypeError, ValueError):
+        raise ResourceError(f"Failed to {_OPERATION}: the image could not be decoded") from None
+
+
+def _reader(content_type: str):
+    """The read function for one image type's template; the SDK takes ``plan_id`` from its signature."""
+
+    async def read(plan_id: str) -> bytes:
+        return await _read_plan_image(plan_id, content_type)
+
+    return read
 
 
 def register_plan_image_resource() -> None:
-    """Register the plan image template on the server. Registering again replaces it."""
+    """Register the plan image templates on the server. Registering again replaces them."""
     for name in _SDK_LOGGERS:
         sdk_logger = logging.getLogger(name)
         if not any(isinstance(f, _PlanImageUriFilter) for f in sdk_logger.filters):
             sdk_logger.addFilter(_PlanImageUriFilter())
-    server.resource(
-        PLAN_IMAGE_URI_TEMPLATE,
-        name="InnerSpace Plan Image",
-        title="InnerSpace Floor Plan Image",
-        description=(
-            "The image of an InnerSpace floor plan, fetched on demand and capped in size. Replace {plan_id} with "
-            "the plan's id (from innerspace_list_floor_plans). These IDs are scoped to the InnerSpace tool family "
-            "— do not pass them to other products' tools."
-        ),
-        mime_type=_PNG,
-        annotations=Annotations(audience=["user", "assistant"], priority=0.7),
-        meta=PLAN_IMAGE_RESOURCE_META,
-    )(plan_image)
+    for content_type, (kind, uri_template) in PLAN_IMAGE_TYPES.items():
+        server.resource(
+            uri_template,
+            name=f"InnerSpace Plan Image ({kind})",
+            title=f"InnerSpace Floor Plan Image ({kind})",
+            description=(
+                f"The image of an InnerSpace floor plan whose image is a {kind}, fetched on demand and capped in "
+                "size. innerspace_get_plan_asset returns the URI for each plan. Replace {plan_id} with the plan's "
+                "id (from innerspace_list_floor_plans). These IDs are scoped to the InnerSpace tool family — do not "
+                "pass them to other products' tools."
+            ),
+            mime_type=content_type,
+            annotations=Annotations(audience=["user", "assistant"], priority=0.7),
+            meta=PLAN_IMAGE_RESOURCE_META,
+        )(_reader(content_type))

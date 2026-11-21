@@ -19879,7 +19879,7 @@
     },
     "/v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset": {
       "get": {
-        "description": "Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image and refuses include_image; read the image through the InnerSpace MCP server. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "description": "Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image; read it through the InnerSpace MCP server's plan image resources. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
         "operationId": "get_innerspace_plan_asset_v1_sites__site_id__innerspace_floor_plans__plan_id__asset_get",
         "parameters": [
           {

@@ -288,17 +288,13 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Returns one floor plan's image metadata and, for a PNG, the resource URI to read the image from; include_image also returns the image. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "description": "Returns one floor plan's image metadata and the resource URI to read the image from. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
       "name": "innerspace_get_plan_asset",
       "permission_action": "read",
       "permission_category": "floor_plans",
       "schema": {
         "input": {
           "properties": {
-            "include_image": {
-              "description": "When true, also returns the image as a capped, base64-encoded string. When false (default), returns the resource URI to read the image from.",
-              "type": "boolean"
-            },
             "plan_id": {
               "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
               "type": "string"

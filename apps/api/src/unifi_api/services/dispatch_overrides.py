@@ -1745,21 +1745,7 @@ def _innerspace_page_result(result: Any, args: dict[str, Any], _manager: Any) ->
     return page_with_limit(result, args.get("limit", DEFAULT_LIMIT))
 
 
-# The API never returns plan image bytes: the image is read through the MCP
-# resource. A request for them is refused rather than silently dropped.
-UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {
-    "innerspace_get_plan_asset": frozenset({"include_image"}),
-}
-
-# Where to go instead, per tool, when the refusal has a better answer than the
-# generic one.
-UNSUPPORTED_ACTION_PARAMETER_HINTS: dict[str, str] = {
-    "innerspace_get_plan_asset": (
-        "omit include_image: the API never returns the plan image. The InnerSpace MCP server's plan image "
-        "resource, innerspace://plans/{plan_id}/image, serves PNG plan images; for other formats use "
-        "innerspace_get_plan_asset with include_image on the MCP server."
-    ),
-}
+UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
 ResultAdapter = Callable[[Any, dict[str, Any], Any], Any]

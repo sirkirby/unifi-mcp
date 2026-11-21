@@ -4,7 +4,7 @@
 - ``GET /sites/{site_id}/innerspace/floor-plans/{plan_id}/asset`` → ``innerspace_get_plan_asset``
 
 The API never returns the image itself: it is read through the InnerSpace MCP
-server's plan image resource, and ``include_image`` is refused here.
+server's plan image resources.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.routes.resources._common import resolve_controller
 from unifi_api.routes.resources.innerspace._common import SITE_NOTE, SiteQuery, detail, items, read
-from unifi_api.services.innerspace import InnerSpaceAPIError
 
 router = APIRouter()
 
@@ -51,8 +50,8 @@ async def list_innerspace_floor_plans(
     tags=["innerspace/floor-plans"],
     summary="Get InnerSpace plan image metadata",
     description=(
-        "Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image "
-        f"and refuses include_image; read the image through the InnerSpace MCP server. {SITE_NOTE}"
+        "Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image; "
+        f"read it through the InnerSpace MCP server's plan image resources. {SITE_NOTE}"
     ),
 )
 async def get_innerspace_plan_asset(
@@ -62,14 +61,6 @@ async def get_innerspace_plan_asset(
     controller=Depends(resolve_controller),
 ) -> dict:
     operation = "get InnerSpace plan asset"
-    if "include_image" in request.query_params:
-        raise InnerSpaceAPIError(
-            422,
-            "invalid_innerspace_request",
-            f"Failed to {operation}: include_image is not supported by the API; read the image "
-            "through the InnerSpace MCP server: its plan image resource, innerspace://plans/{plan_id}/image, serves "
-            "PNG plan images; for other formats use innerspace_get_plan_asset with include_image on the MCP server.",
-        )
     result = await read(
         request,
         controller,

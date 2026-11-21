@@ -387,11 +387,10 @@ curl -s -X POST http://localhost:8080/v1/actions/innerspace_list_walls \
 
 The API never returns image bytes. `GET .../floor-plans/{plan_id}/asset`,
 `planAsset` and `innerspace_get_plan_asset` return image metadata only: file
-name, type, pixel size, scale, image scale and offset. `include_image` is
-rejected on the REST route (`422`) and on the action endpoint ("not supported
-by the typed API action endpoint"), and GraphQL has no such argument. Read the
-image through the InnerSpace MCP server's `innerspace://plans/{plan_id}/image`
-resource.
+name, type, pixel size, scale, image scale and offset. Read the image through
+the InnerSpace MCP server's plan image resources,
+`innerspace://plans/{plan_id}/image` (PNG) and
+`innerspace://plans/{plan_id}/image.jpg` (JPEG).
 
 ### Errors
 
@@ -402,7 +401,7 @@ code in the error's `extensions`.
 
 | Situation | REST status and `kind` | GraphQL code |
 |---|---|---|
-| Invalid arguments (bad id, `limit` out of range, `include_image`) | `422` `invalid_innerspace_request` | `BAD_REQUEST` |
+| Invalid arguments (bad id, `limit` out of range) | `422` `invalid_innerspace_request` | `BAD_REQUEST` |
 | No such floor plan | `404` `innerspace_not_found` | `NOT_FOUND` |
 | The console refused the session for InnerSpace (expired session or no InnerSpace access) | `403` `innerspace_forbidden` | `UPSTREAM_FORBIDDEN` |
 | The InnerSpace application answered `503` (restarting or busy) | `503` `innerspace_unavailable`, with `Retry-After` | `UPSTREAM_ERROR` |

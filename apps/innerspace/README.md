@@ -84,7 +84,7 @@ Nine domain tools, all read-only. See [docs/tools.md](docs/tools.md).
 | `innerspace_list_inventory` | Adopted devices not yet placed on a plan |
 | `innerspace_get_plan_asset` | One plan's image metadata and its resource URI; optionally the image, capped |
 
-A floor plan's image is also available as the MCP resource `innerspace://plans/{plan_id}/image`, fetched on demand.
+A floor plan's image is available as an MCP resource, fetched on demand: `innerspace://plans/{plan_id}/image` for a PNG, `innerspace://plans/{plan_id}/image.jpg` for a JPEG. `innerspace_get_plan_asset` returns the right URI.
 
 IDs returned here belong to the InnerSpace tool family. They are not the ids the Network, Protect, Access or Site Manager servers use, and there is no translation between them.
 

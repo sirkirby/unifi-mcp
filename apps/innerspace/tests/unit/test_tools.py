@@ -149,42 +149,38 @@ async def test_list_inventory(serve):
     manager.list_inventory.assert_awaited_once_with(site_id=SITE)
 
 
-async def test_plan_asset_default_has_uri_not_bytes(serve):
+async def test_plan_asset_png_points_at_the_png_resource(serve):
     metadata = {"filename": "f.png", "content_type": "image/png", "width_px": 1000.0, "height_px": 800.0}
     manager = serve(floor_plans, "floor_plan_manager", _manager(get_plan_asset=metadata))
 
     result = await floor_plans.innerspace_get_plan_asset(PLAN)
 
     assert result == {"success": True, "data": {**metadata, "resource_uri": f"innerspace://plans/{PLAN}/image"}}
-    manager.get_plan_asset.assert_awaited_once_with(PLAN, include_image=False)
+    manager.get_plan_asset.assert_awaited_once_with(PLAN)
 
 
-async def test_plan_asset_has_no_uri_for_an_image_the_resource_does_not_serve(serve):
+async def test_plan_asset_jpeg_points_at_the_jpeg_resource(serve):
     metadata = {"filename": "f.jpg", "content_type": "image/jpeg", "width_px": 1000.0, "height_px": 800.0}
     serve(floor_plans, "floor_plan_manager", _manager(get_plan_asset=metadata))
 
     result = await floor_plans.innerspace_get_plan_asset(PLAN)
 
-    assert result == {"success": True, "data": metadata}
+    assert result == {"success": True, "data": {**metadata, "resource_uri": f"innerspace://plans/{PLAN}/image.jpg"}}
 
 
-async def test_plan_asset_include_image_adds_base64(serve):
-    asset = {"filename": "f.png", "content_type": "image/png", "image_base64": "iVBORw0K"}
-    manager = serve(floor_plans, "floor_plan_manager", _manager(get_plan_asset=asset))
+def test_plan_asset_never_returns_the_image_inline():
+    """The image is served by the resources only, never as base64 in a tool result."""
+    import inspect
 
-    result = await floor_plans.innerspace_get_plan_asset(PLAN, include_image=True)
-
-    assert result["data"]["image_base64"] == "iVBORw0K"
-    assert result["data"]["resource_uri"] == f"innerspace://plans/{PLAN}/image"
-    manager.get_plan_asset.assert_awaited_once_with(PLAN, include_image=True)
+    assert "include_image" not in inspect.signature(floor_plans.innerspace_get_plan_asset).parameters
 
 
-async def test_plan_asset_over_the_cap_returns_the_fixed_text(serve):
-    text = "get InnerSpace plan asset: the image is larger than the allowed size"
+async def test_plan_asset_failure_returns_the_fixed_text(serve):
+    text = "get InnerSpace plan asset: no such floor plan"
     manager = SimpleNamespace(get_plan_asset=AsyncMock(side_effect=UniFiMalformedResponseError(text)))
     serve(floor_plans, "floor_plan_manager", manager)
 
-    result = await floor_plans.innerspace_get_plan_asset(PLAN, include_image=True)
+    result = await floor_plans.innerspace_get_plan_asset(PLAN)
 
     assert result == {"success": False, "error": f"Failed to {text}"}
 

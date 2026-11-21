@@ -134,7 +134,7 @@ The UniFi InnerSpace MCP server, not yet released. 9 read-only domain tools over
   - domain logic lives in `packages/unifi-core/src/unifi_core/innerspace/managers/`, released in `unifi-core` before the app
   - `tools/` -- tool wrappers in four category modules (`status`, `project`, `floor_plans`, `devices`); the managers live in `unifi_core.innerspace`
   - `arguments.py` -- shared argument types, kept outside `tools/` so importing them registers no tool
-  - `resources/` -- the plan image resource and its URI template
+  - `resources/` -- the plan image resources (one per image type) and their URI templates
   - `config/config.yaml` -- console connection and runtime settings; no `api_key`
 - `tests/` -- unit tests with a fake or loopback console; they never contact a real one
 - `Dockerfile` -- container build

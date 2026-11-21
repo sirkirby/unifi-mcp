@@ -118,7 +118,8 @@ async def test_plan_image_resource_follows_the_plan_asset_tool(
 
     await start_in_mode(monkeypatch, mode)
 
-    assert _plan_image_templates() == (["innerspace://plans/{plan_id}/image"] if registered else [])
+    expected = ["innerspace://plans/{plan_id}/image", "innerspace://plans/{plan_id}/image.jpg"]
+    assert sorted(_plan_image_templates()) == (expected if registered else [])
 
 
 async def test_a_wrong_typed_argument_through_the_mcp_framework(monkeypatch, fresh_registrations, caplog):  # noqa: F811

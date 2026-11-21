@@ -15,7 +15,7 @@ from mcp.types import ReadResourceRequestParams
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_innerspace_mcp.resources import plan_image as resource_module
-from unifi_innerspace_mcp.resources.uris import PLAN_IMAGE_URI_TEMPLATE, plan_image_uri
+from unifi_innerspace_mcp.resources.uris import PLAN_IMAGE_URI_TEMPLATE, PLAN_JPEG_URI_TEMPLATE, plan_image_uri
 from unifi_innerspace_mcp.runtime import server
 
 PLAN = "00000000-0000-4000-8000-000000000003"
@@ -41,7 +41,42 @@ async def _read(uri):
 
 def test_uri_shape():
     assert PLAN_IMAGE_URI_TEMPLATE == "innerspace://plans/{plan_id}/image"
+    assert PLAN_JPEG_URI_TEMPLATE == "innerspace://plans/{plan_id}/image.jpg"
     assert plan_image_uri(PLAN) == f"innerspace://plans/{PLAN}/image"
+    assert plan_image_uri(PLAN, "image/jpeg") == f"innerspace://plans/{PLAN}/image.jpg"
+    assert plan_image_uri(PLAN, "image/gif") is None
+
+
+JPEG = b"\xff\xd8\xff" + b"\x00" * 16
+JPEG_METADATA = {"filename": "f.jpg", "content_type": "image/jpeg", "width_px": 1000.0}
+
+
+async def test_the_jpeg_resource_returns_a_jpeg_plan_with_its_type(monkeypatch):
+    asset = {**JPEG_METADATA, "image_base64": base64.b64encode(JPEG).decode()}
+    method = _serve(monkeypatch, side_effect=[JPEG_METADATA, asset])
+
+    content = await _read(plan_image_uri(PLAN, "image/jpeg"))
+
+    assert (content.content, content.mime_type) == (JPEG, "image/jpeg")
+    assert method.await_args_list == [call(PLAN), call(PLAN, include_image=True)]
+
+
+async def test_each_resource_refuses_the_other_type_and_names_the_right_one(monkeypatch):
+    method = _serve(monkeypatch, return_value=JPEG_METADATA)
+    with pytest.raises(ResourceError) as png_read:
+        await _read(plan_image_uri(PLAN))
+
+    _serve(monkeypatch, return_value=METADATA)
+    with pytest.raises(ResourceError) as jpeg_read:
+        await _read(plan_image_uri(PLAN, "image/jpeg"))
+
+    assert str(png_read.value) == (
+        "Failed to read InnerSpace plan image: the image is a JPEG; read innerspace://plans/{plan_id}/image.jpg"
+    )
+    assert str(jpeg_read.value) == (
+        "Failed to read InnerSpace plan image: the image is a PNG; read innerspace://plans/{plan_id}/image"
+    )
+    method.assert_awaited_once_with(PLAN)
 
 
 async def test_resource_returns_the_image_bytes_with_the_png_type(monkeypatch):
@@ -77,15 +112,6 @@ async def test_invalid_plan_id_is_a_fixed_error_that_does_not_echo_it(caplog):
     assert marker not in str(raised.value) + caplog.text
 
 
-async def test_a_jpeg_plan_is_refused_before_its_image_is_downloaded(monkeypatch):
-    method = _serve(monkeypatch, return_value={**METADATA, "filename": "f.jpg", "content_type": "image/jpeg"})
-
-    with pytest.raises(ResourceError, match="not a PNG"):
-        await _read(plan_image_uri(PLAN))
-
-    method.assert_awaited_once_with(PLAN)
-
-
 async def test_unreadable_metadata_is_a_fixed_error(monkeypatch, caplog):
     _serve(monkeypatch, return_value={"filename": "f.png"})
 
@@ -108,10 +134,13 @@ async def test_a_rejected_plan_id_stays_out_of_the_sdk_log(caplog):
     assert marker not in caplog.text
 
 
-async def test_template_is_on_demand_with_no_subscription():
-    (template,) = [t for t in await server.list_resource_templates() if t.uri_template == PLAN_IMAGE_URI_TEMPLATE]
+@pytest.mark.parametrize(
+    ("uri_template", "mime_type"), [(PLAN_IMAGE_URI_TEMPLATE, "image/png"), (PLAN_JPEG_URI_TEMPLATE, "image/jpeg")]
+)
+async def test_template_is_on_demand_with_no_subscription(uri_template, mime_type):
+    (template,) = [t for t in await server.list_resource_templates() if t.uri_template == uri_template]
 
-    assert template.mime_type == "image/png"
+    assert template.mime_type == mime_type
     assert template.meta["io.unifi.updateMode"] == "on-demand"
     assert template.meta["io.unifi.protocolSubscribe"] is False
     assert template.meta["io.unifi.relatedTools"] == ["innerspace_get_plan_asset", "innerspace_list_floor_plans"]
@@ -193,3 +222,21 @@ async def test_no_gate_in_setup_mode_still_reads(monkeypatch):
     content = await _read(plan_image_uri(PLAN))
 
     assert content.content == PNG
+
+
+async def test_a_failed_fetch_gives_its_read_slot_back(monkeypatch, gate):
+    _serve(monkeypatch, side_effect=UniFiNotFoundError("floor plan", "InnerSpace", "get InnerSpace plan asset: gone"))
+
+    with pytest.raises(ResourceError):
+        await _read(plan_image_uri(PLAN))
+
+    assert gate.snapshot()["reads_in_use"] == 0
+
+
+async def test_an_undecodable_image_is_a_fixed_error(monkeypatch):
+    _serve(monkeypatch, side_effect=[METADATA, {**METADATA, "image_base64": "not base64!"}])
+
+    with pytest.raises(ResourceError) as raised:
+        await _read(plan_image_uri(PLAN))
+
+    assert str(raised.value) == "Failed to read InnerSpace plan image: the image could not be decoded"

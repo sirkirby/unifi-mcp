@@ -84,7 +84,7 @@ Positions are in the plan's own coordinate frame, measured from the plan's top-l
 
 ### The image is refused
 
-`innerspace_get_plan_asset` with `include_image` and the `innerspace://plans/{plan_id}/image` resource refuse an image above 8,000,000 bytes, and one that is not an image of the type the plan's address promises, with fixed text. The resource also refuses any image that is not a PNG; read it with `innerspace_get_plan_asset` and `include_image` instead. Over `unifi-api-server` no image is served at all.
+The plan image resources refuse an image above 8,000,000 bytes, and one that is not an image of the type the plan's address promises, with fixed text. Each resource serves one type: a JPEG plan read through `innerspace://plans/{plan_id}/image` is refused with text naming `innerspace://plans/{plan_id}/image.jpg`, and the other way round. Use the `resource_uri` that `innerspace_get_plan_asset` returns. Over `unifi-api-server` no image is served at all.
 
 ## Network and TLS
 

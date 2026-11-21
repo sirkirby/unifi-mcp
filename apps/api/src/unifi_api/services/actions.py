@@ -21,7 +21,6 @@ from unifi_api.services.dispatch_overrides import (
     DISPATCH_ARG_TRANSLATORS,
     DISPATCH_DIRECT_RESULT_ADAPTERS,
     DISPATCH_RESULT_ADAPTERS,
-    UNSUPPORTED_ACTION_PARAMETER_HINTS,
     UNSUPPORTED_ACTION_PARAMETERS,
 )
 from unifi_api.services.managers import ManagerFactory
@@ -314,8 +313,10 @@ async def dispatch_action(
     unsupported = sorted(set(args) & UNSUPPORTED_ACTION_PARAMETERS.get(tool_name, frozenset()))
     if unsupported:
         names = ", ".join(unsupported)
-        hint = UNSUPPORTED_ACTION_PARAMETER_HINTS.get(tool_name, "omit them or use the dedicated resource endpoint.")
-        raise ValueError(f"Action parameter(s) {names} are not supported by the typed API action endpoint; {hint}")
+        raise ValueError(
+            f"Action parameter(s) {names} are not supported by the typed API action endpoint; "
+            "omit them or use the dedicated resource endpoint."
+        )
 
     manager_args = dict(args)
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)

@@ -439,7 +439,7 @@ Floor plans with scale, image size, image file name and image scale and offset. 
 ### `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset` — Get InnerSpace plan image metadata
 
 
-Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image and refuses include_image; read the image through the InnerSpace MCP server. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image; read it through the InnerSpace MCP server's plan image resources. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
 
 
 **Parameters:**
