@@ -122,7 +122,7 @@ def get_connection_manager() -> InnerSpaceConnectionManager:
     verify_ssl, fingerprint = _tls_settings(cfg)
     try:
         return InnerSpaceConnectionManager(
-            host=str(cfg.host).strip(),
+            host=cfg.host,
             username=cfg.username,
             password=cfg.password,
             port=_port(cfg),
