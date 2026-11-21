@@ -23,7 +23,9 @@ from unifi_core.exceptions import (
     UniFiRateLimitError,
     UniFiValidationError,
 )
+from unifi_core.innerspace.managers.connection_manager import InnerSpaceHttpError
 from unifi_core.innerspace.models.reads import InnerSpaceListInput
+from unifi_core.operation_gate import BUSY_RETRY_AFTER_SECONDS, ControllerBusyError
 
 from unifi_api.services.managers import ControllerInitializationFailed
 
@@ -37,11 +39,12 @@ ID_FAMILY = "These IDs are scoped to the InnerSpace tool family — do not pass 
 class InnerSpaceAPIError(Exception):
     """A mapped InnerSpace failure: HTTP status, stable kind and fixed message."""
 
-    def __init__(self, status: int, kind: str, message: str) -> None:
+    def __init__(self, status: int, kind: str, message: str, *, retry_after: int | None = None) -> None:
         super().__init__(message)
         self.status = status
         self.kind = kind
         self.message = message
+        self.retry_after = retry_after
 
     @property
     def graphql_code(self) -> str:
@@ -51,6 +54,7 @@ class InnerSpaceAPIError(Exception):
             "innerspace_forbidden": "UPSTREAM_FORBIDDEN",
             "innerspace_rate_limited": "RATE_LIMITED",
             "innerspace_upstream_error": "UPSTREAM_ERROR",
+            "innerspace_unavailable": "UPSTREAM_ERROR",
         }.get(self.kind, "INTERNAL")
 
 
@@ -60,9 +64,13 @@ def _failed(operation: str, exc: BaseException) -> str:
     return f"Failed to {text}" if text.startswith(f"{operation}:") else f"Failed to {operation}: {text}"
 
 
-def map_innerspace_error(exc: BaseException, operation: str) -> InnerSpaceAPIError:
-    """Map a failure to a status and fixed text. ``operation`` is a fixed label, never caller input."""
-    if isinstance(exc, InnerSpaceAPIError):
+def map_innerspace_error(exc: BaseException, operation: str) -> InnerSpaceAPIError | ControllerBusyError:
+    """Map a failure to a status and fixed text. ``operation`` is a fixed label, never caller input.
+
+    A refusal at the operation gate is returned unchanged, so every surface
+    gives it the same retryable busy answer it gives the other products.
+    """
+    if isinstance(exc, (InnerSpaceAPIError, ControllerBusyError)):
         return exc
     _log.warning("InnerSpace %s failed (%s)", operation, type(exc).__name__)
     if isinstance(exc, (ValidationError, UniFiValidationError)):
@@ -73,6 +81,11 @@ def map_innerspace_error(exc: BaseException, operation: str) -> InnerSpaceAPIErr
         return InnerSpaceAPIError(403, "innerspace_forbidden", _failed(operation, exc))
     if isinstance(exc, UniFiRateLimitError):
         return InnerSpaceAPIError(429, "innerspace_rate_limited", _failed(operation, exc))
+    if isinstance(exc, InnerSpaceHttpError) and exc.status == 503:
+        # The InnerSpace application is restarting or busy: retryable, like a Network 503.
+        return InnerSpaceAPIError(
+            503, "innerspace_unavailable", _failed(operation, exc), retry_after=BUSY_RETRY_AFTER_SECONDS
+        )
     if isinstance(exc, (UniFiError, ControllerInitializationFailed)):
         # Connection, not installed or not running, HTTP, malformed, refused login.
         return InnerSpaceAPIError(502, "innerspace_upstream_error", _failed(operation, exc))

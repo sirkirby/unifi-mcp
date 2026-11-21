@@ -526,7 +526,10 @@ def create_app(config: ApiConfig) -> FastAPI:
 
     @app.exception_handler(InnerSpaceAPIError)
     async def _innerspace_error(request: Request, exc: InnerSpaceAPIError):
-        return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
+        return JSONResponse(
+            status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}}, headers=headers
+        )
 
     @app.middleware("http")
     async def _sitemanager_no_store(request: Request, call_next):

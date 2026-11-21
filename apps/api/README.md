@@ -405,7 +405,10 @@ code in the error's `extensions`.
 | Invalid arguments (bad id, `limit` out of range, `include_image`) | `422` `invalid_innerspace_request` | `BAD_REQUEST` |
 | No such floor plan | `404` `innerspace_not_found` | `NOT_FOUND` |
 | The console refused the session for InnerSpace (expired session or no InnerSpace access) | `403` `innerspace_forbidden` | `UPSTREAM_FORBIDDEN` |
-| Not installed, not running, login rejected, connection, HTTP, malformed or rate-limited | `502` `innerspace_upstream_error` | `UPSTREAM_ERROR` |
+| The InnerSpace application answered `503` (restarting or busy) | `503` `innerspace_unavailable`, with `Retry-After` | `UPSTREAM_ERROR` |
+| Not installed, not running, login rejected, connection, other HTTP or malformed | `502` `innerspace_upstream_error` | `UPSTREAM_ERROR` |
+| The console rate-limited the request | `429` `innerspace_rate_limited` | `RATE_LIMITED` |
+| No read slot in time at the operation gate | `503` `controller_busy`, with `Retry-After` | `CONTROLLER_BUSY` |
 | Controller does not declare `innerspace` | `409` `capability_mismatch` | |
 
 InnerSpace not being installed is a `502`, never a `404`. Over the action

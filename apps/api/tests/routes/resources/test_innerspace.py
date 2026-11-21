@@ -20,6 +20,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceConnectionManager,
     InnerSpaceHttpError,
 )
+from unifi_core.operation_gate import ControllerBusyError
 
 from tests.innerspace_data import (
     DEVICE_IP,
@@ -323,6 +324,7 @@ async def test_init_failure_is_502_and_a_refused_login_is_not_retried(tmp_path, 
     [
         (UniFiPermissionError("list InnerSpace walls: refused"), 403, "innerspace_forbidden", "UPSTREAM_FORBIDDEN"),
         (InnerSpaceHttpError("list InnerSpace walls: HTTP 404", status=404), 502, "innerspace_upstream_error", None),
+        (InnerSpaceHttpError("list InnerSpace walls: HTTP 503", status=503), 503, "innerspace_unavailable", None),
         (UniFiMalformedResponseError("list InnerSpace walls: not JSON"), 502, "innerspace_upstream_error", None),
         (
             UniFiRateLimitError("list InnerSpace walls: the console rate-limited the request (HTTP 429)"),
@@ -340,6 +342,8 @@ async def test_console_failures_map_to_fixed_statuses(tmp_path, error, status, k
 
     assert rest.status_code == status
     assert rest.json()["detail"]["kind"] == kind
+    # Only the InnerSpace application's own 503 is retryable.
+    assert ("Retry-After" in rest.headers) == (status == 503)
     # The core text already names the operation; it is not repeated.
     assert rest.json()["detail"]["message"] == f"Failed to {error}"
     assert gql["errors"][0]["extensions"]["code"] == (code or "UPSTREAM_ERROR")
@@ -441,3 +445,27 @@ async def test_a_result_without_a_required_field_is_502(tmp_path, monkeypatch):
     }
     assert gql["errors"][0]["extensions"]["code"] == "UPSTREAM_ERROR"
     assert gql["data"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_busy_gate_is_the_shared_retryable_503_not_an_upstream_error(tmp_path, monkeypatch):
+    """The read slot is taken inside the InnerSpace read; its refusal keeps the shared busy answer."""
+    app, headers, key, cid = await _app(tmp_path, console_cm())
+    cm = app.state.manager_factory
+
+    async def busy(controller_id, product):
+        raise ControllerBusyError(
+            "The innerspace controller is busy: all 1 read slots stayed in use for 25s. Nothing was sent.",
+            reason="wait_budget",
+            retry_after=3,
+        )
+
+    monkeypatch.setattr(cm, "_take_read_slot", busy)
+
+    rest = await _get(app, headers, f"{BASE}/floor-plans/{PLAN}/walls")
+    gql = await graphql(app, key, f'{{ innerspace {{ walls(controller: "{cid}", planId: "{PLAN}") {{ total }} }} }}')
+
+    assert rest.status_code == 503
+    assert rest.json()["detail"]["kind"] == "controller_busy"
+    assert rest.headers["Retry-After"] == "3"
+    assert gql["errors"][0]["extensions"]["code"] == "CONTROLLER_BUSY"
