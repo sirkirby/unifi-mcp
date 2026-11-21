@@ -4,11 +4,11 @@
 
 ## Summary
 
-UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). We have no servers, no analytics, no telemetry, and no tracking.
+UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). The InnerSpace server, not yet released, also talks only to your console, with a console login (see [InnerSpace floor plan data](#innerspace-floor-plan-data)). We have no servers, no analytics, no telemetry, and no tracking.
 
 ## How UniFi MCP Works
 
-UniFi MCP is a set of [Model Context Protocol](https://modelcontextprotocol.io/) servers that run **locally on your machine**. The Network, Protect and Access servers connect directly to your UniFi controller on your local network; the Site Manager server connects to Ubiquiti's cloud instead. Your AI agent (Claude Code, Claude Cowork, or other MCP clients) communicates with the MCP server over a local stdio or HTTP connection.
+UniFi MCP is a set of [Model Context Protocol](https://modelcontextprotocol.io/) servers that run **locally on your machine**. The Network, Protect, Access and InnerSpace servers connect directly to your UniFi controller on your local network; the Site Manager server connects to Ubiquiti's cloud instead. Your AI agent (Claude Code, Claude Cowork, or other MCP clients) communicates with the MCP server over a local stdio or HTTP connection.
 
 ```
 Your AI Agent <--local--> MCP Server (on your machine) <--your network--> UniFi Controller
@@ -54,6 +54,14 @@ Your AI Agent <--local--> Site Manager server (on your machine) <--internet--> U
 - The server is read-only and stores nothing; the account holder's name, email and role are never returned to the agent
 - The Cloud Relay does not include this server by default. If you add it to the relay, a relay token for that location can read the whole account
 
+### InnerSpace floor plan data
+
+The InnerSpace server is not yet released. It is local-first: it logs in to the console you name with a username and password and reads InnerSpace through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
+
+- The data it returns describes a building: floor plans, wall positions, device placements, MAC addresses and serial numbers. Response redaction hides secret-looking fields by name; it does not mask MAC addresses, serial numbers or plan geometry, so review results before you share them.
+- A floor plan image is returned to your AI agent only by the MCP server, on request, and never by `unifi-api-server`.
+- The server stores nothing. The Cloud Relay does not include it by default; if you add it, a relay token for that location can read the project.
+
 ### Relay Mode (optional)
 
 If you choose to enable the [cloud relay](packages/unifi-mcp-relay/), your tool calls are proxied through a Cloudflare Worker:
@@ -82,7 +90,7 @@ If you set an OTLP endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`), the MCP servers sen
 
 | Service | When Used | What It Sees |
 |---------|-----------|-------------|
-| **Your UniFi Controller** | Network, Protect and Access servers | Tool requests (queries, mutations) over your local network |
+| **Your UniFi Controller** | Network, Protect, Access and InnerSpace servers | Tool requests (queries, mutations) over your local network; for InnerSpace, the console login and read requests |
 | **Ubiquiti Site Manager API (`api.ui.com`)** | Only if you run the Site Manager server | Your Site Manager API key and every read request it makes, over HTTPS |
 | **Cloudflare Workers** | Only if you enable relay mode | Tool calls in transit (encrypted, not stored) |
 | **Your OTLP collector** | Only if you set an OTLP endpoint | Trace spans: MCP method, tool name, request ID, timing, error messages of failed requests |

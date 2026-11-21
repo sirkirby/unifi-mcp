@@ -1276,10 +1276,33 @@ def _only_report(tmp_path, server="sitemanager"):
 def test_sitemanager_is_a_server_target_and_part_of_all():
     import live_smoke
 
-    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager"]
+    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager", "innerspace"]
     assert live_smoke.SERVER_PACKAGES["sitemanager"] == "unifi-sitemanager-mcp"
     assert live_smoke.SERVER_CONFIGS["sitemanager"]["prefix"] == "sitemanager"
     assert live_smoke.SUPPORT_BUNDLE_SERVERS == ("network", "protect", "access")
+
+
+def test_innerspace_is_a_server_target_without_a_support_bundle():
+    import live_smoke
+
+    assert live_smoke.SERVER_PACKAGES["innerspace"] == "unifi-innerspace-mcp"
+    config = live_smoke.SERVER_CONFIGS["innerspace"]
+    assert config["prefix"] == "innerspace"
+    assert config["manifest"].is_file()
+    assert "innerspace" not in live_smoke.SUPPORT_BUNDLE_SERVERS
+    names = {tool["name"] for tool in live_smoke.load_manifest("innerspace")["tools"]}
+    assert "innerspace_list_floor_plans" in names
+
+
+def test_an_innerspace_exception_is_recorded_by_its_class_only():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=AsyncMock(side_effect=RuntimeError("FAKE-plan-title on 192.0.2.10")))
+
+    record = asyncio.run(runner.call("innerspace_get_project", {}, "readonly"))
+
+    assert (record.status, record.error) == ("exception", "unexpected RuntimeError")
 
 
 def test_sitemanager_reads_are_exactly_the_nine_read_only_domain_tools():
@@ -1308,7 +1331,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
         phase="safe", report_dir="out", delay=0.25, include_heavy_reads=False, interactive_risky=False, tool=[]
     )
     assert live_smoke.run_all_servers(args) == 0
-    assert len(commands) == 4
+    assert len(commands) == 5
     script = str(Path(live_smoke.__file__).resolve())
     for command, (server, package) in zip(
         commands,
@@ -1317,6 +1340,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
             ("protect", "unifi-protect-mcp"),
             ("access", "unifi-access-mcp"),
             ("sitemanager", "unifi-sitemanager-mcp"),
+            ("innerspace", "unifi-innerspace-mcp"),
         ],
     ):
         assert command == [
@@ -1677,3 +1701,182 @@ def test_live_smoke_previews_skip_meta_tools_that_are_not_read_only():
 
     assert called == []
     assert [(r.tool, r.status) for r in runner.report.records] == [("unifi_batch_cancel", "skipped")]
+
+
+def test_innerspace_plan_id_is_discovered_from_the_floor_plan_list():
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember(
+        "innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{"id": "plan-1"}], "count": 1}}
+    )
+
+    for tool in ("innerspace_list_walls", "innerspace_list_placed_devices", "innerspace_get_plan_asset"):
+        assert runner.args_for_tool(tool, ["plan_id"]) == ({"plan_id": "plan-1"}, "")
+
+
+def _innerspace_runner(status_result):
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append(tool)
+        if tool == "innerspace_get_status":
+            return status_result
+        if tool == "innerspace_get_plan_asset":
+            return {
+                "success": True,
+                "data": {"content_type": "image/png", "resource_uri": "innerspace://plans/p/image"},
+            }
+        return {"success": True, "data": {"floor_plans": [{"id": "plan-1"}], "count": 1}}
+
+    async def read_resource(uri):
+        from mcp.server.mcpserver.exceptions import ResourceError
+
+        if not uri.endswith("/image"):
+            raise ResourceError("Failed to read InnerSpace plan image: the image is a PNG; read ...")
+        return [SimpleNamespace(content=b"\x89PNG\r\n\x1a\n", mime_type="image/png")]
+
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
+    runner.unwrap_result = lambda raw: raw
+    return runner, calls
+
+
+@pytest.mark.parametrize(
+    ("status", "state"),
+    [({"installed": False, "running": False}, "not installed"), ({"installed": True, "running": False}, "not running")],
+)
+def test_innerspace_reads_are_skipped_when_the_app_is_absent(status, state):
+    runner, calls = _innerspace_runner({"success": True, "data": status})
+
+    asyncio.run(runner.run())
+
+    assert calls == ["innerspace_get_status"]
+    skipped = [r for r in runner.report.records if r.status == "skipped"]
+    assert len(skipped) == 8
+    assert {r.error for r in skipped} == {f"InnerSpace is {state} on this console"}
+
+
+@pytest.mark.parametrize(
+    "status_result",
+    [
+        {"success": True, "data": {"installed": True, "running": True}},
+        {"success": False, "error": "Failed to get InnerSpace status: the console is unreachable"},
+        # Empty or redacted: unknown, not "not installed".
+        {"success": True},
+        {"success": True, "data": {}},
+        {"success": True, "data": "[REDACTED]"},
+        {"success": True, "data": {"installed": "[REDACTED]", "running": "[REDACTED]"}},
+        {"success": True, "data": {"installed": True}},
+    ],
+)
+def test_innerspace_reads_run_when_the_app_runs_or_its_status_is_unknown(status_result):
+    runner, calls = _innerspace_runner(status_result)
+
+    asyncio.run(runner.run())
+
+    # Read once before the seed reads, which do not repeat it, and once in the read-only phase.
+    assert calls[0] == "innerspace_get_status"
+    assert calls.count("innerspace_get_status") == 2
+    assert "innerspace_list_walls" in calls
+    assert not [r for r in runner.report.records if r.status == "skipped"]
+    assert [r.status for r in runner.report.records if r.phase == "resources"] == ["ok", "refused"]
+
+
+def test_innerspace_plan_images_are_read_through_their_resources_and_the_other_type_is_refused():
+    """Each plan's image is read from the resource_uri its asset names; the other type's template must refuse it."""
+    import live_smoke
+    from mcp.server.mcpserver.exceptions import ResourceError
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+    jpeg = b"\xff\xd8\xff" + b"\x00" * 8
+    assets = {
+        "plan-1": {"content_type": "image/png", "resource_uri": "innerspace://plans/plan-1/image"},
+        "plan-2": {"content_type": "image/jpeg", "resource_uri": "innerspace://plans/plan-2/image.jpg"},
+    }
+    images = {"innerspace://plans/plan-1/image": png, "innerspace://plans/plan-2/image.jpg": jpeg}
+
+    async def call_tool(tool, args):
+        return {"success": True, "data": assets[args["plan_id"]]}
+
+    async def read_resource(uri):
+        if uri not in images:
+            raise ResourceError("Failed to read InnerSpace plan image: the image is a PNG; read ...")
+        mime = "image/png" if uri.endswith("/image") else "image/jpeg"
+        return [SimpleNamespace(content=images[uri], mime_type=mime)]
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
+    runner.unwrap_result = lambda raw: raw
+    runner.cache.remember(
+        "innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{"id": "plan-1"}, {"id": "plan-2"}]}}
+    )
+
+    asyncio.run(runner.run_innerspace_resources())
+
+    reads = [r for r in runner.report.records if r.phase == "resources"]
+    assert [(r.tool, r.status) for r in reads] == [
+        ("innerspace://plans/{plan_id}/image", "ok"),
+        ("innerspace://plans/{plan_id}/image.jpg", "refused"),
+        ("innerspace://plans/{plan_id}/image.jpg", "ok"),
+        ("innerspace://plans/{plan_id}/image", "refused"),
+    ]
+    assert reads[0].summary == {"mime_type": "image/png", "bytes": len(png), "magic_ok": True}
+    assert reads[2].summary == {"mime_type": "image/jpeg", "bytes": len(jpeg), "magic_ok": True}
+    assert all(r.success is True for r in reads)
+
+
+def _innerspace_resource_runner(call_tool, read_resource, plans):
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
+    runner.unwrap_result = lambda raw: raw
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": plans}})
+    return runner
+
+
+def test_innerspace_negative_control_fails_on_an_unrelated_read_failure():
+    """A busy gate shares the "Failed to read" prefix; only the type refusal passes the control."""
+    from mcp.server.mcpserver.exceptions import ResourceError
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+
+    async def call_tool(tool, args):
+        return {"success": True, "data": {"content_type": "image/png", "resource_uri": "innerspace://plans/p/image"}}
+
+    async def read_resource(uri):
+        if uri.endswith("/image"):
+            return [SimpleNamespace(content=png, mime_type="image/png")]
+        raise ResourceError("Failed to read InnerSpace plan image: the console is busy; retry shortly.")
+
+    runner = _innerspace_resource_runner(call_tool, read_resource, [{"id": "p"}])
+    asyncio.run(runner.run_innerspace_resources())
+
+    reads = [r for r in runner.report.records if r.phase == "resources"]
+    assert [r.status for r in reads] == ["ok", "exception"]
+    assert reads[1].success is False
+
+
+def test_innerspace_resources_record_a_skip_without_plans_and_survive_an_asset_failure():
+    async def read_resource(uri):  # pragma: no cover - never reached
+        raise AssertionError("no resource read expected")
+
+    async def no_call(tool, args):  # pragma: no cover - never reached
+        raise AssertionError("no tool call expected")
+
+    runner = _innerspace_resource_runner(no_call, read_resource, [])
+    asyncio.run(runner.run_innerspace_resources())
+    assert [(r.status, r.error) for r in runner.report.records] == [("skipped", "no floor plans listed")]
+
+    async def failing_call(tool, args):
+        raise RuntimeError("controller detail that must not be recorded")
+
+    runner = _innerspace_resource_runner(failing_call, read_resource, [{"id": "p"}])
+    asyncio.run(runner.run_innerspace_resources())
+    (record,) = runner.report.records
+    assert (record.status, record.success) == ("exception", False)
+    assert record.error == "plan asset read raised RuntimeError"

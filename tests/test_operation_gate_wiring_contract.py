@@ -20,6 +20,7 @@ APPS = {
     "network": ("unifi_network_mcp", True),
     "protect": ("unifi_protect_mcp", True),
     "access": ("unifi_access_mcp", False),
+    "innerspace": ("unifi_innerspace_mcp", False),
     "sitemanager": ("unifi_sitemanager_mcp", False),
 }
 FACTORIES = {"create_permissioned_tool", "setup_permissioned_tool"}

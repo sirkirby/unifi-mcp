@@ -21,6 +21,11 @@ KNOWN_QUIRKS_BY_PRODUCT = {
 }
 
 
+# Products a console controller record may declare. InnerSpace is never probed:
+# it is session-only, and whether it is installed comes from the first read.
+CONTROLLER_PRODUCTS = ("network", "protect", "access", "innerspace")
+
+
 class ControllerNotFound(Exception):
     pass
 
@@ -37,8 +42,8 @@ def validate_controller_credentials(
     *,
     validate_product_kinds: bool = True,
 ) -> None:
-    if validate_product_kinds and any(p not in ("network", "protect", "access") for p in product_kinds):
-        raise InvalidControllerCredentials("Controller products must be network, protect, or access.")
+    if validate_product_kinds and any(p not in CONTROLLER_PRODUCTS for p in product_kinds):
+        raise InvalidControllerCredentials("Controller products must be network, protect, access, or innerspace.")
     if bool(username) != bool(password):
         raise InvalidControllerCredentials(
             "Provide both username and password, or omit both for API-key authentication."
@@ -48,6 +53,8 @@ def validate_controller_credentials(
         raise InvalidControllerCredentials(
             "Protect requires username and password for session bootstrap, even with an API token."
         )
+    if "innerspace" in product_kinds and not has_session:
+        raise InvalidControllerCredentials("InnerSpace requires username and password; it does not use an API token.")
     if not has_session and not (api_token and api_token.strip()):
         raise InvalidControllerCredentials("Provide a complete username/password pair or an API token.")
 
@@ -189,8 +196,11 @@ async def probe_capabilities(controller: Controller) -> dict:
         "known_quirks": [],
         "probed_at": datetime.now(timezone.utc).isoformat(),
         "probe_error": None,
+        "not_probed": [],
     }
     declared = [p for p in controller.product_kinds.split(",") if p]
+    # Declared but never probed: InnerSpace is decided at its first read, with the session.
+    payload["not_probed"] = [p for p in declared if p == "innerspace"]
 
     timeout = aiohttp.ClientTimeout(total=5)
     connector = aiohttp.TCPConnector(ssl=controller.verify_tls)

@@ -724,6 +724,242 @@
       }
     },
     {
+      "name": "innerspace_get_plan_asset",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "get_plan_asset",
+      "input_schema": {
+        "properties": {
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_get_project",
+      "product": "innerspace",
+      "category": "project",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "project_manager",
+      "manager_method": "get_project",
+      "input_schema": {
+        "properties": {
+          "include_shapes": {
+            "description": "When true, also returns every shape of the project with converted geometry (large).",
+            "type": "boolean"
+          },
+          "unit": {
+            "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_get_status",
+      "product": "innerspace",
+      "category": "status",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "get_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_access_points",
+      "product": "innerspace",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_access_points",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_floor_plans",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "list_floor_plans",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_inventory",
+      "product": "innerspace",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_inventory",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_placed_devices",
+      "product": "innerspace",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "project_manager",
+      "manager_method": "list_placed_devices",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+            "maximum": 2000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_switches",
+      "product": "innerspace",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "inventory_manager",
+      "manager_method": "list_switches",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_list_walls",
+      "product": "innerspace",
+      "category": "project",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "project_manager",
+      "manager_method": "list_walls",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+            "maximum": 2000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "protect_acknowledge_event",
       "product": "protect",
       "category": "event",

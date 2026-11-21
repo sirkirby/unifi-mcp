@@ -18,6 +18,7 @@ MANIFESTS = {
     "protect": ROOT / "apps/protect/src/unifi_protect_mcp/tools_manifest.json",
     "access": ROOT / "apps/access/src/unifi_access_mcp/tools_manifest.json",
     "sitemanager": ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json",
+    "innerspace": ROOT / "apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json",
 }
 READ_HINTS = ("readOnlyHint", "idempotentHint", "openWorldHint")
 WRITE_HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")

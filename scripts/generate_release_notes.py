@@ -161,6 +161,25 @@ APP_CONFIGS = {
             ),
         ),
     ),
+    "innerspace": PackageConfig(
+        key="innerspace",
+        display_name="UniFi InnerSpace MCP",
+        pypi_package="unifi-innerspace-mcp",
+        install_command="uvx unifi-innerspace-mcp=={version}",
+        path_groups=(
+            PathGroup("InnerSpace MCP", ("apps/innerspace/",)),
+            PathGroup("Shared Libraries", ("packages/unifi-core/", "packages/unifi-mcp-shared/")),
+            PathGroup(
+                "Release Infrastructure",
+                (
+                    ".github/workflows/release-innerspace.yml",
+                    ".github/workflows/docker-innerspace.yml",
+                    ".github/workflows/test-innerspace.yml",
+                    *COMMON_PACKAGE_PATHS,
+                ),
+            ),
+        ),
+    ),
     "core": PackageConfig(
         key="core",
         display_name="UniFi Core",
@@ -227,7 +246,7 @@ APP_CONFIGS = {
 
 PRIMARY_PATTERNS_BY_PACKAGE = {config.key: config.path_groups[0].patterns for config in APP_CONFIGS.values()}
 PACKAGE_KEYWORDS = tuple(APP_CONFIGS)
-PRODUCT_KEYS = ("network", "protect", "access", "sitemanager", "relay", "worker")
+PRODUCT_KEYS = ("network", "protect", "access", "sitemanager", "innerspace", "relay", "worker")
 
 
 def run_git(args: list[str]) -> str:
@@ -240,7 +259,7 @@ def parse_release_tag(tag: str) -> ReleaseTag:
     """Parse a package release tag such as ``network/v0.14.12``."""
 
     match = re.match(
-        r"^(?P<key>network|protect|access|sitemanager|core|shared|relay|worker)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$",
+        r"^(?P<key>network|protect|access|sitemanager|innerspace|core|shared|relay|worker)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$",
         tag,
     )
     if match:

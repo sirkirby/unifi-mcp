@@ -13,6 +13,7 @@ Complete documentation for the UniFi MCP ecosystem.
 - **[Plugin Acceptance Procedure](plugin-acceptance.md)** - How real-client evidence for the support matrix is produced
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
 - **[Site Manager Server](../apps/sitemanager/)** - Read-only, account-wide view from Ubiquiti's cloud API; its own [configuration](../apps/sitemanager/docs/configuration.md), [tools](../apps/sitemanager/docs/tools.md) and [troubleshooting](../apps/sitemanager/docs/troubleshooting.md)
+- **[InnerSpace Server](../apps/innerspace/)** - Not yet released. Read-only floor plans, walls and device placements from a console's InnerSpace application, through a console login; its own [configuration](../apps/innerspace/docs/configuration.md), [tools](../apps/innerspace/docs/tools.md) and [troubleshooting](../apps/innerspace/docs/troubleshooting.md)
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
 - **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
@@ -53,11 +54,11 @@ export UNIFI_TOOL_REGISTRATION_MODE=lazy  # default, recommended
 ### Core Guides
 
 #### [Sanitized Support Bundles](support-bundles.md)
-Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe. The Site Manager server has no support bundle; see its [troubleshooting guide](../apps/sitemanager/docs/troubleshooting.md).
+Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe. The Site Manager and InnerSpace servers have no support bundle; see their [Site Manager](../apps/sitemanager/docs/troubleshooting.md) and [InnerSpace](../apps/innerspace/docs/troubleshooting.md) troubleshooting guides.
 
 #### [Checking the Controller's Identity](tls-verification.md)
 
-Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to. This applies to the Network, Protect and Access servers; Site Manager always verifies Ubiquiti's public certificate.
+Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to. This applies to the Network, Protect, Access and InnerSpace servers; Site Manager always verifies Ubiquiti's public certificate.
 
 #### [Credential Providers](credential-providers.md)
 Keep the controller password and API key out of the MCP client's environment with the `_FILE` and `_COMMAND` spellings, and the contract the command provider runs under: supported platforms, executable resolution, and process lifecycle.
@@ -145,6 +146,16 @@ UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key  # or UNIFI
 ```
 
 See [Site Manager configuration](../apps/sitemanager/docs/configuration.md).
+
+The InnerSpace server (not yet released) reads InnerSpace with a console login, so it takes the host, username and password but no API key, and never reads `UNIFI_API_KEY`:
+
+```bash
+UNIFI_INNERSPACE_HOST=192.168.1.1
+UNIFI_INNERSPACE_USERNAME=innerspace-mcp
+UNIFI_INNERSPACE_PASSWORD_FILE=/absolute/path/to/innerspace-password  # or UNIFI_INNERSPACE_PASSWORD / _COMMAND
+```
+
+See [InnerSpace configuration](../apps/innerspace/docs/configuration.md).
 
 ### Worker and Relay
 

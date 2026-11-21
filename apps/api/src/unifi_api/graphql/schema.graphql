@@ -1014,6 +1014,476 @@ type IncidentEvidence {
 }
 
 """
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceAccessPoint {
+  """InnerSpace device id"""
+  id: String
+
+  """Device name"""
+  name: String
+
+  """Device model"""
+  model: String
+
+  """Device MAC address"""
+  mac: String
+
+  """Device serial number"""
+  serial: String
+
+  """InnerSpace floor plan id"""
+  floorPlanId: String
+
+  """Distance from the plan's left edge, in the unit"""
+  x: Float
+
+  """Distance from the plan's top edge, in the unit"""
+  y: Float
+
+  """True when the plan has no usable scale, so x and y are null"""
+  scaleMissing: Boolean!
+
+  """Mounting height, in the unit"""
+  height: Float
+
+  """Azimuth in degrees"""
+  azimuth: Float
+
+  """Mount: ceiling, wall, rack or floor"""
+  mount: String
+
+  """online or offline"""
+  status: String
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceFloorPlan {
+  """InnerSpace floor plan id"""
+  id: String
+
+  """Plan name"""
+  name: String
+
+  """Floor number"""
+  floorNumber: Float
+
+  """Plan units per metre, or per foot when imperial"""
+  scalePerUnit: Float
+
+  """Plan image width in pixels"""
+  widthPx: Float
+
+  """Plan image height in pixels"""
+  heightPx: Float
+
+  """Plan origin x as the console sent it"""
+  originX: Float
+
+  """Plan origin y as the console sent it"""
+  originY: Float
+
+  """InnerSpace site id"""
+  siteId: String
+
+  """Asset file name taken from the image URL"""
+  imageFilename: String
+
+  """The plan map's horizontal image scale, if sent"""
+  imageScale: Float
+
+  """The plan map's image offset (x, y)"""
+  imageOffset: [Float!]
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceInventoryDevice {
+  """InnerSpace device id"""
+  id: String
+
+  """Device name"""
+  name: String
+
+  """Device model"""
+  model: String
+
+  """Device MAC address"""
+  mac: String
+
+  """Device serial number"""
+  serial: String
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpacePlacedDevice {
+  """Placed device id"""
+  id: String
+
+  """InnerSpace floor plan id"""
+  planId: String
+
+  """Device title"""
+  title: String
+
+  """Product id"""
+  productId: String
+
+  """Device MAC address"""
+  mac: String
+
+  """Distance from the plan's left edge, in the unit"""
+  x: Float
+
+  """Distance from the plan's top edge, in the unit"""
+  y: Float
+
+  """Mounting height, in the unit"""
+  height: Float
+
+  """Mount: ceiling, wall, floor or rack"""
+  mount: String
+
+  """Base and point-of-view rotation quaternions"""
+  rotation: JSON
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpacePlacedDevicePage {
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+
+  """InnerSpace floor plan id"""
+  planId: String!
+
+  """Placed devices, at most limit"""
+  devices: [InnerSpacePlacedDevice!]!
+
+  """The limit the list was cut at"""
+  limit: Int!
+
+  """Devices on the plan"""
+  total: Int!
+
+  """Whether the list was cut at limit"""
+  truncated: Boolean!
+
+  """True when the plan has no usable scale"""
+  scaleMissing: Boolean!
+}
+
+"""
+Image metadata of one floor plan. The API never returns the image; read it through the InnerSpace MCP server's plan image resource. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpacePlanAsset {
+  """Asset file name"""
+  filename: String!
+
+  """Image media type"""
+  contentType: String!
+
+  """Image width in pixels"""
+  widthPx: Float
+
+  """Image height in pixels"""
+  heightPx: Float
+
+  """Plan units per metre, or per foot when imperial"""
+  scalePerUnit: Float
+
+  """The plan map's horizontal image scale, if sent"""
+  imageScale: Float
+
+  """The plan map's image offset (x, y)"""
+  imageOffset: [Float!]
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpacePlanSummary {
+  """InnerSpace floor plan id"""
+  id: String
+
+  """Plan title"""
+  title: String
+
+  """Plan order in the project"""
+  ordering: Float
+
+  """InnerSpace site id"""
+  siteId: String
+
+  """Plan units per metre, or per foot when imperial"""
+  scalePerUnit: Float
+
+  """True when the plan has no usable scale"""
+  scaleMissing: Boolean!
+
+  """The plan map's horizontal image scale, if sent"""
+  imageScale: Float
+
+  """The plan map's image offset (x, y)"""
+  imageOffset: [Float!]
+
+  """Number of shapes on the plan, by shape type"""
+  shapeCounts: JSON!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceProject {
+  """Project identity"""
+  project: InnerSpaceProjectInfo!
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+
+  """The project's plans, in order"""
+  plans: [InnerSpacePlanSummary!]!
+
+  """Wall types that are not deleted"""
+  wallTypes: [InnerSpaceWallType!]!
+
+  """Attenuation object types as the console sent them"""
+  attenuationObjectTypes: JSON!
+
+  """
+  Every shape with converted geometry, when requested; device addresses are not carried
+  """
+  shapes: JSON
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceProjectInfo {
+  """InnerSpace project id"""
+  id: String
+
+  """Project title"""
+  title: String
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+
+  """When the project was created"""
+  createdAt: String
+
+  """When the project was last updated"""
+  updatedAt: String
+}
+
+"""
+Read-only access to UniFi InnerSpace resources. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceQuery {
+  """
+  Whether InnerSpace is installed and running on the console. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  status(controller: ID!): InnerSpaceStatus!
+
+  """
+  The InnerSpace project. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  project(controller: ID!, includeShapes: Boolean! = false, unit: String = null): InnerSpaceProject!
+
+  """
+  InnerSpace floor plans. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  floorPlans(controller: ID!, innerspaceSiteId: String = null): [InnerSpaceFloorPlan!]!
+
+  """
+  Walls of one InnerSpace floor plan. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  walls(controller: ID!, planId: String!, limit: Int! = 500, unit: String = null): InnerSpaceWallPage!
+
+  """
+  Devices placed on one InnerSpace floor plan. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  placedDevices(controller: ID!, planId: String!, limit: Int! = 500, unit: String = null): InnerSpacePlacedDevicePage!
+
+  """
+  InnerSpace access points. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  accessPoints(controller: ID!, innerspaceSiteId: String = null, unit: String = null): [InnerSpaceAccessPoint!]!
+
+  """
+  InnerSpace switches. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  switches(controller: ID!, innerspaceSiteId: String = null, unit: String = null): [InnerSpaceSwitch!]!
+
+  """
+  Adopted devices not yet placed on a plan. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  inventory(controller: ID!, innerspaceSiteId: String = null): [InnerSpaceInventoryDevice!]!
+
+  """
+  Image metadata of one InnerSpace floor plan. The image itself is read through the InnerSpace MCP server, never through this API. UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+  """
+  planAsset(controller: ID!, planId: String!): InnerSpacePlanAsset!
+}
+
+"""
+Whether the InnerSpace application is installed and running on the UniFi OS console.
+"""
+type InnerSpaceStatus {
+  """Whether the InnerSpace application is installed"""
+  installed: Boolean!
+
+  """Whether the InnerSpace application is running"""
+  running: Boolean!
+
+  """Installed version"""
+  version: String
+
+  """Version available as an update, if any"""
+  updateAvailable: String
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceSwitch {
+  """InnerSpace device id"""
+  id: String
+
+  """Device name"""
+  name: String
+
+  """Device model"""
+  model: String
+
+  """Switch type"""
+  type: String
+
+  """Device MAC address"""
+  mac: String
+
+  """Device serial number"""
+  serial: String
+
+  """InnerSpace floor plan id"""
+  floorPlanId: String
+
+  """Distance from the plan's left edge, in the unit"""
+  x: Float
+
+  """Distance from the plan's top edge, in the unit"""
+  y: Float
+
+  """True when the plan has no usable scale, so x and y are null"""
+  scaleMissing: Boolean!
+
+  """online or offline"""
+  status: String
+
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceWall {
+  """Wall id"""
+  id: String
+
+  """InnerSpace floor plan id"""
+  planId: String
+
+  """Start x from the plan's left edge, in the unit"""
+  x1: Float
+
+  """Start y from the plan's top edge, in the unit"""
+  y1: Float
+
+  """End x from the plan's left edge, in the unit"""
+  x2: Float
+
+  """End y from the plan's top edge, in the unit"""
+  y2: Float
+
+  """Wall length, in the unit"""
+  length: Float
+
+  """Wall material variant"""
+  variant: String
+
+  """Wall type id"""
+  wallTypeId: String
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceWallPage {
+  """Length unit of the result: metric or imperial"""
+  unit: String!
+
+  """InnerSpace floor plan id"""
+  planId: String!
+
+  """Walls, at most limit"""
+  walls: [InnerSpaceWall!]!
+
+  """The limit the list was cut at"""
+  limit: Int!
+
+  """Walls on the plan"""
+  total: Int!
+
+  """Whether the list was cut at limit"""
+  truncated: Boolean!
+
+  """True when the plan has no usable scale"""
+  scaleMissing: Boolean!
+
+  """Walls without two readable end points; coordinates are null"""
+  unreadable: Int!
+}
+
+"""
+UniFi InnerSpace read, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+"""
+type InnerSpaceWallType {
+  """Wall type id"""
+  id: String
+
+  """Wall type name"""
+  name: String
+
+  """Attenuation in dB"""
+  attenuationDb: Float
+
+  """Display colour"""
+  color: String
+
+  """Whether the wall type is drawn transparent"""
+  transparent: Boolean
+
+  """Wall variant this type overrides"""
+  overridesVariant: String
+}
+
+"""
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
@@ -2041,6 +2511,9 @@ type Query {
   A READ key sees every resource the cloud account can see. These IDs are scoped to the Site Manager tool family — do not pass them to other resource tools.
   """
   sitemanager: SiteManagerQuery!
+
+  """Read-only access to UniFi InnerSpace resources."""
+  innerspace: InnerSpaceQuery!
 }
 
 """Radio configuration entry on a UniFi device with radios."""

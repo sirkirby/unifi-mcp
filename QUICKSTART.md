@@ -1,7 +1,8 @@
 # Quick Start
 
 UniFi MCP ships independent MCP servers for Network, Protect, and Access, a
-read-only Site Manager server for a whole UniFi cloud account, an HTTP API for
+read-only Site Manager server for a whole UniFi cloud account, an InnerSpace
+server for a console's floor plans (not yet released), an HTTP API for
 custom applications, and optional Cloud Relay components for remote MCP
 clients.
 
@@ -65,6 +66,16 @@ or `UNIFI_SITEMANAGER_API_KEY_COMMAND`. The server never uses `UNIFI_API_KEY`
 or the other `UNIFI_*` variables above. Stdio is the default; HTTP is opt-in
 and listens on port 3003. See the [Site Manager README](apps/sitemanager/README.md).
 
+## InnerSpace (not yet released)
+
+The InnerSpace server reads the floor plans, walls and device placements of the
+InnerSpace application on a UniFi OS console. It is not yet released: there is
+no released package, image or plugin, so run it from a source checkout (see
+[Source Checkout](#source-checkout) below). It logs in to the console with a
+username and password and never uses `UNIFI_API_KEY`. It has nine read-only
+domain tools. Stdio is the default; HTTP is opt-in and listens on port 3005.
+See the [InnerSpace README](apps/innerspace/README.md).
+
 ## Claude Desktop
 
 Example Network server configuration:
@@ -107,11 +118,19 @@ uv run --package unifi-network-mcp unifi-network-mcp
 ```
 
 The other servers run the same way with their own package names, for example
-`uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp`.
+`uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp`. InnerSpace runs
+only this way until its first release:
+
+```bash
+export UNIFI_INNERSPACE_HOST=192.168.1.1
+export UNIFI_INNERSPACE_USERNAME=innerspace-mcp
+export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
+uv run --package unifi-innerspace-mcp unifi-innerspace-mcp
+```
 
 ## Optional Cloud Relay
 
-Use the relay when a cloud-hosted agent needs to reach MCP servers running on your local network without opening inbound ports. The relay does not include the Site Manager server unless you add it to `UNIFI_RELAY_SERVERS` yourself; a relay token for that location would then read the whole cloud account.
+Use the relay when a cloud-hosted agent needs to reach MCP servers running on your local network without opening inbound ports. The relay does not include the Site Manager server unless you add it to `UNIFI_RELAY_SERVERS` yourself; a relay token for that location would then read the whole cloud account. It does not include the InnerSpace server by default either.
 
 Deploy the Cloudflare Worker gateway:
 

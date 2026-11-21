@@ -42,9 +42,10 @@ SERVER_PACKAGES = {
     "protect": "unifi-protect-mcp",
     "access": "unifi-access-mcp",
     "sitemanager": "unifi-sitemanager-mcp",
+    "innerspace": "unifi-innerspace-mcp",
 }
 
-# Servers that ship a support-bundle service. Site Manager has none.
+# Servers that ship a support-bundle service. Site Manager and InnerSpace have none.
 SUPPORT_BUNDLE_SERVERS = ("network", "protect", "access")
 
 
@@ -97,6 +98,19 @@ SERVER_CONFIGS = {
         "manifest": REPO_ROOT / "apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json",
         "prefix": "sitemanager",
         "server_label": "UniFi Site Manager",
+        "close": "close",
+    },
+    "innerspace": {
+        "main": "unifi_innerspace_mcp.main",
+        "runtime": "unifi_innerspace_mcp.runtime",
+        "bootstrap": "unifi_innerspace_mcp.bootstrap",
+        "categories": "unifi_innerspace_mcp.categories",
+        "jobs": "unifi_innerspace_mcp.jobs",
+        "tool_index": "unifi_innerspace_mcp.tool_index",
+        "base_package": "unifi_innerspace_mcp.tools",
+        "manifest": REPO_ROOT / "apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json",
+        "prefix": "innerspace",
+        "server_label": "UniFi InnerSpace",
         "close": "close",
     },
 }
@@ -230,6 +244,14 @@ def measure_tool_result_sizes(raw: Any) -> dict[str, int]:
     }
 
 
+# InnerSpace plan image resources: one template per image type, and the file header each must start with.
+INNERSPACE_IMAGE_TEMPLATES = {
+    "image/png": "innerspace://plans/{plan_id}/image",
+    "image/jpeg": "innerspace://plans/{plan_id}/image.jpg",
+}
+INNERSPACE_IMAGE_MAGIC = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
+
+
 @dataclass
 class SmokeRecord:
     tool: str
@@ -261,7 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run live smoke checks against UniFi MCP tools.")
     parser.add_argument(
         "--server",
-        choices=["network", "protect", "access", "sitemanager", "all"],
+        choices=["network", "protect", "access", "sitemanager", "innerspace", "all"],
         required=False,
         help="Required for MCP-direct phases. Ignored for --phase api-actions / api-resources / api-streams.",
     )
@@ -614,6 +636,9 @@ class LiveSmokeRunner:
             kwargs["prefix"] = self.config["prefix"]
             kwargs["server_label"] = self.config["server_label"]
         await registration_mod.register_tools_for_mode(**kwargs)
+        if self.server_key == "innerspace" and await main_mod.plan_image_resource_enabled():
+            # Registered by the server's startup, not by the shared tool registration.
+            importlib.import_module("unifi_innerspace_mcp.resources.plan_image").register_plan_image_resource()
 
     def setup_failed(self, error: str) -> None:
         self.report.records.append(
@@ -665,8 +690,9 @@ class LiveSmokeRunner:
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.status = "exception"
             record.success = False
-            # Site Manager transport exceptions can carry request headers.
-            record.error = f"unexpected {type(exc).__name__}" if self.server_key == "sitemanager" else str(exc)
+            # Site Manager transport exceptions can carry request headers, InnerSpace ones console values.
+            by_class = self.server_key in ("sitemanager", "innerspace")
+            record.error = f"unexpected {type(exc).__name__}" if by_class else str(exc)
         self.report.records.append(record)
         print(f"{self.server_key} {phase} {record.status}: {tool} ({record.duration_ms}ms)", flush=True)
         if self.args.delay:
@@ -718,16 +744,111 @@ class LiveSmokeRunner:
                 await self.run_sitemanager_reads()
             return
 
+        if self.server_key == "innerspace" and not await self.innerspace_app_ready():
+            return
+
         await self.seed_read_lists()
 
         if self.args.phase in ("readonly", "safe"):
             await self.run_readonly()
+            if self.server_key == "innerspace" and any(
+                tool["name"] == "innerspace_get_plan_asset" for tool in self.selected_tools()
+            ):
+                await self.run_innerspace_resources()
         if self.args.phase in ("preview", "safe"):
             await self.run_previews()
         if self.args.phase in ("lifecycle", "safe"):
             await self.run_lifecycles()
         if self.args.phase == "approved":
             await self.run_approved()
+
+    async def innerspace_app_ready(self) -> bool:
+        """Read the InnerSpace app status first. Not installed or not running: every other read is skipped.
+
+        A status read that fails, or whose ``installed`` and ``running`` are not both booleans (empty or
+        redacted), is not a verdict on the app, so the reads then run and report their own errors.
+        """
+        record = await self.call("innerspace_get_status", {}, "seed")
+        status = (self.cache.by_tool.get("innerspace_get_status") or {}).get("data")
+        status = status if isinstance(status, dict) else {}
+        known = isinstance(status.get("installed"), bool) and isinstance(status.get("running"), bool)
+        if record.status != "ok" or not known or (status["installed"] and status["running"]):
+            return True
+        state = "not running" if status.get("installed") else "not installed"
+        for tool in self.selected_tools():
+            # Domain tools carry a permission category; the meta-tools do not read the console.
+            if tool["name"] != "innerspace_get_status" and tool.get("permission_category"):
+                self.skip(tool["name"], "readonly", f"InnerSpace is {state} on this console")
+        return False
+
+    async def run_innerspace_resources(self) -> None:
+        """Read every plan's image through the resource its asset names, and check the other type's refuses it.
+
+        Records the template, never the URI with its plan id, and only the MIME type, the byte count and
+        whether the file header matches.
+        """
+        plans = ((self.cache.by_tool.get("innerspace_list_floor_plans") or {}).get("data") or {}).get("floor_plans")
+        if not plans:
+            self.skip("innerspace plan image resource", "resources", "no floor plans listed")
+            return
+        for plan in plans:
+            plan_id = plan.get("id")
+            try:
+                asset = self.unwrap_result(
+                    await self.server.call_tool("innerspace_get_plan_asset", {"plan_id": plan_id})
+                )
+            except Exception as exc:
+                self.report.records.append(
+                    SmokeRecord(
+                        tool="innerspace plan image resource",
+                        phase="resources",
+                        status="exception",
+                        success=False,
+                        error=f"plan asset read raised {type(exc).__name__}",
+                    )
+                )
+                continue
+            data = asset.get("data") if isinstance(asset, dict) else None
+            content_type = data.get("content_type") if isinstance(data, dict) else None
+            if content_type not in INNERSPACE_IMAGE_TEMPLATES or not data.get("resource_uri"):
+                self.skip("innerspace plan image resource", "resources", "no plan image resource for this plan")
+                continue
+            await self.read_innerspace_image(
+                INNERSPACE_IMAGE_TEMPLATES[content_type], data["resource_uri"], content_type
+            )
+            for other_type, template in INNERSPACE_IMAGE_TEMPLATES.items():
+                if other_type != content_type:
+                    await self.read_innerspace_image(template, template.format(plan_id=plan_id), None)
+
+    async def read_innerspace_image(self, template: str, uri: str, expected_type: str | None) -> None:
+        """Read one image resource. ``expected_type`` ``None`` is the negative control: the read must be refused."""
+        started = time.perf_counter()
+        record = SmokeRecord(tool=template, phase="resources", status="error")
+        try:
+            (content, *_rest) = await self.server.read_resource(uri)
+            body = content.content if isinstance(content.content, bytes) else b""
+            if expected_type is None:
+                record.status, record.success = "failed", False
+                record.error = "the other image type's resource served the image"
+            else:
+                magic = INNERSPACE_IMAGE_MAGIC[expected_type]
+                record.summary = {
+                    "mime_type": content.mime_type,
+                    "bytes": len(body),
+                    "magic_ok": body.startswith(magic),
+                }
+                ok = content.mime_type == expected_type and body.startswith(magic)
+                record.status, record.success = ("ok", True) if ok else ("failed", False)
+        except Exception as exc:
+            # Only the type refusal counts: a busy gate, an unreachable console or a missing
+            # plan share the "Failed to read" prefix and must not pass the negative control.
+            refused = expected_type is None and "the image is a" in str(exc)
+            record.status, record.success = ("refused", True) if refused else ("exception", False)
+            if not refused:
+                record.error = f"unexpected {type(exc).__name__}"
+        record.duration_ms = int((time.perf_counter() - started) * 1000)
+        self.report.records.append(record)
+        print(f"{self.server_key} resources {record.status}: {template} ({record.duration_ms}ms)", flush=True)
 
     def selected_tools(self) -> list[dict[str, Any]]:
         tools = list(self.manifest["tools"])
@@ -775,7 +896,7 @@ class LiveSmokeRunner:
         seen: set[str] = set()
         for tool in candidate_tools:
             name = tool["name"]
-            if name in seen:
+            if name in seen or name in self.cache.by_tool:
                 continue
             seen.add(name)
             if not is_read_only(tool) or required_params(tool) or name in STREAM_OR_HEAVY_READS:
@@ -956,6 +1077,8 @@ class LiveSmokeRunner:
             return self.cache.device_mac("ap") or self.cache.device_mac("uap")
         if param == "ip_address":
             return self.cache.client_ip()
+        if param == "plan_id":
+            return self.cache.id_from_tool("innerspace_list_floor_plans", "floor_plans", ("id",))
         if param == "camera_id":
             return self.cache.id_from(("cameras",), ("id", "_id"))
         if param == "face_id":

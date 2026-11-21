@@ -40,11 +40,13 @@ server options; see
 
 ## Shared and product-specific precedence
 
-This section applies to the three console servers. Network, Protect, and Access
-resolve non-empty product-specific values before shared values:
-`UNIFI_NETWORK_*`, `UNIFI_PROTECT_*`, or `UNIFI_ACCESS_*` > `UNIFI_*`. Empty
-variables count as unset. This applies to the host, port, site, TLS settings and
-other connection settings, and to the credentials as described below. The shared
+This section applies to the four console servers. Network, Protect, Access and
+InnerSpace resolve non-empty product-specific values before shared values:
+`UNIFI_NETWORK_*`, `UNIFI_PROTECT_*`, `UNIFI_ACCESS_*` or `UNIFI_INNERSPACE_*` >
+`UNIFI_*`. Empty variables count as unset. This applies to the host, port, site, TLS
+settings and other connection settings, and to the credentials as described below.
+InnerSpace has no site and takes no API key; see
+[InnerSpace configuration](../apps/innerspace/docs/configuration.md). The shared
 bootstrap overlays this rule after loading the bundled YAML, so the YAML variable
 names alone do not define precedence.
 

@@ -78,6 +78,7 @@ async def list_widgets():
         ("protect", "unifi_protect_mcp"),
         ("access", "unifi_access_mcp"),
         ("sitemanager", "unifi_sitemanager_mcp"),
+        ("innerspace", "unifi_innerspace_mcp"),
     ):
         empty_manifest = root / f"apps/{product}/src/{package}/tools_manifest.json"
         empty_manifest.parent.mkdir(parents=True)
@@ -97,6 +98,9 @@ def _build_protect_managers():
     return {}
 
 def _build_access_managers():
+    return {}
+
+def _build_innerspace_managers():
     return {}
 """.lstrip()
     )
@@ -407,7 +411,7 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 305
+    assert len(payload["actions"]) == 314
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_get_incident_evidence",
@@ -492,6 +496,7 @@ def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -
         "make -C apps/protect manifest",
         "make -C apps/access manifest",
         "make -C apps/sitemanager manifest",
+        "make -C apps/innerspace manifest",
         "scripts/generate_api_action_catalog.py",
         "make skill-references",
         "make server-manifests",
@@ -597,7 +602,7 @@ def test_account_optional_metric_interval_needs_explicit_default_translator(tmp_
 
     generator = _load_generator()
     _write_synthetic_repo(tmp_path)
-    for product in ("network", "protect", "access"):
+    for product in ("network", "protect", "access", "innerspace"):
         path, _ = _manifest(tmp_path, product)
         path.write_text(json.dumps({"tools": [], "module_map": {}}))
     _write_cloud_tool(tmp_path)

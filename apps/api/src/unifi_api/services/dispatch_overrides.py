@@ -1751,6 +1751,13 @@ def _vouchers_result(result: Any, args: dict[str, Any], manager: Any) -> Any:
     )
 
 
+def _innerspace_page_result(result: Any, args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    """A wall or placed-device page with the limit it was cut at, as REST and GraphQL report it."""
+    from unifi_api.services.innerspace import DEFAULT_LIMIT, page_with_limit
+
+    return page_with_limit(result, args.get("limit", DEFAULT_LIMIT))
+
+
 UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
@@ -1761,6 +1768,8 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
 }
 
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
+    "innerspace_list_walls": _innerspace_page_result,
+    "innerspace_list_placed_devices": _innerspace_page_result,
     "protect_get_snapshot": _snapshot_result,
     "protect_recent_events": _recent_events_result,
     "protect_alarm_list_profiles": _alarm_profile_list_result,

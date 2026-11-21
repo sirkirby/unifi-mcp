@@ -24,7 +24,7 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 The unifi-mcp repo ships eight independently versioned Python packages plus the
 Node/TypeScript worker app: `unifi-core`
 and `unifi-mcp-shared` live under `packages/`; `unifi-network-mcp`, `unifi-protect-mcp`,
-`unifi-access-mcp`, `unifi-sitemanager-mcp`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
+`unifi-access-mcp`, `unifi-sitemanager-mcp`, `unifi-innerspace-mcp`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
 alongside core and shared; `unifi-mcp-worker` lives under `apps/worker/` and publishes to npm.
 Each has its own package identity, tag namespace, publish workflow, and release-notes scope. Getting the release sequence wrong leaves downstream
 packages referencing non-existent PyPI versions or produces contaminated release notes
@@ -53,6 +53,7 @@ that bleed across package boundaries.
 | `unifi-mcp-protect` | `apps/protect/` | `unifi-protect-mcp` | `protect/v*` |
 | `unifi-mcp-access` | `apps/access/` | `unifi-access-mcp` | `access/v*` |
 | `unifi-sitemanager-mcp` | `apps/sitemanager/` | `unifi-sitemanager-mcp` | `sitemanager/v*` |
+| `unifi-innerspace-mcp` | `apps/innerspace/` | `unifi-innerspace-mcp` | `innerspace/v*` |
 | `unifi-api-server` | `apps/api/` | `unifi-api-server` | `api/v*` |
 | `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `unifi-mcp-relay` | `relay/v*` |
 | `unifi-mcp-worker` | `apps/worker/` | `unifi-mcp-worker` (npm, unscoped) | `worker/v*` |
@@ -162,7 +163,7 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 
 **`unifi-api-server` is a library package**, not an app package. It publishes to PyPI only and has no plugin manifest assets. Expect no writeback on `api/v*` tags.
 
-### App packages (network, protect, access, sitemanager)
+### App packages (network, protect, access, sitemanager, innerspace)
 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
@@ -170,9 +171,10 @@ These have writable manifest assets updated on tag:
 - Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
 - `plugins/unifi-sitemanager/.claude-plugin/plugin.json` (once the bundle exists)
+- InnerSpace has no plugin bundle yet; only `apps/innerspace/server.json` is written back
 - `apps/*/server.json` (server package version)
 
-**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager).
+**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager, innerspace).
 
 Site Manager may receive its first `sitemanager/v0.1.0` tag before its plugin bundle exists.
 The sync still regenerates `apps/sitemanager/server.json` and succeeds, skipping only that
@@ -200,6 +202,7 @@ Without a per-package `git_describe_command --match` glob, any tag reachable in 
 | protect | `protect/v*` |
 | access | `access/v*` |
 | sitemanager | `sitemanager/v*` |
+| innerspace | `innerspace/v*` |
 | relay | `relay/v*` |
 | unifi-core | `core/v*` |
 | unifi-mcp-shared | `shared/v*` |
@@ -266,7 +269,7 @@ Each mode builds that one wheel, installs it against exactly its declared `unifi
 
 ```bash
 rm -rf /tmp/wheelcheck && mkdir -p /tmp/wheelcheck
-for app in apps/network apps/protect apps/access apps/sitemanager packages/unifi-mcp-relay; do
+for app in apps/network apps/protect apps/access apps/sitemanager apps/innerspace packages/unifi-mcp-relay; do
   echo "=== $app ==="
   uv build --wheel "$app" --out-dir /tmp/wheelcheck/$(basename $app) 2>&1 | tail -2
   whl=$(ls /tmp/wheelcheck/$(basename $app)/*.whl | tail -1)
@@ -287,7 +290,7 @@ packages and the Worker still release only by tag.
 ### Triggers
 
 - **Plugin-only release:** a PR that bumps the plugin version merges to `main`.
-- **Server release:** a Network, Protect, Access or Site Manager tag runs `bump-plugin-versions.yml`,
+- **Server release:** a Network, Protect, Access, Site Manager or InnerSpace tag runs `bump-plugin-versions.yml`,
   which moves the server pin and bumps the plugin in one writeback commit.
 
 The writeback is tag-triggered, not gated on the separate PyPI publish job. Verify exact
@@ -416,6 +419,7 @@ release_tags=(
   "protect/v${PROTECT_VERSION:?Set PROTECT_VERSION}"
   "access/v${ACCESS_VERSION:?Set ACCESS_VERSION}"
   "sitemanager/v${SITEMANAGER_VERSION:?Set SITEMANAGER_VERSION}"
+  "innerspace/v${INNERSPACE_VERSION:?Set INNERSPACE_VERSION}"
   "api/v${API_VERSION:?Set API_VERSION}"
   "relay/v${RELAY_VERSION:?Set RELAY_VERSION}"
   "worker/v${WORKER_VERSION:?Set WORKER_VERSION}"
@@ -564,11 +568,11 @@ Before releasing `packages/unifi-mcp-shared/` or `packages/unifi-core/`, verify 
 
 ### J-1: DI-Only Rule — No Reverse Imports in `unifi-mcp-shared`
 
-Every entrypoint in `packages/unifi-mcp-shared/` must accept app-specific behavior as injected parameters. Direct imports from `unifi_network_mcp`, `unifi_protect_mcp`, `unifi_access_mcp`, or `unifi_sitemanager_mcp` inside the shared package create a circular import that breaks all four MCP app servers simultaneously at import time — blast radius is total.
+Every entrypoint in `packages/unifi-mcp-shared/` must accept app-specific behavior as injected parameters. Direct imports from `unifi_network_mcp`, `unifi_protect_mcp`, `unifi_access_mcp`, `unifi_sitemanager_mcp`, or `unifi_innerspace_mcp` inside the shared package create a circular import that breaks all five MCP app servers simultaneously at import time — blast radius is total.
 
 Verify before releasing any shared-package change:
 ```bash
-grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp" packages/unifi-mcp-shared/
+grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp\|from unifi_innerspace_mcp" packages/unifi-mcp-shared/
 ```
 Any match is a release blocker. Replace with an injected parameter or a typed Protocol interface defined within `packages/unifi-mcp-shared/`.
 
@@ -583,7 +587,7 @@ Decision tree for placing new code:
 Import direction must remain strictly left-to-right: `app servers → unifi-mcp-shared → unifi-core`. Verify:
 ```bash
 grep -r "from unifi_mcp_shared\|import unifi_mcp_shared" packages/unifi-core/
-grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp" packages/unifi-mcp-shared/ packages/unifi-core/
+grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp\|from unifi_sitemanager_mcp\|from unifi_innerspace_mcp" packages/unifi-mcp-shared/ packages/unifi-core/
 ```
 Both commands must return nothing.
 
@@ -624,7 +628,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **Cross-package combined pytest run causes test configuration collision.** Running `uv run pytest packages/ apps/` causes pytest to load conflicting conftest files. Run per-package: `cd apps/network && uv run pytest`. CI workflows are already scoped this way.
 
-**Shared-package import blast radius is total.** A single `from unifi_network_mcp` import inside `packages/unifi-mcp-shared/` breaks all four MCP app servers simultaneously at import time. The `ImportError` traceback names the shared package, masking the root cause. Run the grep from Procedure J-1 before every shared-package release.
+**Shared-package import blast radius is total.** A single `from unifi_network_mcp` import inside `packages/unifi-mcp-shared/` breaks all five MCP app servers simultaneously at import time. The `ImportError` traceback names the shared package, masking the root cause. Run the grep from Procedure J-1 before every shared-package release.
 
 **Relay protocol drift is silent.** The relay implementation files (`packages/unifi-mcp-relay/src/unifi_mcp_relay/discovery.py` and `packages/unifi-mcp-relay/src/unifi_mcp_relay/protocol.py`) have no import from `unifi-mcp-shared` — protocol changes fail silently until a real client exercises the changed path. Manual review on every protocol-touching PR is the only protection (see Procedure J-3).
 

@@ -11,7 +11,7 @@ from unifi_core.auth import AuthMethod
 
 CATALOG_RESOURCE = "action_catalog.json"
 SUPPORTED_SCHEMA_VERSION = 1
-PRODUCTS = frozenset({"network", "protect", "access", "sitemanager"})
+PRODUCTS = frozenset({"network", "protect", "access", "sitemanager", "innerspace"})
 MUTATION_ACTIONS = frozenset({"create", "update", "delete"})
 
 
@@ -144,6 +144,11 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             permission_action != "read" or read_only_hint is not True or auth_method != "api_key_only"
         ):
             raise CatalogLoadError(f"actions[{index}] must be a read-only API-key Site Manager operation")
+        # The InnerSpace server is read-only and session-only; anything else is refused, not dispatched.
+        if product == "innerspace" and (
+            permission_action != "read" or read_only_hint is not True or auth_method != "local_only"
+        ):
+            raise CatalogLoadError(f"actions[{index}] must be a read-only session InnerSpace operation")
         manager_method = _require_string(action, "manager_method", index)
         input_schema = action.get("input_schema")
         if not isinstance(input_schema, dict):

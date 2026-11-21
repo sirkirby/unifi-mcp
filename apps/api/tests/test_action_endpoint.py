@@ -329,21 +329,32 @@ async def test_action_endpoint_lists_and_renames_camera_detection_areas(tmp_path
     manager.apply_rename_camera_detection_area.assert_awaited_once_with(**args)
 
 
+_PROTECT_AREA = {"camera_id": "cam-1", "kind": "fence", "area_id": "1", "new_name": "Street"}
+_INNERSPACE_WALLS = {"plan_id": "plan-1", "unit": "furlongs"}
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("confirm", [False, True])
-async def test_action_endpoint_refuses_a_value_outside_a_literal_parameter(tmp_path, monkeypatch, confirm) -> None:
+@pytest.mark.parametrize(
+    ("product", "action", "args", "field", "value", "confirm"),
+    [
+        ("protect", "protect_rename_camera_detection_area", _PROTECT_AREA, "kind", "fence", False),
+        ("protect", "protect_rename_camera_detection_area", _PROTECT_AREA, "kind", "fence", True),
+        ("innerspace", "innerspace_list_walls", _INNERSPACE_WALLS, "unit", "furlongs", False),
+    ],
+)
+async def test_action_endpoint_refuses_a_value_outside_a_literal_parameter(
+    tmp_path, monkeypatch, product, action, args, field, value, confirm
+) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds=product, scopes="admin")
     manager = MagicMock()
-    manager.apply_rename_camera_detection_area = AsyncMock()
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=manager)
     app.state.manager_factory = factory
-    args = {"camera_id": "cam-1", "kind": "fence", "area_id": "1", "new_name": "Street"}
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/v1/actions/protect_rename_camera_detection_area",
+            f"/v1/actions/{action}",
             headers={"Authorization": f"Bearer {key}"},
             json={"site": "default", "controller": cid, "args": args, "confirm": confirm},
         )
@@ -354,14 +365,14 @@ async def test_action_endpoint_refuses_a_value_outside_a_literal_parameter(tmp_p
         "error": "Failed to execute action. Check the server audit log for details.",
     }
     factory.get_domain_manager.assert_not_awaited()
-    manager.apply_rename_camera_detection_area.assert_not_awaited()
+    assert manager.method_calls == []
 
     async with app.state.sessionmaker() as session:
         rows = (await session.execute(select(AuditLog))).scalars().all()
-    [row] = [row for row in rows if row.target == "protect_rename_camera_detection_area"]
+    [row] = [row for row in rows if row.target == action]
     assert row.outcome == "error"
-    assert "at args.kind: does not satisfy 'enum'" in row.detail
-    assert "fence" not in row.detail
+    assert f"at args.{field}: does not satisfy 'enum'" in row.detail
+    assert value not in row.detail
 
 
 @pytest.mark.asyncio
