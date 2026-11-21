@@ -25,6 +25,7 @@ from unifi_core.network.models.ap_group import (
 from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
 from unifi_core.network.models.networks import (
     MDNS_ENABLED_DESCRIPTION,
+    validate_ipv6_dns_state,
     validate_ipv6_subnet_state,
     validate_wan_dns_state,
 )
@@ -285,7 +286,7 @@ VPN_FIREWALL_ZONE_WARNING = (
     "DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), auto_scale_enabled (bool), "
     "dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), "
     "dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). "
-    "DHCP options: dhcpd_dns_1 (IP), dhcpd_dns_2 (IP), dhcpd_dns_enabled (bool), "
+    "DHCP options: dhcpd_dns_1..dhcpd_dns_4 (IPv4), dhcpd_dns_enabled (bool), "
     "dhcpd_ntp_1 (IPv4), dhcpd_ntp_2 (IPv4), dhcpd_ntp_enabled (bool), "
     "dhcpd_wins_1 (IP), dhcpd_wins_2 (IP), dhcpd_wins_enabled (bool), dhcpd_unifi_controller (IP). "
     "DNS: domain_name (str). "
@@ -310,6 +311,7 @@ VPN_FIREWALL_ZONE_WARNING = (
     "ipv6_client_address_assignment ('slaac'/'dhcpv6'), ipv6_pd_interface (str), ipv6_pd_prefixid (hex str), "
     "ipv6_pd_auto_prefixid_enabled (bool), ipv6_pd_start (str), ipv6_pd_stop (str), "
     "dhcpdv6_enabled (bool), dhcpdv6_allow_slaac (bool), dhcpdv6_dns_auto (bool), "
+    "dhcpdv6_dns_1..dhcpdv6_dns_4 (IPv6, manual servers; at least one required when dhcpdv6_dns_auto is false), "
     "dhcpdv6_leasetime (int seconds), dhcpdv6_start (str), dhcpdv6_stop (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
     "WARNING: setting ipv6_interface_type='static' on a delegated ('pd') network releases its delegated prefix. "
@@ -363,6 +365,7 @@ async def update_network(
             - dhcpd_gateway_enabled (boolean): Use custom gateway instead of default.
             - dhcpd_dns_1 (string): Primary DNS server for DHCP clients.
             - dhcpd_dns_2 (string): Secondary DNS server for DHCP clients.
+            - dhcpd_dns_3, dhcpd_dns_4 (string): Third and fourth DNS servers for DHCP clients.
             - dhcpd_dns_enabled (boolean): Enable custom DNS servers in DHCP.
             - dhcpd_ntp_1 (string): Primary NTP server IPv4 (controller rejects hostnames).
             - dhcpd_ntp_2 (string): Secondary NTP server IPv4 (controller rejects hostnames).
@@ -429,6 +432,8 @@ async def update_network(
             - dhcpdv6_enabled (boolean): Enable the DHCPv6 server on this network.
             - dhcpdv6_allow_slaac (boolean): Permit SLAAC alongside DHCPv6.
             - dhcpdv6_dns_auto (boolean): Advertise DNS automatically over DHCPv6.
+            - dhcpdv6_dns_1 .. dhcpdv6_dns_4 (string): Manual IPv6 DNS servers, used when
+              dhcpdv6_dns_auto is false; at least one is required then. "" clears a slot.
             - dhcpdv6_leasetime (integer): DHCPv6 lease time in seconds.
             - dhcpdv6_start (string): Start of the DHCPv6 assignment range (e.g. '::2').
             - dhcpdv6_stop (string): End of the DHCPv6 assignment range (e.g. '::7d1').
@@ -472,6 +477,7 @@ async def update_network(
         return {"success": False, "error": "Network not found"}
     try:
         validate_wan_dns_state(current, validated_data)
+        validate_ipv6_dns_state(current, validated_data)
         validate_ipv6_subnet_state(current, validated_data)
     except ValueError as e:
         return {"success": False, "error": str(e)}

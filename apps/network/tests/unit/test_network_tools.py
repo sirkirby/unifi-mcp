@@ -1006,3 +1006,143 @@ class TestUpdateNetworkIpv6Subnet:
         assert result["success"] is True, result
         assert result["requires_confirmation"] is True
         mock_mgr.update_network.assert_not_called()
+
+
+class TestUpdateNetworkIpv6Dns:
+    """Manual LAN IPv6 DNS servers (dhcpdv6_dns_1..4) beside dhcpdv6_dns_auto."""
+
+    @pytest.mark.asyncio
+    async def test_preview_accepts_manual_ipv6_dns_servers(self):
+        update_data = {
+            "dhcpdv6_dns_auto": False,
+            "dhcpdv6_dns_1": "2606:4700:4700::1111",
+            "dhcpdv6_dns_2": "2001:4860:4860::8888",
+        }
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value={**SAMPLE_NETWORK, "dhcpdv6_dns_auto": True})
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="net001", update_data=update_data, confirm=False)
+
+        assert result["success"] is True, result
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["proposed"]["dhcpdv6_dns_auto"] is False
+        assert result["preview"]["proposed"]["dhcpdv6_dns_1"] == "2606:4700:4700::1111"
+        assert result["preview"]["proposed"]["dhcpdv6_dns_2"] == "2001:4860:4860::8888"
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirmed_update_forwards_manual_ipv6_dns_servers(self):
+        before = {**SAMPLE_NETWORK, "dhcpdv6_dns_auto": True}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr._connection.site = "default"
+            mock_mgr.get_network_details = AsyncMock(return_value=before)
+            mock_mgr.update_network = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"},
+                    before=before,
+                    after={**before, "dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"},
+                )
+            )
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001",
+                update_data={"dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"},
+                confirm=True,
+            )
+
+        assert result["success"] is True, result
+        mock_mgr.update_network.assert_awaited_once_with(
+            "net001", {"dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_invalid_ipv6_dns_server_is_rejected(self):
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001",
+                update_data={"dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "1.1.1.1"},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "'dhcpdv6_dns_1' must be a valid IPv6 address" in result["error"]
+        mock_mgr.get_network_details.assert_not_called()
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("confirm", [False, True])
+    async def test_auto_off_without_servers_in_update_or_record_is_rejected(self, confirm):
+        stored = {**SAMPLE_NETWORK, "dhcpdv6_dns_auto": True}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=stored)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="net001", update_data={"dhcpdv6_dns_auto": False}, confirm=confirm)
+
+        assert result["success"] is False
+        assert result.get("requires_confirmation") is not True
+        assert "advertises no IPv6 DNS server" in result["error"]
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_off_with_server_already_on_record_is_accepted(self):
+        stored = {**SAMPLE_NETWORK, "dhcpdv6_dns_auto": True, "dhcpdv6_dns_1": "2606:4700:4700::1111"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=stored)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="net001", update_data={"dhcpdv6_dns_auto": False}, confirm=False)
+
+        assert result["success"] is True, result
+        assert result["requires_confirmation"] is True
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_summary_sections_include_dns_server_slots(self):
+        network = {
+            **SAMPLE_NETWORK,
+            "dhcpd_dns_enabled": True,
+            "dhcpd_dns_1": "1.1.1.1",
+            "dhcpd_dns_2": "1.0.0.1",
+            "dhcpd_dns_3": "9.9.9.9",
+            "dhcpd_dns_4": "",
+            "dhcpdv6_dns_auto": False,
+            "dhcpdv6_dns_1": "2606:4700:4700::1111",
+            "dhcpdv6_dns_2": "2001:4860:4860::8888",
+            "dhcpdv6_dns_3": "",
+            "dhcpdv6_dns_4": "",
+        }
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=network)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import get_network_details
+
+            result = await get_network_details(network_id="net001", summary=True, include="dhcp,ipv6")
+
+        assert result["success"] is True
+        details = result["details"]
+        assert details["dhcpd_dns_1"] == "1.1.1.1"
+        assert details["dhcpd_dns_2"] == "1.0.0.1"
+        assert details["dhcpd_dns_3"] == "9.9.9.9"
+        assert details["dhcpd_dns_4"] == ""
+        assert details["dhcpdv6_dns_auto"] is False
+        assert details["dhcpdv6_dns_1"] == "2606:4700:4700::1111"
+        assert details["dhcpdv6_dns_2"] == "2001:4860:4860::8888"
+        assert details["dhcpdv6_dns_3"] == ""
+        assert details["dhcpdv6_dns_4"] == ""
