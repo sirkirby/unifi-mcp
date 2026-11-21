@@ -34,7 +34,8 @@ from unifi_core.request_budget import create_uncharged_task
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
-from unifi_api.services.operation_gate import gate_for, take_read_slot
+from unifi_api.services.controllers import get_controller
+from unifi_api.services.operation_gate import gate_for, in_read_scope, take_read_slot
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,23 @@ class ManagerFactory:
         """
         return gate_for(controller_id, product)
 
+    async def _take_read_slot(self, controller_id: str, product: str) -> None:
+        """Under a read route, take the request's read slot before reaching the controller.
+
+        Only a stored controller gets a gate: an id that names none (a GraphQL
+        argument) is refused here, before a gate is created for it. The check
+        uses a session of its own, closed before the wait for a slot, so a
+        queued read holds no database connection.
+        """
+        if not in_read_scope():
+            return
+        if not any(key[0] == controller_id and key[1] == product for key in self._connection_cache):
+            async with self._sm() as session:
+                await get_controller(session, controller_id)
+        await take_read_slot(
+            self.gate_for(controller_id, product), controller_id=controller_id, label=f"{product} read"
+        )
+
     async def get_connection_manager(
         self,
         session: AsyncSession,
@@ -365,7 +383,7 @@ class ManagerFactory:
     ) -> Any:
         # Under a read route, this request takes its read slot on the
         # controller application's gate before reaching the controller.
-        await take_read_slot(controller_id, product, label=f"{product} read")
+        await self._take_read_slot(controller_id, product)
         site_scope = self._site_scope(product, site)
         key = (controller_id, product, site_scope)
         cm = self._connection_cache.get(key)
@@ -496,7 +514,7 @@ class ManagerFactory:
         Acquiring the lock here would deadlock — it's non-reentrant and
         get_connection_manager acquires the same lock.
         """
-        await take_read_slot(controller_id, product, label=f"{product} read")
+        await self._take_read_slot(controller_id, product)
         site_scope = self._site_scope(product, site)
         key = (controller_id, product, attr_name, site_scope)
         cached = self._domain_cache.get(key)
@@ -571,6 +589,8 @@ class ManagerFactory:
         instance on the cached connection: bounded evidence collection must not
         leave a background websocket listener behind.
         """
+        # A cached reader still reads the controller: take the slot first.
+        await self._take_read_slot(controller_id, product)
         site_scope = self._site_scope(product, site)
         key = (controller_id, product, "event_manager", site_scope)
         cached = self._domain_cache.get(key)

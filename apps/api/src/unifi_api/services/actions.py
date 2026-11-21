@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -253,7 +254,7 @@ async def dispatch_action(
     *,
     registry: ManifestRegistry,
     factory: ManagerFactory,
-    session: AsyncSession,
+    session: AsyncSession | None,
     tool_name: str,
     controller_id: str,
     controller_products: list[str],
@@ -261,12 +262,17 @@ async def dispatch_action(
     args: dict,
     confirm: bool,
     dispatch_table: dict[str, DispatchEntry] | None = None,
+    session_factory: Any = None,
 ) -> Any:
     """Resolve one validated catalog action and invoke its Core manager binding.
 
     ``dispatch_table`` remains only as an explicit unit-test seam for narrow
     translator tests. Production calls always use the binding packaged on the
     resolved catalog entry.
+
+    With ``session_factory``, the manager lookup opens a session of its own
+    inside the gate turn, so the caller need hold none while the action waits
+    for it; otherwise ``session`` is used.
     """
     entry = registry.resolve(tool_name)
     if entry.connection_kind != "controller":
@@ -344,13 +350,15 @@ async def dispatch_action(
         # Inside a held write the whole operation is bounded by what is left of
         # the write's hold budget; a no-op for reads.
         async with write_request_bound():
-            manager = await factory.get_domain_manager(
-                session=session,
-                controller_id=controller_id,
-                product=entry.product,
-                attr_name=binding.manager_attr,
-                site=site,
-            )
+            lookup = session_factory() if session_factory is not None else nullcontext(session)
+            async with lookup as lookup_session:
+                manager = await factory.get_domain_manager(
+                    session=lookup_session,
+                    controller_id=controller_id,
+                    product=entry.product,
+                    attr_name=binding.manager_attr,
+                    site=site,
+                )
 
             method = getattr(manager, binding.method, None)
             if method is None or not callable(method):
