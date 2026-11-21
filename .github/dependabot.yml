@@ -86,9 +86,9 @@ updates:
     directories:
       - "/apps/access"
       - "/apps/api"
+      - "/apps/innerspace"
       - "/apps/network"
       - "/apps/protect"
-      - "/apps/innerspace"
       - "/apps/sitemanager"
       - "/packages/unifi-mcp-relay"
     schedule:
