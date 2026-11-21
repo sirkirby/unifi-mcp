@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-21 — unifi-network 1.14.2
+
+- Pins `unifi-network-mcp` [0.50.1](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.1).
+
+
 ## 2026-11-21 — unifi-network 1.14.1, unifi-protect 1.8.1, unifi-access 1.5.1, unifi-sitemanager 1.1.1
 
 - The skills describe batches as the pinned servers run them: writes in a batch run one at a time in the order you submit them, reads run side by side up to a limit, and the new `*_batch_cancel` tool withdraws jobs that have not started. Batch status now shows `queued` (with the job's place in line) and `cancelled`.
