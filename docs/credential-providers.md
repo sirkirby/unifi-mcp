@@ -71,8 +71,11 @@ level the host came from:
   set UNIFI_PROTECT_PASSWORD (or its _FILE/_COMMAND form).` When the hosts
   match and only the port differs, the line says instead `which names the
   UNIFI_HOST console on another port (UNIFI_PROTECT_PORT or UNIFI_PORT)`. The
-  server still starts, and its first login fails until the product-level
-  credential is set.
+  server still starts, and its login fails until the product-level credential
+  is set. The login error a tool call returns names the ignored variable the
+  same way, since MCP clients rarely show the startup log. When no username and
+  password or API key is left, the server sends no login at all and the error
+  says no credentials are configured.
 
 Port, site, `verify_ssl` and the TLS fingerprint keep falling back in every case.
 A host written in a `CONFIG_PATH` file is not an environment level and does not
