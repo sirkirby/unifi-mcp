@@ -22,6 +22,20 @@ _log = logging.getLogger("unifi-api.audit")
 _audit_subscribers: list[Callable[[dict], None]] = []
 
 
+def parse_ts_bound(value: str) -> datetime:
+    """Parse an ISO-8601 ``since``/``until`` filter value for comparison with ``AuditLog.ts``.
+
+    Audit rows are stored as UTC wall-clock time and SQLite drops the tzinfo when
+    binding, so an aware value with a non-UTC offset is converted to UTC first.
+    Offset-free values are left as they are (treated as UTC, as before).
+    Raises ``ValueError`` on a malformed value.
+    """
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc)
+    return parsed
+
+
 def add_audit_subscriber(cb: Callable[[dict], None]) -> Callable[[], None]:
     """Register a subscriber callback. Returns an unsubscribe callable."""
     _audit_subscribers.append(cb)
