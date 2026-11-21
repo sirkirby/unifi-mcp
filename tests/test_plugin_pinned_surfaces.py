@@ -223,13 +223,15 @@ def test_sitemanager_pinned_surface_has_nine_domain_tools_and_six_meta_tools(sit
 
 def test_sitemanager_reference_generator_handles_multiword_title(sitemanager_repo: Path) -> None:
     reference = "plugins/unifi-sitemanager/skills/unifi-sitemanager/references/sitemanager-tools.md"
-    write(
-        sitemanager_repo,
-        reference,
-        (sitemanager_repo / reference)
-        .read_text()
-        .replace("(9 read-only domain tools, plus 5 meta-tools)", "(0 read-only domain tools, plus 5 meta-tools)"),
+    original = (sitemanager_repo / reference).read_text()
+    # Whatever counts the committed header holds, make them wrong.
+    drifted = re.sub(
+        r"\(\d+ read-only domain tools, plus \d+ meta-tools\)",
+        "(0 read-only domain tools, plus 5 meta-tools)",
+        original,
     )
+    assert drifted != original
+    write(sitemanager_repo, reference, drifted)
     assert generator.run(sitemanager_repo, check_mode=True) == 1
     assert generator.run(sitemanager_repo, check_mode=False) == 0
     text = (sitemanager_repo / reference).read_text()
