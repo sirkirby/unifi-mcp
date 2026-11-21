@@ -739,7 +739,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         innerspace_floor_plans_routes,
         innerspace_devices_routes,
     ):
-        app.include_router(r.router, prefix="/v1")
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (
         net_streams_routes,
         protect_streams_routes,

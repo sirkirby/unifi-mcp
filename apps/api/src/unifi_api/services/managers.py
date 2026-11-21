@@ -428,14 +428,10 @@ class ManagerFactory:
             cm = self._connection_cache.get(key)
             if cm is not None:
                 return cm
+            # Only InnerSpace keeps a failed manager; the other products' call is unchanged.
+            keep = {"keep_failed": True} if product == "innerspace" else {}
             try:
-                cm = await self._construct_connection_manager(
-                    session,
-                    controller_id,
-                    product,
-                    site=site_scope,
-                    keep_failed=True,
-                )
+                cm = await self._construct_connection_manager(session, controller_id, product, site=site_scope, **keep)
             except ControllerInitializationFailed as failure:
                 if failure.connection_manager is not None:
                     # A kept InnerSpace manager: later requests use it, so a refused
