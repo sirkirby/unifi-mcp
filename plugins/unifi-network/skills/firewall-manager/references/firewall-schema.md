@@ -97,7 +97,7 @@ Set `protocol` to `tcp`, `udp` or `tcp_udp` on a port-matching policy. The contr
 
 Port inversion also applies to `OBJECT` port-group matches and is included in list summaries. Switching to `port_matching_type: ANY` clears a stored port-inversion flag automatically; explicitly requesting `ANY` together with `match_opposite_ports: true` is rejected because the controller does not support that combination.
 
-Three selectors are only accepted together with the value that activates them: `port` needs `port_matching_type: SPECIFIC`, `port_group_id` needs `OBJECT`, and `client_macs` needs `matching_target: CLIENT`. The controller would accept and silently ignore any other pairing, so the tools reject those three and retire them on update. `ips`, `ip_group_id` and `network_ids` follow the same contract on the controller, but the tools only check that they are present on create — a stale one left under a different `matching_target` is not yet rejected or retired. To turn port matching off on an existing policy, update with `{"destination": {"port_matching_type": "ANY"}}`; the tool retires the stored `port` for you. The same applies when switching between `SPECIFIC` and `OBJECT`, or moving a side off `CLIENT`.
+Three selectors are only accepted together with the value that activates them: `port` needs `port_matching_type: SPECIFIC`, `port_group_id` needs `OBJECT`, and `client_macs` needs `matching_target: CLIENT`. The controller would accept and silently ignore any other pairing, so the tools reject those three and retire them on update. `ips` (needs `matching_target: IP` with `SPECIFIC`), `ip_group_id` (`IP` with `OBJECT`) and `network_ids` (`NETWORK`) follow the same contract on the controller. The tools check that they are present on create and do not reject a stale one, but an update that moves the side's targeting off the value that activates one retires it, so it cannot silently return if the target is switched back. Leaving `IP` or `NETWORK` also sets `match_opposite_ips` or `match_opposite_networks` to `false`. On read-back, a selector you cleared with `[]` or `""`, or an inversion flag set to `false`, counts as applied when the controller drops the key. To turn port matching off on an existing policy, update with `{"destination": {"port_matching_type": "ANY"}}`; the tool retires the stored `port` for you. The same applies when switching between `SPECIFIC` and `OBJECT`, or moving a side off `CLIENT`.
 
 ### Example — any-in-zone to any-in-zone
 
@@ -232,15 +232,32 @@ Time ranges that span midnight are supported.
 ## Policy Ordering
 
 Zone-based firewall policy ordering is not changed by updating `index`.
-Use the dedicated ordering API through the MCP tools:
+Ordering is scoped to a source/destination firewall zone pair. Two tool pairs
+change it, each with its own IDs; do not pass one pair's IDs to the other.
+
+### V2 API (session credentials)
+
+```text
+unifi_get_firewall_policy_order
+unifi_set_firewall_policy_order
+```
+
+Both take `source_zone_id` and `destination_zone_id` from
+`unifi_list_firewall_zones`. The read returns V2 policy IDs (the IDs
+`unifi_list_firewall_policies` returns) split into `before_predefined_ids` and
+`after_predefined_ids`. The set takes both lists, together exactly the pair's
+current user policy IDs, in the new order. It previews with `confirm=false`,
+applies with `confirm=true`, and reads the order back. These tools need a
+username and password; an API key alone does not reach them.
+
+### Integration API (API key and session)
 
 ```text
 unifi_get_firewall_policy_ordering
 unifi_reorder_firewall_policies
 ```
 
-Ordering is scoped to a source/destination firewall zone pair and has this
-shape:
+The ordering has this shape:
 
 ```json
 {
@@ -253,10 +270,14 @@ shape:
 
 For reorder operations, preserve the complete current policy ID set and only
 move IDs between or within `beforeSystemDefined` and `afterSystemDefined`.
+These IDs are Integration API UUIDs, not V2 policy IDs.
 
-These tools require a UniFi Network integration API key (`UNIFI_API_KEY` or
-`UNIFI_NETWORK_API_KEY`). Local username/password controller cookies are not
-accepted by `/proxy/network/integration/v1/sites/.../firewall/policies/ordering`.
+These tools require a UniFi Network integration API key
+(`UNIFI_NETWORK_API_KEY`, or `UNIFI_API_KEY` when Network uses the `UNIFI_HOST`
+console). Local username/password controller cookies are not accepted by
+`/proxy/network/integration/v1/sites/.../firewall/policies/ordering`. The MCP tools also
+use session credentials to translate `unifi_list_firewall_zones` IDs into the
+Integration API's zone UUIDs, so they need both.
 
 ---
 

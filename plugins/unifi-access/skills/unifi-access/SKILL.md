@@ -46,8 +46,9 @@ The server uses **lazy loading** by default — only meta-tools are registered i
 |-----------|---------|
 | `access_tool_index` | Discover tools by name/description; use `category`, `search`, or `include_schemas` to filter |
 | `access_execute` | Call any tool by name (essential in lazy mode) |
-| `access_batch` | Run multiple tools in parallel |
-| `access_batch_status` | Check async batch job status |
+| `access_batch` | Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap |
+| `access_batch_status` | Check job status: `queued` (with its `position` among the writes ahead), `running`, `done`, `error` or `cancelled` |
+| `access_batch_cancel` | Cancel jobs that are still `queued`; a running or finished job is reported, not cancelled |
 
 **Workflow:** Call `access_tool_index` to find the right tool, then `access_execute` to call it. Use `access_batch` for multiple independent queries.
 

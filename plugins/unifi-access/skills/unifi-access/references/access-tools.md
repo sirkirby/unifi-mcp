@@ -24,8 +24,9 @@ Always available, regardless of registration mode.
 |------|---------|
 | `access_tool_index` | Discover tools (names+descriptions by default; pass `include_schemas` for full schemas) |
 | `access_execute` | Execute any tool by name (essential in lazy mode) |
-| `access_batch` | Run multiple tools in parallel |
-| `access_batch_status` | Check status of an async batch job |
+| `access_batch` | Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap |
+| `access_batch_status` | Check job status: `queued` (with its `position` among the writes ahead), `running`, `done`, `error` or `cancelled` |
+| `access_batch_cancel` | Cancel jobs that are still `queued`; a running or finished job is reported, not cancelled |
 
 ---
 
