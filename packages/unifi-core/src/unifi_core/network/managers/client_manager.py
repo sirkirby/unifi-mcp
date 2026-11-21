@@ -3,7 +3,7 @@ import logging
 from types import SimpleNamespace
 from typing import Any, List, Optional
 
-from aiounifi.models.api import ApiRequest
+from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.client import Client
 
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
@@ -19,6 +19,25 @@ from unifi_core.request_paths import object_id
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_CLIENTS = "clients"
+
+# V2 active-client list as the Network UI requests it to include Thread end devices.
+MATTER_THREAD_ACTIVE_CLIENTS_PATH = "/clients/active?includeMatterThreadClients=true"
+MATTER_THREAD_CLIENT_TYPE = "MATTER_THREAD"
+
+
+def _matter_thread_session_required(env_prefix: str | None) -> str:
+    """Fixed text naming where the session credentials go.
+
+    The ``UNIFI_*`` variables are named only for a caller that reads them (an
+    MCP server passes its prefix); the API server keeps credentials on the
+    controller record instead.
+    """
+    if isinstance(env_prefix, str) and env_prefix:
+        where = f"Configure UNIFI_{env_prefix}_USERNAME and UNIFI_{env_prefix}_PASSWORD."
+    else:
+        where = "Add a username and password to this controller's configuration."
+    return f"Matter/Thread client inventory requires Network session authentication. {where}"
+
 
 UNKNOWN_USER_CODE = "api.err.UnknownUser"
 
@@ -547,6 +566,73 @@ class ClientManager:
     async def _is_known_client(self, path_mac: str) -> bool:
         """Whether the controller has a user-table record for the MAC, read per MAC."""
         return await self._user_record(path_mac) is not None
+
+    async def get_matter_thread_clients(self) -> List[dict[str, Any]]:
+        """Get connected Matter-over-Thread clients for the current site.
+
+        Thread end devices never appear in ``/stat/sta`` or ``/rest/user``. The
+        Network UI (verified on Network 11.0) reads them from the V2 active-client
+        list with ``includeMatterThreadClients=true``, where they carry
+        ``type == "MATTER_THREAD"`` and no MAC address. Only those records are
+        returned; the wired/Wi-Fi records in the same response stay with
+        :meth:`get_clients`. Requires a Network session (V2 API); an API-key
+        route is never used for this session-only endpoint.
+
+        Errors carry fixed text and the exception class only, so controller
+        response text (device names, addresses) never reaches the caller.
+        """
+        if not await self._connection.ensure_session_connected():
+            raise UniFiAuthError(_matter_thread_session_required(getattr(self._connection, "tls_env_prefix", None)))
+        cache_key = f"{CACHE_PREFIX_CLIENTS}_matter_thread_{self._connection.site}"
+        cached_data: Optional[List[dict[str, Any]]] = self._connection.get_cached(cache_key)
+        if cached_data is not None:
+            return cached_data
+        try:
+            response = await self._connection.request(
+                ApiRequestV2(method="get", path=MATTER_THREAD_ACTIVE_CLIENTS_PATH)
+            )
+        except Exception as e:
+            logger.error("Error getting Matter/Thread clients: %s", type(e).__name__)
+            raise UniFiOperationError(
+                f"Failed to list Matter/Thread clients ({type(e).__name__}). "
+                "Verify controller availability and Network session permissions."
+            ) from None
+        if not isinstance(response, list):
+            logger.warning("Matter/Thread client list returned an unexpected response shape")
+            raise UniFiOperationError(
+                "Failed to list Matter/Thread clients: the controller returned an unexpected response shape. "
+                "Verify that this Network version supports Matter/Thread client inventory."
+            )
+        thread_clients = [
+            record
+            for record in response
+            if isinstance(record, dict) and record.get("type") == MATTER_THREAD_CLIENT_TYPE
+        ]
+        self._connection._update_cache(cache_key, thread_clients)
+        return thread_clients
+
+    async def get_client_inventory(self, filter_type: str = "all", include_offline: bool = False) -> dict[str, Any]:
+        """Client records for a public client list, by connection type.
+
+        ``filter_type="thread"`` reads only the Matter/Thread end devices.
+        Otherwise the wired/Wi-Fi records come from :meth:`get_clients`; for
+        ``"all"`` the Thread end devices are also read, best effort, so the list
+        can report how many there are without mixing MAC-less records into a
+        MAC-keyed list. ``thread_clients`` is ``None`` when they were not read.
+        """
+        if filter_type == "thread":
+            return {"clients": [], "thread_clients": await self.get_matter_thread_clients()}
+        clients = await self.get_clients(include_offline=include_offline)
+        thread_clients: Optional[List[dict[str, Any]]] = None
+        if filter_type == "all" and not (
+            getattr(self._connection, "has_api_key", False) is True
+            and getattr(self._connection, "integration_inventory_only", False) is True
+        ):
+            try:
+                thread_clients = await self.get_matter_thread_clients()
+            except Exception as thread_e:
+                logger.debug("Matter/Thread client count skipped: %s", type(thread_e).__name__)
+        return {"clients": clients, "thread_clients": thread_clients}
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
