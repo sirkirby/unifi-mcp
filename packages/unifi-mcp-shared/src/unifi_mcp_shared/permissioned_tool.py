@@ -14,6 +14,7 @@ from pydantic import Field
 from unifi_core.permission import _infer_input_schema
 from unifi_core.policy_gate import resolve_permission_mode
 
+from unifi_mcp_shared.call_arguments import caller_supplied
 from unifi_mcp_shared.metadata import tool_title_from_name
 from unifi_mcp_shared.output_schema import apply_unifi_tool_response_signature, get_unifi_tool_response_output_schema
 from unifi_mcp_shared.preview_token import (
@@ -322,12 +323,14 @@ def create_permissioned_tool(
                 token = kwargs.pop(PREVIEW_TOKEN_ARGUMENT, None) if uses_preview_token else None
 
                 # 2. Bypass injection — only for mutation actions with confirm param
-                #    Only inject if caller didn't explicitly provide confirm
+                #    Only inject if the caller didn't provide confirm. Over MCP the
+                #    kwargs always carry confirm (FastMCP fills defaults), so ask
+                #    which arguments the caller actually sent (#1085).
                 mode = None
                 if action.lower() != "read":
                     mode = resolve_permission_mode(server_prefix)
                     if mode == "bypass":
-                        if "confirm" in func_sig.parameters and "confirm" not in kwargs:
+                        if "confirm" in func_sig.parameters and not caller_supplied("confirm", kwargs):
                             kwargs["confirm"] = True
 
                 # 3. Preview tokens. Bypass mode skips previews by design, so it skips tokens too.
