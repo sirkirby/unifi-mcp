@@ -61,6 +61,12 @@ class MatterManager:
         cached = self._connection.get_cached(cache_key)
         if cached is not None:
             return cached
+        # Capture the cache generation before the request, so a set_site() or
+        # cleanup() that invalidates this key while the read is in flight
+        # cannot be undone by publishing pre-invalidation records.
+        get_cache_generation = getattr(self._connection, "_get_cache_generation", None)
+        update_cache_if_current = getattr(self._connection, "_update_cache_if_current", None)
+        cache_generation = get_cache_generation(cache_key) if callable(get_cache_generation) else None
         try:
             response = await self._connection.request(ApiRequestV2(method="get", path=path))
         except Exception as e:
@@ -76,5 +82,8 @@ class MatterManager:
                 "Verify that this Network version supports Matter/Thread inventory (Network 11+)."
             )
         records = [record for record in response if isinstance(record, dict)]
-        self._connection._update_cache(cache_key, records)
+        if cache_generation is not None and callable(update_cache_if_current):
+            update_cache_if_current(cache_key, records, cache_generation)
+        else:
+            self._connection._update_cache(cache_key, records)
         return records

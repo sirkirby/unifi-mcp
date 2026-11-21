@@ -4,12 +4,14 @@ Shapes mirror Network 11.0.99 responses for ``/thread-networks`` and
 ``/matter/nodes`` with every value replaced by test data.
 """
 
+import asyncio
 import copy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiounifi.models.api import ApiRequestV2
 from unifi_core.exceptions import UniFiAuthError, UniFiOperationError
+from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.matter_manager import (
     MATTER_NODES_PATH,
     THREAD_NETWORKS_PATH,
@@ -89,6 +91,8 @@ def mock_connection():
     conn.tls_env_prefix = "NETWORK"
     conn.get_cached = MagicMock(return_value=None)
     conn._update_cache = MagicMock()
+    conn._get_cache_generation = MagicMock(return_value=3)
+    conn._update_cache_if_current = MagicMock(return_value=True)
     conn.ensure_connected = AsyncMock(return_value=True)
     conn.ensure_session_connected = AsyncMock(return_value=True)
     conn.request = AsyncMock(return_value=None)
@@ -208,7 +212,9 @@ async def test_reads_the_v2_list_and_caches_it(mock_connection, method, path, re
     assert isinstance(request, ApiRequestV2)
     assert request.method == "get"
     assert request.path == path
-    mock_connection._update_cache.assert_called_once_with(cache_key, result)
+    mock_connection._get_cache_generation.assert_called_once_with(cache_key)
+    mock_connection._update_cache_if_current.assert_called_once_with(cache_key, result, 3)
+    mock_connection._update_cache.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -258,6 +264,7 @@ async def test_request_failure_is_value_free(mock_connection, method):
     assert excinfo.value.__cause__ is None
     assert excinfo.value.__suppress_context__ is True
     mock_connection._update_cache.assert_not_called()
+    mock_connection._update_cache_if_current.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -268,3 +275,59 @@ async def test_malformed_response_raises_and_is_not_cached(mock_connection, resp
     with pytest.raises(UniFiOperationError, match="unexpected response shape"):
         await MatterManager(mock_connection).list_thread_networks()
     mock_connection._update_cache.assert_not_called()
+    mock_connection._update_cache_if_current.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_connection_without_cache_generations_still_caches(mock_connection):
+    """Lightweight fakes without the generation API keep the plain cache write."""
+    del mock_connection._get_cache_generation
+    del mock_connection._update_cache_if_current
+    mock_connection.request = AsyncMock(return_value=[copy.deepcopy(MATTER_NODE)])
+
+    result = await MatterManager(mock_connection).list_matter_nodes()
+
+    assert result == [MATTER_NODE]
+    mock_connection._update_cache.assert_called_once_with("matter_nodes_default", result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "cache_key", "record", "invalidate"),
+    [
+        ("list_thread_networks", "matter_thread_networks_default", THREAD_NETWORK, "key"),
+        ("list_matter_nodes", "matter_nodes_default", MATTER_NODE, "key"),
+        ("list_matter_nodes", "matter_nodes_default", MATTER_NODE, "all"),
+    ],
+)
+async def test_in_flight_read_cannot_restore_cache_after_invalidation(method, cache_key, record, invalidate):
+    connection = ConnectionManager("controller.invalid", "user", "password")
+    connection.ensure_session_connected = AsyncMock(return_value=True)
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def delayed_read(_request):
+        started.set()
+        await finish.wait()
+        return [copy.deepcopy(record)]
+
+    connection.request = delayed_read
+    read_task = asyncio.create_task(getattr(MatterManager(connection), method)())
+    await started.wait()
+    connection._invalidate_cache(cache_key if invalidate == "key" else None)
+    finish.set()
+
+    assert await read_task == [record]
+    assert connection.get_cached(cache_key) is None
+
+
+@pytest.mark.asyncio
+async def test_uninterrupted_read_is_cached_on_a_real_connection():
+    connection = ConnectionManager("controller.invalid", "user", "password")
+    connection.ensure_session_connected = AsyncMock(return_value=True)
+    connection.request = AsyncMock(return_value=[copy.deepcopy(MATTER_NODE)])
+
+    result = await MatterManager(connection).list_matter_nodes()
+
+    assert connection.get_cached("matter_nodes_default") == [MATTER_NODE]
+    assert result == [MATTER_NODE]
