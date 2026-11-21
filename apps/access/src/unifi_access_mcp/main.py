@@ -21,6 +21,7 @@ from unifi_access_mcp.runtime import (
     config,
     connection_manager,
     event_manager,
+    get_operation_gate,
     server,
     support_bundle_service,
 )
@@ -41,6 +42,8 @@ setup_permissioned_tool(
     diagnostics_enabled_fn=diagnostics_enabled,
     wrap_tool_fn=wrap_tool,
     logger=logger,
+    # Writes one at a time in request order, reads capped, per controller.
+    gate_provider=get_operation_gate,
 )
 
 logger.debug("Access MCP server module loaded; singletons initialised.")

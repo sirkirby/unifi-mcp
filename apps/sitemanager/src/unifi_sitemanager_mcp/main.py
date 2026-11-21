@@ -29,6 +29,9 @@ setup_permissioned_tool(
     diagnostics_enabled_fn=diagnostics_enabled,
     wrap_tool_fn=wrap_tool,
     logger=logger,
+    # No operation gate: every Site Manager tool reads Ubiquiti's cloud API and
+    # none writes to a controller. Calls still signal batch admission.
+    gate_provider=None,
 )
 
 _KEY_SOURCE = "unifi.ui.com > Settings > API Keys."

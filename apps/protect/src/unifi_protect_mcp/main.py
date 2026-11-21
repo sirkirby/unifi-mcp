@@ -30,6 +30,7 @@ from unifi_protect_mcp.runtime import (
     config,
     connection_manager,
     event_manager,
+    get_operation_gate,
     server,
     support_bundle_service,
 )
@@ -41,11 +42,14 @@ from unifi_protect_mcp.utils.diagnostics import diagnostics_enabled, wrap_tool
 
 _original_tool_decorator = getattr(server, "_original_tool", server.tool)
 
-# Domain tools reconnect first when the controller was unavailable at start-up.
-# Meta-tools register with the plain decorator: discovery never contacts the
-# controller.
+# Domain tools take their turn at the controller's operation gate first (writes
+# one at a time in request order, reads capped), then reconnect when the
+# controller was unavailable at start-up. Meta-tools register with the plain
+# decorator: discovery never contacts the controller and is never gated.
 server.tool = create_permissioned_tool(
-    original_tool_decorator=reconnecting_tool_decorator(_original_tool_decorator, connection_manager),
+    original_tool_decorator=_original_tool_decorator,
+    connection_decorator=lambda tool_decorator: reconnecting_tool_decorator(tool_decorator, connection_manager),
+    gate_provider=get_operation_gate,
     policy_gate_checker=PolicyGateChecker(server_prefix="protect", category_map=PROTECT_CATEGORY_MAP),
     server_prefix="protect",
     register_tool_fn=register_tool,

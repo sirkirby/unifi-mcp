@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from unifi_core.support_bundle import (
     ConnectionSection,
     ControllerCapabilityFlag,
     ControllerSection,
     EvidenceStatus,
+    OperationGateSummary,
     Product,
     ProtectCapabilities,
     ResourceShapeProbe,
     SanitizationSection,
     SummaryProbe,
+    operation_gate_summary,
 )
 from unifi_mcp_shared.support_bundle import ProbeName, SupportBundleEvidence
 
@@ -23,8 +25,13 @@ class ProtectSupportBundleAdapter:
 
     product = Product.PROTECT
 
-    def __init__(self, connection_manager: Any) -> None:
+    def __init__(self, connection_manager: Any, *, operation_gate: Callable[[], Any] | None = None) -> None:
         self._connection_manager = connection_manager
+        self._operation_gate = operation_gate
+
+    def _gate_summary(self) -> OperationGateSummary | None:
+        gate = self._operation_gate() if self._operation_gate is not None else None
+        return operation_gate_summary(gate.snapshot()) if gate is not None else None
 
     async def collect(self, probe: ProbeName, resource: str | None) -> SupportBundleEvidence:
         status = self._connection_manager.support_status()
@@ -65,6 +72,7 @@ class ProtectSupportBundleAdapter:
                     public_api_key_configured=api_key_configured,
                     websocket_state=status["websocket_state"],
                 ),
+                operation_gate=self._gate_summary(),
             ),
             probe=probe_section,
             sanitization=SanitizationSection(
