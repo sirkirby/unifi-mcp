@@ -120,9 +120,16 @@ class WriteTicketCancelled(UniFiError):
 class WriteRequestTimeout(UniFiConnectionError, TimeoutError):
     """A controller request inside a held write ran past the write's hold budget.
 
-    The request may already have reached the controller, so the change may or
-    may not have been applied; read the resource back before retrying.
+    ``request_sent`` is ``False`` when the budget was already spent and the
+    request was refused before it was sent: the change was certainly not
+    applied. Otherwise the request may already have reached the controller, so
+    the change may or may not have been applied; read the resource back before
+    retrying.
     """
+
+    def __init__(self, message: str, *, request_sent: bool = True) -> None:
+        super().__init__(message)
+        self.request_sent = request_sent
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +337,8 @@ async def write_request_bound() -> AsyncIterator[None]:
     if remaining <= 0:
         raise WriteRequestTimeout(
             "The write's time budget is spent; the controller request was not sent. "
-            "Read the resource back before retrying the change."
+            "Read the resource back before retrying the change.",
+            request_sent=False,
         )
     # The remaining budget is read on the gate's clock, the timeout runs on the
     # event loop's. Both are monotonic seconds with the default clock; a test

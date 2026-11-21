@@ -35,6 +35,11 @@ CACHE_PREFIX_SETTINGS = "settings"
 CACHE_PREFIX_SITES = "sites"
 CACHE_PREFIX_ADMINS = "admin_users"
 
+# A restore uploads the whole backup and the controller checks it before it
+# answers, which can outlast the session's five-minute default. It gets an
+# explicit limit of its own, ten minutes, so a dead controller cannot hang it.
+RESTORE_TIMEOUT_SECONDS = 600.0
+
 
 def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """The managed device that hosts this controller, if there is one.
@@ -201,7 +206,14 @@ class SystemManager:
             restore_url = f"{self._connection.url_base}/api/s/{self._connection.site}/cmd/restore"
             logger.info("Attempting to restore backup via POST to %s", restore_url)
 
-            async with self._connection.controller.session.post(restore_url, data=form) as response:
+            # Its own explicit limit, replacing the session's five-minute default.
+            # No tool or action calls this yet. One that does must design its
+            # operation-gate hold explicitly: inside a held write the gate's hold
+            # budget (and any bound already entered) still ends it earlier.
+            restore_timeout = aiohttp.ClientTimeout(total=RESTORE_TIMEOUT_SECONDS)
+            async with self._connection.controller.session.post(
+                restore_url, data=form, timeout=restore_timeout
+            ) as response:
                 if response.status == 200:
                     logger.info("Backup restoration initiated successfully.")
                     self._connection._invalidate_cache()
