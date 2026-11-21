@@ -14552,7 +14552,7 @@
         "readOnlyHint": true
       },
       "auth_method": "either",
-      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Clients with a DHCP reservation also carry fixed_ip. Filter by filter_type (all/wired/wireless/thread), set include_offline=true to add offline/historical clients to the connected ones (connected clients keep their live status and wireless fields). Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details, unifi_recent_events). filter_type='thread' lists connected Matter-over-Thread end devices (session credentials; Network 11+), which have no MAC and carry thread_client_id, Thread network, channel, signal, parent and border router instead; they cannot be passed to the MAC-based client tools. filter_type='all' returns wired and Wi-Fi clients and reports thread_client_count alongside them when the controller has Thread clients. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. include_offline=true requires session credentials for historical inventory. Full details and mutations can require session credentials.",
+      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Clients with a DHCP reservation also carry fixed_ip. Filter by filter_type (all/wired/wireless), set include_offline=true to add offline/historical clients to the connected ones (connected clients keep their live status and wireless fields). Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details, unifi_recent_events). API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. include_offline=true requires session credentials for historical inventory. Full details and mutations can require session credentials.",
       "name": "unifi_list_clients",
       "schema": {
         "input": {
@@ -14562,12 +14562,11 @@
               "type": "string"
             },
             "filter_type": {
-              "description": "Filter clients by connection type: 'all' (default, wired + Wi-Fi), 'wired', 'wireless', or 'thread' (connected Matter/Thread end devices only)",
+              "description": "Filter clients by connection type: 'all' (default), 'wired', or 'wireless'",
               "enum": [
                 "all",
                 "wired",
-                "wireless",
-                "thread"
+                "wireless"
               ],
               "type": "string"
             },
