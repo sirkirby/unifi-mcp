@@ -1,0 +1,1404 @@
+{
+  "count": 15,
+  "generated_by": "scripts/generate_tool_manifest.py",
+  "module_map": {
+    "innerspace_get_plan_asset": "unifi_innerspace_mcp.tools.floor_plans",
+    "innerspace_get_project": "unifi_innerspace_mcp.tools.project",
+    "innerspace_get_status": "unifi_innerspace_mcp.tools.status",
+    "innerspace_list_access_points": "unifi_innerspace_mcp.tools.devices",
+    "innerspace_list_floor_plans": "unifi_innerspace_mcp.tools.floor_plans",
+    "innerspace_list_inventory": "unifi_innerspace_mcp.tools.devices",
+    "innerspace_list_placed_devices": "unifi_innerspace_mcp.tools.devices",
+    "innerspace_list_switches": "unifi_innerspace_mcp.tools.devices",
+    "innerspace_list_walls": "unifi_innerspace_mcp.tools.project"
+  },
+  "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Run several UniFi InnerSpace tools as background jobs through the indirect execution wrapper. Writes execute one at a time in submission order; reads run concurrently, up to a cap. Queued jobs can be cancelled. Arguments are fixed at submission, and a batch does not stop on failure. Returns job IDs; use innerspace_batch_status to check progress and innerspace_batch_cancel to cancel queued jobs.",
+      "name": "innerspace_batch",
+      "schema": {
+        "input": {
+          "properties": {
+            "operations": {
+              "description": "Array of {tool, arguments} objects using names from innerspace_tool_index in lazy mode, or known domain tool names in meta-only mode",
+              "items": {
+                "properties": {
+                  "arguments": {
+                    "description": "Tool parameters matching the domain tool's input schema",
+                    "type": "object"
+                  },
+                  "tool": {
+                    "description": "Tool name from innerspace_tool_index in lazy mode, or a known domain tool name in meta-only mode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tool"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "operations"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "errors": {
+              "description": "Errors for operations that failed to start",
+              "type": "array"
+            },
+            "jobs": {
+              "description": "Started jobs with index, tool name, and jobId",
+              "items": {
+                "properties": {
+                  "index": {
+                    "type": "integer"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "tool": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Execute"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Cancel queued UniFi InnerSpace batch jobs. Jobs already running or finished are reported, not cancelled.",
+      "name": "innerspace_batch_cancel",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to cancel",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to cancel at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "cancelled": {
+              "description": "True when the job was withdrawn before it ran",
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Outcome per job (when using jobIds parameter)",
+              "items": {
+                "properties": {
+                  "cancelled": {
+                    "description": "True when the job was withdrawn before it ran",
+                    "type": "boolean"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Why the job was not cancelled",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Status after the call",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "done",
+                      "error",
+                      "cancelled",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "description": "Why the job was not cancelled",
+              "type": "string"
+            },
+            "status": {
+              "description": "Status after the call",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Cancel"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Check status of UniFi InnerSpace batch operations. Returns status (with the queue position while queued), result (if done), or error (if failed).",
+      "name": "innerspace_batch_status",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to check",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to check at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "error": {
+              "description": "Error message (present when status is 'error')",
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Status of multiple jobs (when using jobIds parameter)",
+              "type": "array"
+            },
+            "position": {
+              "description": "While queued: write operations ahead of this job (1 = next; 0 = starting). Null while it waits for an earlier job in its batch.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "result": {
+              "description": "Job result (present when status is 'done')"
+            },
+            "status": {
+              "description": "Current job status. 'queued' waits for an earlier job or its write turn; 'cancelled' never ran.",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Batch Status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Execute a UniFi InnerSpace tool (floor plans, walls, wall types and device placement from UniFi InnerSpace) by name for lazy/meta-only workflows.",
+      "name": "innerspace_execute",
+      "schema": {
+        "input": {
+          "properties": {
+            "arguments": {
+              "description": "Tool parameters matching the domain tool's input schema",
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "tool": {
+              "description": "Domain tool name (e.g. 'innerspace_list_*'); discover it through innerspace_tool_index in lazy mode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "tool"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "description": "Result from the executed UniFi InnerSpace tool",
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Execute Tool"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns one floor plan's image metadata and the resource URI to read the image from. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_get_plan_asset",
+      "permission_action": "read",
+      "permission_category": "floor_plans",
+      "schema": {
+        "input": {
+          "properties": {
+            "plan_id": {
+              "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get InnerSpace Plan Image"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns the InnerSpace project: its title, floor plans, wall types and attenuation-object (RF obstacle) types. Lengths are in the project's unit unless unit is given; include_shapes adds every shape (large). Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_get_project",
+      "permission_action": "read",
+      "permission_category": "project",
+      "schema": {
+        "input": {
+          "properties": {
+            "include_shapes": {
+              "description": "When true, also returns every shape of the project with converted geometry (large).",
+              "type": "boolean"
+            },
+            "unit": {
+              "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get InnerSpace Project"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Reports whether the InnerSpace application is installed and running on the UniFi OS console, with its installed version and any update available. Read-only. Run this first when other InnerSpace tools report that the application is not installed or not running.",
+      "name": "innerspace_get_status",
+      "permission_action": "read",
+      "permission_category": "status",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get InnerSpace Status"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the access points in the InnerSpace project and where they are placed, in the project's unit unless unit is given. Optionally filtered by site. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_access_points",
+      "permission_action": "read",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            },
+            "unit": {
+              "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List InnerSpace Access Points"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the floor plans of the InnerSpace project with their scale and image placement. Optionally filtered by site. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_floor_plans",
+      "permission_action": "read",
+      "permission_category": "floor_plans",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List InnerSpace Floor Plans"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the devices the console has adopted that are not yet placed on a floor plan. Optionally filtered by site. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_inventory",
+      "permission_action": "read",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List InnerSpace Inventory"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the devices placed on one floor plan, in the project's unit unless unit is given. Cut at limit. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_placed_devices",
+      "permission_action": "read",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "limit": {
+              "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "plan_id": {
+              "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            },
+            "unit": {
+              "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Placed InnerSpace Devices"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the switches in the InnerSpace project and where they are placed, in the project's unit unless unit is given. Optionally filtered by site. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_switches",
+      "permission_action": "read",
+      "permission_category": "devices",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "InnerSpace site id to filter by. Omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            },
+            "unit": {
+              "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List InnerSpace Switches"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the walls of one floor plan in the plan's own coordinate frame, in the project's unit unless unit is given. Cut at limit. Read-only. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+      "name": "innerspace_list_walls",
+      "permission_action": "read",
+      "permission_category": "project",
+      "schema": {
+        "input": {
+          "properties": {
+            "limit": {
+              "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "plan_id": {
+              "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "type": "string"
+            },
+            "unit": {
+              "description": "Length unit of the result: 'metric' (metres) or 'imperial' (feet). Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List InnerSpace Walls"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Load UniFi InnerSpace tools (floor plans, walls, wall types and device placement from UniFi InnerSpace) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
+      "name": "innerspace_load_tools",
+      "schema": {
+        "input": {
+          "properties": {
+            "tools": {
+              "description": "Tool names to load (from innerspace_tool_index)",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "tools"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "errors": {
+              "description": "Errors for tools that failed to load",
+              "type": "array"
+            },
+            "loaded": {
+              "description": "Successfully loaded tool names",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "message": {
+              "description": "Summary message",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Load Tools"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Discover UniFi InnerSpace tools (floor plans, walls, wall types and device placement from UniFi InnerSpace) through the compact tool index. The catalog is manifest-backed in lazy mode; in meta-only mode it starts with registered meta-tools and expands after domain modules execute. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "name": "innerspace_tool_index",
+      "schema": {
+        "input": {
+          "properties": {
+            "category": {
+              "description": "Filter to one category. Valid values are returned in the 'categories' field of every response.",
+              "type": "string"
+            },
+            "include_schemas": {
+              "default": false,
+              "description": "Include full input/output schemas per tool. Defaults to false \u2014 set true with a name, category or search filter to get parameter details for specific tools.",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Exact, case-sensitive tool name. Cannot be combined with category or search. Unknown names return an empty index.",
+              "type": "string"
+            },
+            "search": {
+              "description": "Case-insensitive token search over tool names and descriptions. Ignores common words and one-character terms; multi-word queries require at least half of usable terms (minimum two). Terms of four or more characters also match token prefixes. Results are ranked by exact phrase and name matches, with at most 20 returned. An empty string applies no filter; a non-empty query with no usable terms returns no tools.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "categories": {
+              "description": "All available category names (use as values for the category filter)",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "count": {
+              "description": "Number of tools returned",
+              "type": "integer"
+            },
+            "filtered": {
+              "description": "True when name, category or search filter was applied",
+              "type": "boolean"
+            },
+            "tools": {
+              "description": "Matching tools with name and description (plus schemas if include_schemas)",
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi InnerSpace Tool Index"
+    }
+  ]
+}

@@ -6,6 +6,9 @@ contact_links:
   - name: Site Manager troubleshooting
     url: https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/troubleshooting.md
     about: The Site Manager server has no support bundle. Check its troubleshooting guide, then report with the manual bug form fields.
+  - name: InnerSpace troubleshooting
+    url: https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/docs/troubleshooting.md
+    about: The InnerSpace server has no support bundle. Check its troubleshooting guide, then report with the manual bug form fields.
   - name: Security vulnerability
     url: https://github.com/sirkirby/unifi-mcp/security/advisories
     about: Please report suspected vulnerabilities privately through GitHub Security Advisories.

@@ -8,6 +8,7 @@ Usage:
     python scripts/generate_server_manifest.py --app protect [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app access [--version X.Y.Z]
     python scripts/generate_server_manifest.py --app sitemanager [--version X.Y.Z]
+    python scripts/generate_server_manifest.py --app innerspace [--version X.Y.Z]
 
 Output:
     apps/{app}/server.json — MCP Registry manifest (committed to git)
@@ -93,6 +94,16 @@ APP_CONFIGS = {
             },
         ],
     },
+    "innerspace": {
+        "title": "UniFi InnerSpace MCP",
+        "description": "Read UniFi InnerSpace projects, floor plans, walls, and placed devices via MCP.",
+        # No bare "v" fallback: plain v* tags are Network's legacy releases.
+        "tag_prefixes": ["innerspace/v"],
+        # InnerSpace uses the console login session only, so it must never be
+        # offered a console's UNIFI_API_KEY.
+        "omit_env_vars": ["UNIFI_API_KEY"],
+        "extra_env_vars": [],
+    },
 }
 
 
@@ -131,7 +142,9 @@ def build_server_manifest(app_name: str, version: str) -> dict:
         raise ValueError(f"Unknown app: '{app_name}'. Expected one of: {sorted(APP_CONFIGS.keys())}")
 
     config = APP_CONFIGS[app_name]
-    env_vars = (_SHARED_ENV_VARS if config.get("controller_env_vars", True) else []) + config["extra_env_vars"]
+    shared = _SHARED_ENV_VARS if config.get("controller_env_vars", True) else []
+    omitted = set(config.get("omit_env_vars", []))
+    env_vars = [v for v in shared if v["name"] not in omitted] + config["extra_env_vars"]
 
     return {
         "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",

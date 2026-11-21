@@ -1,8 +1,8 @@
 """CI gate: every read tool must have a registered GET resource route.
 
-Mirrors test_serializer_coverage.py. Adding a new unifi_list_*, unifi_get_*_details,
-protect_list_*, protect_get_*, access_list_*, access_get_*, or *_recent_events tool
-fails this test if no matching GET route is registered.
+Mirrors test_serializer_coverage.py. Adding a read tool to the action catalog, for any
+product (Network, Protect, Access, Site Manager, InnerSpace), fails this test if no
+matching resource route is registered.
 
 The default convention is "tool name minus product prefix" (e.g., unifi_list_clients
 maps to a route function named list_clients). When a route is registered under a
@@ -33,6 +33,16 @@ TOOL_ROUTE_OVERRIDES: dict[str, str] = {
     "sitemanager_list_sdwan_configs": "list_sitemanager_sdwan_configs",
     "sitemanager_get_sdwan_config": "get_sitemanager_sdwan_config",
     "sitemanager_get_sdwan_config_status": "get_sitemanager_sdwan_config_status",
+    # InnerSpace — product-prefixed route functions to disambiguate from Network and Access.
+    "innerspace_get_status": "get_innerspace_status",
+    "innerspace_get_project": "get_innerspace_project",
+    "innerspace_list_floor_plans": "list_innerspace_floor_plans",
+    "innerspace_list_walls": "list_innerspace_walls",
+    "innerspace_list_placed_devices": "list_innerspace_placed_devices",
+    "innerspace_list_access_points": "list_innerspace_access_points",
+    "innerspace_list_switches": "list_innerspace_switches",
+    "innerspace_list_inventory": "list_innerspace_inventory",
+    "innerspace_get_plan_asset": "get_innerspace_plan_asset",
     # Access — domain-prefixed route functions to disambiguate from network/protect.
     "access_get_activity_summary": "get_access_activity_summary",
     "access_get_health": "get_access_health",

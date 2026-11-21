@@ -636,3 +636,13 @@ def test_api_floor_contract_requires_every_inventory_input(monkeypatch, model):
     monkeypatch.delattr(reads, model)
     with pytest.raises(ImportError, match=model):
         exec(_module()._API_CATALOG_FLOOR_CONTRACT, {})
+
+
+def test_innerspace_is_a_floor_checked_downstream_package() -> None:
+    module = _module()
+    assert module.SECURITY_FLOORS["unifi-innerspace-mcp"] == module.MCP_SECURITY_FLOORS
+    assert module.FLOOR_ONLY_CORE_EXTRAS["unifi-innerspace-mcp"] == ""
+    downstream = {item.dist_name: item for item in module.DOWNSTREAM_PACKAGES}["unifi-innerspace-mcp"]
+    assert downstream.src == module.REPO / "apps/innerspace"
+    assert downstream.smoke_import == "unifi_innerspace_mcp.main"
+    assert downstream.root_module == "unifi_innerspace_mcp"

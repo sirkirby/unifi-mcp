@@ -1,0 +1,1 @@
+"""UniFi InnerSpace MCP resources."""

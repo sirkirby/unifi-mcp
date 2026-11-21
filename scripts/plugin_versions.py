@@ -21,12 +21,14 @@ SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
 )
-PACKAGE_PIN = re.compile(r"(unifi-(network|protect|access|sitemanager)-mcp)==(.+)")
+PACKAGE_PIN = re.compile(r"(unifi-(network|protect|access|sitemanager|innerspace)-mcp)==(.+)")
 MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
 # Claude Code's servers are inline in its manifest; Codex and OpenClaw run this file's.
 CODEX_MCP = ".mcp.codex.json"
 MARKETPLACES = (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json")
-PRODUCTS = ("network", "protect", "access", "sitemanager")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "innerspace")
+# Servers that release before, or without, a plugin bundle; their server.json still follows the tag.
+BUNDLELESS_PRODUCTS = frozenset({"sitemanager", "innerspace"})
 CHANGELOG = "CHANGELOG.md"
 CHANGELOG_MARKER = "<!-- New entries go below this line, newest first; the release writeback inserts here. -->"
 REPO_URL = "https://github.com/sirkirby/unifi-mcp"
@@ -246,8 +248,8 @@ def sync(root: Path, releasing: str | None = None) -> None:
         if version is None:
             continue
         bundle = root / "plugins" / f"unifi-{product}"
-        # The first Site Manager tag may precede its plugin bundle. Still update server.json.
-        if product != "sitemanager" or bundle.exists():
+        # A bundle-less server tag still updates server.json.
+        if product not in BUNDLELESS_PRODUCTS or bundle.exists():
             _, pins = plugin_state(bundle)
             current = pins[f"unifi-{product}-mcp"]
             if Version.parse(version).key < Version.parse(current).key:

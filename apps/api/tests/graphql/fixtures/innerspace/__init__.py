@@ -1,0 +1,1 @@
+"""InnerSpace resolver fixtures."""

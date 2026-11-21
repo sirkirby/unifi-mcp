@@ -62,7 +62,9 @@ class DispatchEntry:
     method: str
 
 
-def build_dispatch_table(products: Iterable[str] = ("network", "protect", "access")) -> dict[str, DispatchEntry]:
+def build_dispatch_table(
+    products: Iterable[str] = ("network", "protect", "access", "innerspace"),
+) -> dict[str, DispatchEntry]:
     """Return a catalog-derived binding view without inspecting sibling app source."""
     selected = set(products)
     registry = ManifestRegistry.load()

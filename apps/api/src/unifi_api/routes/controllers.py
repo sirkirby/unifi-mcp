@@ -32,7 +32,7 @@ class ControllerIn(BaseModel):
     username: str = ""
     password: str = ""
     api_token: str | None = None
-    product_kinds: list[Literal["network", "protect", "access"]]
+    product_kinds: list[Literal["network", "protect", "access", "innerspace"]]
     verify_tls: bool = True
     is_default: bool = False
 
@@ -45,7 +45,7 @@ class ControllerIn(BaseModel):
 class ControllerPatch(BaseModel):
     name: str | None = None
     base_url: str | None = None
-    product_kinds: list[Literal["network", "protect", "access"]] | None = None
+    product_kinds: list[Literal["network", "protect", "access", "innerspace"]] | None = None
     verify_tls: bool | None = None
     is_default: bool | None = None
     username: str | None = None

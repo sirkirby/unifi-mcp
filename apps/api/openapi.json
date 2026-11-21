@@ -1030,7 +1030,8 @@
               "enum": [
                 "network",
                 "protect",
-                "access"
+                "access",
+                "innerspace"
               ],
               "type": "string"
             },
@@ -1171,7 +1172,8 @@
                   "enum": [
                     "network",
                     "protect",
-                    "access"
+                    "access",
+                    "innerspace"
                   ],
                   "type": "string"
                 },
@@ -19692,6 +19694,822 @@
         "summary": "Get Protect Incident Evidence",
         "tags": [
           "protect/incident_evidence"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/access-points": {
+      "get": {
+        "description": "Access points with position, height, azimuth and mount. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_access_points_v1_sites__site_id__innerspace_access_points_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "in": "query",
+            "name": "innerspace_site_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "title": "Innerspace Site Id"
+            }
+          },
+          {
+            "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Access Points V1 Sites  Site Id  Innerspace Access Points Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List InnerSpace access points",
+        "tags": [
+          "innerspace/devices"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/floor-plans": {
+      "get": {
+        "description": "Floor plans with scale, image size, image file name and image scale and offset. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_floor_plans_v1_sites__site_id__innerspace_floor_plans_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "in": "query",
+            "name": "innerspace_site_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "title": "Innerspace Site Id"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Floor Plans V1 Sites  Site Id  Innerspace Floor Plans Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List InnerSpace floor plans",
+        "tags": [
+          "innerspace/floor-plans"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset": {
+      "get": {
+        "description": "Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image; read it through the InnerSpace MCP server's plan image resources. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_innerspace_plan_asset_v1_sites__site_id__innerspace_floor_plans__plan_id__asset_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Innerspace Plan Asset V1 Sites  Site Id  Innerspace Floor Plans  Plan Id  Asset Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get InnerSpace plan image metadata",
+        "tags": [
+          "innerspace/floor-plans"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/devices": {
+      "get": {
+        "description": "Devices placed on one floor plan with position and height. The result reports limit, total and whether the list was cut. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_placed_devices_v1_sites__site_id__innerspace_floor_plans__plan_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Placed Devices V1 Sites  Site Id  Innerspace Floor Plans  Plan Id  Devices Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List the devices placed on an InnerSpace floor plan",
+        "tags": [
+          "innerspace/devices"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/walls": {
+      "get": {
+        "description": "Walls of one floor plan with end points in the plan's own frame. The result reports limit, total and whether the list was cut. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_walls_v1_sites__site_id__innerspace_floor_plans__plan_id__walls_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Walls V1 Sites  Site Id  Innerspace Floor Plans  Plan Id  Walls Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List the walls of an InnerSpace floor plan",
+        "tags": [
+          "innerspace/project"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/inventory": {
+      "get": {
+        "description": "Devices the console has adopted that are not yet placed on a floor plan. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_inventory_v1_sites__site_id__innerspace_inventory_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "in": "query",
+            "name": "innerspace_site_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "title": "Innerspace Site Id"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Inventory V1 Sites  Site Id  Innerspace Inventory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List unplaced InnerSpace inventory",
+        "tags": [
+          "innerspace/devices"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/project": {
+      "get": {
+        "description": "The project's title, its floor plans with their scale, and its wall types; every shape with include_shapes (large). The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_innerspace_project_v1_sites__site_id__innerspace_project_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also return every shape with converted geometry (large).",
+            "in": "query",
+            "name": "include_shapes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also return every shape with converted geometry (large).",
+              "title": "Include Shapes",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Innerspace Project V1 Sites  Site Id  Innerspace Project Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get the InnerSpace project",
+        "tags": [
+          "innerspace/project"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/status": {
+      "get": {
+        "description": "Whether the InnerSpace application is installed and running on the UniFi OS console, with its version. The path site_id is ignored. Read-only, through the console session.",
+        "operationId": "get_innerspace_status_v1_sites__site_id__innerspace_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Innerspace Status V1 Sites  Site Id  Innerspace Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get InnerSpace status",
+        "tags": [
+          "innerspace/status"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/innerspace/switches": {
+      "get": {
+        "description": "Switches with position. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_innerspace_switches_v1_sites__site_id__innerspace_switches_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "in": "query",
+            "name": "innerspace_site_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "InnerSpace site id to filter by; omit for every site. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+              "title": "Innerspace Site Id"
+            }
+          },
+          {
+            "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
+              "title": "Unit"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Innerspace Switches V1 Sites  Site Id  Innerspace Switches Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List InnerSpace switches",
+        "tags": [
+          "innerspace/devices"
         ]
       }
     },

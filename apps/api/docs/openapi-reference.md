@@ -352,6 +352,159 @@ Get a UniFi Access Developer API visitor by a UUID returned from the visitor fam
 **Returns:** `object`
 
 
+## innerspace/devices
+
+### `GET /v1/sites/{site_id}/innerspace/access-points` — List InnerSpace access points
+
+
+Access points with position, height, azimuth and mount. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `innerspace_site_id` (query)
+- `unit` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/devices` — List the devices placed on an InnerSpace floor plan
+
+
+Devices placed on one floor plan with position and height. The result reports limit, total and whether the list was cut. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `plan_id` (path) (required)
+- `limit` (query)
+- `unit` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/innerspace/inventory` — List unplaced InnerSpace inventory
+
+
+Devices the console has adopted that are not yet placed on a floor plan. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `innerspace_site_id` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/innerspace/switches` — List InnerSpace switches
+
+
+Switches with position. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `innerspace_site_id` (query)
+- `unit` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## innerspace/floor-plans
+
+### `GET /v1/sites/{site_id}/innerspace/floor-plans` — List InnerSpace floor plans
+
+
+Floor plans with scale, image size, image file name and image scale and offset. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `innerspace_site_id` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset` — Get InnerSpace plan image metadata
+
+
+Image metadata of one floor plan: file name, type, pixel size and scale. The API never returns the image; read it through the InnerSpace MCP server's plan image resources. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `plan_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## innerspace/project
+
+### `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/walls` — List the walls of an InnerSpace floor plan
+
+
+Walls of one floor plan with end points in the plan's own frame. The result reports limit, total and whether the list was cut. The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `plan_id` (path) (required)
+- `limit` (query)
+- `unit` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/innerspace/project` — Get the InnerSpace project
+
+
+The project's title, its floor plans with their scale, and its wall types; every shape with include_shapes (large). The path site_id is ignored; filter by InnerSpace site with innerspace_site_id. Read-only, through the console session. These IDs are scoped to the InnerSpace tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `include_shapes` (query)
+- `unit` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## innerspace/status
+
+### `GET /v1/sites/{site_id}/innerspace/status` — Get InnerSpace status
+
+
+Whether the InnerSpace application is installed and running on the UniFi OS console, with its version. The path site_id is ignored. Read-only, through the console session.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
 ## network/clients
 
 ### `GET /v1/sites/{site_id}/blocked-clients` — List Blocked Clients

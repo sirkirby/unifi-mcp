@@ -84,10 +84,20 @@ SERVER_SPECS = {
         representative_tool="sitemanager_list_hosts",
         representative_direct=True,
     ),
+    "innerspace": ServerSpec(
+        package="unifi-innerspace-mcp",
+        command="unifi-innerspace-mcp",
+        expected_name="unifi-innerspace-mcp",
+        prefix="innerspace",
+        index_tool="innerspace_tool_index",
+        expected_index_title="UniFi InnerSpace Tool Index",
+        representative_tool="innerspace_list_floor_plans",
+        representative_direct=True,
+    ),
 }
 
 EXPECTED_ICON_SIZES = [["48x48"], ["96x96"], ["192x192"]]
-OFFLINE_SERVER_NAMES = ("network", "protect", "access", "sitemanager")
+OFFLINE_SERVER_NAMES = ("network", "protect", "access", "sitemanager", "innerspace")
 
 
 def _field(obj: Any, name: str) -> Any:

@@ -21,6 +21,7 @@ PRODUCT_PACKAGES = {
     "protect": "unifi_protect_mcp",
     "access": "unifi_access_mcp",
     "sitemanager": "unifi_sitemanager_mcp",
+    "innerspace": "unifi_innerspace_mcp",
 }
 
 

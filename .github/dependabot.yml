@@ -86,6 +86,7 @@ updates:
     directories:
       - "/apps/access"
       - "/apps/api"
+      - "/apps/innerspace"
       - "/apps/network"
       - "/apps/protect"
       - "/apps/sitemanager"
