@@ -47,6 +47,8 @@ logger = logging.getLogger(__name__)
     description=(
         "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, "
         "IP subnet, VLAN ID, DHCP settings, and enabled state. "
+        "ip_subnet is the controller's gateway-address form (gateway IP plus prefix, e.g. "
+        "'192.168.1.1/24' for the 192.168.1.0/24 network), not the network address. "
         "Use to understand network topology and VLAN layout. "
         "Filters: search (name/VLAN substring), purpose (corporate/guest/wan/vlan-only), "
         "limit (default 25), fields (comma-separated subset). "
@@ -93,7 +95,7 @@ async def list_networks(
             - name (str): The user-defined name of the network.
             - enabled (bool): Whether the network is active.
             - purpose (str): The purpose of the network (e.g., 'corporate', 'guest', 'vlan-only', 'wan').
-            - ip_subnet (str, optional): The IP subnet in CIDR notation (if applicable).
+            - ip_subnet (str, optional): Gateway address and prefix (e.g. '192.168.1.1/24'), if applicable.
             - vlan_enabled (bool): Whether VLAN tagging is enabled.
             - vlan (int, optional): The VLAN ID (if `vlan_enabled` is true).
             - dhcpd_enabled (bool, optional): Whether DHCP server is enabled for this network.
@@ -114,7 +116,7 @@ async def list_networks(
                 "name": "LAN",
                 "enabled": True,
                 "purpose": "corporate",
-                "ip_subnet": "192.168.1.0/24",
+                "ip_subnet": "192.168.1.1/24",
                 "vlan_enabled": False,
                 "vlan": null,
                 "dhcpd_enabled": True,
@@ -127,7 +129,7 @@ async def list_networks(
                 "name": "IoT VLAN",
                 "enabled": True,
                 "purpose": "corporate", # Note: Purpose might map differently in V1
-                "ip_subnet": "10.10.20.0/24",
+                "ip_subnet": "10.10.20.1/24",
                 "vlan_enabled": True,
                 "vlan": 20,
                 "dhcpd_enabled": True,
@@ -211,7 +213,7 @@ async def get_network_details(
             "name": "IoT VLAN",
             "enabled": True,
             "purpose": "corporate",
-            "ip_subnet": "10.10.20.0/24",
+            "ip_subnet": "10.10.20.1/24",
             "vlan_enabled": True,
             "vlan": 20,
             "dhcpd_enabled": True,
@@ -274,7 +276,7 @@ VPN_FIREWALL_ZONE_WARNING = (
     "Every network field below is a key inside the update_data dict, not a top-level argument, e.g. "
     "update_data={'dhcpd_enabled': false}. Unknown keys are rejected. "
     "Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), "
-    "ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), "
+    "ip_subnet (gateway address/prefix CIDR, e.g. '10.10.20.1/24'), enabled (bool), network_isolation_enabled (bool, corporate only), "
     "internet_access_enabled (bool), upnp_lan_enabled (bool), "
     "firewall_zone_id (str, V2 firewall-zone ID — assigns the network to a zone; these IDs are scoped "
     "to the V2 firewall/network tool family, so do not pass Integration API firewall-zone UUIDs). "
@@ -345,7 +347,7 @@ async def update_network(
             - purpose (string): New purpose ("corporate" or "vlan-only"). Setting "guest" is rejected because current controllers can silently place it in the Internal firewall zone.
             - vlan_enabled (boolean): Enable/disable VLAN tagging.
             - vlan (integer): New VLAN ID (1-4094).
-            - ip_subnet (string): New IP subnet (CIDR format).
+            - ip_subnet (string): New gateway address and prefix (e.g. '10.10.20.1/24').
             - enabled (boolean): Enable/disable the entire network.
             - network_isolation_enabled (boolean): Enable network isolation (corporate networks only).
             - internet_access_enabled (boolean): Allow this network to access the internet.
@@ -616,7 +618,7 @@ async def create_network(
     network_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Guest creation requires firewall_zone_id for the built-in Hotspot zone and network_isolation_enabled=false or omitted; switch-routed and SD-WAN guest networks are unsupported. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields."
+            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Guest creation requires firewall_zone_id for the built-in Hotspot zone and network_isolation_enabled=false or omitted; switch-routed and SD-WAN guest networks are unsupported. Required if purpose != 'vlan-only': ip_subnet (gateway address/prefix CIDR, e.g. '192.168.1.1/24' — the controller derives the network from it, so pass the gateway IP, not the network address). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields."
         ),
     ],
     confirm: Annotated[
@@ -635,7 +637,7 @@ async def create_network(
     - purpose (string): Network purpose/type ("corporate", "guest", "wan", "vlan-only", "vpn-client", "vpn-server"). Guest creation requires an explicit built-in Hotspot firewall_zone_id, verified against the controller.
 
     If purpose is not "vlan-only":
-    - ip_subnet (string): IP subnet in CIDR notation (e.g., "192.168.1.0/24") is required
+    - ip_subnet (string): Gateway address and prefix (e.g., "192.168.1.1/24") is required
 
     If purpose is "vlan-only":
     - vlan (integer): VLAN ID (1-4094) is required
@@ -670,7 +672,7 @@ async def create_network(
     {
         "name": "IoT Network",
         "purpose": "corporate",
-        "ip_subnet": "10.20.0.0/24",
+        "ip_subnet": "10.20.0.1/24",
         "vlan_enabled": true,
         "vlan": 20,
         "dhcpd_enabled": true,

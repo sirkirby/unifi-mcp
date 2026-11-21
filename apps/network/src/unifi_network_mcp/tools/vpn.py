@@ -230,7 +230,11 @@ async def delete_vpn_client(
 @server.tool(
     name="unifi_list_vpn_servers",
     auth="either",
-    description="List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
+    description=(
+        "List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc). "
+        "Teleport is not a VPN server record and never appears here, even when the UI's "
+        "Settings overview lists it under VPN Server; read it with unifi_get_teleport_settings."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def list_vpn_servers() -> Dict[str, Any]:
