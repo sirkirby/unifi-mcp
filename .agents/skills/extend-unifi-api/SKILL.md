@@ -283,7 +283,9 @@ Every type has `kind` (LIST/DETAIL/DIFF/TIMESERIES/EVENT_LOG/EMPTY/STREAM). Opti
 
 **Resource endpoints** (`GET /v1/sites/{id}/{resource}`): Use HTTP status codes. 409 Conflict for capability mismatch.
 
-**Action endpoints** (`POST /v1/actions/{tool}`): Always 200; errors in envelope.
+**Action endpoints** (`POST /v1/actions/{tool}`): 200 with errors in the envelope, except read-only mode (403) and a busy controller (503).
+
+**Busy controller:** the operation gate answers 503 with `Retry-After` on REST routes and actions, and `CONTROLLER_BUSY` in GraphQL; nothing is sent. Do not add locks of your own (see `api-endpoint-serializer-authoring`).
 
 ### Procedure G: ManagerFactory for Multi-Controller
 

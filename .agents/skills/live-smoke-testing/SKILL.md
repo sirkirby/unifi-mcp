@@ -154,7 +154,10 @@ phase inclusion.
 
 **Classification is driven by manifest annotations — not static tier lists.** When in doubt,
 set `destructiveHint: true` on the tool's `ToolAnnotations`. A tool missing `readOnlyHint`
-that does only reads is silently treated as mutating; fix the annotation.
+that does only reads is silently treated as mutating; fix the annotation. Meta tools are the
+exception: the preview phase skips them (`skipped`, "meta tool, not a controller write"),
+because some are not read-only (`*_batch_cancel`) yet never reach the controller or take
+`confirm`. Their behaviour is covered by unit tests, not live smoke.
 
 ## Procedure B: Run the Harness with `--phase` Control
 

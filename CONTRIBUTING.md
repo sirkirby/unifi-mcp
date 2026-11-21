@@ -293,9 +293,11 @@ the authorship credit.
 - **Writes that cannot clobber.**
   - Preview first (`confirm=false`).
   - Read back after writing.
-  - Serialize read-modify-write of a shared list, so two calls cannot overwrite
-    each other.
-  - State any remaining race in the docstring.
+  - Declare `permission_action` and `confirm`, so the operation gate runs the
+    confirmed write one at a time and two calls cannot overwrite each other. Do
+    not add your own write lock.
+  - State any remaining race in the docstring, such as another client editing
+    the same controller.
 - **Typed tools, not passthroughs.** One tool per setting or resource, with
   validation. Generic "read or write any setting" accessors are declined.
 - **One ID family per tool.** V2 and Integration IDs never mix in one tool, and

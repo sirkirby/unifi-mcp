@@ -77,6 +77,22 @@ manager = await factory.get_connection_manager(session, controller_id, product)
 - Each concurrency scope (request) shares the cached manager instance; no
   per-request teardown.
 
+### 5. Stay inside the operation gate
+Controller access is ordered per stored controller and product by the operation
+gate (`unifi_api/services/operation_gate.py`, `factory.gate_for`). Do not add
+your own locks.
+- **Resource and GraphQL routers** take a read slot through the
+  `hold_controller_read_slots` dependency that `server.py` attaches where the
+  routers are included. Include a new console resource router in those loops;
+  `apps/api/tests/test_controller_read_route_coverage.py` fails one included
+  anywhere else. A route that must not hold a slot goes in its
+  `NOT_READ_SLOT_ROUTES`, with the reason.
+- **Actions** enter the gate in `dispatch_action`: a confirmed mutation holds
+  the write turn, a read action takes a read slot, and a preview, which never
+  reaches the controller, takes neither.
+- A busy controller answers `503` with `Retry-After` (REST and actions) or
+  `CONTROLLER_BUSY` (GraphQL); nothing is sent.
+
 ---
 
 ## B. Phase 5A Advanced Routing Patterns

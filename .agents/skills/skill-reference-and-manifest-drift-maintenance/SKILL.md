@@ -142,9 +142,12 @@ manifest entries (five initially). The other three products retain their release
 manifest-total count convention unchanged.
 
 In the main `skills/unifi-sitemanager/SKILL.md`, use the same count phrase:
-`It provides 9 read-only domain tools, plus 5 meta-tools`. Name the meta-tools separately:
-`sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`,
-`sitemanager_batch_status`, `sitemanager_load_tools`. Supply paired AUTO markers for
+`It provides 9 read-only domain tools, plus 5 meta-tools`; the generator keeps both
+counts at the pinned manifest's. Name the meta-tools separately, as the pinned
+manifest has them: `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`,
+`sitemanager_batch_status`, `sitemanager_load_tools`, and `sitemanager_batch_cancel`
+once the pin reaches a release that registers it (six meta-tools). These names are
+hand-written, so add it in the plugin release that moves the pin. Supply paired AUTO markers for
 all five categories: `hosts`, `sites`, `devices`, `isp_metrics`, `sdwan`, plus their
 headings and ToC entries. Reference tables contain the domain tools only.
 
