@@ -5051,6 +5051,28 @@
             ],
             "title": "Dhcpd Dns 2"
           },
+          "dhcpd_dns_3": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Dns 3"
+          },
+          "dhcpd_dns_4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Dns 4"
+          },
           "dhcpd_dns_enabled": {
             "anyOf": [
               {
@@ -5237,6 +5259,50 @@
               }
             ],
             "title": "Dhcpdv6 Allow Slaac"
+          },
+          "dhcpdv6_dns_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Dns 1"
+          },
+          "dhcpdv6_dns_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Dns 2"
+          },
+          "dhcpdv6_dns_3": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Dns 3"
+          },
+          "dhcpdv6_dns_4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Dns 4"
           },
           "dhcpdv6_dns_auto": {
             "anyOf": [

@@ -14,6 +14,7 @@ from unifi_core.network.models.networks import (
     to_guest_create_wire,
     validate_create,
     validate_guest_create_fields,
+    validate_ipv6_dns_state,
     validate_ipv6_subnet_state,
     validate_update,
     validate_wan_dns_state,
@@ -793,3 +794,157 @@ class TestGuestCreateWire:
     def test_rejects_non_guest_input(self) -> None:
         with pytest.raises(ValueError, match="guest"):
             to_guest_create_wire(_guest_create(purpose="corporate"))
+
+
+class TestManualDnsServers:
+    """Manual DNS server slots: IPv4 dhcpd_dns_1..4 and IPv6 dhcpdv6_dns_1..4."""
+
+    DHCPV6_DNS = ("dhcpdv6_dns_1", "dhcpdv6_dns_2", "dhcpdv6_dns_3", "dhcpdv6_dns_4")
+    DHCP_DNS = ("dhcpd_dns_1", "dhcpd_dns_2", "dhcpd_dns_3", "dhcpd_dns_4")
+
+    def test_dns_slots_are_mutable(self) -> None:
+        for field in (*self.DHCP_DNS, *self.DHCPV6_DNS):
+            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
+    def test_from_controller_reads_dns_slots(self) -> None:
+        network = from_controller(
+            {
+                "_id": "net-dns",
+                "dhcpd_dns_1": "1.1.1.1",
+                "dhcpd_dns_2": "1.0.0.1",
+                "dhcpd_dns_3": "9.9.9.9",
+                "dhcpd_dns_4": "8.8.8.8",
+                "dhcpdv6_dns_auto": False,
+                "dhcpdv6_dns_1": "2606:4700:4700::1111",
+                "dhcpdv6_dns_2": "2001:4860:4860::8888",
+                "dhcpdv6_dns_3": "2620:fe::fe",
+                "dhcpdv6_dns_4": "",
+            }
+        )
+        assert network.dhcpd_dns_3 == "9.9.9.9"
+        assert network.dhcpd_dns_4 == "8.8.8.8"
+        assert network.dhcpdv6_dns_auto is False
+        assert network.dhcpdv6_dns_1 == "2606:4700:4700::1111"
+        assert network.dhcpdv6_dns_2 == "2001:4860:4860::8888"
+        assert network.dhcpdv6_dns_3 == "2620:fe::fe"
+        assert network.dhcpdv6_dns_4 == ""
+
+    def test_update_accepts_manual_ipv6_dns_servers(self) -> None:
+        assert validate_update(
+            {
+                "dhcpdv6_dns_auto": False,
+                "dhcpdv6_dns_1": "2606:4700:4700::1111",
+                "dhcpdv6_dns_2": "2001:4860:4860::8888",
+            }
+        ) == {
+            "dhcpdv6_dns_auto": False,
+            "dhcpdv6_dns_1": "2606:4700:4700::1111",
+            "dhcpdv6_dns_2": "2001:4860:4860::8888",
+        }
+
+    def test_update_normalizes_ipv6_dns_server(self) -> None:
+        assert validate_update({"dhcpdv6_dns_1": "2606:4700:4700:0:0:0:0:1111"}) == {
+            "dhcpdv6_dns_1": "2606:4700:4700::1111"
+        }
+
+    def test_update_accepts_empty_string_to_clear_ipv6_dns_slot(self) -> None:
+        assert validate_update({"dhcpdv6_dns_2": ""}) == {"dhcpdv6_dns_2": ""}
+
+    @pytest.mark.parametrize("field_name", DHCPV6_DNS)
+    @pytest.mark.parametrize(
+        ("value", "rule"),
+        [
+            ("dns.example.com", "valid IPv6 address"),
+            ("1.1.1.1", "valid IPv6 address"),
+            ("2606:4700:4700::1111/128", "valid IPv6 address"),
+            (" 2606:4700:4700::1111", "valid IPv6 address"),
+            ("fe80::1%eth0", "scope ID"),
+            ("::", "unicast"),
+            ("::1", "unicast"),
+            ("ff02::1", "unicast"),
+        ],
+    )
+    def test_update_rejects_invalid_ipv6_dns_server(self, field_name: str, value: str, rule: str) -> None:
+        with pytest.raises(ValueError, match=rf"'{field_name}'.*{rule}") as error:
+            validate_update({field_name: value})
+        assert value.strip() not in str(error.value)
+
+    def test_update_rejects_non_string_ipv6_dns_server(self) -> None:
+        with pytest.raises(ValueError, match="Invalid network update data"):
+            validate_update({"dhcpdv6_dns_1": 1234})
+
+    @pytest.mark.parametrize("field_name", DHCP_DNS)
+    @pytest.mark.parametrize("value", ["dns.example.com", "2001:4860:4860::8888", "999.1.1.1"])
+    def test_update_rejects_invalid_ipv4_dhcp_dns_server(self, field_name: str, value: str) -> None:
+        with pytest.raises(ValueError, match=rf"'{field_name}' must be a valid IPv4 address"):
+            validate_update({field_name: value})
+
+    def test_update_accepts_ipv4_dhcp_dns_servers_and_empty_clear(self) -> None:
+        assert validate_update({"dhcpd_dns_3": "9.9.9.9", "dhcpd_dns_4": ""}) == {
+            "dhcpd_dns_3": "9.9.9.9",
+            "dhcpd_dns_4": "",
+        }
+
+    def test_auto_off_without_servers_in_update_or_record_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="advertises no IPv6 DNS server"):
+            validate_ipv6_dns_state({"dhcpdv6_dns_auto": True}, {"dhcpdv6_dns_auto": False})
+
+    def test_auto_off_with_only_empty_slots_on_record_is_rejected(self) -> None:
+        current = {"dhcpdv6_dns_auto": True, "dhcpdv6_dns_1": "", "dhcpdv6_dns_2": "  "}
+        with pytest.raises(ValueError, match="advertises no IPv6 DNS server"):
+            validate_ipv6_dns_state(current, {"dhcpdv6_dns_auto": False})
+
+    def test_auto_off_with_servers_in_update_is_accepted(self) -> None:
+        validate_ipv6_dns_state(
+            {"dhcpdv6_dns_auto": True},
+            {"dhcpdv6_dns_auto": False, "dhcpdv6_dns_3": "2606:4700:4700::1111"},
+        )
+
+    def test_auto_off_with_server_already_on_record_is_accepted(self) -> None:
+        validate_ipv6_dns_state(
+            {"dhcpdv6_dns_auto": True, "dhcpdv6_dns_1": "2606:4700:4700::1111"},
+            {"dhcpdv6_dns_auto": False},
+        )
+
+    def test_clearing_last_server_while_stored_auto_is_off_is_rejected(self) -> None:
+        current = {"dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"}
+        with pytest.raises(ValueError, match="advertises no IPv6 DNS server"):
+            validate_ipv6_dns_state(current, {"dhcpdv6_dns_1": ""})
+
+    def test_clearing_servers_while_auto_is_on_is_accepted(self) -> None:
+        validate_ipv6_dns_state(
+            {"dhcpdv6_dns_auto": True, "dhcpdv6_dns_1": "2606:4700:4700::1111"},
+            {"dhcpdv6_dns_1": ""},
+        )
+
+    def test_turning_auto_on_clears_the_requirement(self) -> None:
+        validate_ipv6_dns_state({"dhcpdv6_dns_auto": False}, {"dhcpdv6_dns_auto": True})
+
+    def test_unrelated_update_does_not_reject_stored_auto_off_without_servers(self) -> None:
+        validate_ipv6_dns_state({"dhcpdv6_dns_auto": False}, {"name": "Renamed"})
+
+    def test_validate_create_rejects_auto_off_without_servers(self) -> None:
+        with pytest.raises(ValueError, match="advertises no IPv6 DNS server"):
+            validate_create(
+                {
+                    "name": "Lab",
+                    "purpose": "corporate",
+                    "ip_subnet": "10.0.99.1/24",
+                    "dhcpd_enabled": False,
+                    "dhcpdv6_dns_auto": False,
+                }
+            )
+
+    def test_validate_create_accepts_auto_off_with_server(self) -> None:
+        payload = validate_create(
+            {
+                "name": "Lab",
+                "purpose": "corporate",
+                "ip_subnet": "10.0.99.1/24",
+                "dhcpd_enabled": False,
+                "dhcpdv6_dns_auto": False,
+                "dhcpdv6_dns_1": "2606:4700:4700::1111",
+            }
+        )
+        assert payload["dhcpdv6_dns_auto"] is False
+        assert payload["dhcpdv6_dns_1"] == "2606:4700:4700::1111"

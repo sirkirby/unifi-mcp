@@ -144,11 +144,19 @@ class Network(BaseModel):
     )
     dhcpd_dns_1: Optional[str] = Field(
         default=None,
-        description="Primary DNS server IP for DHCP clients",
+        description="Primary DNS server IPv4 address for DHCP clients; an empty string clears the slot",
     )
     dhcpd_dns_2: Optional[str] = Field(
         default=None,
-        description="Secondary DNS server IP for DHCP clients",
+        description="Secondary DNS server IPv4 address for DHCP clients; an empty string clears the slot",
+    )
+    dhcpd_dns_3: Optional[str] = Field(
+        default=None,
+        description="Third DNS server IPv4 address for DHCP clients; an empty string clears the slot",
+    )
+    dhcpd_dns_4: Optional[str] = Field(
+        default=None,
+        description="Fourth DNS server IPv4 address for DHCP clients; an empty string clears the slot",
     )
     dhcpd_dns_enabled: Optional[bool] = Field(
         default=None,
@@ -435,7 +443,38 @@ class Network(BaseModel):
     )
     dhcpdv6_dns_auto: Optional[bool] = Field(
         default=None,
-        description="Advertise DNS servers automatically over DHCPv6",
+        description=(
+            "Advertise DNS servers automatically over DHCPv6; when false, at least one of "
+            "dhcpdv6_dns_1..dhcpdv6_dns_4 must be set"
+        ),
+    )
+    dhcpdv6_dns_1: Optional[str] = Field(
+        default=None,
+        description=(
+            "Primary IPv6 DNS server advertised to clients when dhcpdv6_dns_auto is false; "
+            "an empty string clears the slot"
+        ),
+    )
+    dhcpdv6_dns_2: Optional[str] = Field(
+        default=None,
+        description=(
+            "Secondary IPv6 DNS server advertised to clients when dhcpdv6_dns_auto is false; "
+            "an empty string clears the slot"
+        ),
+    )
+    dhcpdv6_dns_3: Optional[str] = Field(
+        default=None,
+        description=(
+            "Third IPv6 DNS server advertised to clients when dhcpdv6_dns_auto is false; "
+            "an empty string clears the slot"
+        ),
+    )
+    dhcpdv6_dns_4: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fourth IPv6 DNS server advertised to clients when dhcpdv6_dns_auto is false; "
+            "an empty string clears the slot"
+        ),
     )
     dhcpdv6_leasetime: Optional[int] = Field(
         default=None,
@@ -502,6 +541,8 @@ def from_controller(raw: Any) -> Network:
         dhcpd_gateway_enabled=_get(raw, "dhcpd_gateway_enabled"),
         dhcpd_dns_1=_get(raw, "dhcpd_dns_1"),
         dhcpd_dns_2=_get(raw, "dhcpd_dns_2"),
+        dhcpd_dns_3=_get(raw, "dhcpd_dns_3"),
+        dhcpd_dns_4=_get(raw, "dhcpd_dns_4"),
         dhcpd_dns_enabled=_get(raw, "dhcpd_dns_enabled"),
         dhcpd_ntp_1=_get(raw, "dhcpd_ntp_1"),
         dhcpd_ntp_2=_get(raw, "dhcpd_ntp_2"),
@@ -569,6 +610,10 @@ def from_controller(raw: Any) -> Network:
         dhcpdv6_enabled=_get(raw, "dhcpdv6_enabled"),
         dhcpdv6_allow_slaac=_get(raw, "dhcpdv6_allow_slaac"),
         dhcpdv6_dns_auto=_get(raw, "dhcpdv6_dns_auto"),
+        dhcpdv6_dns_1=_get(raw, "dhcpdv6_dns_1"),
+        dhcpdv6_dns_2=_get(raw, "dhcpdv6_dns_2"),
+        dhcpdv6_dns_3=_get(raw, "dhcpdv6_dns_3"),
+        dhcpdv6_dns_4=_get(raw, "dhcpdv6_dns_4"),
         dhcpdv6_leasetime=_get(raw, "dhcpdv6_leasetime"),
         dhcpdv6_start=_get(raw, "dhcpdv6_start"),
         dhcpdv6_stop=_get(raw, "dhcpdv6_stop"),
@@ -617,6 +662,10 @@ _WRITE_ENUM_VALUES = {
 }
 _CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id"}
 
+# Manual DNS server slots handed to LAN clients, in slot order.
+DHCP_DNS_FIELDS = ("dhcpd_dns_1", "dhcpd_dns_2", "dhcpd_dns_3", "dhcpd_dns_4")
+DHCPV6_DNS_FIELDS = ("dhcpdv6_dns_1", "dhcpdv6_dns_2", "dhcpdv6_dns_3", "dhcpdv6_dns_4")
+
 
 def _normalize_vlan_payload(payload: Dict[str, Any]) -> None:
     """Emit vlan as the controller-native int regardless of caller input type."""
@@ -652,6 +701,24 @@ def _validate_ipv6_subnet(value: str) -> str:
     if address.is_unspecified or address.is_loopback or address.is_multicast or address.is_link_local:
         raise ValueError("'ipv6_subnet' must be a unicast, non-link-local gateway address.")
     return str(interface)
+
+
+def _validate_ipv6_dns_server(field_name: str, value: str) -> str:
+    """Return a manual IPv6 DNS server in canonical form, else raise ``ValueError``.
+
+    Error messages name the rule broken, never echo the value.
+    """
+    if "%" in value:
+        raise ValueError(f"'{field_name}' must not include a scope ID.")
+    try:
+        address = ip_address(value)
+    except ValueError:
+        raise ValueError(f"'{field_name}' must be a valid IPv6 address or an empty string.") from None
+    if address.version != 6:
+        raise ValueError(f"'{field_name}' must be a valid IPv6 address or an empty string.")
+    if address.is_unspecified or address.is_loopback or address.is_multicast:
+        raise ValueError(f"'{field_name}' must be a unicast IPv6 address.")
+    return str(address)
 
 
 def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
@@ -717,7 +784,7 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
         if model.ipv6_interface_type is not None and model.ipv6_interface_type != "static":
             raise ValueError("'ipv6_subnet' can only be set when 'ipv6_interface_type' is 'static'.")
         model.ipv6_subnet = _validate_ipv6_subnet(model.ipv6_subnet)
-    for field_name in ("wan_dns1", "wan_dns2"):
+    for field_name in ("wan_dns1", "wan_dns2", *DHCP_DNS_FIELDS):
         value = getattr(model, field_name)
         if not value:
             continue
@@ -727,6 +794,10 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
             raise ValueError(f"'{field_name}' must be a valid IPv4 address or an empty string.") from None
         if address.version != 4:
             raise ValueError(f"'{field_name}' must be a valid IPv4 address or an empty string.")
+    for field_name in DHCPV6_DNS_FIELDS:
+        value = getattr(model, field_name)
+        if value:
+            setattr(model, field_name, _validate_ipv6_dns_server(field_name, value))
     return model
 
 
@@ -752,6 +823,30 @@ def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> 
         ) from None
     if address.version != 4:
         raise ValueError("The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'.")
+
+
+def validate_ipv6_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> None:
+    """Reject a touched LAN IPv6 DNS configuration that would advertise no server.
+
+    The effective state is ``updates`` over the stored ``current`` record. When
+    ``dhcpdv6_dns_auto`` is effectively false, at least one manual server slot
+    must hold an address; otherwise clients get no IPv6 DNS server. Updates that
+    leave every IPv6 DNS field alone are not checked, so an already stored state
+    does not block unrelated changes.
+    """
+    if not {"dhcpdv6_dns_auto", *DHCPV6_DNS_FIELDS}.intersection(updates):
+        return
+    if updates.get("dhcpdv6_dns_auto", current.get("dhcpdv6_dns_auto")) is not False:
+        return
+    for field_name in DHCPV6_DNS_FIELDS:
+        server = updates.get(field_name, current.get(field_name))
+        if isinstance(server, str) and server.strip():
+            return
+    raise ValueError(
+        "At least one of 'dhcpdv6_dns_1' to 'dhcpdv6_dns_4' must be set when the effective "
+        "'dhcpdv6_dns_auto' is false; otherwise the network advertises no IPv6 DNS server. "
+        "Provide an IPv6 DNS server in the same request or set 'dhcpdv6_dns_auto' to true."
+    )
 
 
 def validate_ipv6_subnet_state(current: Dict[str, Any], updates: Dict[str, Any]) -> None:
@@ -851,6 +946,7 @@ def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     _normalize_vlan_payload(payload)
     payload.setdefault("enabled", True)
     validate_wan_dns_state({}, payload)
+    validate_ipv6_dns_state({}, payload)
     validate_ipv6_subnet_state({}, payload)
     return payload
 

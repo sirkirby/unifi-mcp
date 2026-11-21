@@ -1260,6 +1260,8 @@ type Network {
   dhcpdGatewayEnabled: Boolean
   dhcpdDns1: String
   dhcpdDns2: String
+  dhcpdDns3: String
+  dhcpdDns4: String
   dhcpdDnsEnabled: Boolean
   dhcpdNtp1: String
   dhcpdNtp2: String
@@ -1335,6 +1337,10 @@ type Network {
   dhcpdv6Enabled: Boolean
   dhcpdv6AllowSlaac: Boolean
   dhcpdv6DnsAuto: Boolean
+  dhcpdv6Dns1: String
+  dhcpdv6Dns2: String
+  dhcpdv6Dns3: String
+  dhcpdv6Dns4: String
   dhcpdv6Leasetime: Int
   dhcpdv6Start: String
   dhcpdv6Stop: String
