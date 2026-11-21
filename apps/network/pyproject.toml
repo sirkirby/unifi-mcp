@@ -53,7 +53,7 @@ dependencies = [
     # Reading one firewall policy per update requires Core 0.4.101.
     # Naming ignored shared credentials in the login error requires Core 0.4.102.
     # The shared operation gate it runs on requires Core 0.4.103.
-    "unifi-core[network]>=0.4.104,<0.5",
+    "unifi-core[network]>=0.4.105,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
