@@ -99,8 +99,9 @@ async def get_network_stats(
         "Get a client's traffic time-series from the controller's per-client report. "
         "summary.upload_bytes is what the client sent and summary.download_bytes what it received "
         "(the report's rx_bytes/tx_bytes, counted from the network side). Pass start/end to inspect "
-        "a past incident window. Wired clients are not metered per client in this report on current "
-        "gateways, so an empty series for a wired client means 'not reported', not 'no traffic'."
+        "a past incident window. Whether wired clients are metered in this report depends on the "
+        "gateway and Network version (e.g. a UDR7 on Network 11 reports them; some gateways do not), "
+        "so an empty series for a wired client means 'not reported', not 'no traffic'."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )
