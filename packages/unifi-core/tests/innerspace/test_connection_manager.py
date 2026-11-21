@@ -330,23 +330,6 @@ async def test_reconnects_on_demand_after_failed_start(manager, console):
     assert console.logins == 2
 
 
-async def test_reconnect_callbacks_run_after_reconnect(manager, console):
-    clock = _Clock()
-    manager._clock = clock
-    ran = []
-
-    async def callback():
-        ran.append(True)
-
-    manager.add_reconnect_callback(callback)
-    console.reply("POST", LOGIN, status=503)
-    assert await manager.initialize() is False
-    clock.now += 31
-
-    assert await manager.reconnect() is True
-    assert ran == [True]
-
-
 # ---------------------------------------------------------------------------
 # Status mapping
 # ---------------------------------------------------------------------------

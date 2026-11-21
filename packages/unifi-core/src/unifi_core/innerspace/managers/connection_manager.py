@@ -436,7 +436,6 @@ class InnerSpaceConnectionManager:
         self._last_attempt_at: float | None = None
         self._reconnect_block_until = 0.0
         self._reconnect_block_count = 0
-        self._reconnect_callbacks: list[Callable[[], Awaitable[None]]] = []
         self._app_running_until = 0.0
         self._no_access_until = 0.0
         # Until then, a list-less /api/system reply raises the permission error without another login.
@@ -532,22 +531,11 @@ class InnerSpaceConnectionManager:
         await self._attempt.wait()
         return self.is_connected
 
-    def add_reconnect_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
-        """Run ``callback`` after each successful automatic reconnect."""
-        self._reconnect_callbacks.append(callback)
-
     async def _reconnect_once(self) -> bool:
         if not self.reconnect_due:
             return self.is_connected
         logger.info("[innerspace-cm] Attempting automatic reconnect to the UniFi OS console")
-        if not await self._connect_attempt():
-            return False
-        for callback in list(self._reconnect_callbacks):
-            try:
-                await callback()
-            except Exception as exc:
-                logger.error("[innerspace-cm] Reconnect callback failed: %s", type(exc).__name__)
-        return True
+        return await self._connect_attempt()
 
     async def _connect_attempt(self) -> bool:
         if not self._credentials_configured():
