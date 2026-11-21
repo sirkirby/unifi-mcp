@@ -19744,6 +19744,10 @@
                 }
               ],
               "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
               "title": "Unit"
             }
           },
@@ -19980,6 +19984,8 @@
             "schema": {
               "default": 500,
               "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -19999,6 +20005,10 @@
                 }
               ],
               "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
               "title": "Unit"
             }
           },
@@ -20082,6 +20092,8 @@
             "schema": {
               "default": 500,
               "description": "Maximum entries to return, 1 to 2000. The result reports the total and whether it was cut.",
+              "maximum": 2000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -20101,6 +20113,10 @@
                 }
               ],
               "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
               "title": "Unit"
             }
           },
@@ -20275,6 +20291,10 @@
                 }
               ],
               "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
               "title": "Unit"
             }
           },
@@ -20437,6 +20457,10 @@
                 }
               ],
               "description": "Length unit of the result: 'metric' or 'imperial'. Omit to use the project's own unit.",
+              "enum": [
+                "metric",
+                "imperial"
+              ],
               "title": "Unit"
             }
           },

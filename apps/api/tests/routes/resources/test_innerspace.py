@@ -520,3 +520,38 @@ def test_an_unexpected_error_is_logged_as_an_error_by_class_only(caplog):
     assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
         (logging.ERROR, "InnerSpace list InnerSpace walls failed (RuntimeError)")
     ]
+
+
+@pytest.mark.asyncio
+async def test_catalog_endpoints_agree_on_innerspace_render_hints(tmp_path):
+    """/catalog/tools, /catalog/render-hints and /catalog/resources give each InnerSpace read the same kind."""
+    from unifi_api.graphql.types.innerspace.registration import REGISTRATIONS
+
+    app, headers, _key, _cid = await _app(tmp_path)
+    async with client(app) as c:
+        tools = (await c.get("/v1/catalog/tools", headers=headers)).json()["items"]
+        hints = (await c.get("/v1/catalog/render-hints", headers=headers)).json()["items"]
+        resources = (await c.get("/v1/catalog/resources", headers=headers)).json()["items"]
+
+    expected = {tool: kind for tool, (_resource, _projection, kind) in REGISTRATIONS.items()}
+    assert {t["name"]: t["render_hint"]["kind"] for t in tools if t["product"] == "innerspace"} == expected
+    hinted = {r["path"]: h["kind"] for h in hints for r in h["resources"] if r["product"] == "innerspace"}
+    assert hinted == {resource: kind for resource, _projection, kind in REGISTRATIONS.values()}
+    listed = {
+        r["resource_path"].removeprefix("/v1/sites/{site_id}/"): r["render_hint"]["kind"]
+        for r in resources
+        if r["product"] == "innerspace"
+    }
+    assert listed == hinted
+
+
+def test_openapi_states_the_innerspace_limit_and_unit_bounds():
+    """Documented in the schema only: validation stays with the core input model and its fixed text."""
+    import json
+    from pathlib import Path
+
+    spec = json.loads((Path(__file__).resolve().parents[3] / "openapi.json").read_text(encoding="utf-8"))
+    walls = spec["paths"]["/v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/walls"]["get"]["parameters"]
+    params = {p["name"]: p["schema"] for p in walls}
+    assert (params["limit"]["minimum"], params["limit"]["maximum"]) == (1, 2000)
+    assert params["unit"]["enum"] == ["metric", "imperial"]

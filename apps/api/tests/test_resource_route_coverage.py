@@ -1,8 +1,8 @@
 """CI gate: every read tool must have a registered GET resource route.
 
-Mirrors test_serializer_coverage.py. Adding a new unifi_list_*, unifi_get_*_details,
-protect_list_*, protect_get_*, access_list_*, access_get_*, or *_recent_events tool
-fails this test if no matching GET route is registered.
+Mirrors test_serializer_coverage.py. Adding a read tool to the action catalog, for any
+product (Network, Protect, Access, Site Manager, InnerSpace), fails this test if no
+matching resource route is registered.
 
 The default convention is "tool name minus product prefix" (e.g., unifi_list_clients
 maps to a route function named list_clients). When a route is registered under a

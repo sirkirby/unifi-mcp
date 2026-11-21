@@ -9,9 +9,14 @@ from fastapi import APIRouter, Depends, Request
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.types.innerspace.registration import REGISTRATIONS as INNERSPACE_REGISTRATIONS
-from unifi_api.graphql.types.sitemanager.registration import REGISTRATIONS
+from unifi_api.graphql.types.sitemanager.registration import REGISTRATIONS as SITEMANAGER_REGISTRATIONS
 
 router = APIRouter()
+
+
+# Products whose reads are projected by the type registry rather than a serializer:
+# product -> {tool: (resource, projection, kind)}.
+_PROJECTION_REGISTRATIONS = {"sitemanager": SITEMANAGER_REGISTRATIONS, "innerspace": INNERSPACE_REGISTRATIONS}
 
 
 @router.get("/catalog/tools", dependencies=[Depends(require_scope(Scope.READ))])
@@ -21,13 +26,14 @@ async def get_tools(request: Request) -> dict:
     items = []
     for tool_name in manifest.all_tools():
         entry = manifest.resolve(tool_name)
-        try:
-            render_hint = serializer_registry.render_hint_for_tool(tool_name)
-        except Exception:
-            render_hint = {"kind": "empty"}
-        if entry.connection_kind == "sitemanager_account":
+        if entry.product in _PROJECTION_REGISTRATIONS:
             projection, kind = request.app.state.type_registry.lookup_tool(tool_name)
             render_hint = projection.render_hint(kind)
+        else:
+            try:
+                render_hint = serializer_registry.render_hint_for_tool(tool_name)
+            except Exception:
+                render_hint = {"kind": "empty"}
         items.append(
             {
                 "name": tool_name,
@@ -82,9 +88,10 @@ async def get_render_hints(request: Request) -> dict:
             continue
         by_kind.setdefault(kind, {"kind": kind, "tools": [], "resources": []})
         by_kind[kind]["resources"].append({"product": product, "path": resource})
-    for resource, projection, kind in REGISTRATIONS.values():
-        by_kind.setdefault(kind, {"kind": kind, "tools": [], "resources": []})
-        by_kind[kind]["resources"].append({"product": "sitemanager", "path": resource})
+    for product, registrations in _PROJECTION_REGISTRATIONS.items():
+        for resource, _projection, kind in registrations.values():
+            by_kind.setdefault(kind, {"kind": kind, "tools": [], "resources": []})
+            by_kind[kind]["resources"].append({"product": product, "path": resource})
     return {"items": list(by_kind.values())}
 
 
@@ -102,9 +109,9 @@ async def get_resources(request: Request) -> dict:
     seen: set[tuple[str, str]] = set()
 
     def _render_hint(product: str, resource: str) -> dict:
-        registrations = {"sitemanager": REGISTRATIONS, "innerspace": INNERSPACE_REGISTRATIONS}.get(product, {})
-        for key, projection, kind in registrations.values():
-            if key == resource:
+        registrations = _PROJECTION_REGISTRATIONS.get(product, {})
+        for registered_resource, projection, kind in registrations.values():
+            if registered_resource == resource:
                 return projection.render_hint(kind)
         try:
             type_class = type_registry.lookup(product, resource)
