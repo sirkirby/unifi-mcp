@@ -7,6 +7,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from unifi_core.operation_gate import ControllerBusyError, WriteRequestTimeout
 from unifi_core.redaction import collect_secret_values, redact_sensitive_fields, scrub_secret_values
 
 from unifi_api.auth.middleware import require_scope
@@ -132,6 +133,13 @@ def _audit_detail(error: BaseException, args: dict) -> str:
     return scrub_secret_values(str(error), collect_secret_values(args))
 
 
+async def _write_audit_row(sm, **fields) -> None:
+    """Write one audit row in a short session of its own."""
+    async with sm() as session:
+        await write_audit(session, **fields)
+        await session.commit()
+
+
 class ActionIn(BaseModel):
     site: str = Field(description="Controller site to use for this action.")
     controller: str = Field(description="Registered controller identifier.")
@@ -195,141 +203,166 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             await session.commit()
             raise HTTPException(status_code=404, detail="controller not found")
 
-        controller_products = [p for p in controller.product_kinds.split(",") if p]
-        try:
-            result = await actions_svc.dispatch_action(
-                registry=registry,
-                factory=factory,
-                session=session,
+    # The session closes before the action waits for its gate turn: a queued
+    # action holds no database connection. The manager lookup and the audit
+    # row each open their own.
+    controller_products = [p for p in controller.product_kinds.split(",") if p]
+    try:
+        result = await actions_svc.dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=None,
+            session_factory=sm,
+            tool_name=tool_name,
+            controller_id=body.controller,
+            controller_products=controller_products,
+            site=body.site,
+            args=body.args,
+            confirm=body.confirm,
+        )
+        redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
+        if isinstance(result, actions_svc.MutationPreview):
+            shaped = redact_sensitive_fields(result.payload, redact_sensitive=redact_sensitive)
+        elif isinstance(result, ShapedReadResult):
+            shaped = _shape_shared_read_result(
+                result,
                 tool_name=tool_name,
-                controller_id=body.controller,
-                controller_products=controller_products,
-                site=body.site,
-                args=body.args,
-                confirm=body.confirm,
+                type_registry=type_registry,
+                redact_sensitive=redact_sensitive,
             )
-            redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
-            if isinstance(result, actions_svc.MutationPreview):
-                shaped = redact_sensitive_fields(result.payload, redact_sensitive=redact_sensitive)
-            elif isinstance(result, ShapedReadResult):
-                shaped = _shape_shared_read_result(
-                    result,
-                    tool_name=tool_name,
-                    type_registry=type_registry,
-                    redact_sensitive=redact_sensitive,
-                )
-            elif (tool_type := type_registry.lookup_tool(tool_name)) is not None:
-                # Phase 6 PR2 — read tool migrated to a Strawberry type. Shape
-                # the manager output through Type.from_manager_output().to_dict()
-                # and wrap with the same {"success", "data", "render_hint"}
-                # envelope the dict-serializer used to produce.
-                type_class, kind = tool_type
-                hint = type_class.render_hint(kind)
-                shape_kwargs = (
-                    {"redact_sensitive": redact_sensitive} if _type_accepts_redact_sensitive(type_class) else {}
-                )
-                if kind in ("list", "timeseries", "event_log"):
-                    items = _coerce_list_result(result, tool_name, kind)
-                    data = [type_class.from_manager_output(x, **shape_kwargs).to_dict() for x in items]
-                else:
-                    data = type_class.from_manager_output(result, **shape_kwargs).to_dict()
-                shaped = {"success": True, "data": data, "render_hint": hint}
+        elif (tool_type := type_registry.lookup_tool(tool_name)) is not None:
+            # Phase 6 PR2 — read tool migrated to a Strawberry type. Shape
+            # the manager output through Type.from_manager_output().to_dict()
+            # and wrap with the same {"success", "data", "render_hint"}
+            # envelope the dict-serializer used to produce.
+            type_class, kind = tool_type
+            hint = type_class.render_hint(kind)
+            shape_kwargs = {"redact_sensitive": redact_sensitive} if _type_accepts_redact_sensitive(type_class) else {}
+            if kind in ("list", "timeseries", "event_log"):
+                items = _coerce_list_result(result, tool_name, kind)
+                data = [type_class.from_manager_output(x, **shape_kwargs).to_dict() for x in items]
             else:
-                serializer = serializer_registry.serializer_for_tool(tool_name)
-                shaped = serializer.serialize_action(result, tool_name=tool_name, redact_sensitive=redact_sensitive)
-            outcome = "success" if shaped.get("success", True) else "error"
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome=outcome,
-            )
-            await session.commit()
-            return shaped
-        except ToolNotFound:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="error",
-                error_kind="unknown_tool",
-            )
-            await session.commit()
-            return {"success": False, "error": f"unknown tool: {tool_name}"}
-        except actions_svc.ReadOnlyModeDenied as e:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="denied",
-                error_kind="read_only_mode",
-            )
-            await session.commit()
-            raise HTTPException(status_code=403, detail=str(e))
-        except actions_svc.CapabilityMismatch:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="error",
-                error_kind="capability_mismatch",
-            )
-            await session.commit()
-            return {
-                "success": False,
-                "error": "Failed to execute action: controller does not support this tool product.",
-            }
-        except SerializerContractError as e:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="error",
-                error_kind="serializer_contract",
-                detail=_audit_detail(e, body.args),
-            )
-            await session.commit()
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "kind": "serializer_contract_error",
-                    "tool": tool_name,
-                    "detail": "Failed to serialize action result. Contact the server administrator.",
-                },
-            )
-        except SerializerRegistryError as e:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="error",
-                error_kind="serializer_missing",
-                detail=_audit_detail(e, body.args),
-            )
-            await session.commit()
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "kind": "serializer_missing",
-                    "tool": tool_name,
-                    "detail": "Action serializer is unavailable. Contact the server administrator.",
-                },
-            )
-        except Exception as e:
-            await write_audit(
-                session,
-                key_id_prefix=key_prefix,
-                controller=body.controller,
-                target=tool_name,
-                outcome="error",
-                error_kind=type(e).__name__,
-                detail=_audit_detail(e, body.args),
-            )
-            await session.commit()
-            return {"success": False, "error": "Failed to execute action. Check the server audit log for details."}
+                data = type_class.from_manager_output(result, **shape_kwargs).to_dict()
+            shaped = {"success": True, "data": data, "render_hint": hint}
+        else:
+            serializer = serializer_registry.serializer_for_tool(tool_name)
+            shaped = serializer.serialize_action(result, tool_name=tool_name, redact_sensitive=redact_sensitive)
+        outcome = "success" if shaped.get("success", True) else "error"
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome=outcome,
+        )
+        return shaped
+    except ToolNotFound:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="unknown_tool",
+        )
+        return {"success": False, "error": f"unknown tool: {tool_name}"}
+    except actions_svc.ReadOnlyModeDenied as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="denied",
+            error_kind="read_only_mode",
+        )
+        raise HTTPException(status_code=403, detail=str(e))
+    except ControllerBusyError as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="controller_busy",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={"kind": "controller_busy", "reason": e.reason, "message": str(e)},
+            headers={"Retry-After": str(e.retry_after)},
+        )
+    except WriteRequestTimeout as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="write_request_timeout",
+        )
+        # Fixed text. Refused before sending, the change certainly was not
+        # applied; cut off mid-flight, it may or may not have reached the controller.
+        return {
+            "success": False,
+            "error": f"Failed to execute action: {e}",
+            "mutation_applied": None if e.request_sent else False,
+        }
+    except actions_svc.CapabilityMismatch:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="capability_mismatch",
+        )
+        return {
+            "success": False,
+            "error": "Failed to execute action: controller does not support this tool product.",
+        }
+    except SerializerContractError as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="serializer_contract",
+            detail=_audit_detail(e, body.args),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "kind": "serializer_contract_error",
+                "tool": tool_name,
+                "detail": "Failed to serialize action result. Contact the server administrator.",
+            },
+        )
+    except SerializerRegistryError as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="serializer_missing",
+            detail=_audit_detail(e, body.args),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "kind": "serializer_missing",
+                "tool": tool_name,
+                "detail": "Action serializer is unavailable. Contact the server administrator.",
+            },
+        )
+    except Exception as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind=type(e).__name__,
+            detail=_audit_detail(e, body.args),
+        )
+        return {"success": False, "error": "Failed to execute action. Check the server audit log for details."}

@@ -227,10 +227,10 @@ You: "Check the status of my batch jobs"
 Claude:
 ```python
 status = unifi_batch_status(jobIds=["abc123", "def456"])
-# Shows: status of each job (running, done, error)
+# Shows: status of each job (queued with its position, running, done, error, cancelled)
 ```
 
-### Parallel Upgrades
+### Batch Upgrades
 
 ```
 You: "Upgrade all access points, show me progress every 30 seconds"

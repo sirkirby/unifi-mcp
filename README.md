@@ -355,6 +355,8 @@ Credentials follow the host. The shared username, password and API key (rows mar
 
 **Site Manager has no shared fallback.** Its only credential is `UNIFI_SITEMANAGER_API_KEY`, or its `_FILE` / `_COMMAND` form (set exactly one). It never reads `UNIFI_API_KEY`, any other shared `UNIFI_*` variable, `config.yaml` or `CONFIG_PATH`, and it takes no host, username or password. A console key and a Site Manager key reach different places, so neither is ever sent to the other's destination. See [Site Manager configuration](apps/sitemanager/docs/configuration.md).
 
+**Controller operation gate:** The Network, Protect and Access servers run confirmed writes to their controller one at a time, in the order they arrive (direct calls, `*_execute` and `*_batch` alike), and cap concurrent reads. `UNIFI_WRITE_HOLD_SECONDS` (default 120), `UNIFI_CALL_WAIT_SECONDS` (25) and `UNIFI_READ_CONCURRENCY` (8) tune it, with per-server overrides such as `UNIFI_NETWORK_READ_CONCURRENCY`. A call refused as busy sends nothing to the controller and says so. The guarantee is per server process. See each server's configuration page.
+
 **Tracing:** Set `OTEL_EXPORTER_OTLP_ENDPOINT` to export the MCP SDK's spans over OTLP, one per MCP message, continuing a trace context passed in the request's `_meta`. The Docker images include the exporter; pip and uvx installs need the `otel` extra (for example `unifi-network-mcp[otel]`). Off by default.
 
 For the full configuration reference including permissions, transports, and advanced options, see the [Network server docs](apps/network/docs/configuration.md), [Protect server docs](apps/protect/docs/configuration.md), [Access server docs](apps/access/docs/configuration.md), or [Site Manager server docs](apps/sitemanager/docs/configuration.md).

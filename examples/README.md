@@ -97,7 +97,7 @@ Execute discovered tools synchronously or in parallel batches:
 # Single execution (returns result directly)
 result = await session.call_tool("unifi_execute", {"tool": "unifi_list_clients", "arguments": {"limit": 10}})
 
-# Batch execution (parallel, returns job IDs)
+# Batch execution (returns job IDs; reads run concurrently, writes one at a time in order)
 batch = await session.call_tool(
     "unifi_batch",
     {

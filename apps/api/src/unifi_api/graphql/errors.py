@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from graphql import GraphQLError
+from unifi_core.operation_gate import ControllerBusyError
 
 from unifi_api.graphql.permissions import ScopeDenied
 from unifi_api.services.access_event_key import InvalidAccessEventCursor, InvalidAccessEventTopic
@@ -30,6 +31,7 @@ EXPECTED_ERRORS = (
     InvalidAccessEventTopic,
     InvalidCursor,
     ScopeDenied,
+    ControllerBusyError,
 )
 
 # graphql-core quotes a rejected argument or variable value in these messages.
@@ -77,6 +79,9 @@ def _classify(error: GraphQLError) -> str:
         return "BAD_REQUEST"
     if isinstance(orig, ScopeDenied):
         return "FORBIDDEN"
+    if isinstance(orig, ControllerBusyError):
+        # Nothing was sent; the message is fixed text and the client may retry.
+        return "CONTROLLER_BUSY"
     if isinstance(orig, PermissionError):
         # Raised by server code with a fixed prefix, never from caller input.
         return "UNAUTHENTICATED" if str(orig).startswith("UNAUTHENTICATED:") else "FORBIDDEN"
@@ -91,8 +96,11 @@ def format_graphql_error(error: GraphQLError) -> dict[str, Any]:
     Strips internal trace details; surfaces only message + extensions.code.
     """
     code = _classify(error)
+    extensions: dict[str, Any] = {"code": code}
+    if isinstance(error.original_error, ControllerBusyError):
+        extensions["retryAfter"] = error.original_error.retry_after
     return {
         "message": safe_message(error),
         "path": list(error.path) if error.path else None,
-        "extensions": {"code": code},
+        "extensions": extensions,
     }

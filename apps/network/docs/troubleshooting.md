@@ -18,7 +18,7 @@ If the server starts, run `unifi_get_support_bundle(probe="summary")` and review
 
 ### Authentication failures
 
-**Symptoms:** 401 Unauthorized, "invalid credentials" errors.
+**Symptoms:** 401 Unauthorized, "invalid credentials" or "no Network controller credentials are configured" errors. The last one means no username and password or API key reached the server, so no login was sent.
 
 **Check:**
 1. Look for `UNIFI_PASSWORD is set but not used` (or `UNIFI_USERNAME`, `UNIFI_API_KEY`) in the login error a tool call returns or in the startup log. Newer server releases send the shared credentials only to the `UNIFI_HOST` console, so when `UNIFI_NETWORK_HOST` names another console (an IP address and a hostname for one console count as different) or `UNIFI_HOST` is unset, set `UNIFI_NETWORK_USERNAME` and `UNIFI_NETWORK_PASSWORD` (or `UNIFI_NETWORK_API_KEY`). See [credentials follow the host](configuration.md).

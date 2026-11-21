@@ -9,6 +9,13 @@ logging:
 db:
   path: /var/lib/unifi-api/state.db
 
+# Controller operation gate: writes to one controller application run one at a
+# time in request order, reads share a capped number of slots. Per process.
+gate:
+  write_hold_seconds: 120
+  call_wait_seconds: 25
+  read_concurrency: 8
+
 policy:
   response:
     redact_sensitive_fields: ${oc.env:UNIFI_API_REDACT_SENSITIVE_FIELDS,true}

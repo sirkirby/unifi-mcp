@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from unifi_core.support_bundle import (
     ConnectionSection,
@@ -10,9 +10,11 @@ from unifi_core.support_bundle import (
     ControllerSection,
     EvidenceStatus,
     NetworkCapabilities,
+    OperationGateSummary,
     Product,
     SanitizationSection,
     SummaryProbe,
+    operation_gate_summary,
 )
 from unifi_mcp_shared.support_bundle import ProbeName, SupportBundleEvidence
 
@@ -22,9 +24,20 @@ class NetworkSupportBundleAdapter:
 
     product = Product.NETWORK
 
-    def __init__(self, connection_manager: Any, *, integration_api_key_configured: bool) -> None:
+    def __init__(
+        self,
+        connection_manager: Any,
+        *,
+        integration_api_key_configured: bool,
+        operation_gate: Callable[[], Any] | None = None,
+    ) -> None:
         self._connection_manager = connection_manager
+        self._operation_gate = operation_gate
         self._integration_api_key_configured = integration_api_key_configured
+
+    def _gate_summary(self) -> OperationGateSummary | None:
+        gate = self._operation_gate() if self._operation_gate is not None else None
+        return operation_gate_summary(gate.snapshot()) if gate is not None else None
 
     async def collect(self, probe: ProbeName, resource: str | None) -> SupportBundleEvidence:
         del resource
@@ -64,6 +77,7 @@ class NetworkSupportBundleAdapter:
                     controller_type=controller_type,
                     reconnect_circuit=status["reconnect_circuit"],
                 ),
+                operation_gate=self._gate_summary(),
             ),
             probe=probe_section,
             sanitization=SanitizationSection(

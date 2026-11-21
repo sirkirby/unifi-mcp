@@ -11,7 +11,7 @@ dependencies = [
     # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
     # Taking credentials only from the level the host came from requires Shared 0.6.44.
     # Naming ignored shared credentials in the login error requires Shared 0.6.45.
-    "unifi-mcp-shared>=0.6.45,<0.7",
+    "unifi-mcp-shared>=0.6.46,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
@@ -28,7 +28,7 @@ dependencies = [
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
     # Naming ignored shared credentials in the login error requires Core 0.4.102.
     # The shared operation gate it runs on requires Core 0.4.103.
-    "unifi-core[access]>=0.4.103,<0.5",
+    "unifi-core[access]>=0.4.104,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

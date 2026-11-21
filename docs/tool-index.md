@@ -99,7 +99,15 @@ Example:
 
 `*_batch`, `*_batch_status` and `*_batch_cancel` provide the same indirect execution path
 for several operations. Writes run one at a time in submission order; reads run
-concurrently, up to a cap. `*_batch_cancel` withdraws jobs that are still queued.
+concurrently, up to a cap. `*_batch_status` reports a job waiting for an earlier
+job or for its write turn as `queued`, with its `position` (the writes ahead of
+it) once it is in the write queue, and a withdrawn job as `cancelled`.
+`*_batch_cancel` withdraws jobs that are still queued; a running or finished job
+is reported, not cancelled.
+Direct tool calls take their turn at the same per-controller gate, so a batch and
+a direct write never run at once. The guarantee is per server process; see each
+server's configuration page for its `*_WRITE_HOLD_SECONDS`, `*_CALL_WAIT_SECONDS`
+and `*_READ_CONCURRENCY` settings.
 
 ### Load Tools
 
@@ -138,7 +146,8 @@ the shared model in three ways:
 - In `lazy` mode it lists all nine domain tools directly, not a few. Its
   dispatchers carry conservative annotations: `sitemanager_tool_index` and
   `sitemanager_batch_status` are marked read-only, while `sitemanager_execute`,
-  `sitemanager_batch`, and `sitemanager_load_tools` are not, because a
+  `sitemanager_batch`, `sitemanager_batch_cancel` and `sitemanager_load_tools`
+  are not, because a
   dispatcher's hint has to hold for any tool it could run. A client that allows
   only read-only tools can still call the nine tools by name.
 - In `meta_only` mode the nine tools are reachable only through

@@ -67,7 +67,8 @@ The closed, versioned JSON schema can include:
 - controller application and UniFi OS versions when already available in trusted memory (Network reads them once on connecting and on each system-info read);
 - fixed product capability flags, such as whether an authenticated session or API key path is configured;
 - for connectivity, a fixed outcome and coarse duration bucket;
-- sanitizer bounds and suppression/truncation indicators.
+- sanitizer bounds and suppression/truncation indicators;
+- the controller operation gate's state, when the server runs one: whether a write holds its turn and whether it is over budget, the queue depth (bucketed), read slots in use and the read cap, the write hold budget, and bucketed counts of completed, busy-refused and withdrawn writes. It names no controller and no tool.
 
 The entire successful response envelope is valid JSON and limited to 32 KiB. Structural traversal, where supported, is limited to 100 items, 16 variants, depth 6, 64 fields per object, and 2,000 nodes.
 
