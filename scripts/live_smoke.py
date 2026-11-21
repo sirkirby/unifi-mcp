@@ -30,6 +30,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from mcp.types import CallToolResult
+from unifi_mcp_shared.meta_tools import is_meta_tool
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 API_ACTION_CATALOG = REPO_ROOT / "apps/api/src/unifi_api/action_catalog.json"
@@ -863,6 +864,11 @@ class LiveSmokeRunner:
         for tool in self.selected_tools():
             name = tool["name"]
             if is_read_only(tool):
+                continue
+            if is_meta_tool(name):
+                # Batch cancel only withdraws this server's queued jobs; it never reaches
+                # the controller, takes no confirm, and is covered by its unit tests.
+                self.skip(name, "preview", "meta tool, not a controller write")
                 continue
             tier = self.safety_tier(tool)
             if tier == "requires_approval":
