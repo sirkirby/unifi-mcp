@@ -29,7 +29,7 @@ from unifi_core.network.models._actions import (
     UnblockClientInput,
 )
 from unifi_core.network.models.clients import blocked_client_from_controller, client_lookup_from_controller
-from unifi_core.network.read_views import shape_client_details, shape_client_list
+from unifi_core.network.read_views import shape_client_details, shape_client_inventory
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import client_manager, server
@@ -77,7 +77,7 @@ async def lookup_by_ip(
         "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
         "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
         "channel, radio. Clients with a DHCP reservation also carry fixed_ip. "
-        "Filter by filter_type (all/wired/wireless), set "
+        "Filter by filter_type (all/wired/wireless/thread), set "
         "include_offline=true to add offline/historical clients to the connected ones "
         "(connected clients keep their live status and wireless fields). Use search to filter by "
         "name/hostname/IP/MAC (case-insensitive). For a single client's full raw "
@@ -87,6 +87,11 @@ async def lookup_by_ip(
         "unifi_rename_client, unifi_get_client_sessions, "
         "unifi_get_client_dpi_traffic, unifi_get_client_wifi_details, "
         "unifi_recent_events)."
+        " filter_type='thread' lists connected Matter-over-Thread end devices (session credentials; "
+        "Network 11+). They have no MAC and carry thread_client_id, Thread network, channel, signal, "
+        "parent and border router instead, so they cannot be passed to the MAC-based client tools. "
+        "filter_type='all' returns wired and Wi-Fi clients and adds thread_client_count when the "
+        "controller has Thread clients."
         " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
         "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
@@ -97,8 +102,13 @@ async def lookup_by_ip(
 )
 async def list_clients(
     filter_type: Annotated[
-        Literal["all", "wired", "wireless"],
-        Field(description="Filter clients by connection type: 'all' (default), 'wired', or 'wireless'"),
+        Literal["all", "wired", "wireless", "thread"],
+        Field(
+            description=(
+                "Filter clients by connection type: 'all' (default, wired + Wi-Fi), 'wired', 'wireless', "
+                "or 'thread' (connected Matter/Thread end devices only)"
+            )
+        ),
     ] = "all",
     include_offline: Annotated[
         bool,
@@ -106,7 +116,12 @@ async def list_clients(
     ] = False,
     search: Annotated[
         Optional[str],
-        Field(description="Filter by name, hostname, IP, or MAC (case-insensitive substring match)"),
+        Field(
+            description=(
+                "Filter by name, hostname, IP, or MAC (case-insensitive substring match). "
+                "For Thread clients: name, model, vendor, id, parent/border-router MAC or IPv6 address."
+            )
+        ),
     ] = None,
     limit: Annotated[int, Field(description="Maximum number of clients to return (default 100)")] = 100,
     fields: Annotated[
@@ -116,6 +131,9 @@ async def list_clients(
                 "Comma-separated list of fields to return per client (default: all). "
                 "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. "
                 "Wireless-only: essid, signal_dbm, channel, radio. "
+                "With filter_type='thread': thread_client_id, name, model, vendor, connection_type, status, "
+                "matter_status, first_seen, last_seen, ipv6_addresses, thread_network_name, thread_network_id, "
+                "channel, signal_dbm, parent_mac, parent_name, border_router_mac, border_router_name. "
                 "Example: fields='mac,name,ip' returns only those 3 fields."
             )
         ),
@@ -123,9 +141,9 @@ async def list_clients(
 ) -> Dict[str, Any]:
     """Implementation for listing clients."""
     try:
-        clients = await client_manager.get_clients(include_offline=include_offline)
-        return shape_client_list(
-            clients,
+        inventory = await client_manager.get_client_inventory(filter_type=filter_type, include_offline=include_offline)
+        return shape_client_inventory(
+            inventory,
             site=client_manager._connection.site,
             filter_type=filter_type,
             search=search,

@@ -58,8 +58,7 @@ def _mock_conn():
 )
 async def test_list_clients_search_and_limit_report_total(kwargs, total, returned):
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
+        mock_cm.get_client_inventory = AsyncMock(return_value={"clients": list(SAMPLE_CLIENTS), "thread_clients": None})
         mock_cm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.clients import list_clients
@@ -84,8 +83,7 @@ async def test_list_clients_search_and_limit_report_total(kwargs, total, returne
 )
 async def test_list_clients_fields_selects_subset_and_surfaces_unknown(fields, expected_keys, unknown_fields):
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
+        mock_cm.get_client_inventory = AsyncMock(return_value={"clients": list(SAMPLE_CLIENTS), "thread_clients": None})
         mock_cm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.clients import list_clients
@@ -101,8 +99,7 @@ async def test_list_clients_fields_selects_subset_and_surfaces_unknown(fields, e
 async def test_name_and_hostname_are_distinct():
     # User alias (name) and DHCP hostname must stay separate.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
-        mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
+        mock_cm.get_client_inventory = AsyncMock(return_value={"clients": list(SAMPLE_CLIENTS), "thread_clients": None})
         mock_cm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.clients import list_clients
@@ -158,8 +155,7 @@ async def test_get_client_details_summary_include_all_returns_every_section():
 async def test_list_clients_zero_items_case():
     # Controller returns empty -> total_count=0, returned_count=0, count=0, clients=[].
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
-        mock_cm.get_clients = AsyncMock(return_value=[])
-        mock_cm.get_all_clients = AsyncMock(return_value=[])
+        mock_cm.get_client_inventory = AsyncMock(return_value={"clients": [], "thread_clients": None})
         mock_cm._connection = _mock_conn()
 
         from unifi_network_mcp.tools.clients import list_clients
@@ -268,3 +264,78 @@ async def test_get_client_details_summary_status(raw, expected_status):
         result = await get_client_details(raw["mac"], summary=True, include="basic")
 
     assert result["client"]["status"] == expected_status
+
+
+# Shape verified against a Network 11.0 V2 /clients/active?includeMatterThreadClients=true
+# record (values replaced with test data).
+SAMPLE_THREAD_CLIENT = {
+    "type": "MATTER_THREAD",
+    "id": "abc1234",
+    "name": "Smart Plug",
+    "model_name": "Plug 20EBO8301",
+    "status": "online",
+    "ipv6_address": ["fd00:db8::1"],
+    "network_name": "TestNet",
+    "channel": 25,
+    "signal": -72,
+    "uplink_tbr_name": "Thread Parent",
+    "matter": {"status": "COMMISSIONED", "basic_info": {"vendor_name": "Example Vendor", "serial_number": "SECRET-SN"}},
+}
+
+
+@pytest.mark.asyncio
+async def test_list_clients_thread_filter_returns_thread_rows():
+    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
+        mock_cm.get_client_inventory = AsyncMock(
+            return_value={"clients": [], "thread_clients": [dict(SAMPLE_THREAD_CLIENT)]}
+        )
+        mock_cm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.clients import list_clients
+
+        result = await list_clients(filter_type="thread", fields="thread_client_id,name,vendor,connection_type")
+
+    mock_cm.get_client_inventory.assert_awaited_once_with(filter_type="thread", include_offline=False)
+    assert result["success"] is True
+    assert result["filter_type"] == "thread"
+    assert result["total_count"] == 1
+    assert result["clients"] == [
+        {"thread_client_id": "abc1234", "name": "Smart Plug", "vendor": "Example Vendor", "connection_type": "Thread"}
+    ]
+    assert "SECRET-SN" not in str(result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("thread_clients", "expected_count"), [([dict(SAMPLE_THREAD_CLIENT)], 1), (None, None), ([], None)]
+)
+async def test_list_clients_all_reports_thread_count_only_when_there_are_thread_clients(thread_clients, expected_count):
+    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
+        mock_cm.get_client_inventory = AsyncMock(
+            return_value={"clients": list(SAMPLE_CLIENTS), "thread_clients": thread_clients}
+        )
+        mock_cm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.clients import list_clients
+
+        result = await list_clients()
+
+    mock_cm.get_client_inventory.assert_awaited_once_with(filter_type="all", include_offline=False)
+    assert result["total_count"] == 3
+    assert len(result["clients"]) == 3
+    assert all(client["connection_type"] in ("Wired", "Wireless") for client in result["clients"])
+    assert result.get("thread_client_count") == expected_count
+
+
+@pytest.mark.asyncio
+async def test_list_clients_thread_failure_is_reported():
+    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
+        mock_cm.get_client_inventory = AsyncMock(side_effect=ConnectionError("Not connected to controller"))
+        mock_cm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.clients import list_clients
+
+        result = await list_clients(filter_type="thread")
+
+    assert result["success"] is False
+    assert result["error"].startswith("Failed to list clients")
