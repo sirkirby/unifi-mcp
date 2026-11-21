@@ -168,7 +168,7 @@ def make_call_classifier(
             return None
         if confirm is not None:
             # Over MCP the kwargs carry every default, so an omitted confirm
-            # must be told apart by what the caller sent (#1085).
+            # must be told apart by what the caller sent.
             if caller_supplied("confirm", kwargs):
                 resolved = bool(kwargs.get("confirm"))
             else:

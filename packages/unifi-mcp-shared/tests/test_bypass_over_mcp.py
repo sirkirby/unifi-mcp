@@ -1,4 +1,4 @@
-"""Bypass mode over a real MCP dispatch (#1085).
+"""Bypass mode over a real MCP dispatch.
 
 FastMCP calls a tool with every parameter, defaults included, so an omitted
 ``confirm`` reaches the permissioned wrapper as ``confirm=False``. These tests

@@ -325,7 +325,7 @@ def create_permissioned_tool(
                 # 2. Bypass injection — only for mutation actions with confirm param
                 #    Only inject if the caller didn't provide confirm. Over MCP the
                 #    kwargs always carry confirm (FastMCP fills defaults), so ask
-                #    which arguments the caller actually sent (#1085).
+                #    which arguments the caller actually sent.
                 mode = None
                 if action.lower() != "read":
                     mode = resolve_permission_mode(server_prefix)

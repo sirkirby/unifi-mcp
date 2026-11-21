@@ -131,7 +131,7 @@ class StrictKwargFastMCP(MCPServer):
             )
         # FastMCP passes every parameter to the tool, defaults included; record
         # what the caller actually sent so bypass mode can tell an omitted
-        # ``confirm`` from an explicit ``confirm=false`` (#1085).
+        # ``confirm`` from an explicit ``confirm=false``.
         with recording_supplied_arguments(arguments):
             return await super().call_tool(name, arguments, context=context)
 
