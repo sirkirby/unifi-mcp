@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from types import SimpleNamespace
@@ -133,3 +134,62 @@ async def test_a_rejected_uri_never_reaches_a_log(caplog, uri):
     for record in caplog.records:
         seen += [record.getMessage(), str(record.args), str(record.__dict__)]
     assert "MARK" not in "\n".join(seen)
+
+
+@pytest.fixture
+def gate(monkeypatch):
+    from unifi_core.operation_gate import GateSettings, OperationGate
+
+    gate = OperationGate(GateSettings(read_cap=1, direct_call_wait_seconds=0.05), name="innerspace")
+    monkeypatch.setattr(resource_module, "get_operation_gate", lambda: gate)
+    return gate
+
+
+async def test_the_console_fetch_holds_a_read_slot_at_the_gate(monkeypatch, gate):
+    """MCP resources are not tool calls, so this read takes its own slot."""
+    slots = []
+
+    async def get_plan_asset(plan_id, include_image=False):
+        slots.append(gate.snapshot()["reads_in_use"])
+        return {**METADATA, "image_base64": base64.b64encode(PNG).decode()} if include_image else METADATA
+
+    monkeypatch.setattr(resource_module, "floor_plan_manager", SimpleNamespace(get_plan_asset=get_plan_asset))
+
+    await _read(plan_image_uri(PLAN))
+
+    assert slots == [1, 1]
+    assert gate.snapshot()["reads_in_use"] == 0
+
+
+async def test_a_busy_gate_refuses_the_read_before_the_console_is_reached(monkeypatch, gate):
+    method = _serve(monkeypatch, return_value=METADATA)
+
+    # Another task holds the only read slot; this read waits its short budget, then is refused.
+    held, release = asyncio.Event(), asyncio.Event()
+
+    async def hold_the_slot():
+        async with gate.read():
+            held.set()
+            await release.wait()
+
+    holder = asyncio.create_task(hold_the_slot())
+    await held.wait()
+    try:
+        with pytest.raises(ResourceError) as raised:
+            await asyncio.wait_for(_read(plan_image_uri(PLAN)), timeout=5)
+    finally:
+        release.set()
+        await holder
+
+    assert str(raised.value).startswith("Failed to read InnerSpace plan image: ")
+    method.assert_not_awaited()
+
+
+async def test_no_gate_in_setup_mode_still_reads(monkeypatch):
+    monkeypatch.setattr(resource_module, "get_operation_gate", lambda: None)
+    asset = {**METADATA, "image_base64": base64.b64encode(PNG).decode()}
+    _serve(monkeypatch, side_effect=[METADATA, asset])
+
+    content = await _read(plan_image_uri(PLAN))
+
+    assert content.content == PNG

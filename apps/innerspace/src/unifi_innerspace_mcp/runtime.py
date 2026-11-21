@@ -22,6 +22,7 @@ from unifi_core.innerspace.managers.floor_plan_manager import InnerSpaceFloorPla
 from unifi_core.innerspace.managers.inventory_manager import InnerSpaceInventoryManager
 from unifi_core.innerspace.managers.project_manager import InnerSpaceProjectManager
 from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
+from unifi_core.operation_gate import GateKey, GateSettings, OperationGate, gate_registry
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.tls import ssl_setting
 from unifi_innerspace_mcp.bootstrap import load_config, logger
@@ -30,6 +31,7 @@ from unifi_mcp_shared.bootstrap import credential_cut_hint, resolve_env
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
 from unifi_mcp_shared.server import UniFiMCPServer, resolve_allowed_hosts
+from unifi_mcp_shared.tool_gate import gate_settings_from_env
 
 _TOOLS_MANIFEST_PATH = Path(__file__).resolve().parent / "tools_manifest.json"
 
@@ -156,6 +158,24 @@ def get_system_manager() -> InnerSpaceSystemManager:
 
 
 @lru_cache
+def get_gate_settings() -> GateSettings:
+    """Operation-gate limits from UNIFI_INNERSPACE_* or the shared UNIFI_*; a bad value refuses startup."""
+    return gate_settings_from_env("INNERSPACE", logger=logger)
+
+
+def get_operation_gate() -> OperationGate | None:
+    """This server's console operation gate; ``None`` while no host is configured (setup mode).
+
+    Keyed by the configured host and port plus the product, so it outlives any
+    connection manager and is shared by every tool call in this process.
+    """
+    cm = get_connection_manager()
+    if not cm.host:
+        return None
+    return gate_registry().get(GateKey.for_host(cm.host, cm.port, "innerspace"), get_gate_settings())
+
+
+@lru_cache
 def get_tool_registry() -> dict[str, Any]:
     """Return the global tool registry for runtime access."""
     return TOOL_REGISTRY
@@ -169,6 +189,8 @@ floor_plan_manager = get_floor_plan_manager()
 inventory_manager = get_inventory_manager()
 system_manager = get_system_manager()
 tool_registry = get_tool_registry()
+# Read now, so a bad gate setting refuses startup instead of the first tool call.
+gate_settings = get_gate_settings()
 
 
 def should_redact_sensitive_fields() -> bool:

@@ -20,7 +20,7 @@ from unifi_innerspace_mcp.categories import (
     setup_lazy_loading,
 )
 from unifi_innerspace_mcp.jobs import get_job_status, start_async_tool
-from unifi_innerspace_mcp.runtime import config, connection_manager, server
+from unifi_innerspace_mcp.runtime import config, connection_manager, get_operation_gate, server
 from unifi_innerspace_mcp.tool_index import register_tool, tool_index_handler
 from unifi_innerspace_mcp.utils.diagnostics import diagnostics_enabled, wrap_tool
 from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
@@ -37,6 +37,8 @@ setup_permissioned_tool(
     diagnostics_enabled_fn=diagnostics_enabled,
     wrap_tool_fn=wrap_tool,
     logger=logger,
+    # Reads capped per console; writes, when they come, one at a time in request order.
+    gate_provider=get_operation_gate,
 )
 
 

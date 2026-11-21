@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import base64
 import logging
+from contextlib import nullcontext
 
 from mcp.server.mcpserver.exceptions import ResourceError
 from mcp.types import Annotations
 
+from unifi_core.operation_gate import ControllerBusyError
 from unifi_innerspace_mcp.resources.uris import PLAN_IMAGE_URI_TEMPLATE
-from unifi_innerspace_mcp.runtime import floor_plan_manager, server, tool_failure
+from unifi_innerspace_mcp.runtime import floor_plan_manager, get_operation_gate, server, tool_failure
 
 PLAN_IMAGE_RESOURCE_META = {
     "io.unifi.resourceKind": "plan-image",
@@ -56,16 +58,37 @@ class _PlanImageUriFilter(logging.Filter):
         return True
 
 
-async def plan_image(plan_id: str) -> bytes:
-    """Fetch a plan's image bytes, after checking from its metadata that it is a PNG."""
+async def _fetch(plan_id: str) -> tuple[str, str | None]:
+    """The plan's content type, and its base64 image when that type is PNG."""
     try:
         content_type = (await floor_plan_manager.get_plan_asset(plan_id))["content_type"]
-        if content_type == _PNG:
-            asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=True)
-            content_type, image = asset["content_type"], asset["image_base64"]
+        if content_type != _PNG:
+            return content_type, None
+        asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=True)
+        return asset["content_type"], asset["image_base64"]
     except Exception as e:
         # Fixed text, built and logged the way the tools do it: class only.
         raise ResourceError(tool_failure(_OPERATION, e)["error"]) from None
+
+
+async def plan_image(plan_id: str) -> bytes:
+    """Fetch a plan's image bytes, after checking from its metadata that it is a PNG.
+
+    A resource read is not a tool call, so it takes its own read slot at the
+    console's operation gate, with a direct call's wait budget.
+    """
+    gate = get_operation_gate()
+    slot = (
+        gate.read(wait_budget=gate.settings.direct_call_wait_seconds, label=_OPERATION)
+        if gate is not None
+        else nullcontext()
+    )
+    try:
+        async with slot:
+            content_type, image = await _fetch(plan_id)
+    except ControllerBusyError as e:
+        # The gate's text is fixed; nothing was sent to the console.
+        raise ResourceError(f"Failed to {_OPERATION}: {e}") from None
     if content_type != _PNG:
         raise ResourceError(
             f"Failed to {_OPERATION}: the image is not a PNG; read it with innerspace_get_plan_asset and include_image"

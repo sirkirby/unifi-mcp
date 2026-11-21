@@ -39,6 +39,18 @@ Without a host the server starts in setup mode: it answers the client, offers on
 
 Settings are read once at startup. Restart the server, or start a new client session, after changing any of them. There are no event or websocket settings and no policy settings: this server has no event stream and no write tools.
 
+## Console operation gate
+
+Every tool call, and every read of the plan image resource, takes a read slot at this server's operation gate for the console before it reaches the console. Reads run side by side up to a cap. The guarantee is per server process: two servers, or two copies of one, pointed at the same console do not coordinate.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `UNIFI_INNERSPACE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
+| `UNIFI_INNERSPACE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a call waits for a read slot before it is refused as busy (1 to 3600). |
+| `UNIFI_INNERSPACE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | Checked at startup (10 to 3600). It has no effect yet: this server has no write tools. |
+
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, and nothing is sent to the console.
+
 ## TLS
 
 Consoles usually present a self-signed certificate, so verification is off by default. Choose one of:
