@@ -103,3 +103,108 @@ async def test_request_failure_raises_value_free_error(mock_connection):
     assert excinfo.value.__cause__ is None
     assert excinfo.value.__suppress_context__ is True
     mock_connection._update_cache.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_client_inventory + shape_client_inventory: the composition the MCP tool
+# and the API action share.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_inventory_thread_reads_only_thread_clients(mock_connection):
+    manager = ClientManager(mock_connection)
+    manager.get_clients = AsyncMock(return_value=[WIRED_RECORD])
+    manager.get_matter_thread_clients = AsyncMock(return_value=[THREAD_RECORD])
+
+    inventory = await manager.get_client_inventory(filter_type="thread")
+
+    assert inventory == {"clients": [], "thread_clients": [THREAD_RECORD]}
+    manager.get_clients.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_inventory_all_adds_thread_clients_best_effort(mock_connection):
+    manager = ClientManager(mock_connection)
+    manager.get_clients = AsyncMock(return_value=[WIRED_RECORD])
+    manager.get_matter_thread_clients = AsyncMock(side_effect=ConnectionError("no V2"))
+
+    inventory = await manager.get_client_inventory(filter_type="all", include_offline=True)
+
+    assert inventory == {"clients": [WIRED_RECORD], "thread_clients": None}
+    manager.get_clients.assert_awaited_once_with(include_offline=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("filter_type", ["wired", "wireless"])
+async def test_inventory_connection_filters_skip_the_thread_read(mock_connection, filter_type):
+    manager = ClientManager(mock_connection)
+    manager.get_clients = AsyncMock(return_value=[WIRED_RECORD])
+    manager.get_matter_thread_clients = AsyncMock(return_value=[THREAD_RECORD])
+
+    inventory = await manager.get_client_inventory(filter_type=filter_type)
+
+    assert inventory["thread_clients"] is None
+    manager.get_matter_thread_clients.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_inventory_all_skips_thread_read_on_integration_only_inventory(mock_connection):
+    mock_connection.has_api_key = True
+    mock_connection.integration_inventory_only = True
+    manager = ClientManager(mock_connection)
+    manager.get_clients = AsyncMock(return_value=[WIRED_RECORD])
+    manager.get_matter_thread_clients = AsyncMock(return_value=[THREAD_RECORD])
+
+    inventory = await manager.get_client_inventory(filter_type="all")
+
+    assert inventory["thread_clients"] is None
+    manager.get_matter_thread_clients.assert_not_awaited()
+
+
+def test_shape_inventory_all_reports_thread_count_without_mixing_records():
+    from unifi_core.network.read_views import shape_client_inventory
+
+    result = shape_client_inventory(
+        {"clients": [WIRED_RECORD, WIRELESS_RECORD], "thread_clients": [THREAD_RECORD]},
+        site="default",
+        filter_type="all",
+    )
+
+    assert result["success"] is True
+    assert [client.get("mac") for client in result["clients"]] == [WIRED_RECORD["mac"], WIRELESS_RECORD["mac"]]
+    assert result["thread_client_count"] == 1
+    assert result["included_connection_types"] == ["Wired", "Wireless"]
+
+
+def test_shape_inventory_thread_and_invalid_filter():
+    from unifi_core.network.read_views import shape_client_inventory
+
+    thread = shape_client_inventory(
+        {"clients": [], "thread_clients": [THREAD_RECORD]}, site="default", filter_type="thread"
+    )
+    assert thread["filter_type"] == "thread"
+    assert thread["clients"][0]["thread_client_id"] == "abc1234"
+
+    invalid = shape_client_inventory({"clients": [], "thread_clients": None}, site="default", filter_type="zigbee")
+    assert invalid["success"] is False
+    assert "thread" in str(invalid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("env_prefix", "expected", "absent"),
+    [("NETWORK", "UNIFI_NETWORK_USERNAME", None), (None, "this controller's configuration", "UNIFI_")],
+)
+async def test_session_required_names_where_credentials_go(mock_connection, env_prefix, expected, absent):
+    from unifi_core.exceptions import UniFiAuthError
+
+    mock_connection.ensure_session_connected = AsyncMock(return_value=False)
+    mock_connection.tls_env_prefix = env_prefix
+
+    with pytest.raises(UniFiAuthError) as excinfo:
+        await ClientManager(mock_connection).get_matter_thread_clients()
+
+    assert expected in str(excinfo.value)
+    if absent:
+        assert absent not in str(excinfo.value)

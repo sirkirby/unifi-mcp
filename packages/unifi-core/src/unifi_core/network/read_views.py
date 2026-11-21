@@ -63,6 +63,7 @@ def _with_inventory_source(response: dict[str, Any], records: list[Any]) -> dict
 # matching nothing or skipping the filter, which would echo a filter that was
 # never applied. Device types are what ``classify_device`` can return.
 CLIENT_TYPE_FILTERS = ("all", "wired", "wireless")
+CLIENT_LIST_FILTERS = (*CLIENT_TYPE_FILTERS, "thread")
 DEVICE_TYPE_FILTERS = ("all", "ap", "switch", "gateway", "pdu", "wan", "unknown")
 DEVICE_STATUS_STATES = {"online": 1, "offline": 0, "pending": 2, "adopting": 4, "provisioning": 5, "upgrading": 6}
 DEVICE_STATUS_FILTERS = ("all", *DEVICE_STATUS_STATES)
@@ -324,6 +325,49 @@ def shape_thread_client_list(
     if unknown_fields:
         response["unknown_fields"] = unknown_fields
     return response
+
+
+def shape_client_inventory(
+    inventory: dict[str, Any],
+    *,
+    site: str,
+    filter_type: str = "all",
+    search: str | None = None,
+    limit: int = 100,
+    fields: str | None = None,
+) -> dict[str, Any]:
+    """Public client list from :meth:`ClientManager.get_client_inventory`.
+
+    ``thread`` lists the Matter/Thread end devices in their own shape. The
+    other filters keep the MAC-keyed wired/Wi-Fi list; for ``all`` the count
+    of Thread end devices is added when the controller has any, so totals
+    reconcile with the Network UI.
+    """
+    if error := invalid_filter("filter_type", filter_type, CLIENT_LIST_FILTERS):
+        return error
+    if filter_type == "thread":
+        return shape_thread_client_list(
+            inventory.get("thread_clients") or [], site=site, search=search, limit=limit, fields=fields
+        )
+    result = shape_client_list(
+        inventory.get("clients") or [],
+        site=site,
+        filter_type=filter_type,
+        search=search,
+        limit=limit,
+        fields=fields,
+    )
+    thread_clients = inventory.get("thread_clients")
+    if (
+        filter_type == "all"
+        and result.get("success")
+        and result.get("_meta", {}).get("source_api") != "integration"
+        and thread_clients
+    ):
+        result["included_connection_types"] = ["Wired", "Wireless"]
+        result["thread_client_count"] = len(thread_clients)
+        result["thread_hint"] = "Use filter_type='thread' to list Matter/Thread clients."
+    return result
 
 
 def shape_client_details(
