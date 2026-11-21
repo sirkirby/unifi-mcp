@@ -16,6 +16,7 @@ from unifi_core.network.models.networks import (
     is_hotspot_zone,
     to_guest_create_wire,
     validate_guest_create_fields,
+    validate_ipv6_dns_state,
     validate_ipv6_subnet_state,
     validate_wan_dns_state,
 )
@@ -244,6 +245,7 @@ class NetworkManager:
             is_guest = network_data.get("purpose") == "guest"
             try:
                 validate_wan_dns_state({}, network_data)
+                validate_ipv6_dns_state({}, network_data)
                 validate_ipv6_subnet_state({}, network_data)
                 if is_guest or "firewall_zone_id" in network_data:
                     await self.validate_firewall_zone_assignment({}, network_data)
@@ -331,6 +333,7 @@ class NetworkManager:
             # 2. Validate cross-field state using stored values plus this partial update.
             try:
                 validate_wan_dns_state(existing_network, update_data)
+                validate_ipv6_dns_state(existing_network, update_data)
                 validate_ipv6_subnet_state(existing_network, update_data)
                 await self.validate_firewall_zone_assignment(existing_network, update_data)
             except ValueError as error:

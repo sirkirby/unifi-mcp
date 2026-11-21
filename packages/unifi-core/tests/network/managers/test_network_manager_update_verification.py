@@ -395,6 +395,68 @@ async def test_update_network_rejects_manual_dns_with_invalid_stored_primary_bef
     assert conn.request.await_count == 1
 
 
+async def test_update_network_rejects_ipv6_dns_auto_off_without_servers_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.return_value = [_network(dhcpdv6_dns_auto=True, dhcpdv6_dns_1="")]
+
+    result = await mgr.update_network(NETWORK_ID, {"dhcpdv6_dns_auto": False})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "no IPv6 DNS server" in result.error
+    assert conn.request.await_count == 1
+
+
+async def test_update_network_accepts_ipv6_dns_auto_off_with_stored_server():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(dhcpdv6_dns_auto=True, dhcpdv6_dns_1="2606:4700:4700::1111")
+    after = {**before, "dhcpdv6_dns_auto": False}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"dhcpdv6_dns_auto": False})
+
+    assert result.success is True
+    assert result.persisted_fields == ("dhcpdv6_dns_auto",)
+    submitted = conn.request.await_args_list[1].args[0].data
+    assert submitted["dhcpdv6_dns_auto"] is False
+    assert submitted["dhcpdv6_dns_1"] == "2606:4700:4700::1111"
+
+
+async def test_update_network_verifies_manual_ipv6_dns_servers():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    update = {
+        "dhcpdv6_dns_auto": False,
+        "dhcpdv6_dns_1": "2606:4700:4700::1111",
+        "dhcpdv6_dns_2": "2001:4860:4860::8888",
+    }
+    before = _network(dhcpdv6_dns_auto=True)
+    # The controller keeps auto off but drops the second server.
+    after = {**before, "dhcpdv6_dns_auto": False, "dhcpdv6_dns_1": "2606:4700:4700::1111"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, dict(update))
+
+    assert result.success is False
+    assert result.mutation_applied is True
+    assert set(result.persisted_fields) == {"dhcpdv6_dns_auto", "dhcpdv6_dns_1"}
+    assert result.dropped_fields == ("dhcpdv6_dns_2",)
+
+
+async def test_create_network_rejects_ipv6_dns_auto_off_without_servers_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.create_network({"name": "Lab", "purpose": "corporate", "dhcpdv6_dns_auto": False})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "no IPv6 DNS server" in result.error
+    conn.request.assert_not_called()
+
+
 async def test_update_network_readback_failure_labels_before_state_explicitly():
     conn = _make_connection()
     mgr = NetworkManager(conn)

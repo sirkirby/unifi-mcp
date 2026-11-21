@@ -52,6 +52,8 @@ class Network:
     dhcpd_gateway_enabled: bool | None
     dhcpd_dns_1: str | None
     dhcpd_dns_2: str | None
+    dhcpd_dns_3: str | None
+    dhcpd_dns_4: str | None
     dhcpd_dns_enabled: bool | None
     dhcpd_ntp_1: str | None
     dhcpd_ntp_2: str | None
@@ -127,6 +129,10 @@ class Network:
     dhcpdv6_enabled: bool | None
     dhcpdv6_allow_slaac: bool | None
     dhcpdv6_dns_auto: bool | None
+    dhcpdv6_dns_1: str | None
+    dhcpdv6_dns_2: str | None
+    dhcpdv6_dns_3: str | None
+    dhcpdv6_dns_4: str | None
     dhcpdv6_leasetime: int | None
     dhcpdv6_start: str | None
     dhcpdv6_stop: str | None
@@ -179,6 +185,8 @@ class Network:
             dhcpd_gateway_enabled=raw.get("dhcpd_gateway_enabled"),
             dhcpd_dns_1=raw.get("dhcpd_dns_1"),
             dhcpd_dns_2=raw.get("dhcpd_dns_2"),
+            dhcpd_dns_3=raw.get("dhcpd_dns_3"),
+            dhcpd_dns_4=raw.get("dhcpd_dns_4"),
             dhcpd_dns_enabled=raw.get("dhcpd_dns_enabled"),
             dhcpd_ntp_1=raw.get("dhcpd_ntp_1"),
             dhcpd_ntp_2=raw.get("dhcpd_ntp_2"),
@@ -244,6 +252,10 @@ class Network:
             dhcpdv6_enabled=raw.get("dhcpdv6_enabled"),
             dhcpdv6_allow_slaac=raw.get("dhcpdv6_allow_slaac"),
             dhcpdv6_dns_auto=raw.get("dhcpdv6_dns_auto"),
+            dhcpdv6_dns_1=raw.get("dhcpdv6_dns_1"),
+            dhcpdv6_dns_2=raw.get("dhcpdv6_dns_2"),
+            dhcpdv6_dns_3=raw.get("dhcpdv6_dns_3"),
+            dhcpdv6_dns_4=raw.get("dhcpdv6_dns_4"),
             dhcpdv6_leasetime=raw.get("dhcpdv6_leasetime"),
             dhcpdv6_start=raw.get("dhcpdv6_start"),
             dhcpdv6_stop=raw.get("dhcpdv6_stop"),
