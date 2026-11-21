@@ -16,6 +16,9 @@ from typing import Any, Dict, List
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+# A batch job ends as done, error or cancelled; queued and running are still pending.
+FINISHED_STATUSES = ("done", "error", "cancelled")
+
 
 async def execute_tool(session: ClientSession, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Execute a single tool synchronously using unifi_execute."""
@@ -63,7 +66,7 @@ async def wait_for_batch(
         status = await check_batch_status(session, job_ids)
 
         # Check if all jobs are complete
-        all_done = all(job.get("status") in ["done", "error"] for job in status.get("jobs", []))
+        all_done = all(job.get("status") in FINISHED_STATUSES for job in status.get("jobs", []))
 
         if all_done:
             return status
@@ -133,7 +136,7 @@ async def main():
                     await asyncio.sleep(0.5)
                     status = await check_batch_status(session, job_ids)
 
-                    completed = sum(1 for job in status.get("jobs", []) if job.get("status") in ["done", "error"])
+                    completed = sum(1 for job in status.get("jobs", []) if job.get("status") in FINISHED_STATUSES)
                     print(f"  [{i + 1}] Completed: {completed}/{len(job_ids)}")
 
                     if completed == len(job_ids):

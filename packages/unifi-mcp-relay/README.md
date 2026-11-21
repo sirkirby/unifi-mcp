@@ -25,7 +25,7 @@ The relay sidecar:
 1. **Discovers** tools from your local MCP servers via the MCP protocol
 2. **Connects** to the Cloudflare Worker via WebSocket with token authentication
 3. **Registers** your location name and full tool catalog (including annotations)
-4. **Forwards** tool calls from cloud agents to the correct local server
+4. **Forwards** tool calls from cloud agents to the correct local server. `*_batch_status` and `*_batch_cancel` are refused unless every job ID is one this relay started through that server's `*_batch`
 5. **Refreshes** the catalog periodically with change detection
 
 ## Quick Start

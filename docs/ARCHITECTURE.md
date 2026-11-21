@@ -33,6 +33,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `connection.py` | Connection manager (aiohttp session, auto-reconnect) |
 | `detection.py` | Controller type detection (UniFi OS vs standalone) |
 | `retry.py` | Retry logic with exponential backoff |
+| `operation_gate.py` | Per-controller operation gate: one write at a time in arrival order, a capped number of reads |
 | `exceptions.py` | Shared exception types |
 | `incident_evidence.py` | Versioned cross-product incident evidence contract ([details](incident-evidence.md)); Network and Protect normalizers live in `network/` and `protect/` |
 | `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
@@ -53,7 +54,8 @@ per connection, so one process can serve clients at either migration state.
 | `confirmation.py` | Preview-then-confirm flow for mutations |
 | `lazy_tools.py` | Lazy tool loading (on-demand registration) |
 | `tool_loader.py` | Tool module import and registration |
-| `meta_tools.py` | Meta-tools (tool_index, execute, batch) |
+| `meta_tools.py` | Meta-tools (tool_index, execute, batch, batch_status, batch_cancel) |
+| `tool_gate.py` | Runs each domain tool call through its controller's operation gate |
 | `config.py` | OmegaConf config loading with env var interpolation |
 | `formatting.py` | Response formatting helpers |
 
@@ -110,7 +112,7 @@ The UniFi Access MCP server. 38 tools across 7 categories covering doors, polici
 
 ### apps/sitemanager
 
-The UniFi Site Manager MCP server. 9 read-only domain tools over Ubiquiti's cloud Site Manager API: hosts, sites, devices, ISP metrics, and SD-WAN configurations, plus the five shared meta-tools. It has no writes, no policy gates, no events or MCP resources, and no support-bundle tool.
+The UniFi Site Manager MCP server. 9 read-only domain tools over Ubiquiti's cloud Site Manager API: hosts, sites, devices, ISP metrics, and SD-WAN configurations, plus the six shared meta-tools. It has no writes, no policy gates, no events or MCP resources, and no support-bundle tool.
 
 - `src/unifi_sitemanager_mcp/` -- server code
   - `tools/` -- tool wrappers; the managers live in `unifi_core.sitemanager`
@@ -221,6 +223,7 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 5. **Reuse shared packages:**
    - `unifi_core` for controller connectivity and auth
    - `unifi_mcp_shared` for permissions, confirmation, lazy loading, config
+   - pass `gate_provider` (`None` only for a server with no controller) and the connection wait as `connection_decorator`, so tool calls go through the operation gate
 6. **Add Makefile** targets (test, lint, format, manifest)
 7. **Add to root Makefile** delegation targets
 8. **Add Dockerfile** following the protect/network/access server pattern
@@ -241,6 +244,7 @@ All servers share these patterns via `unifi-mcp-shared`:
 
 - **Permissions:** Category/action model with env var overrides, safe defaults
 - **Confirmation:** Preview-then-confirm for all mutations, auto-confirm for automation
+- **Operation gate:** Confirmed writes to one controller application run one at a time in arrival order, from direct calls and batches alike; reads are capped. The guarantee is per server process
 - **Lazy tool loading:** Meta-tools registered first, others loaded on demand (~200 vs ~5000 tokens)
 - **Config:** OmegaConf YAML with `${oc.env:VAR,default}` interpolation
 - **Tool response contract:** `{"success": bool, "data": ...}` or `{"success": false, "error": "..."}`
