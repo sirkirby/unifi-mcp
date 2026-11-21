@@ -893,6 +893,7 @@ type FirewallPolicyOrdering {
 type FirewallRule {
   id: ID
   name: String
+  description: String
   action: String
   enabled: Boolean!
   predefined: Boolean!

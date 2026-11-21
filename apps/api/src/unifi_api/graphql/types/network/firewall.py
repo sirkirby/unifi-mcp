@@ -47,6 +47,7 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
 class FirewallRule:
     id: strawberry.ID | None
     name: str | None
+    description: str | None
     action: str | None
     enabled: bool
     predefined: bool
@@ -81,6 +82,7 @@ class FirewallRule:
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
+            description=raw.get("description"),
             action=raw.get("action"),
             enabled=bool(raw.get("enabled", False)),
             predefined=bool(raw.get("predefined", False)),

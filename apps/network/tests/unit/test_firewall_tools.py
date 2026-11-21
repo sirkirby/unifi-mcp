@@ -885,6 +885,89 @@ class TestUpdatePreviewAndVerification:
         assert "did not apply changes to: destination" in result["error"]
 
 
+class TestUpdateFirewallPolicyDescription:
+    """description is updatable, can be cleared with "", and is covered by the read-back."""
+
+    @staticmethod
+    async def _confirmed_update(update_data, reread_changes, *, drop=()):
+        raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
+        raw["description"] = "Old reason"
+        reread = copy.deepcopy(raw)
+        reread.update(reread_changes)
+        for key in drop:
+            reread.pop(key, None)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=[_make_policy(raw), _make_policy(reread)])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(policy_id="pol_zone_001", update_data=update_data, confirm=True)
+        return result, mock_fm.update_firewall_policy
+
+    @pytest.mark.asyncio
+    async def test_a_description_only_update_is_sent_and_verified(self):
+        result, update = await self._confirmed_update({"description": "New reason"}, {"description": "New reason"})
+
+        assert result["success"] is True, result.get("error")
+        assert update.await_args.args[1] == {"description": "New reason"}
+        assert result["updated_fields"] == ["description"]
+
+    @pytest.mark.asyncio
+    async def test_a_description_with_other_fields_is_sent_with_them(self):
+        update_data = {"name": "Renamed", "description": "New reason", "protocol": "tcp"}
+        result, update = await self._confirmed_update(update_data, update_data)
+
+        assert result["success"] is True, result.get("error")
+        assert update.await_args.args[1] == update_data
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("reread_changes", "drop"),
+        [({"description": ""}, ()), ({}, ("description",))],
+        ids=["answered_empty", "key_omitted"],
+    )
+    async def test_clearing_the_description_is_applied_when_the_reread_is_empty_or_omits_it(self, reread_changes, drop):
+        result, update = await self._confirmed_update({"description": ""}, reread_changes, drop=drop)
+
+        assert result["success"] is True, result.get("error")
+        assert update.await_args.args[1] == {"description": ""}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("update_data", "reread_changes"),
+        [
+            ({"description": "New reason"}, {}),
+            ({"description": ""}, {}),
+            ({"name": "Renamed", "description": "New reason"}, {"name": "Renamed"}),
+        ],
+        ids=["kept_old_value", "clear_kept_old_value", "mixed_update_kept_old_description"],
+    )
+    async def test_a_description_the_controller_did_not_store_is_reported(self, update_data, reread_changes):
+        result, _ = await self._confirmed_update(update_data, reread_changes)
+
+        assert result["success"] is False
+        assert "did not apply changes to: description" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_field_is_refused_before_any_controller_call(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_by_id = AsyncMock(side_effect=AssertionError("controller was read"))
+            mock_fm.update_firewall_policy = AsyncMock(side_effect=AssertionError("controller was written"))
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"name": "Renamed", "notes": "would have been dropped"},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "Unknown firewall policy field(s): notes" in result["error"]
+
+
 class TestFirewallPolicyToolsReadOnePolicy:
     """Tools acting on one policy read that policy, never the full inventory: a bulk
     rename read hundreds of policies up to three times per call and stalled the
@@ -1088,11 +1171,11 @@ class TestUpdateFirewallPolicyV2Fields:
     @pytest.mark.parametrize(
         ("update_data", "expected"),
         [
-            # Unknown keys are filtered out by to_controller_update; with nothing left the update is empty.
-            ({"dst_port_group_id": "abc123"}, "empty"),
+            # Unknown keys are refused by name rather than dropped.
+            ({"dst_port_group_id": "abc123"}, "Unknown firewall policy field(s): dst_port_group_id"),
             ({"action": "INVALID"}, "Invalid action"),
         ],
-        ids=["unknown_key_dropped", "invalid_action"],
+        ids=["unknown_key_refused", "invalid_action"],
     )
     async def test_update_rejects_unusable_data(self, update_data, expected):
         from unifi_network_mcp.tools.firewall import update_firewall_policy

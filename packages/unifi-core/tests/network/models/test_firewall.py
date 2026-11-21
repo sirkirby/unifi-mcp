@@ -77,6 +77,7 @@ class TestFirewallRuleFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
         expected = {
             "name",
+            "description",
             "action",
             "enabled",
             "index",
@@ -106,6 +107,7 @@ class TestFirewallRuleFromController:
                 {
                     "_id": "fw-1",
                     "name": "Block Outbound",
+                    "description": "Keep the printer off the internet",
                     "action": "BLOCK",
                     "enabled": True,
                     "predefined": False,
@@ -117,6 +119,7 @@ class TestFirewallRuleFromController:
                 {
                     "id": "fw-1",
                     "name": "Block Outbound",
+                    "description": "Keep the printer off the internet",
                     "action": "BLOCK",
                     "enabled": True,
                     "predefined": False,
@@ -169,15 +172,17 @@ class TestToControllerUpdate:
         result = to_controller_update({"connection_states": []})
         assert result["connection_states"] == []
 
+    def test_empty_description_preserved(self) -> None:
+        assert to_controller_update({"description": ""}) == {"description": ""}
+
 
 class TestNormalizePolicyUpdate:
-    def test_normalizes_public_enum_values_and_filters_unknown_fields(self) -> None:
+    def test_normalizes_public_enum_values(self) -> None:
         result = normalize_policy_update(
             {
                 "action": "allow",
                 "ip_version": "ipv4",
                 "connection_states": ["established", "related"],
-                "unknown": "drop-me",
             }
         )
 
@@ -187,6 +192,54 @@ class TestNormalizePolicyUpdate:
             "connection_states": ["ESTABLISHED", "RELATED"],
         }
 
+    def test_a_description_only_update_is_accepted(self) -> None:
+        assert normalize_policy_update({"description": "Why this rule exists"}) == {
+            "description": "Why this rule exists"
+        }
+
+    def test_a_description_travels_with_other_fields(self) -> None:
+        result = normalize_policy_update(
+            {
+                "name": "Renamed",
+                "description": "Now matches the domain on 443",
+                "protocol": "tcp",
+                "destination": {"port_matching_type": "SPECIFIC", "port": "443"},
+            }
+        )
+
+        assert result == {
+            "name": "Renamed",
+            "description": "Now matches the domain on 443",
+            "protocol": "tcp",
+            "destination": {"port_matching_type": "SPECIFIC", "port": "443"},
+        }
+
+    def test_an_empty_description_is_kept_so_it_clears_the_stored_one(self) -> None:
+        assert normalize_policy_update({"description": ""}) == {"description": ""}
+
+    def test_a_none_description_is_dropped_rather_than_sent(self) -> None:
+        assert normalize_policy_update({"description": None, "enabled": False}) == {"enabled": False}
+
+    def test_unknown_fields_are_refused_by_name_not_dropped(self) -> None:
+        """A dropped field let a mixed update report success for a change never sent."""
+        with pytest.raises(ValueError, match="Unknown firewall policy field") as excinfo:
+            normalize_policy_update({"name": "Renamed", "zz_unsupported": "x", "comment": "y"})
+
+        message = str(excinfo.value)
+        assert "comment, zz_unsupported" in message
+        assert "description" in message.split("Updatable fields:")[1]
+        assert "index" not in message.split("Updatable fields:")[1]
+
+    @pytest.mark.parametrize("field", ["id", "predefined"])
+    def test_read_only_fields_are_refused_by_name(self, field: str) -> None:
+        with pytest.raises(ValueError, match="read-only and cannot be updated: %s" % field):
+            normalize_policy_update({field: "x", "name": "Renamed"})
+
+    def test_endpoint_keys_stay_opaque_to_the_unknown_field_check(self) -> None:
+        """Newer controller targets live inside source/destination and must pass through."""
+        update = {"destination": {"matching_target": "WEB", "web_domains": ["example.com"]}}
+        assert normalize_policy_update(update) == update
+
     @pytest.mark.parametrize(
         ("fields", "message"),
         [
@@ -194,7 +247,8 @@ class TestNormalizePolicyUpdate:
             ({"action": "accept"}, "Legacy V1 firewall fields"),
             ({"action": "invalid"}, "Invalid action"),
             ({"action": "SENTINEL-caller-value"}, "must be one of ALLOW, BLOCK, REJECT"),
-            ({"id": "read-only"}, "effectively empty"),
+            ({"id": "read-only"}, "read-only"),
+            ({"name": None}, "effectively empty"),
             ({"index": 2000, "enabled": True}, "unifi_reorder_firewall_policies"),
             ({"index": 2000}, "unifi_reorder_firewall_policies"),
             ({"destination": {"port_matching_type": "ANY", "port": "53"}}, "port_matching_type"),

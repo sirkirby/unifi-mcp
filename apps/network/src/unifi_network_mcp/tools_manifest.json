@@ -22357,7 +22357,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. source/destination are deep-merged with the current policy and accept the same targeting and port fields as create (matching_target, port_matching_type, port, port_group_id, client_macs); the merged result is checked for port shape and selector activation, while the zone/IP/NETWORK completeness rules are checked on create only. To change policy order use unifi_reorder_firewall_policies; index is rejected here.",
+      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, description, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. source/destination are deep-merged with the current policy and accept the same targeting and port fields as create (matching_target, port_matching_type, port, port_group_id, client_macs); the merged result is checked for port shape and selector activation, while the zone/IP/NETWORK completeness rules are checked on create only. To change policy order use unifi_reorder_firewall_policies; index is rejected here.",
       "name": "unifi_update_firewall_policy",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -22373,7 +22373,7 @@
               "type": "string"
             },
             "update_data": {
-              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. Partial source/destination dicts are merged with the current policy; port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and switching port_matching_type, matching_target or matching_target_type retires the stored selectors the new values no longer use (port/port_group_id/client_macs/ips/ip_group_id/network_ids) automatically. index is not accepted here; use unifi_reorder_firewall_policies to change order.",
+              "description": "Dictionary of V2 zone-based fields to update: name, description ('' clears it), action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. Any other top-level key is refused by name, not dropped. Partial source/destination dicts are merged with the current policy; port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and switching port_matching_type, matching_target or matching_target_type retires the stored selectors the new values no longer use (port/port_group_id/client_macs/ips/ip_group_id/network_ids) automatically. index is not accepted here; use unifi_reorder_firewall_policies to change order.",
               "type": "object"
             }
           },

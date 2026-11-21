@@ -3237,6 +3237,17 @@
             ],
             "title": "Create Allow Respond"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "destination": {
             "anyOf": [
               {},

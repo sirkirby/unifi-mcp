@@ -60,6 +60,10 @@ class FirewallRule(BaseModel):
         default=None,
         description="Policy name",
     )
+    description: Optional[str] = Field(
+        default=None,
+        description="Free-text policy description; an empty string clears it on update",
+    )
     action: Optional[str] = Field(
         default=None,
         description="Policy action: ALLOW, BLOCK, REJECT",
@@ -139,6 +143,10 @@ READ_ONLY_FIELDS: frozenset[str] = frozenset(
     for name, field in FirewallRule.model_fields.items()
     if (field.json_schema_extra or {}).get("mutable", True) is False
 )
+
+# What normalize_policy_update accepts: every mutable field except index, which
+# has its own refusal pointing at the ordering tools.
+_POLICY_UPDATE_FIELDS: frozenset[str] = MUTABLE_FIELDS - {"index"}
 
 _LEGACY_V1_FIREWALL_FIELDS = frozenset({"ruleset", "rule_index", "src_address", "dst_address", "src_port", "dst_port"})
 _LEGACY_V1_ACTIONS = frozenset({"accept", "drop", "reject"})
@@ -482,6 +490,7 @@ def from_controller(raw: Any) -> FirewallRule:
     return FirewallRule(
         id=raw_dict.get("_id") or raw_dict.get("id"),
         name=raw_dict.get("name"),
+        description=raw_dict.get("description"),
         action=raw_dict.get("action"),
         enabled=enabled,
         predefined=predefined,
@@ -991,10 +1000,12 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     This is the shared mutation boundary for MCP and API callers. It rejects
     ``index`` (ordering is a separate tool family), rejects retired V1 fields,
-    normalizes the controller's upper-case enums, drops unknown/read-only
-    fields through :func:`to_controller_update`, and rejects a selector paired
-    with a non-activating enum in the same update. Checks that need the stored
-    policy run in :func:`prepare_policy_update`.
+    refuses read-only and unknown top-level fields by name, normalizes the
+    controller's upper-case enums, and rejects a selector paired with a
+    non-activating enum in the same update. ``None`` values are dropped; an
+    empty string is kept so a caller can clear a text field such as
+    ``description``. Checks that need the stored policy run in
+    :func:`prepare_policy_update`.
     """
     if "index" in fields:
         # The V2 policy endpoint accepts index and silently ignores it, so the
@@ -1005,6 +1016,18 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
         )
     if error := legacy_policy_error(fields):
         raise ValueError(error)
+    # Refuse, never drop: a dropped field let the tool report success for a change
+    # that was never sent. Only top-level keys are checked; source/destination stay
+    # opaque so newer controller targets inside them still pass through.
+    read_only = sorted(set(fields) & READ_ONLY_FIELDS)
+    if read_only:
+        raise ValueError("Firewall policy field(s) are read-only and cannot be updated: %s" % ", ".join(read_only))
+    unknown = sorted(set(fields) - MUTABLE_FIELDS)
+    if unknown:
+        raise ValueError(
+            "Unknown firewall policy field(s): %s. Updatable fields: %s."
+            % (", ".join(unknown), ", ".join(sorted(_POLICY_UPDATE_FIELDS)))
+        )
     normalized = normalize_policy_enums(fields)
 
     payload = to_controller_update(normalized)
