@@ -159,7 +159,7 @@ Every tool call takes its turn at this server's operation gate for the controlle
 | `UNIFI_NETWORK_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
 | `UNIFI_NETWORK_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
 
-A value that is not a number in range stops the server at startup, naming the variable. Unlike the preview-token lifetime, which is clamped, these are not guessed at: a wrong lock budget is a configuration error to fix. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write. `unifi_batch_cancel` withdraws batch jobs that are still queued. The support bundle reports the gate's state as flags and bucketed counts.
+A value that is not a number in range stops the server at startup, naming the variable. Unlike the preview-token lifetime, which is clamped, these are not guessed at: a wrong lock budget is a configuration error to fix. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write. `unifi_batch_cancel` withdraws batch jobs that are still queued. The support bundle reports the gate's state as flags and bucketed counts. This server has one gate, for its own controller, so a call never waits for one gate while holding another.
 
 ## Permissions
 

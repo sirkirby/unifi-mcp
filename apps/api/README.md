@@ -349,12 +349,19 @@ or Access) run one at a time, in the order they arrive: a confirmed action
 holds the write turn for the manager call, so two clients never interleave a
 read-modify-write. Reads (read actions, resource routes, GraphQL) share a
 capped number of slots per controller application and never wait behind
-writes; event streams take none. A request that cannot get its turn in time
-gets `503` with `Retry-After` (GraphQL: error code `CONTROLLER_BUSY` with
-`retryAfter`), nothing is sent to the controller, and an audit row records it.
-A value out of range stops the server at startup. The guarantee is per API
-server process; these variables apply to the API server only, not to the MCP
-servers, which have their own (`UNIFI_<SERVER>_WRITE_HOLD_SECONDS` and so on).
+writes; event streams take none. A REST request that cannot get its turn in
+time gets `503` with `Retry-After`, nothing is sent to the controller, and an
+audit row records it. A GraphQL field that cannot gets HTTP `200` with an error
+whose `extensions.code` is `CONTROLLER_BUSY` and `extensions.retryAfter` the
+suggested delay; GraphQL busy errors write no audit row. A request holds at most
+one read slot per controller application, released when it ends, and a
+multi-controller query waits for each in turn, at most the wait budget each.
+Controller reads outside the cap: the capability probes
+(`/v1/controllers/{id}/capabilities`) and controller probes, which manage the
+connection itself. A value out of range stops the server at startup. The
+guarantee is per API server process; these variables apply to the API server
+only, not to the MCP servers, which have their own
+(`UNIFI_<SERVER>_WRITE_HOLD_SECONDS` and so on).
 
 Per-controller credentials are stored encrypted in the state DB after the first
 `POST /v1/controllers` call — no controller credentials in env vars. The
