@@ -1,5 +1,6 @@
 """Tests for TrafficFlowManager — caching, validation, and response shaping."""
 
+import copy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -308,9 +309,10 @@ async def test_statistics_preserves_order_and_resolves_partial_catalog_matches()
             "category_name": None,
         },
     ]
+    # No entry has both names, but some names were found.
     assert result["dpi_name_resolution"] == {
         "status": "partial",
-        "resolved_count": 1,
+        "resolved_count": 0,
         "total_count": 3,
         "reason": "not_in_dpi_catalogue",
         "remediation": (
@@ -381,3 +383,43 @@ async def test_statistics_missing_api_key_without_env_prefix_names_the_controlle
     assert resolution["reason"] == "network_api_key_required"
     assert "this controller's configuration" in resolution["remediation"]
     assert "UNIFI_" not in resolution["remediation"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "catalog,expected_names",
+    [
+        (
+            {"applications": [{"id": (4 << 16) | 470, "name": "Example Stream"}], "categories": []},
+            ("Example Stream", None),
+        ),
+        (
+            {"applications": [], "categories": [{"id": 4, "name": "Media streaming services"}]},
+            (None, "Media streaming services"),
+        ),
+    ],
+    ids=["application-only", "category-only"],
+)
+async def test_statistics_single_name_match_is_partial_not_resolved(catalog, expected_names):
+    class OneSidedDpiCatalog:
+        async def get_full_dpi_catalog(self):
+            return copy.deepcopy(catalog)
+
+    conn = _make_connection(response=_STATS_RESPONSE)
+    mgr = TrafficFlowManager(conn, dpi_manager=OneSidedDpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    assert len(result["top_applications"]) == 1
+    application = result["top_applications"][0]
+    assert (application["application_name"], application["category_name"]) == expected_names
+    assert application["application_id"] == 470
+    assert result["dpi_name_resolution"] == {
+        "status": "partial",
+        "resolved_count": 0,
+        "total_count": 1,
+        "reason": "not_in_dpi_catalogue",
+        "remediation": (
+            "The controller's public DPI catalogue does not list these applications; IDs and byte counts are complete."
+        ),
+    }
