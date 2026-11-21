@@ -356,7 +356,11 @@ whose `extensions.code` is `CONTROLLER_BUSY` and `extensions.retryAfter` the
 suggested delay; GraphQL busy errors write no audit row. A confirmed action cut
 off at the hold budget answers `success: false` with `mutation_applied: null`,
 since it may have reached the controller (read the resource back before
-retrying), or `false` when it was refused before sending. A request holds at most
+retrying), or `false` when it was refused before sending. A REST read that goes
+through `ConnectionManager.request()` and whose controller application answers
+`503` (restarting or busy) gets `503` with `Retry-After` and `detail.kind`
+`controller_unavailable`, no audit row, and no controller text; collection
+refreshes and GraphQL error mapping are unchanged. A request holds at most
 one read slot per controller application, released when it ends, and a
 multi-controller query waits for each in turn, at most the wait budget each.
 Controller reads outside the cap: the capability probes

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aiounifi.errors import ServiceUnavailable
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -21,7 +22,7 @@ from starlette.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
-from unifi_core.operation_gate import ControllerBusyError, GateSettings
+from unifi_core.operation_gate import BUSY_RETRY_AFTER_SECONDS, ControllerBusyError, GateSettings
 
 from unifi_api._version import __version__ as _api_version
 from unifi_api.auth.cache import ArgonVerifyCache
@@ -258,6 +259,7 @@ from unifi_api.services.streams import SubscriberPool
 
 _streams_log = logging.getLogger("unifi-api.streams")
 _access_log = logging.getLogger("unifi-api.access")
+_unavailable_log = logging.getLogger("unifi-api.controller")
 
 
 _PATH_PARAM = re.compile(r"{([^}:]+)(?::[^}]+)?}")
@@ -489,6 +491,28 @@ def create_app(config: ApiConfig) -> FastAPI:
             status_code=503,
             content={"detail": {"kind": "controller_busy", "reason": exc.reason, "message": str(exc)}},
             headers={"Retry-After": str(exc.retry_after)},
+        )
+
+    @app.exception_handler(ServiceUnavailable)
+    async def _controller_unavailable(request: Request, exc: ServiceUnavailable):
+        """The controller's application answered 503 (restarting or busy): a retryable 503.
+
+        The message names the route template and nothing else: the exception
+        text quotes the controller request URL and path.
+        """
+        route = request.scope.get("route")
+        target = getattr(route, "path", None) or "controller route"
+        _unavailable_log.warning("Controller application unavailable on %s %s", request.method, target)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": {
+                    "kind": "controller_unavailable",
+                    "message": f"Controller request failed ({request.method} {target}): "
+                    "the controller's application is unavailable. Retry shortly.",
+                }
+            },
+            headers={"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)},
         )
 
     @app.exception_handler(SiteManagerAPIError)
