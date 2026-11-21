@@ -41,7 +41,7 @@ dependencies = [
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
     # Reading and setting the V2 firewall policy order requires Core 0.4.100.
     # Reading one firewall policy per update requires Core 0.4.101.
-    "unifi-core[network,protect,access]>=0.4.101,<0.5",
+    "unifi-core[network,protect,access]>=0.4.103,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
