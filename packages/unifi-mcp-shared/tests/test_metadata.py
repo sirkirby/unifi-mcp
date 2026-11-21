@@ -34,6 +34,18 @@ def test_mcp_icons_for_server_returns_packaged_png_data_uris() -> None:
         assert data.startswith(b"\x89PNG\r\n\x1a\n")
 
 
+def test_mcp_icons_for_server_returns_innerspace_icons() -> None:
+    icons = mcp_icons_for_server("innerspace")
+
+    assert [icon.sizes for icon in icons] == [["48x48"], ["96x96"], ["192x192"]]
+    for icon in icons:
+        assert _decode_icon_src(icon.src).startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_tool_title_from_name_strips_innerspace_prefix() -> None:
+    assert tool_title_from_name("innerspace_list_walls") == "List Walls"
+
+
 def test_mcp_icons_for_server_rejects_unknown_server() -> None:
     try:
         mcp_icons_for_server("unknown")

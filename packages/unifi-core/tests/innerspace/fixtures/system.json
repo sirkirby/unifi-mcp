@@ -1,0 +1,26 @@
+{
+  "apps": {
+    "controllers": [
+      {
+        "isConfigured": true,
+        "isInstalled": true,
+        "isRunning": true,
+        "name": "innerspace",
+        "state": "active",
+        "status": "ok",
+        "type": "controller",
+        "version": "1.4.3"
+      },
+      {
+        "isConfigured": true,
+        "isInstalled": true,
+        "isRunning": true,
+        "name": "network",
+        "state": "active",
+        "status": "ok",
+        "type": "controller",
+        "version": "9.0.0"
+      }
+    ]
+  }
+}

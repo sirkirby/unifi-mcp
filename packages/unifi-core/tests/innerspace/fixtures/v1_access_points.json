@@ -1,0 +1,32 @@
+{
+  "access_points": [
+    {
+      "azimuth": 0,
+      "floor_plan_id": "00000000-0000-4000-8000-000000000003",
+      "height": 2.7,
+      "id": "00000000-0000-4000-8000-000000000029",
+      "mac": "00:00:5e:00:53:01",
+      "model": "Model AP",
+      "mount": "ceiling",
+      "name": "Device 1",
+      "serial": "SYN0000001",
+      "status": "online",
+      "x": 250.0,
+      "y": 300.0
+    },
+    {
+      "azimuth": 90,
+      "floor_plan_id": "00000000-0000-4000-8000-000000000004",
+      "height": 2.5,
+      "id": "00000000-0000-4000-8000-000000000030",
+      "mac": "00:00:5e:00:53:02",
+      "model": "Model AP",
+      "mount": "wall",
+      "name": "Device 2",
+      "serial": "SYN0000002",
+      "status": "online",
+      "x": 400.0,
+      "y": 150.0
+    }
+  ]
+}

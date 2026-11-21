@@ -95,6 +95,23 @@ def test_meta_tool_registered_schemas_and_descriptions():
     assert arguments_description == "Tool parameters matching the domain tool's input schema"
 
 
+def test_innerspace_tool_index_description_carries_domain_hint():
+    register_tool = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=_capture_tools()[1],
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=register_tool,
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
+        prefix="innerspace",
+    )
+
+    calls = {call.kwargs["name"]: call.kwargs for call in register_tool.call_args_list}
+    assert "floor plans, walls" in calls["innerspace_tool_index"]["description"]
+
+
 def test_meta_tool_index_objects_contain_declared_annotations():
     TOOL_REGISTRY.clear()
     try:

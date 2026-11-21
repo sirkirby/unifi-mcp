@@ -113,6 +113,8 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 
 UniFi exposes three API surfaces with disjoint ID/auth models: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields), the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields), and the UniFi-OS **Alarm Manager v2** service (`/api/v2/alarms/`, session + **SuperAdmin** auth, UUIDs, `snake_case` fields). They are **not interchangeable**.
 
+InnerSpace's `/proxy/innerspace/integration/v1` is session-only; see InnerSpace session isolation.
+
 Authentication credentials and API surfaces are separate concepts. Network 10.6.106
 and 11.1 also accept API keys on verified legacy and V2 GET read endpoints, preserving
 legacy IDs and fields. Add a path to the key-read allowlist only after a live GET with
@@ -132,6 +134,22 @@ Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authe
 - Site Manager host, site, and device IDs are scoped to the Site Manager tool family. Do not pass them to Network, Protect, or Access tools, and do not translate between them.
 - Setup tooling MUST NOT offer to reuse or migrate `UNIFI_API_KEY` as a Site Manager key.
 - **Anchor:** `packages/unifi-core/src/unifi_core/sitemanager/managers/connection_manager.py`
+
+### InnerSpace session isolation
+
+InnerSpace is a separate UniFi OS application with its own routes and ID family. It does not follow the Network surface rules above. The app lives on the console under `/proxy/innerspace/`.
+
+- Both the documented routes (`/proxy/innerspace/integration/v1`) and the one internal read (`/proxy/innerspace/api/project`) use the console session: a login on `/api/auth/login` and the `TOKEN` cookie plus CSRF token it returns. The client has no API-key path, and a console's local API key MUST NOT be used for InnerSpace.
+- InnerSpace API keys are issued per app by Site Manager and reach InnerSpace through the cloud connector. This repo does not use that path yet. Do not add it without its own credential isolation rules.
+- The internal read exists only for the project's display unit (`metric` or `imperial`). Any other internal route is **banned** until it is added here.
+- InnerSpace site, project, floor plan, device and wall IDs are scoped to the InnerSpace tool family. Do not pass them to Network, Protect, Access or Site Manager tools, and do not translate between them.
+- Caller-supplied IDs placed in an InnerSpace path MUST pass through `object_id`. An image is fetched from only the plan's own `image_url`, and only when it matches the fixed asset pattern and equals the image address of that plan's map in the project; an asset filename never comes from the caller.
+- A 403 `errors.api.access` means the session is missing, expired or lacks access; the console gives no separate code. `/api/system` instead answers a missing or expired session with 200 and a public payload without `apps.controllers`, so on that route a 2xx without the list is a refused session too: never adopt its CSRF token, log in once and read again. No list on the new session is a permission error (the account cannot read the app list), and for 60 seconds after it a list-less reply raises the same error without a login. Whether InnerSpace is installed and running comes only from the list in `/api/system`, never from a 403 or a 404.
+- Lengths are returned in the project's unit, or the caller's explicit `unit` override; the result always says which. With no override, a missing or unrecognised project unit is an error.
+- Positions use the documented API's plan frame: distance from the plan's top-left in the vendor's coordinates; it lines up with the image only when `image_scale` is 1 and `image_offset` is (0, 0). Both are returned with each plan, and the conversion to image pixels is documented on `FloorPlan`.
+- The HTTP session MUST NOT follow redirects or honor proxy environment variables, so the session cookie cannot be sent elsewhere.
+- Errors are built from fixed text, the HTTP status and an `errors.*` code matching a fixed pattern. Never include the response body, the console address, the request path or an exception's text. Logs carry the operation, a route template and the exception class.
+- **Anchor:** `packages/unifi-core/src/unifi_core/innerspace/managers/connection_manager.py`
 
 ### Authentication routing golden path
 
@@ -159,6 +177,7 @@ Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authe
 - **Tool families share an ID space.** Tools whose returned IDs and accepted IDs are mutually portable form a *family*. Cross-family ID use is prohibited.
 - **Tool descriptions MUST scope IDs** when they could be confused with another family's IDs. Standard formula: *"These IDs are scoped to the <family> tool family — do not pass them to other <resource> tools."* This applies to MCP tool descriptions, GraphQL type/query descriptions, and REST route descriptions alike.
 - **Integration API tools MUST require an API key** and fail with a clear remediation message when it is missing. The auth check belongs in the manager so every tool in the family inherits it.
+- InnerSpace's `/proxy/innerspace/integration/v1` is session-only; see InnerSpace session isolation.
 - **Alarm Manager v2 (`/api/v2/alarms/`) requires a SuperAdmin credential.** Reach it via `uiprotect`'s `api_request(..., api_path="/api/v2/alarms/")` (no bespoke client). A Protect-scoped account returns 403 — managers MUST map this to an actionable "requires SuperAdmin" error so callers/agents self-diagnose. Blast radius is topology-dependent: broad on a combined UDM console, contained to Protect on a standalone UNVR.
 - **Silent cross-API ID translation is banned** unless the mapping is 1:1, stable, and verified against live data. Zones are grandfathered (1:1 by name, stable, unique). Policies are not (membership diverges, no bridge field, V2 has duplicate names).
 - **Bridging tools must be explicit.** If you need to cross ID namespaces, write a named bridging tool (`unifi_resolve_<resource>_id_for_<family>`) with documented failure modes. Never bury the bridge inside another tool.
