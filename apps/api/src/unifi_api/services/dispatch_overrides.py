@@ -83,9 +83,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_set_client_ip_settings": ("client_manager", "set_client_ip_settings"),
     "unifi_set_client_fixed_ap": ("client_manager", "set_client_fixed_ap"),
     "unifi_forget_client": ("client_manager", "forget_client"),
-    # list_clients branches between get_all_clients (offline+history) and
-    # get_clients (online only) on the include_offline parameter. Default path
-    # is the online list.
+    # list_clients reads through Core's client inventory, which selects the
+    # online, all/historical or Matter/Thread records from filter_type and
+    # include_offline, so the API and the MCP tool share one composition.
     "unifi_list_clients": ("client_manager", "get_client_inventory"),
     # Network/WLAN/AP-group mutations: preview pre-fetches for current config.
     # Guest-create previews validate the zone before the mutation call.
