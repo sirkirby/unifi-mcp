@@ -76,8 +76,19 @@ async def test_no_host_means_no_gate_but_the_call_is_still_admitted(wiring, monk
 
 
 async def test_the_support_bundle_summarises_the_gate_without_naming_the_controller(wiring):
-    evidence = await runtime.support_bundle_adapter.collect("summary", None)
-    summary = evidence.connection.operation_gate
-    assert summary is not None
-    assert summary.read_cap == runtime.get_gate_settings().read_cap
-    assert "test" not in summary.model_dump_json()
+    import json as _json
+
+    gate = runtime.get_operation_gate()
+    async with gate.write(label="access_update_secret_wlan_name"):
+        pass
+    async with gate.read():
+        bundle = await runtime.support_bundle_service.generate(probe="summary")
+    assert bundle["success"] is True, bundle
+    summary = bundle["data"]["connection"]["operation_gate"]
+    assert summary["read_cap"] == runtime.get_gate_settings().read_cap
+    assert summary["reads_in_use"] == 1
+    assert summary["writes_completed"] == "1"
+    text = _json.dumps(bundle)
+    # The whole bundle, not just the summary: no host, no tool label.
+    assert "access.test" not in text
+    assert "secret_wlan" not in text

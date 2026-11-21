@@ -107,7 +107,7 @@ async def _run(product: str) -> dict:
     manager = getattr(runtime, spec["manager"])
     state = {"writes": 0, "write_overlap": False, "reads": 0, "read_peak": 0}
     writes: list[str] = []
-    hold = {"event": None}
+    hold: dict[str, Any] = {"event": None, "holding": asyncio.Event()}
 
     async def fake_write(*args: Any, **kwargs: Any) -> Any:
         state["writes"] += 1
@@ -115,6 +115,7 @@ async def _run(product: str) -> dict:
             state["write_overlap"] = True
         writes.append(spec["write_key"](args, kwargs))
         if hold["event"] is not None:
+            hold["holding"].set()
             await hold["event"].wait()
         for _ in range(3):
             await asyncio.sleep(0)
@@ -173,6 +174,8 @@ async def _run(product: str) -> dict:
         if all(status in ("done", "error", "cancelled") for status in statuses):
             break
         await asyncio.sleep(0.005)
+    else:
+        raise AssertionError(f"the batch never finished: {statuses}")
     report["batch"] = {
         "order": list(writes),
         "expected": [list(spec["write_args"](i).values())[0] for i in range(10, 15)],
@@ -186,10 +189,16 @@ async def _run(product: str) -> dict:
     operations = [{"tool": spec["write_tool"], "arguments": spec["write_args"](i)} for i in range(20, 23)]
     batch = _payload(await call(f"{prefix}_batch", {"operations": operations}))
     job_ids = [job["jobId"] for job in batch["jobs"]]
-    for _ in range(200):
-        if len(writes) == 1 and (await main.get_job_status(job_ids[1]))["status"] == "queued":
+    # Deterministic readiness: the first write is inside the controller, holding
+    # the write turn, and the second has joined the queue behind it.
+    await asyncio.wait_for(hold["holding"].wait(), timeout=10)
+    for _ in range(1000):
+        if (await main.get_job_status(job_ids[1]))["status"] == "queued":
             break
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("the second batch job never queued behind the held write")
+    assert writes == [list(spec["write_args"](20).values())[0]], writes
     cancelled = _payload(await call(f"{prefix}_batch_cancel", {"jobIds": [job_ids[1]]}))
     refused = _payload(await call(f"{prefix}_batch_cancel", {"jobId": job_ids[0]}))
     hold["event"].set()
@@ -199,6 +208,8 @@ async def _run(product: str) -> dict:
         if all(status in ("done", "error", "cancelled") for status in statuses):
             break
         await asyncio.sleep(0.005)
+    else:
+        raise AssertionError(f"the cancelled batch never finished: {statuses}")
     report["cancel"] = {
         "order": list(writes),
         "expected": [list(spec["write_args"](i).values())[0] for i in (20, 22)],

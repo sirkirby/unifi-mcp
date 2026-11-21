@@ -167,6 +167,7 @@ async def test_a_held_write_is_bounded_by_its_remaining_hold_budget_and_reads_ar
     assert result["success"] is False
     assert result["mutation_applied"] is None
     assert "may or may not have been applied" in result["error"]
+    assert "cached device state may show the change" in result["error"]
     assert not gate.write_held
 
     read = json.loads((await main_mod.server.call_tool(PROBES[1], {})).content[0].text)
@@ -174,8 +175,52 @@ async def test_a_held_write_is_bounded_by_its_remaining_hold_budget_and_reads_ar
 
 
 async def test_the_support_bundle_summarises_the_gate_without_naming_the_controller(wiring):
-    evidence = await runtime.support_bundle_adapter.collect("summary", None)
-    summary = evidence.connection.operation_gate
-    assert summary is not None
-    assert summary.read_cap == runtime.get_gate_settings().read_cap
-    assert "test" not in summary.model_dump_json()
+    import json as _json
+
+    gate = runtime.get_operation_gate()
+    async with gate.write(label="protect_update_secret_wlan_name"):
+        pass
+    async with gate.read():
+        bundle = await runtime.support_bundle_service.generate(probe="summary")
+    assert bundle["success"] is True, bundle
+    summary = bundle["data"]["connection"]["operation_gate"]
+    assert summary["read_cap"] == runtime.get_gate_settings().read_cap
+    assert summary["reads_in_use"] == 1
+    assert summary["writes_completed"] == "1"
+    text = _json.dumps(bundle)
+    # The whole bundle, not just the summary: no host, no tool label.
+    assert "controller.test" not in text
+    assert "secret_wlan" not in text
+
+
+async def test_a_write_whose_budget_is_spent_before_it_runs_reports_nothing_applied(wiring, monkeypatch):
+    class Clock:
+        value = 0.0
+
+        def now(self) -> float:
+            return self.value
+
+        async def sleep(self, seconds: float) -> None:
+            await asyncio.sleep(seconds)
+
+    clock = Clock()
+    gate = OperationGate(GateSettings(hold_budget_seconds=10), name="protect", clock=clock)
+    gate_registry()._gates[GateKey.for_host("controller.test", 443, "protect")] = gate
+    ran: list[str] = []
+
+    async def ensure_connected(self) -> bool:
+        clock.value += 10.5  # the connection wait used up the whole budget
+        return True
+
+    monkeypatch.setattr(type(runtime.connection_manager), "ensure_connected", ensure_connected)
+
+    @main_mod.server.tool(name=PROBES[0], permission_category="cameras", permission_action="update")
+    async def probe_write(confirm: bool = False) -> dict:
+        ran.append("sent")
+        return {"success": True, "data": {}}
+
+    result = json.loads((await main_mod.server.call_tool(PROBES[0], {"confirm": True})).content[0].text)
+    assert result["success"] is False
+    assert result["mutation_applied"] is False
+    assert "was not sent" in result["error"]
+    assert ran == []

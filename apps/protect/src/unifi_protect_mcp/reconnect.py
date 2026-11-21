@@ -22,6 +22,10 @@ from typing import Any, Callable
 
 from unifi_core.operation_gate import WriteRequestTimeout, write_request_bound
 
+_STALE_CACHE_NOTE = (
+    "Protect's cached device state may show the change until its next bootstrap refresh (about a minute)."
+)
+
 
 def reconnecting_tool_decorator(tool_decorator: Callable, connection_manager: Any) -> Callable:
     """Wrap a FastMCP-style ``tool(...)`` decorator so each tool first ensures a connection."""
@@ -42,8 +46,17 @@ def reconnecting_tool_decorator(tool_decorator: Callable, connection_manager: An
                     async with write_request_bound():
                         return await func(*args, **kwargs)
                 except WriteRequestTimeout as exc:
-                    # The change may have reached the controller: the outcome is unknown.
-                    return {"success": False, "error": f"Failed to run {name}: {exc}", "mutation_applied": None}
+                    if not getattr(exc, "request_sent", True):
+                        # The budget was spent before the body ran: nothing was sent.
+                        return {"success": False, "error": f"Failed to run {name}: {exc}", "mutation_applied": False}
+                    # The change may have reached the controller: the outcome is
+                    # unknown. uiprotect reverts its cached copy only when a request
+                    # fails, not when it is cut off, so say the cache may be stale.
+                    return {
+                        "success": False,
+                        "error": f"Failed to run {name}: {exc} {_STALE_CACHE_NOTE}",
+                        "mutation_applied": None,
+                    }
 
             return register(connected_tool)
 
