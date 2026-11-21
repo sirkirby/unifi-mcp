@@ -47,7 +47,7 @@ from typing import Any, Callable
 from unifi_core.network.read_views import (
     shape_alerts,
     shape_client_details,
-    shape_client_list,
+    shape_client_inventory,
     shape_dashboard,
     shape_device_details,
     shape_device_list,
@@ -86,7 +86,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # list_clients branches between get_all_clients (offline+history) and
     # get_clients (online only) on the include_offline parameter. Default path
     # is the online list.
-    "unifi_list_clients": ("client_manager", "get_clients"),
+    "unifi_list_clients": ("client_manager", "get_client_inventory"),
     # Network/WLAN/AP-group mutations: preview pre-fetches for current config.
     # Guest-create previews validate the zone before the mutation call.
     "unifi_create_network": ("network_manager", "create_network"),
@@ -747,8 +747,15 @@ def _rename_mac_address_to_client_mac(args: dict[str, Any]) -> tuple[tuple[Any, 
 
 
 def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Pass only the Core client-source selector to ``get_clients``."""
-    return (), {"include_offline": args.get("include_offline", False)}
+    """Pass only the Core inventory selectors to ``get_client_inventory``.
+
+    An unknown ``filter_type`` is passed through: the result shaper refuses it
+    with the valid values, as ``shape_client_inventory`` does for the MCP tool.
+    """
+    return (), {
+        "filter_type": args.get("filter_type", "all"),
+        "include_offline": args.get("include_offline", False),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1515,23 +1522,29 @@ def _manager_site(manager: Any) -> str:
 
 
 def _list_clients_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
-    payload = shape_client_list(
+    filter_type = args.get("filter_type", "all")
+    payload = shape_client_inventory(
         result,
         site=_manager_site(manager),
-        filter_type=args.get("filter_type", "all"),
+        filter_type=filter_type,
         search=args.get("search"),
         limit=args.get("limit", 100),
         fields=args.get("fields"),
     )
-    return ShapedReadResult(
-        payload,
-        "clients",
-        {
+    if filter_type == "thread":
+        # Thread end devices have no MAC; their controller id keys the rows.
+        render_hints = {
+            "primary_key": "thread_client_id",
+            "display_columns": ["name", "thread_network_name", "border_router_name", "status"],
+            "sort_default": "name:asc",
+        }
+    else:
+        render_hints = {
             "primary_key": "mac",
             "display_columns": ["name", "ip", "connection_type", "status"],
             "sort_default": "name:asc",
-        },
-    )
+        }
+    return ShapedReadResult(payload, "clients", render_hints)
 
 
 def _alerts_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
@@ -1931,7 +1944,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_forget_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     # Network — list clients: Core selects online or all/historical clients.
-    "unifi_list_clients": _spec(_translate_list_clients, "include_offline"),
+    "unifi_list_clients": _spec(_translate_list_clients, "filter_type", "include_offline"),
     # Network — firewall: shared validation and update kwarg rename
     "unifi_create_firewall_policy": _spec(_translate_create_firewall_policy, "policy_data"),
     "unifi_update_firewall_policy": _spec(_translate_update_firewall_policy, "policy_id", "updates"),

@@ -415,11 +415,10 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
     )
     registry = _registry_with(entry)
 
-    # Mock domain manager whose `get_clients` returns controller rows.
-    expected_response: list[dict[str, object]] = []
+    # Mock domain manager whose `get_client_inventory` returns controller rows.
     domain_manager = MagicMock()
     domain_manager._connection.site = "default"
-    domain_manager.get_clients = AsyncMock(return_value=expected_response)
+    domain_manager.get_client_inventory = AsyncMock(return_value={"clients": [], "thread_clients": None})
 
     # Mock connection manager — supports site updates.
     conn_manager = MagicMock()
@@ -443,7 +442,7 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         args={},
         confirm=False,
         dispatch_table={
-            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_client_inventory"),
         },
     )
 
@@ -474,7 +473,7 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         attr_name="client_manager",
         site="default",
     )
-    domain_manager.get_clients.assert_awaited_once_with(include_offline=False)
+    domain_manager.get_client_inventory.assert_awaited_once_with(filter_type="all", include_offline=False)
     factory.get_connection_manager.assert_not_awaited()
 
 
@@ -845,7 +844,7 @@ async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connec
     registry = _registry_with(entry)
 
     domain_manager = MagicMock()
-    domain_manager.get_clients = AsyncMock(return_value=[])
+    domain_manager.get_client_inventory = AsyncMock(return_value={"clients": [], "thread_clients": None})
 
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=domain_manager)
@@ -863,7 +862,7 @@ async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connec
         args={},
         confirm=False,
         dispatch_table={
-            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_client_inventory"),
         },
     )
 
@@ -875,7 +874,67 @@ async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connec
         site="upstairs",
     )
     factory.get_connection_manager.assert_not_awaited()
-    domain_manager.get_clients.assert_awaited_once_with(include_offline=False)
+    domain_manager.get_client_inventory.assert_awaited_once_with(filter_type="all", include_offline=False)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_list_clients_thread_filter_shapes_thread_rows() -> None:
+    entry = ToolEntry(name="unifi_list_clients", product="network", category="clients", manager="", method="")
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager._connection.site = "default"
+    domain_manager.get_client_inventory = AsyncMock(
+        return_value={
+            "clients": [],
+            "thread_clients": [
+                {
+                    "type": "MATTER_THREAD",
+                    "id": "abc1234",
+                    "name": "Smart Plug",
+                    "status": "online",
+                    "network_name": "TestNet",
+                    "uplink_tbr_name": "Thread Parent",
+                    "matter": {"basic_info": {"serial_number": "SECRET-SN"}},
+                }
+            ],
+        }
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock()
+
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_list_clients",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"filter_type": "thread"},
+        confirm=False,
+        dispatch_table={
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_client_inventory"),
+        },
+    )
+
+    domain_manager.get_client_inventory.assert_awaited_once_with(filter_type="thread", include_offline=False)
+    assert result.data_key == "clients"
+    assert result.render_hint["primary_key"] == "thread_client_id"
+    assert result.payload["filter_type"] == "thread"
+    assert result.payload["total_count"] == 1
+    assert result.payload["clients"] == [
+        {
+            "thread_client_id": "abc1234",
+            "name": "Smart Plug",
+            "connection_type": "Thread",
+            "status": "online",
+            "thread_network_name": "TestNet",
+            "border_router_name": "Thread Parent",
+        }
+    ]
+    assert "SECRET-SN" not in str(result.payload)
 
 
 def test_build_dispatch_table_finds_real_tools() -> None:
@@ -885,12 +944,12 @@ def test_build_dispatch_table_finds_real_tools() -> None:
     dispatch table to contain at least one well-known tool from each.
     """
     table = build_dispatch_table()
-    # unifi_list_clients -> client_manager.get_clients (PR4 override pins the
-    # default-path branch where include_offline=False).
+    # unifi_list_clients -> client_manager.get_client_inventory (the override
+    # passes filter_type and include_offline).
     network_entry = table.get("unifi_list_clients") or table.get("list_clients")
     assert network_entry is not None
     assert network_entry.manager_attr == "client_manager"
-    assert network_entry.method == "get_clients"
+    assert network_entry.method == "get_client_inventory"
 
     # protect_list_cameras -> camera_manager.list_cameras
     protect_entry = table.get("protect_list_cameras")
@@ -3237,9 +3296,9 @@ async def test_reviewed_catalog_mutations_preserve_wrapper_semantics(
                 "limit": 1,
                 "fields": "mac,connection_type",
             },
-            "get_clients",
-            [{"mac": "aa", "name": "Phone", "is_wired": False}],
-            {"include_offline": True},
+            "get_client_inventory",
+            {"clients": [{"mac": "aa", "name": "Phone", "is_wired": False}], "thread_clients": None},
+            {"filter_type": "wireless", "include_offline": True},
             "clients",
             {"filter_type": "wireless", "search": "phone", "limit": 1, "returned_count": 1},
         ),

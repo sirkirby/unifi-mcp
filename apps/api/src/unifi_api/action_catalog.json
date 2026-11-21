@@ -5979,19 +5979,20 @@
       "read_only_hint": true,
       "auth_method": "either",
       "manager_attr": "client_manager",
-      "manager_method": "get_clients",
+      "manager_method": "get_client_inventory",
       "input_schema": {
         "properties": {
           "fields": {
-            "description": "Comma-separated list of fields to return per client (default: all). Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. Wireless-only: essid, signal_dbm, channel, radio. Example: fields='mac,name,ip' returns only those 3 fields.",
+            "description": "Comma-separated list of fields to return per client (default: all). Available: mac, name, hostname, ip, connection_type, status, last_seen, _id, fixed_ip. Wireless-only: essid, signal_dbm, channel, radio. With filter_type='thread': thread_client_id, name, model, vendor, connection_type, status, matter_status, first_seen, last_seen, ipv6_addresses, thread_network_name, thread_network_id, channel, signal_dbm, parent_mac, parent_name, border_router_mac, border_router_name. Example: fields='mac,name,ip' returns only those 3 fields.",
             "type": "string"
           },
           "filter_type": {
-            "description": "Filter clients by connection type: 'all' (default), 'wired', or 'wireless'",
+            "description": "Filter clients by connection type: 'all' (default, wired + Wi-Fi), 'wired', 'wireless', or 'thread' (connected Matter/Thread end devices only)",
             "enum": [
               "all",
               "wired",
-              "wireless"
+              "wireless",
+              "thread"
             ],
             "type": "string"
           },
@@ -6004,7 +6005,7 @@
             "type": "integer"
           },
           "search": {
-            "description": "Filter by name, hostname, IP, or MAC (case-insensitive substring match)",
+            "description": "Filter by name, hostname, IP, or MAC (case-insensitive substring match). For Thread clients: name, model, vendor, id, parent/border-router MAC or IPv6 address.",
             "type": "string"
           }
         },
