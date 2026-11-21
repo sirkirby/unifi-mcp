@@ -27,6 +27,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from unifi_core.redaction import redaction_marker_paths
 
+from unifi_mcp_shared.call_arguments import recording_supplied_arguments
 from unifi_mcp_shared.permissioned_tool import preview_token_tools
 from unifi_mcp_shared.preview_token import PREVIEW_TOKEN_ARGUMENT
 
@@ -128,7 +129,11 @@ class StrictKwargFastMCP(MCPServer):
                 f"Invalid params for '{name}': {field} is the redaction marker, not a real value. "
                 f"Omit {field} to keep the current value."
             )
-        return await super().call_tool(name, arguments, context=context)
+        # FastMCP passes every parameter to the tool, defaults included; record
+        # what the caller actually sent so bypass mode can tell an omitted
+        # ``confirm`` from an explicit ``confirm=false``.
+        with recording_supplied_arguments(arguments):
+            return await super().call_tool(name, arguments, context=context)
 
 
 def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str]]:

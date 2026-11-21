@@ -51,6 +51,7 @@ from unifi_core.jobs import current_job_id
 from unifi_core.operation_gate import ControllerBusyError, GateSettings, OperationGate, signal_admitted
 
 from unifi_mcp_shared.bootstrap import resolve_env
+from unifi_mcp_shared.call_arguments import caller_supplied
 
 GateProvider = Callable[[], OperationGate | None]
 OperationMode = Literal["write", "read"]
@@ -166,8 +167,10 @@ def make_call_classifier(
         if not policy_allows():
             return None
         if confirm is not None:
-            if "confirm" in kwargs:
-                resolved = bool(kwargs["confirm"])
+            # Over MCP the kwargs carry every default, so an omitted confirm
+            # must be told apart by what the caller sent.
+            if caller_supplied("confirm", kwargs):
+                resolved = bool(kwargs.get("confirm"))
             else:
                 resolved = True if bypass_mode() else confirm_default
             if not resolved:
