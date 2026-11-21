@@ -1,6 +1,17 @@
 """Exact controller write-outcome classification."""
 
-from unifi_core.write_verification import failed_write, verify_write
+from unittest.mock import AsyncMock
+
+import pytest
+from unifi_core.operation_gate import GateSettings, OperationGate, held_write_remaining_seconds
+from unifi_core.write_verification import (
+    READBACK_SETTLE_DELAYS_SECONDS,
+    READBACK_SETTLE_HOLD_RESERVE_SECONDS,
+    SettledReadback,
+    failed_write,
+    settle_readback,
+    verify_write,
+)
 
 
 def test_verify_write_reports_exact_persisted_fields() -> None:
@@ -162,3 +173,114 @@ def test_failed_write_distinguishes_no_mutation_from_applied_unknown_result() ->
     assert result.mutation_applied is True
     assert result.partial_success is False
     assert result.error == "Could not re-read resource"
+
+
+class _StepClock:
+    """A gate clock that a test moves by hand."""
+
+    def __init__(self) -> None:
+        self.value = 1_000.0
+
+    def now(self) -> float:
+        return self.value
+
+    async def sleep(self, seconds: float) -> None:
+        self.value += seconds
+
+
+def _reads(*values):
+    remaining = list(values)
+    calls = []
+
+    async def read():
+        calls.append(None)
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
+
+    return read, calls
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_immediate_match_reads_once_and_never_waits() -> None:
+    read, calls = _reads("new")
+    sleep = AsyncMock()
+
+    settled = await settle_readback(read, lambda value: value == "new", sleep=sleep)
+
+    assert settled == SettledReadback("new", True, 1, 0.0)
+    assert len(calls) == 1
+    sleep.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_rereads_a_stale_answer_until_it_matches() -> None:
+    read, calls = _reads("old", "old", "new")
+    sleep = AsyncMock()
+
+    settled = await settle_readback(read, lambda value: value == "new", sleep=sleep)
+
+    assert settled == SettledReadback("new", True, 3, 0.75)
+    assert len(calls) == 3
+    assert [call.args[0] for call in sleep.await_args_list] == [0.25, 0.5]
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_gives_up_after_its_budget_with_the_last_value() -> None:
+    read, calls = _reads("old")
+    sleep = AsyncMock()
+
+    settled = await settle_readback(read, lambda value: value == "new", sleep=sleep)
+
+    assert settled.matched is False
+    assert settled.value == "old"
+    assert settled.reads == len(READBACK_SETTLE_DELAYS_SECONDS) + 1 == len(calls)
+    assert settled.waited_seconds == pytest.approx(sum(READBACK_SETTLE_DELAYS_SECONDS))
+    assert sum(READBACK_SETTLE_DELAYS_SECONDS) <= 3.0
+    assert [call.args[0] for call in sleep.await_args_list] == list(READBACK_SETTLE_DELAYS_SECONDS)
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_propagates_a_failed_read_without_retrying() -> None:
+    read = AsyncMock(side_effect=[None, RuntimeError("boom")])
+    sleep = AsyncMock()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await settle_readback(read, lambda value: value is not None, sleep=sleep)
+    assert read.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_inside_a_held_write_stays_inside_the_hold_budget() -> None:
+    clock = _StepClock()
+    gate = OperationGate(GateSettings(hold_budget_seconds=10.0), name="network", clock=clock)
+    read, calls = _reads("old")
+    waits: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        clock.value += seconds
+
+    async with gate.write():
+        clock.value += 7.5  # The write has 2.5 s of its hold budget left.
+        settled = await settle_readback(read, lambda value: value == "new", sleep=sleep)
+        assert held_write_remaining_seconds() >= READBACK_SETTLE_HOLD_RESERVE_SECONDS
+
+    assert waits == [0.25]
+    assert settled.matched is False
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_settle_readback_inside_a_held_write_reads_without_reentering_the_gate() -> None:
+    clock = _StepClock()
+    gate = OperationGate(GateSettings(hold_budget_seconds=120.0), name="network", clock=clock)
+    values = iter(["old", "new"])
+
+    async def read():
+        # A write's own read-back passes straight through its held gate.
+        async with gate.read():
+            return next(values)
+
+    async with gate.write():
+        settled = await settle_readback(read, lambda value: value == "new", sleep=clock.sleep)
+
+    assert settled == SettledReadback("new", True, 2, 0.25)
