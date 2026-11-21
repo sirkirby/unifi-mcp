@@ -24,7 +24,6 @@ from unifi_core.network.models.threat_management import (
     threat_management_to_controller_update,
 )
 from unifi_core.network.models.threat_posture import ThreatPosture, threat_posture_from_controller
-from unifi_core.operation_gate import extend_write_hold
 from unifi_core.redaction import collect_secret_values, sanitize_exception
 from unifi_core.request_paths import object_id
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
@@ -37,12 +36,9 @@ CACHE_PREFIX_SITES = "sites"
 CACHE_PREFIX_ADMINS = "admin_users"
 
 # A restore uploads the whole backup and the controller checks it before it
-# answers, which can outlast the operation gate's ordinary write budget. It gets
-# a limit of its own, ten minutes, so a dead controller still cannot hold the
-# write turn forever; the hold is extended to cover it, so queued writes wait
-# for the restore rather than being refused as busy while it runs.
+# answers, which can outlast the session's five-minute default. It gets an
+# explicit limit of its own, ten minutes, so a dead controller cannot hang it.
 RESTORE_TIMEOUT_SECONDS = 600.0
-_RESTORE_HOLD_MARGIN_SECONDS = 30.0
 
 
 def _console_device(info: Dict[str, Any], devices: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -210,9 +206,10 @@ class SystemManager:
             restore_url = f"{self._connection.url_base}/api/s/{self._connection.site}/cmd/restore"
             logger.info("Attempting to restore backup via POST to %s", restore_url)
 
-            # Inside a held write this outlasts the gate's ordinary budget, by design.
-            extend_write_hold(RESTORE_TIMEOUT_SECONDS + _RESTORE_HOLD_MARGIN_SECONDS)
             # Its own explicit limit, replacing the session's five-minute default.
+            # No tool or action calls this yet. One that does must design its
+            # operation-gate hold explicitly: inside a held write the gate's hold
+            # budget (and any bound already entered) still ends it earlier.
             restore_timeout = aiohttp.ClientTimeout(total=RESTORE_TIMEOUT_SECONDS)
             async with self._connection.controller.session.post(
                 restore_url, data=form, timeout=restore_timeout

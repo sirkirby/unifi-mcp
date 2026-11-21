@@ -348,7 +348,9 @@ class ConnectionSection(_ClosedModel):
     tls_verification_enabled: bool
     last_attempt: SafeConnectionAttempt
     capabilities: ConnectionCapabilities
-    # The controller operation gate, when the server runs one.
+    # The controller operation gate, when the server runs one. Optional and
+    # additive, so schema_version stays 1: a bundle without it still validates,
+    # and a bundle is validated only by the server that produced it.
     operation_gate: OperationGateSummary | None = None
 
 
