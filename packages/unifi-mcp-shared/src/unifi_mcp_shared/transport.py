@@ -10,12 +10,16 @@ so that a failed HTTP transport does not kill the stdio connection.
 
 HTTP can optionally require a static bearer token
 (``UNIFI_MCP_HTTP_AUTH_TOKEN``); see :func:`resolve_http_auth_token`.
+Requests from networks listed in ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS``
+(an authenticating reverse proxy or tunnel in front of the server) skip that
+token; see :func:`resolve_http_auth_trusted_networks`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -38,6 +42,13 @@ _TRANSPORT_LABELS = {"streamable-http": "Streamable HTTP", "sse": "HTTP SSE"}
 # UNIFI_MCP_HTTP_AUTH_TOKEN, each also accepting the _FILE and _COMMAND spellings.
 HTTP_AUTH_TOKEN_KEY = "mcp_http_auth_token"
 MIN_HTTP_AUTH_TOKEN_LENGTH = 32
+
+# Comma-separated IP addresses or CIDR networks whose requests skip the bearer
+# token, because a reverse proxy or tunnel there authenticates callers itself.
+# Matched against the TCP peer address; read from the environment only.
+HTTP_AUTH_TRUSTED_NETWORKS_ENV = "UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
+
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 _AUTH_REALM = "unifi-mcp"
 
 
@@ -143,21 +154,91 @@ def resolve_http_auth_token(*, env_prefix: str, logger: logging.Logger, configur
     return token
 
 
+def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNetwork, ...]:
+    """Parse ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` into networks.
+
+    Each comma-separated entry is an IP address or a CIDR network (host bits
+    are ignored, so ``172.30.33.2/23`` means ``172.30.32.0/23``). Unset or
+    blank means no network is trusted. An entry that does not parse, or a
+    network with prefix length 0 (which would trust every address and turn the
+    token off), refuses startup: this is an access control, so a typo must not
+    silently widen or drop it.
+    """
+    raw = os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV)
+    if raw is None or not raw.strip():
+        return ()
+    networks: list[IPNetwork] = []
+    for entry in (part.strip() for part in raw.split(",")):
+        if not entry:
+            continue
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            logger.error(
+                "[credentials] %s entry %r is not an IP address or CIDR network. Refusing to start until it is fixed.",
+                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                entry,
+            )
+            raise SystemExit(2) from None
+        if network.prefixlen == 0:
+            logger.error(
+                "[credentials] %s entry %r trusts every address, which turns the bearer token off. "
+                "Unset the token instead, or list the proxy's own network. Refusing to start until it is fixed.",
+                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                entry,
+            )
+            raise SystemExit(2)
+        if network not in networks:
+            networks.append(network)
+    return tuple(networks)
+
+
+def _peer_in(scope: Scope, networks: tuple[IPNetwork, ...]) -> bool:
+    """Whether the request's TCP peer address falls in one of ``networks``."""
+    if not networks:
+        return False
+    client = scope.get("client")
+    if not client:
+        return False
+    try:
+        address = ipaddress.ip_address(client[0])
+    except (TypeError, ValueError):
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return any(address in network for network in networks)
+
+
 class BearerTokenMiddleware:
     """Reject every HTTP request that does not carry ``Authorization: Bearer <token>``.
 
     Wraps the whole Starlette app, so it covers every method and path of both
     transports (``/mcp``, ``/sse``, ``/messages/``). Lifespan events pass through
     untouched: the Streamable HTTP session manager starts there.
+
+    Requests whose TCP peer address is in ``trusted_networks`` pass without a
+    token: an authenticating proxy or tunnel there has already checked the
+    caller, and may itself use ``Authorization`` for its own credentials.
     """
 
-    def __init__(self, app: ASGIApp, token: str, *, logger: logging.Logger) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        token: str,
+        *,
+        logger: logging.Logger,
+        trusted_networks: tuple[IPNetwork, ...] = (),
+    ) -> None:
         self._app = app
         self._token = token.encode("ascii")
         self._logger = logger
+        self._trusted_networks = tuple(trusted_networks)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
+            await self._app(scope, receive, send)
+            return
+        if _peer_in(scope, self._trusted_networks):
             await self._app(scope, receive, send)
             return
         values = [value for name, value in scope.get("headers", []) if name == b"authorization"]
@@ -205,12 +286,17 @@ async def _serve_authenticated_http(
     http_transport: str,
     auth_token: str,
     logger: logging.Logger,
+    trusted_networks: tuple[IPNetwork, ...] = (),
 ) -> None:
     """Build the SDK's Starlette app, wrap it in bearer auth, and serve it.
 
     Mirrors ``run_streamable_http_async`` / ``run_sse_async`` with the default
     paths; the SDK has no hook for an outer middleware short of its OAuth
     resource-server profile.
+
+    With trusted networks, uvicorn's ``X-Forwarded-For`` handling is turned
+    off, so the address checked is always the TCP peer and a header cannot
+    claim a trusted source.
     """
     import uvicorn
 
@@ -220,10 +306,11 @@ async def _serve_authenticated_http(
     else:
         app = server.sse_app(transport_security=transport_security, host=host)
     config = uvicorn.Config(
-        BearerTokenMiddleware(app, auth_token, logger=logger),
+        BearerTokenMiddleware(app, auth_token, logger=logger, trusted_networks=trusted_networks),
         host=host,
         port=port,
         log_level=server.settings.log_level.lower(),
+        **({"proxy_headers": False} if trusted_networks else {}),
     )
     await uvicorn.Server(config).serve()
 
@@ -250,8 +337,9 @@ async def run_transports(
     ``run_http`` so it does not propagate.
 
     When ``auth_token`` is set (see :func:`resolve_http_auth_token`), every HTTP
-    request must carry it as ``Authorization: Bearer <token>``; stdio is
-    unaffected.
+    request must carry it as ``Authorization: Bearer <token>``, except requests
+    from ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` (see
+    :func:`resolve_http_auth_trusted_networks`); stdio is unaffected.
 
     The main process of a container (PID 1) has no stdio client and runs HTTP
     alone. ``UNIFI_MCP_STDIO_ENABLED=false`` takes the same HTTP-only path for
@@ -268,6 +356,17 @@ async def run_transports(
             STDIO_ENABLED_ENV,
         )
         raise SystemExit(2)
+
+    # Resolved before any transport starts, so an invalid value refuses startup
+    # instead of being caught as an HTTP failure below.
+    trusted_networks: tuple[IPNetwork, ...] = ()
+    if http_enabled and auth_token:
+        trusted_networks = resolve_http_auth_trusted_networks(logger=logger)
+    elif http_enabled and (os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV) or "").strip():
+        logger.warning(
+            "%s is set, but no HTTP bearer token is configured, so it has no effect: HTTP is unauthenticated.",
+            HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+        )
 
     async def run_stdio() -> None:
         logger.info("Starting FastMCP stdio server ...")
@@ -294,7 +393,14 @@ async def run_transports(
             uvicorn.config.LOGGING_CONFIG["handlers"]["access"]["stream"] = "ext://sys.stderr"
 
             if auth_token:
-                logger.info("%s requires a bearer token.", transport_label)
+                if trusted_networks:
+                    logger.info(
+                        "%s requires a bearer token, except from %s.",
+                        transport_label,
+                        ", ".join(str(network) for network in trusted_networks),
+                    )
+                else:
+                    logger.info("%s requires a bearer token.", transport_label)
                 await _serve_authenticated_http(
                     server=server,
                     host=host,
@@ -302,6 +408,7 @@ async def run_transports(
                     http_transport=http_transport,
                     auth_token=auth_token,
                     logger=logger,
+                    trusted_networks=trusted_networks,
                 )
             elif http_transport == "streamable-http":
                 await server.run_streamable_http_async(

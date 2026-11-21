@@ -149,7 +149,22 @@ export UNIFI_MCP_HTTP_AUTH_TOKEN="$(openssl rand -hex 32)"
 
 The token is one static secret with no scopes or expiry. It authenticates the caller; it does not encrypt the connection, so carry it only over TLS or loopback. The intended shape is a TLS tunnel or reverse proxy (Cloudflare Tunnel, Tailscale, an ingress) forwarding to a backend that still binds loopback or a private container network. It does not replace the Host/Origin allowlist, policy gates, or `confirm=True`.
 
-The Cloud Relay sidecar does not send a token to the local servers yet, so leave it unset on servers the relay reaches.
+The Cloud Relay sidecar does not send a token to the local servers yet, so leave it unset on servers the relay reaches, or list the relay's network in [trusted networks](#trusted-networks).
+
+### Trusted networks
+
+A reverse proxy or tunnel that authenticates callers itself (Cloudflare Access, an authenticating ingress, the Cloud Relay sidecar) often cannot add the server's static token, and may send its own `Authorization` header. `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` lists the networks such a proxy connects from; their requests skip the token, and every other caller still needs it. This lets one server accept direct clients with the token and proxied clients without it.
+
+```bash
+export UNIFI_MCP_HTTP_AUTH_TOKEN="$(openssl rand -hex 32)"
+export UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS=172.30.32.0/23   # the proxy's container network
+```
+
+- Entries are comma-separated IP addresses or CIDR networks, IPv4 or IPv6; host bits are ignored.
+- The check uses the TCP peer address. Uvicorn's `X-Forwarded-For` handling is turned off when trusted networks are set, so a header cannot claim a trusted source.
+- An entry that does not parse, or a network that trusts every address (`0.0.0.0/0`, `::/0`), refuses startup.
+- Without a token it has no effect, and the server logs a warning.
+- List only networks whose every peer is the authenticating proxy, or is otherwise trusted with the server's controller privileges. Every process that can connect from a listed network can call the server without a token.
 
 ## Reverse Proxy
 
