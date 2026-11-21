@@ -244,6 +244,14 @@ def measure_tool_result_sizes(raw: Any) -> dict[str, int]:
     }
 
 
+# InnerSpace plan image resources: one template per image type, and the file header each must start with.
+INNERSPACE_IMAGE_TEMPLATES = {
+    "image/png": "innerspace://plans/{plan_id}/image",
+    "image/jpeg": "innerspace://plans/{plan_id}/image.jpg",
+}
+INNERSPACE_IMAGE_MAGIC = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
+
+
 @dataclass
 class SmokeRecord:
     tool: str
@@ -628,6 +636,9 @@ class LiveSmokeRunner:
             kwargs["prefix"] = self.config["prefix"]
             kwargs["server_label"] = self.config["server_label"]
         await registration_mod.register_tools_for_mode(**kwargs)
+        if self.server_key == "innerspace" and await main_mod.plan_image_resource_enabled():
+            # Registered by the server's startup, not by the shared tool registration.
+            importlib.import_module("unifi_innerspace_mcp.resources.plan_image").register_plan_image_resource()
 
     def setup_failed(self, error: str) -> None:
         self.report.records.append(
@@ -740,6 +751,10 @@ class LiveSmokeRunner:
 
         if self.args.phase in ("readonly", "safe"):
             await self.run_readonly()
+            if self.server_key == "innerspace" and any(
+                tool["name"] == "innerspace_get_plan_asset" for tool in self.selected_tools()
+            ):
+                await self.run_innerspace_resources()
         if self.args.phase in ("preview", "safe"):
             await self.run_previews()
         if self.args.phase in ("lifecycle", "safe"):
@@ -765,6 +780,56 @@ class LiveSmokeRunner:
             if tool["name"] != "innerspace_get_status" and tool.get("permission_category"):
                 self.skip(tool["name"], "readonly", f"InnerSpace is {state} on this console")
         return False
+
+    async def run_innerspace_resources(self) -> None:
+        """Read every plan's image through the resource its asset names, and check the other type's refuses it.
+
+        Records the template, never the URI with its plan id, and only the MIME type, the byte count and
+        whether the file header matches.
+        """
+        plans = ((self.cache.by_tool.get("innerspace_list_floor_plans") or {}).get("data") or {}).get("floor_plans")
+        for plan in plans or []:
+            plan_id = plan.get("id")
+            asset = self.unwrap_result(await self.server.call_tool("innerspace_get_plan_asset", {"plan_id": plan_id}))
+            data = asset.get("data") if isinstance(asset, dict) else None
+            content_type = data.get("content_type") if isinstance(data, dict) else None
+            if content_type not in INNERSPACE_IMAGE_TEMPLATES or not data.get("resource_uri"):
+                self.skip("innerspace plan image resource", "resources", "no plan image resource for this plan")
+                continue
+            await self.read_innerspace_image(
+                INNERSPACE_IMAGE_TEMPLATES[content_type], data["resource_uri"], content_type
+            )
+            for other_type, template in INNERSPACE_IMAGE_TEMPLATES.items():
+                if other_type != content_type:
+                    await self.read_innerspace_image(template, template.format(plan_id=plan_id), None)
+
+    async def read_innerspace_image(self, template: str, uri: str, expected_type: str | None) -> None:
+        """Read one image resource. ``expected_type`` ``None`` is the negative control: the read must be refused."""
+        started = time.perf_counter()
+        record = SmokeRecord(tool=template, phase="resources", status="error")
+        try:
+            (content, *_rest) = await self.server.read_resource(uri)
+            body = content.content if isinstance(content.content, bytes) else b""
+            if expected_type is None:
+                record.status, record.success = "failed", False
+                record.error = "the other image type's resource served the image"
+            else:
+                magic = INNERSPACE_IMAGE_MAGIC[expected_type]
+                record.summary = {
+                    "mime_type": content.mime_type,
+                    "bytes": len(body),
+                    "magic_ok": body.startswith(magic),
+                }
+                ok = content.mime_type == expected_type and body.startswith(magic)
+                record.status, record.success = ("ok", True) if ok else ("failed", False)
+        except Exception as exc:
+            refused = expected_type is None and str(exc).startswith("Failed to read InnerSpace plan image:")
+            record.status, record.success = ("refused", True) if refused else ("exception", False)
+            if not refused:
+                record.error = f"unexpected {type(exc).__name__}"
+        record.duration_ms = int((time.perf_counter() - started) * 1000)
+        self.report.records.append(record)
+        print(f"{self.server_key} resources {record.status}: {template} ({record.duration_ms}ms)", flush=True)
 
     def selected_tools(self) -> list[dict[str, Any]]:
         tools = list(self.manifest["tools"])

@@ -1726,9 +1726,21 @@ def _innerspace_runner(status_result):
         calls.append(tool)
         if tool == "innerspace_get_status":
             return status_result
+        if tool == "innerspace_get_plan_asset":
+            return {
+                "success": True,
+                "data": {"content_type": "image/png", "resource_uri": "innerspace://plans/p/image"},
+            }
         return {"success": True, "data": {"floor_plans": [{"id": "plan-1"}], "count": 1}}
 
-    runner.server = SimpleNamespace(call_tool=call_tool)
+    async def read_resource(uri):
+        from mcp.server.mcpserver.exceptions import ResourceError
+
+        if not uri.endswith("/image"):
+            raise ResourceError("Failed to read InnerSpace plan image: the image is a PNG; read ...")
+        return [SimpleNamespace(content=b"\x89PNG\r\n\x1a\n", mime_type="image/png")]
+
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
     runner.unwrap_result = lambda raw: raw
     return runner, calls
 
@@ -1771,3 +1783,47 @@ def test_innerspace_reads_run_when_the_app_runs_or_its_status_is_unknown(status_
     assert calls.count("innerspace_get_status") == 2
     assert "innerspace_list_walls" in calls
     assert not [r for r in runner.report.records if r.status == "skipped"]
+    assert [r.status for r in runner.report.records if r.phase == "resources"] == ["ok", "refused"]
+
+
+def test_innerspace_plan_images_are_read_through_their_resources_and_the_other_type_is_refused():
+    """Each plan's image is read from the resource_uri its asset names; the other type's template must refuse it."""
+    import live_smoke
+    from mcp.server.mcpserver.exceptions import ResourceError
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+    jpeg = b"\xff\xd8\xff" + b"\x00" * 8
+    assets = {
+        "plan-1": {"content_type": "image/png", "resource_uri": "innerspace://plans/plan-1/image"},
+        "plan-2": {"content_type": "image/jpeg", "resource_uri": "innerspace://plans/plan-2/image.jpg"},
+    }
+    images = {"innerspace://plans/plan-1/image": png, "innerspace://plans/plan-2/image.jpg": jpeg}
+
+    async def call_tool(tool, args):
+        return {"success": True, "data": assets[args["plan_id"]]}
+
+    async def read_resource(uri):
+        if uri not in images:
+            raise ResourceError("Failed to read InnerSpace plan image: the image is a PNG; read ...")
+        mime = "image/png" if uri.endswith("/image") else "image/jpeg"
+        return [SimpleNamespace(content=images[uri], mime_type=mime)]
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
+    runner.unwrap_result = lambda raw: raw
+    runner.cache.remember(
+        "innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{"id": "plan-1"}, {"id": "plan-2"}]}}
+    )
+
+    asyncio.run(runner.run_innerspace_resources())
+
+    reads = [r for r in runner.report.records if r.phase == "resources"]
+    assert [(r.tool, r.status) for r in reads] == [
+        ("innerspace://plans/{plan_id}/image", "ok"),
+        ("innerspace://plans/{plan_id}/image.jpg", "refused"),
+        ("innerspace://plans/{plan_id}/image.jpg", "ok"),
+        ("innerspace://plans/{plan_id}/image", "refused"),
+    ]
+    assert reads[0].summary == {"mime_type": "image/png", "bytes": len(png), "magic_ok": True}
+    assert reads[2].summary == {"mime_type": "image/jpeg", "bytes": len(jpeg), "magic_ok": True}
+    assert all(r.success is True for r in reads)
