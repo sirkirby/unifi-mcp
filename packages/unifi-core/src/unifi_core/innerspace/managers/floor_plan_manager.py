@@ -15,7 +15,6 @@ from typing import Any
 from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError, UniFiValidationError
 from unifi_core.innerspace.frames import Coordinates
 from unifi_core.innerspace.managers._layout import (
-    ALREADY_APPLIED,
     Display,
     Snapshot,
     WritePlan,
@@ -175,8 +174,7 @@ def _scale(args: PlanScaleInput, snapshot: Snapshot) -> WritePlan:
             preview={"plan_id": plan_id, "plan_title": plan.get("title"), "unit": args.unit},
             request=None,
             effects={"devices_shifted": 0},
-            warnings=[ALREADY_APPLIED],
-            already_applied=True,
+            noop="already_applied",
         )
     position = plan_points(
         [(args.x1, args.y1), (args.x2, args.y2)],
@@ -186,7 +184,8 @@ def _scale(args: PlanScaleInput, snapshot: Snapshot) -> WritePlan:
         operation=_SCALE,
     )
     pixels = math.hypot(position[1]["x"] - position[0]["x"], position[1]["y"] - position[0]["y"])
-    display = Display(snapshot.geometry(plan_id), args.unit, args.coordinates)
+    # Unrounded: the current line is what an undo sends back.
+    display = Display(snapshot.geometry(plan_id), args.unit, args.coordinates, exact=True)
     (x1, y1), (x2, y2) = (display.position(stored.get("position")) + [(None, None)] * 2)[:2]
     unchanged = points_close(stored.get("position"), position) and matches({"s": stored_metres}, {"s": metres})
     prior_ppm = snapshot.geometry(plan_id).ppm

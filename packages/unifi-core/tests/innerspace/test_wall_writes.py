@@ -6,7 +6,7 @@ from copy import deepcopy
 import pytest
 from pydantic import ValidationError
 from unifi_core.exceptions import UniFiNotFoundError, UniFiValidationError
-from unifi_core.innerspace.managers._layout import ALREADY_APPLIED, POSITION_TOLERANCE, shape_change_body
+from unifi_core.innerspace.managers._layout import POSITION_TOLERANCE, shape_change_body
 from unifi_core.innerspace.managers._writes import InnerSpaceWriteRefusedError
 from unifi_core.innerspace.managers.connection_manager import (
     INTERNAL_PROJECT_PATH,
@@ -15,6 +15,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceUnavailableError,
 )
 from unifi_core.innerspace.managers.wall_manager import InnerSpaceWallManager
+from unifi_core.write_verification import READBACK_SETTLE_DELAYS_SECONDS
 
 from tests.innerspace.helpers import (
     PLAN_A,
@@ -366,8 +367,9 @@ async def test_a_retried_remove_finds_nothing_left_and_sends_nothing(connected, 
     assert preview["no_op"] is True and preview["count"] == 0
     assert (retry.success, retry.mutation_applied) == (True, False)
     # The ids are absent: removed earlier, or never there. The reply cannot tell which, and says so.
-    assert retry.metadata["none_found"] is True
-    assert any("already removed, or never existed" in warning for warning in retry.metadata["warnings"])
+    assert retry.metadata["noop"] == "none_found"
+    # The reason travels once, as the code; the server turns it into its one message.
+    assert retry.metadata["warnings"] == []
     assert len(console.shape_changes()) == 1
 
 
@@ -453,7 +455,8 @@ async def test_read_back_tolerance(connected, console, offset, applied):
     wall = next(s for s in after["shapes"] if s["id"] == WALL_08)
     wall["position"] = [{"x": -100.0, "y": 100.0, "z": 0}, {"x": 300.0 + offset, "y": 0.0 - offset, "z": 0}]
     console.reply("GET", INTERNAL_PROJECT_PATH, {"data": state})
-    console.reply("GET", INTERNAL_PROJECT_PATH, {"data": after})
+    # The same stored state for every read the settle waits may make.
+    console.reply("GET", INTERNAL_PROJECT_PATH, {"data": after}, times=1 + len(READBACK_SETTLE_DELAYS_SECONDS))
     update = {"id": WALL_08, "x1": 4.0, "y1": 3.0, "x2": 8.0, "y2": 4.0}
 
     result = await InnerSpaceWallManager(connected).apply_update_walls(PLAN_A, [update], unit="metric")
@@ -478,9 +481,9 @@ async def test_retry_after_a_lost_answer_sends_nothing(connected, console):
     assert first.success is True and first.mutation_applied is True
     assert len(console.shape_changes()) == 1
     assert (retry.success, retry.mutation_applied) == (True, False)
-    assert retry.metadata["already_applied"] is True
+    assert retry.metadata["noop"] == "already_applied"
     assert retry.metadata["created_ids"] == first.metadata["created_ids"]
-    assert ALREADY_APPLIED in retry.metadata["warnings"]
+    assert retry.metadata["warnings"] == []
     assert len([s for s in console.project["shapes"] if s["type"] == "wall" and s["planId"] == PLAN_A]) == 4
 
 
@@ -492,7 +495,7 @@ async def test_a_second_identical_create_is_a_no_op(connected, console):
     second = await manager.apply_create_walls(PLAN_A, [FRAME_WALL], unit="metric")
 
     assert len(console.shape_changes()) == 1
-    assert second.metadata["already_applied"] is True
+    assert second.metadata["noop"] == "already_applied"
 
 
 async def test_an_identical_create_after_all_its_objects_were_removed_creates_them_again(connected, console):
@@ -509,7 +512,7 @@ async def test_an_identical_create_after_all_its_objects_were_removed_creates_th
     assert removed.mutation_applied is True
     assert (again.success, again.mutation_applied) == (True, True)
     assert again.metadata["created_ids"] == created
-    assert "already_applied" not in again.metadata
+    assert "noop" not in again.metadata
     assert len(console.shape_changes()) == 3
     assert all(stored_shape(console, shape_id) is not None for shape_id in created)
 

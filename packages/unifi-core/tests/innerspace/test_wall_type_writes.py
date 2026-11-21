@@ -179,5 +179,5 @@ async def test_a_retried_type_create_finds_its_type_and_sends_nothing(connected,
     retry = await manager.apply_create_wall_type("Brick wall", 12, "#aa5500")
 
     assert len(_type_writes(console)) == 1
-    assert retry.metadata["already_applied"] is True
+    assert retry.metadata["noop"] == "already_applied"
     assert retry.metadata["created_ids"] == first.metadata["created_ids"]

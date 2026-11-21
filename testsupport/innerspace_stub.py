@@ -113,15 +113,23 @@ class StubConsole:
         stream: tuple[int, int] | None = None,
         declared: int | None = None,
         gate: tuple[asyncio.Event, asyncio.Event] | None = None,
+        times: int = 1,
     ) -> None:
         """``stream=(chunks, size)`` answers chunked, with no Content-Length, and counts bytes sent.
+
+        ``times`` answers that many requests the same way (a read-back that settles reads more than once).
 
         ``declared`` sends a Content-Length of that many bytes and then no body at all.
         ``gate=(arrived, release)`` sets ``arrived`` when the request is in and answers once ``release`` is set.
         """
-        self._scripts[(method, path)].append(
-            (status, payload, headers or {}, delay, body_bytes, stream, declared, gate)
-        )
+        for _ in range(times):
+            self._scripts[(method, path)].append(
+                (status, payload, headers or {}, delay, body_bytes, stream, declared, gate)
+            )
+
+    def refuse(self, method: str, path: str, code: str = "errors.validation") -> None:
+        """Answer the next ``method`` ``path`` with InnerSpace's 400 refusal carrying ``code``."""
+        self.reply(method, path, {"error": {"code": code}}, status=400)
 
     def redirect(self, path: str, location: str, *, method: str = "GET") -> None:
         self.reply(method, path, status=302, headers={"Location": location})
@@ -500,11 +508,14 @@ async def start_stub(port: int | None = None) -> tuple[StubConsole, TestServer]:
 
 @pytest.fixture
 async def console(monkeypatch):
-    # The stub answers a scripted reply once and the stored state after; a write's read-back settle
-    # waits would re-read past it. Tests of the settle waits set them back on.
-    from unifi_core.innerspace.managers import _writes
+    # A write's read-back settle waits are instant here: every connection manager built in a test
+    # sleeps with a no-op. Tests of the waits replace it with a recording sleep.
+    from unifi_core.innerspace.managers import connection_manager
 
-    monkeypatch.setattr(_writes, "_SETTLE_DELAYS", ())
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(connection_manager.InnerSpaceConnectionManager, "readback_sleep", staticmethod(no_wait))
     stub, server = await start_stub()
     yield stub
     stub.release_hangs()

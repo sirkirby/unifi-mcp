@@ -22,7 +22,7 @@ from unifi_core.exceptions import UniFiValidationError
 from unifi_core.innerspace.models._coerce import as_dict, length, number
 from unifi_core.innerspace.models.floor_plans import PlanGeometry, plan_geometry_from_api
 from unifi_core.innerspace.models.project import _wall_metres
-from unifi_core.innerspace.units import Unit, to_metres
+from unifi_core.innerspace.units import Unit, from_metres, to_metres
 
 Coordinates = Literal["frame", "plan_units"]
 
@@ -76,7 +76,16 @@ def to_plan_point(
     return px, py
 
 
-def from_plan_point(x: float, y: float, *, geometry: PlanGeometry, unit: Unit) -> tuple[float, float] | None:
-    """Console plan units as a frame point in ``unit`` (rounded like the reads), or ``None`` without geometry."""
+def from_plan_point(
+    x: float, y: float, *, geometry: PlanGeometry, unit: Unit, exact: bool = False
+) -> tuple[float, float] | None:
+    """Console plan units as a frame point in ``unit``, or ``None`` without geometry.
+
+    Rounded like the reads, unless ``exact``: a value a caller sends back unchanged keeps full precision.
+    """
     metres = _wall_metres(x, y, geometry)
-    return None if metres is None else (length(metres[0], unit), length(metres[1], unit))  # type: ignore[return-value]
+    if metres is None:
+        return None
+    if exact:
+        return from_metres(metres[0], unit), from_metres(metres[1], unit)  # type: ignore[return-value]
+    return length(metres[0], unit), length(metres[1], unit)  # type: ignore[return-value]

@@ -11,9 +11,11 @@ once with :func:`send_write`, which then reads back to decide the outcome:
 * The write goes out with ``replay=False``. A refused session is renewed and
   the write is not sent again: the result is "not applied" with no read-back.
   After any other outcome (an answer of any status, a timeout, a dropped
-  connection) only the read-back decides: every change in place is applied,
-  none is not applied, anything else (a read-back with no changes in it too)
-  is unknown.
+  connection) the read-back decides, with the console's answer: every change
+  in place is applied; no change is "not applied" only when the console
+  refused the write (a 4xx, or UniFi OS refusing it a second time); anything
+  else is unknown, because an accepted or lost write may still appear and a
+  5xx or 429 says nothing about InnerSpace.
 * New ids come from :func:`write_ids`: the same call (tool and arguments, the
   plan id included) always gives the same ids, so a retried confirm after a
   lost answer finds its objects already there and sends nothing. The console's
@@ -49,16 +51,15 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceConnectionManager,
     InnerSpaceHttpError,
     InnerSpaceUnavailableError,
+    InnerSpaceWriteForbidden,
     InnerSpaceWriteNotSent,
     InnerSpaceWriteOutcomeUnknown,
-    InnerSpaceWriteRefused,
     _log_route,
 )
 from unifi_core.innerspace.models.project import _data
 from unifi_core.innerspace.models.status import app_status_from_api
-from unifi_core.request_paths import object_id
+from unifi_core.request_paths import InvalidRequestPathError, object_id
 from unifi_core.write_verification import (
-    READBACK_SETTLE_DELAYS_SECONDS,
     WriteVerificationResult,
     failed_write,
     settle_readback,
@@ -74,14 +75,11 @@ WRITE_ID_NAMESPACE = uuid.UUID("5d1f6c64-7a1b-4b5e-9f3c-2a8e4d6b7c90")
 ReadBack = Callable[[], Awaitable[Mapping[str, "bool | None"]]]
 
 
-# The waits between read-backs of an accepted write that does not show yet (tests set none).
-_SETTLE_DELAYS: tuple[float, ...] = tuple(READBACK_SETTLE_DELAYS_SECONDS)
-
 # Errors after which the write may have been applied: the read-back decides. Any other error
 # from the request (unavailable, refused path, permission) was raised before anything was sent.
 _SENT_ERRORS = (
     InnerSpaceWriteOutcomeUnknown,
-    InnerSpaceWriteRefused,
+    InnerSpaceWriteForbidden,
     InnerSpaceHttpError,
     UniFiRateLimitError,
     UniFiMalformedResponseError,
@@ -92,11 +90,14 @@ class InnerSpaceWriteRefusedError(UniFiOperationError):
     """A write refused before anything was sent, because the request cannot be built safely from the stored state."""
 
 
+_REORDER_SEGMENT = PLAN_ORDER_PATH.rpartition("/")[2].casefold()
+
+
 def plan_path(plan_id: str) -> str:
-    """The internal route of one plan; the id must be one path segment, and not the reorder route's."""
+    """The internal route of one plan; the id must be one path segment, and not the reorder route's in any case."""
     segment = object_id(plan_id, "plan")
-    if f"{PLAN_PATH_PREFIX}/{segment}" == PLAN_ORDER_PATH:
-        raise ValueError("plan id is not valid")
+    if segment.casefold() == _REORDER_SEGMENT:
+        raise InvalidRequestPathError("plan id is not valid")
     return f"{PLAN_PATH_PREFIX}/{segment}"
 
 
@@ -139,7 +140,7 @@ def _answer(error: UniFiError | None) -> str:
     """What the console said, in fixed words: a status and an ``errors.*`` code at most."""
     if error is None:
         return "the console accepted the request"
-    if isinstance(error, InnerSpaceWriteRefused):
+    if isinstance(error, InnerSpaceWriteForbidden):
         return "the console refused the write (HTTP 403): the console account cannot make this change"
     if isinstance(error, InnerSpaceHttpError):
         return f"the console answered HTTP {error.status}" + (f" ({error.code})" if error.code else "")
@@ -148,6 +149,25 @@ def _answer(error: UniFiError | None) -> str:
     if isinstance(error, UniFiMalformedResponseError):
         return "the console's answer was unreadable"
     return "the console did not answer"
+
+
+def _classify(error: UniFiError | None) -> str:
+    """What a sent write's answer says about it.
+
+    ``accepted``: a 2xx, readable or not. ``lost``: no answer. Both may still show a moment later,
+    so the read-back settles. ``refused``: a 4xx from InnerSpace (not 429) or UniFi OS refusing the
+    write on the session it had just issued; an unchanged read-back then means not applied.
+    ``unclear``: anything else (5xx, 429, a redirect), which says nothing about InnerSpace.
+    """
+    if error is None or isinstance(error, UniFiMalformedResponseError):
+        return "accepted"
+    if isinstance(error, InnerSpaceWriteOutcomeUnknown):
+        return "lost"
+    if isinstance(error, InnerSpaceWriteForbidden) or (
+        isinstance(error, InnerSpaceHttpError) and 400 <= error.status < 500
+    ):
+        return "refused"
+    return "unclear"
 
 
 async def send_write(
@@ -160,7 +180,6 @@ async def send_write(
     read_back: ReadBack,
     metadata: Mapping[str, Any] | None = None,
     warnings: Iterable[str] = (),
-    sleep: Callable[[float], Awaitable[Any]] | None = None,
 ) -> WriteVerificationResult:
     """Send one write, never twice, then let the read-back decide whether it was applied.
 
@@ -171,10 +190,14 @@ async def send_write(
     when the read-back failed or had no changes in it). A read-back with no
     changes in it proves nothing, so the outcome is unknown. The reply body is never logged or returned.
 
-    When the console accepted the write, or its answer was lost, a read-back that does not show every
-    change yet is repeated a few times (``settle_readback``, within the write's hold budget): a read made
-    just after a write can show the old state. An HTTP error answer is the console's own verdict, so one
-    read-back decides. ``sleep`` replaces the waits in tests.
+    When the console accepted the write (readable answer or not), or its answer was lost, a read-back
+    that does not show every change yet is repeated a few times (``settle_readback``, within the write's
+    hold budget, sleeping with ``cm.readback_sleep``): a read made just after a write can show the old
+    state. Any other answer gets one read-back.
+
+    Only a definite refusal (a 4xx from the console, or UniFi OS refusing the write) with an unchanged
+    read-back is "not applied". An accepted or lost write that still reads unchanged once the waits are
+    over (or cut short) may yet appear, and a 5xx or 429 says nothing about InnerSpace: those are unknown.
     """
     meta: dict[str, Any] = dict(metadata or {})
     meta["warnings"] = list(warnings)
@@ -194,6 +217,7 @@ async def send_write(
     except _SENT_ERRORS as exc:
         error = exc
     answer = _answer(error)
+    kind = _classify(error)
 
     async def read() -> dict[str, bool | None]:
         return dict(await read_back())
@@ -202,11 +226,12 @@ async def send_write(
         return bool(states) and all(state is True for state in states.values())
 
     try:
-        if error is None or isinstance(error, InnerSpaceWriteOutcomeUnknown):
-            states = (await settle_readback(read, complete, delays=_SETTLE_DELAYS, sleep=sleep)).value
+        if kind in ("accepted", "lost"):
+            states = (await settle_readback(read, complete, sleep=cm.readback_sleep)).value
         else:
             states = await read()
-    except UniFiError as exc:
+    except Exception as exc:
+        # The write went out: any read-back failure, UniFi or not, leaves the outcome unknown.
         logger.warning("[innerspace-writes] %s: read-back failed (%s)", operation, type(exc).__name__)
         meta["missing"] = None
         return failed_write(
@@ -218,13 +243,14 @@ async def send_write(
         )
     missing = sorted(key for key, state in states.items() if state is not True)
     meta["missing"] = missing if states else None
+    unchanged = bool(states) and all(state is False for state in states.values())
     if states and not missing:
         outcome = "applied"
         if error is not None:
             lost = "the console's answer was lost" if isinstance(error, InnerSpaceWriteOutcomeUnknown) else answer
             meta["warnings"].append(f"The read-back shows every change in place: applied, although {lost}")
         result = WriteVerificationResult(success=True, mutation_applied=True, operation=operation, metadata=meta)
-    elif states and all(state is False for state in states.values()):
+    elif unchanged and kind == "refused":
         outcome = "not applied"
         result = failed_write(
             f"{operation}: {answer}, and the read-back shows no change; nothing was applied.",
@@ -234,12 +260,15 @@ async def send_write(
         )
     else:
         outcome = "unknown"
-        shown = (
-            "only part of the change or a state that is neither the old nor the requested one; an edit made at "
-            "the same time can cause this"
-            if states
-            else "nothing to compare"
-        )
+        if unchanged:
+            shown = "no change yet, and the change may still appear"
+        elif states:
+            shown = (
+                "only part of the change or a state that is neither the old nor the requested one; an edit made "
+                "at the same time can cause this"
+            )
+        else:
+            shown = "nothing to compare"
         result = failed_write(
             f"{operation}: {answer}, and the read-back shows {shown}. Read before retrying.",
             operation=operation,

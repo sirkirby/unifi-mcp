@@ -17,6 +17,7 @@ from unifi_core.innerspace.managers.connection_manager import (
 )
 from unifi_core.innerspace.managers.floor_plan_manager import InnerSpaceFloorPlanManager
 from unifi_core.innerspace.models.writes import PlanScaleInput
+from unifi_core.write_verification import READBACK_SETTLE_DELAYS_SECONDS
 
 from tests.innerspace.helpers import (
     PLAN_A,
@@ -46,10 +47,13 @@ def _plan(console, plan_id):
 
 
 def _script_scale_read_back(console, ppm):
-    """The floor-plan rows a scale write reads back, with plan A's ``ppm`` as the console computed it."""
+    """The floor-plan rows a scale write reads back, with plan A's ``ppm`` as the console computed it.
+
+    Scripted for every read the settle waits may make, so the console's answer stays the same.
+    """
     rows = floor_plan_rows()
     rows[0]["ppm"] = ppm
-    console.reply("GET", FLOOR_PLANS, {"floor_plans": rows})
+    console.reply("GET", FLOOR_PLANS, {"floor_plans": rows}, times=1 + len(READBACK_SETTLE_DELAYS_SECONDS))
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +180,7 @@ async def test_a_reorder_that_did_not_land_reads_back_as_not_applied(connected, 
     """Plans that keep their place read the same either way, so only the moved ones decide the outcome."""
     ready(console)
     before = [_plan(console, p)["ordering"] for p in (PLAN_A, PLAN_B, PLAN_C, PLAN_D)]
-    console.drop_connection("PATCH", PLAN_ORDER_PATH, apply=False)
+    console.refuse("PATCH", PLAN_ORDER_PATH)
 
     result = await InnerSpaceFloorPlanManager(connected).apply_reorder_floor_plans([PLAN_A, PLAN_C, PLAN_B, PLAN_D])
 
@@ -282,7 +286,8 @@ async def test_set_scale_preview_counts_the_devices_that_shift(connected, consol
     assert preview["effects"] == {"devices_shifted": 2}
     assert preview["current"]["scale_per_unit"] == pytest.approx(100 / 3.2808)
     assert preview["proposed"]["scale_per_unit"] == pytest.approx(80 / 3.2808, rel=1e-6)
-    assert preview["current"]["line"] == {"x1": 16.404, "y1": 13.1232, "x2": 19.6848, "y2": 13.1232}
+    # Full precision (what an undo sends back), so compared approximately.
+    assert preview["current"]["line"] == pytest.approx({"x1": 16.404, "y1": 13.1232, "x2": 19.6848, "y2": 13.1232})
     assert preview["proposed"]["line"] == line
     assert "2 devices" in preview["warnings"][0]
     assert set(re.findall(UUID_SHAPED, repr(preview))) == {PLAN_A}
@@ -301,6 +306,27 @@ async def test_set_scale_preview_shows_the_stored_length_unrounded(connected, co
     )
 
     assert preview["current"]["length"] == pytest.approx(1.234567891, rel=1e-12)
+
+
+@pytest.mark.parametrize("coordinates", ["plan_units", "frame"])
+async def test_set_scale_preview_shows_the_stored_line_unrounded(connected, console, coordinates):
+    """The current line's end points are what an undo sends back, so they are not cut to display precision."""
+    state = internal_state()
+    line = next(s for s in state["shapes"] if s["id"] == SCALE_A)
+    line["position"] = [{"x": 0.123456789, "y": 0.0, "z": 0}, {"x": 100.987654321, "y": 0.0, "z": 0}]
+    console.load_project(state)
+    script_preview(console)
+
+    preview = await InnerSpaceFloorPlanManager(connected).preview_set_plan_scale(
+        PLAN_A, **LINE, length=2.5, unit="metric", coordinates=coordinates
+    )
+
+    shown = preview["current"]["line"]
+    if coordinates == "plan_units":
+        assert (shown["x1"], shown["x2"]) == (0.123456789, 100.987654321)
+    else:
+        # Frame metres at the plan's 100 per metre: the end points keep their full precision.
+        assert shown["x2"] - shown["x1"] == pytest.approx((100.987654321 - 0.123456789) / 100, rel=1e-12)
 
 
 async def test_set_scale_equal_to_the_stored_line_sends_nothing(connected, console):
@@ -322,7 +348,7 @@ async def test_a_scale_write_that_did_not_land_reads_back_as_not_applied_when_th
     """A line moved at the same pixels per metre leaves the computed scale equal either way: it decides nothing."""
     ready(console)
     _script_scale_read_back(console, 100.0)
-    console.drop_connection("POST", SHAPE_CHANGE_PATH, apply=False)
+    console.refuse("POST", SHAPE_CHANGE_PATH)
     # The stored line is 100 plan units at 100 per metre; this one is moved, at the same scale.
     moved = {"x1": 0.0, "y1": 10.0, "x2": 100.0, "y2": 10.0}
 
@@ -386,7 +412,7 @@ async def test_a_retried_scale_in_the_frame_finds_its_line_and_sends_nothing(con
     assert first.mutation_applied is True
     assert preview["no_op"] is True
     assert (retry.success, retry.mutation_applied) == (True, False)
-    assert retry.metadata["already_applied"] is True
+    assert retry.metadata["noop"] == "already_applied"
     assert len(console.shape_changes()) == 1
 
 

@@ -46,7 +46,7 @@ async def test_set_unit_preview_and_no_op(connected, console):
 async def test_set_unit_not_applied_when_the_read_back_shows_the_old_unit(connected, console):
     ready(console)
     console.reply("GET", INTERNAL_PROJECT_PATH, {"data": internal_state()})
-    console.reply("PATCH", INTERNAL_PROJECT_PATH, {"error": {"code": "errors.invalid.data"}}, status=400)
+    console.refuse("PATCH", INTERNAL_PROJECT_PATH, "errors.invalid.data")
 
     result = await InnerSpaceProjectSettingsManager(connected).apply_set_project_unit("imperial")
 

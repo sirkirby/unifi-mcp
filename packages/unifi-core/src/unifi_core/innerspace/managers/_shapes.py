@@ -34,8 +34,6 @@ from unifi_core.innerspace.managers._layout import (
 from unifi_core.innerspace.managers.connection_manager import SHAPE_CHANGE_PATH
 from unifi_core.innerspace.units import Unit
 
-ALREADY_REMOVED = "None of the objects named is in the project (already removed, or never existed), so nothing was sent"
-
 
 @dataclass(frozen=True)
 class ShapeKind:
@@ -217,7 +215,7 @@ def plan_remove(kind: ShapeKind, snapshot: Snapshot, *, plan_id: str, ids: Seque
     preview: dict[str, Any] = {"plan_id": plan_id, "plan_title": plan.get("title"), "unit": display.unit}
     if not any(shape_id in snapshot.shapes for shape_id in ids):
         preview.update(count=0, bounding_box=None, items=[])
-        return WritePlan(preview=preview, request=None, warnings=[ALREADY_REMOVED], none_found=True)
+        return WritePlan(preview=preview, request=None, noop="none_found")
     stored = snapshot.stored(ids, kind.shape_type, plan_id, kind.noun, operation)
     current = [_fields(kind, shape, display) for shape in stored]
     removing = set(ids)

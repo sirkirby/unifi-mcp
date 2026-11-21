@@ -18,7 +18,7 @@ import math
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel
 
@@ -59,6 +59,10 @@ class WriteRequest:
     read_rows: bool = False
 
 
+# Why a no-op sent nothing, carried as ``noop`` in the result's metadata.
+NoopReason = Literal["already_applied", "none_found"]
+
+
 @dataclass
 class WritePlan:
     """What one call would change: the preview, and the request to send (``None`` for a no-op)."""
@@ -68,8 +72,9 @@ class WritePlan:
     new_ids: int = 0
     effects: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    already_applied: bool = False  # a no-op because an identical earlier call is in place
-    none_found: bool = False  # a remove no-op: none of the named objects is in the project
+    # Why a no-op sends nothing: an identical earlier call is in place, or none of the objects a
+    # remove names is in the project. ``None`` for a no-op whose values are already there.
+    noop: NoopReason | None = None
 
 
 class Snapshot:
@@ -143,10 +148,6 @@ class Snapshot:
 # ---------------------------------------------------------------------------
 
 
-ALREADY_APPLIED = (
-    "Every object this call creates already exists with the same content, from an earlier call with the same "
-    "arguments, so nothing was sent"
-)
 _PARTLY_PRESENT = (
     "an object created by an identical earlier call was changed, or some of those objects were removed while "
     "others remain; change an argument or remove the existing object. Nothing was sent."
@@ -231,10 +232,8 @@ async def apply_write(
         plan = build(snapshot)
         metadata: dict[str, Any] = {"effects": plan.effects}
         if plan.request is None:
-            if plan.already_applied:
-                metadata["already_applied"] = True
-            if plan.none_found:
-                metadata["none_found"] = True
+            if plan.noop is not None:
+                metadata["noop"] = plan.noop
             return noop_write(operation=operation, metadata={**metadata, "warnings": plan.warnings})
         request = plan.request(write_ids(tool, args.model_dump(mode="json"), plan.new_ids))
         if _touched_ids(request.body) & set(request.created_ids):
@@ -244,7 +243,7 @@ async def apply_write(
         if existing is None:
             raise InnerSpaceWriteRefusedError(f"{operation}: {_PARTLY_PRESENT}")
         if existing:
-            metadata.update(already_applied=True, warnings=[*plan.warnings, ALREADY_APPLIED])
+            metadata.update(noop="already_applied", warnings=list(plan.warnings))
             return noop_write(operation=operation, metadata=metadata)
 
         async def read_back() -> Mapping[str, bool | None]:
@@ -347,11 +346,13 @@ class Display:
     geometry: PlanGeometry
     unit: Unit
     coordinates: Coordinates
+    # Full precision, for values a caller sends back unchanged (an undo); otherwise rounded like the reads.
+    exact: bool = False
 
     def point(self, x: float, y: float) -> tuple[float | None, float | None]:
         if self.coordinates == "plan_units":
-            return round(x, 4), round(y, 4)
-        shown = from_plan_point(x, y, geometry=self.geometry, unit=self.unit)
+            return (x, y) if self.exact else (round(x, 4), round(y, 4))
+        shown = from_plan_point(x, y, geometry=self.geometry, unit=self.unit, exact=self.exact)
         return (None, None) if shown is None else shown
 
     def position(self, position: Any) -> list[tuple[float | None, float | None]]:

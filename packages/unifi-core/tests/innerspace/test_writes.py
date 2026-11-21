@@ -75,7 +75,7 @@ def _since(console, start):
     [
         ("accepted", [WALL_1], True, True),
         ("applied_then_timed_out", [WALL_1], True, True),
-        ("dropped_before_applying", [WALL_1], False, False),
+        ("dropped_before_applying", [WALL_1], None, False),
         ("rejected_400", [WALL_1], False, False),
         ("duplicate_already_applied", [EXISTING_WALL], True, True),
         ("mixed", [WALL_1, WALL_2], None, False),
@@ -262,16 +262,17 @@ async def test_a_read_back_with_no_changes_in_it_is_unknown(connected, console):
     assert "nothing to compare" in result.error and "Read before retrying" in result.error
 
 
-async def _settled(connected, console, monkeypatch, reads, *, status=None):
-    """send_write with a scripted read-back sequence and a recorded, instant sleep."""
-    from unifi_core.innerspace.managers import _writes
+async def _settled(connected, console, reads, *, status=None, body=b"{}", drop=False, held_remaining=None):
+    """send_write with a scripted read-back sequence and a recorded, instant sleep on the manager."""
+    from unittest.mock import patch
+
     from unifi_core.write_verification import READBACK_SETTLE_DELAYS_SECONDS
 
-    # The suite turns the waits off (conftest); these tests are about them.
-    monkeypatch.setattr(_writes, "_SETTLE_DELAYS", tuple(READBACK_SETTLE_DELAYS_SECONDS))
     console.load_project(internal_state())
-    if status is not None:
-        console.reply("POST", SHAPE_CHANGE_PATH, status=status, body_bytes=b"{}")
+    if drop:
+        console.drop_connection("POST", SHAPE_CHANGE_PATH, apply=False)
+    elif status is not None:
+        console.reply("POST", SHAPE_CHANGE_PATH, status=status, body_bytes=body)
     remaining, slept = list(reads), []
 
     async def read_back():
@@ -280,39 +281,84 @@ async def _settled(connected, console, monkeypatch, reads, *, status=None):
     async def sleep(seconds):
         slept.append(seconds)
 
-    result = await send_write(
-        connected,
-        "POST",
-        SHAPE_CHANGE_PATH,
-        {"create": [], "mode": "2D"},
-        operation=OP,
-        read_back=read_back,
-        sleep=sleep,
-    )
+    connected.readback_sleep = sleep
+    with patch("unifi_core.write_verification.held_write_remaining_seconds", return_value=held_remaining):
+        result = await send_write(
+            connected, "POST", SHAPE_CHANGE_PATH, {"create": [], "mode": "2D"}, operation=OP, read_back=read_back
+        )
     return result, slept, READBACK_SETTLE_DELAYS_SECONDS
 
 
-async def test_a_stale_first_read_back_settles_to_applied(connected, console, monkeypatch):
+async def test_a_stale_first_read_back_settles_to_applied(connected, console):
     """Like Network's client writes: a read made just after the write can show the old state."""
-    result, slept, delays = await _settled(connected, console, monkeypatch, [{"x": False}, {"x": True}])
+    result, slept, delays = await _settled(connected, console, [{"x": False}, {"x": True}])
 
     assert (result.success, result.mutation_applied) == (True, True)
     assert slept == [delays[0]]
 
 
-async def test_a_read_back_that_never_shows_the_change_is_not_applied_after_the_waits(connected, console, monkeypatch):
-    result, slept, delays = await _settled(connected, console, monkeypatch, [{"x": False}])
+async def test_an_unreadable_answer_the_console_accepted_settles_too(connected, console):
+    """A 2xx whose body is not JSON was accepted: it gets the same settle waits as a readable one."""
+    result, slept, delays = await _settled(connected, console, [{"x": False}, {"x": True}], status=200, body=b"")
 
-    assert (result.success, result.mutation_applied) == (False, False)
+    assert (result.success, result.mutation_applied) == (True, True)
+    assert slept == [delays[0]]
+
+
+async def test_an_accepted_write_that_never_shows_is_unknown_not_unapplied(connected, console):
+    """The console said yes and the reads still show the old state: the change may yet appear, so unknown."""
+    result, slept, delays = await _settled(connected, console, [{"x": False}])
+
+    assert (result.success, result.mutation_applied) == (False, None)
     assert slept == list(delays)
+    assert "Read before retrying" in result.error
 
 
-async def test_a_write_the_console_refused_is_not_waited_on(connected, console, monkeypatch):
-    """An HTTP error answer is the console's own verdict: one read-back decides, with no settle wait."""
-    result, slept, _delays = await _settled(connected, console, monkeypatch, [{"x": False}], status=400)
+async def test_a_lost_answer_that_never_shows_is_unknown(connected, console):
+    result, _slept, _delays = await _settled(connected, console, [{"x": False}], drop=True)
+
+    assert (result.success, result.mutation_applied) == (False, None)
+
+
+async def test_a_lost_answer_whose_waits_the_hold_budget_cut_short_is_unknown(connected, console):
+    result, slept, _delays = await _settled(connected, console, [{"x": False}], drop=True, held_remaining=1.0)
+
+    assert (result.success, result.mutation_applied) == (False, None)
+    assert slept == []
+
+
+async def test_a_server_error_with_an_unchanged_read_back_is_unknown(connected, console):
+    """A 504 from the UniFi OS proxy says nothing about whether InnerSpace applied the write."""
+    result, slept, _delays = await _settled(connected, console, [{"x": False}], status=504)
+
+    assert (result.success, result.mutation_applied) == (False, None)
+    assert slept == []
+
+
+async def test_a_write_the_console_refused_is_not_waited_on(connected, console):
+    """A 4xx refusal is the console's own verdict: one read-back decides, with no settle wait."""
+    result, slept, _delays = await _settled(connected, console, [{"x": False}], status=400)
 
     assert (result.success, result.mutation_applied) == (False, False)
     assert slept == []
+
+
+async def test_a_read_back_that_raises_after_the_write_was_sent_is_unknown(connected, console, caplog):
+    """Any error from the read-back, not only a UniFi one, leaves the outcome unknown: the write went out."""
+    console.load_project(internal_state())
+
+    async def read_back():
+        raise TypeError("detail that must not be logged")
+
+    with caplog.at_level(logging.DEBUG):
+        result = await send_write(
+            connected, "POST", SHAPE_CHANGE_PATH, {"create": [], "mode": "2D"}, operation=OP, read_back=read_back
+        )
+
+    assert (result.success, result.mutation_applied) == (False, None)
+    assert result.metadata["missing"] is None
+    assert "detail that must not be logged" not in caplog.text
+    assert "TypeError" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +532,10 @@ def test_plan_path_takes_one_segment_only():
         plan_path("order/../x")
 
 
-def test_plan_path_refuses_the_reorder_route_segment():
-    """``order`` is the reorder route under the same prefix, never a plan."""
-    with pytest.raises(ValueError):
-        plan_path("order")
+@pytest.mark.parametrize("segment", ["order", "ORDER", "Order"])
+def test_plan_path_refuses_the_reorder_route_segment(segment):
+    """``order`` is the reorder route under the same prefix, never a plan, in any case."""
+    from unifi_core.request_paths import InvalidRequestPathError
+
+    with pytest.raises(InvalidRequestPathError):
+        plan_path(segment)

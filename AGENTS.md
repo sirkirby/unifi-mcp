@@ -158,7 +158,7 @@ Layout writes go through the shared write layer in `unifi_core/innerspace/manage
 
 - `preview_*` and `apply_*` refuse unless `/api/system` (read uncached) reports InnerSpace installed and running.
 - `apply_*` holds the connection manager's `write_lock` from its first read to its read-back; previews never take it. Servers also run confirmed writes through the operation gate. Neither coordinates other processes or the browser editor: re-read before writing, refuse a shape that changed type or plan or is gone, and state the remaining race in the tool's docstring.
-- No replay: writes call `request(..., replay=False)`. A refused session is renewed without resending; a lost answer is `mutation_applied: None`, never a resend. Only the read-back decides whether a write applied.
+- No replay: writes call `request(..., replay=False)`. A refused session is renewed without resending; a lost answer is `mutation_applied: None`, never a resend. Applied needs a read-back showing every change; not applied needs a console refusal (a 4xx, or UniFi OS refusing it again) and an unchanged read-back; anything else is unknown.
 - Send whole stored objects from a fresh read, never partial objects or bare ids; a request equal to the stored state sends nothing.
 - New ids are deterministic (`uuid5` of the tool, its canonical arguments and the batch index) and made in `apply_*` only, so a retry finds its own create and sends nothing.
 - No request body carries a `map` shape; only the plan scale write carries a `scale` shape.

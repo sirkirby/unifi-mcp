@@ -17,6 +17,8 @@ from unifi_core.exceptions import (
 from unifi_core.innerspace.managers import connection_manager as cm_module
 from unifi_core.innerspace.managers.connection_manager import (
     INTEGRATION_PREFIX,
+    INTERNAL_PROJECT_PATH,
+    PLAN_PATH_PREFIX,
     InnerSpaceConnectionManager,
     InnerSpaceHttpError,
     InnerSpaceUnavailableError,
@@ -1105,3 +1107,60 @@ async def test_a_console_that_is_down_does_not_latch_reconnect_blocked(manager, 
     assert await manager.initialize() is False
 
     assert manager.reconnect_blocked is False
+
+
+# ---------------------------------------------------------------------------
+# Entry points: each route is reachable only through the call that owns it
+# ---------------------------------------------------------------------------
+
+ASSET_ROUTE = f"{INTEGRATION_PREFIX}/assets/00000000-0000-4000-8000-000000000001/plan.png"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("POST", LOGIN), ("POST", LOGOUT), ("GET", ASSET_ROUTE)],
+    ids=["login", "logout", "asset"],
+)
+async def test_request_cannot_reach_the_login_logout_or_asset_routes(connected, console, method, path):
+    """Login and logout belong to the session code, and the image route to ``request_bytes``."""
+    console.reply(method, path, {"data": []})
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError):
+        await connected.request(method, path, operation=OP)
+
+    assert len(console.requests) == sent_before
+
+
+async def test_request_bytes_cannot_reach_a_json_route(connected, console):
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError):
+        await connected.request_bytes(
+            f"{INTEGRATION_PREFIX}/floor_plans", operation=OP, max_bytes=1000, allowed_types={"image/png"}
+        )
+
+    assert len(console.requests) == sent_before
+
+
+async def test_the_send_refuses_a_method_the_route_does_not_allow_before_sending():
+    """The check sits in ``_send`` itself, the only caller of ``session.request``."""
+    from unittest.mock import MagicMock
+
+    cm = InnerSpaceConnectionManager(HOST, USERNAME, PASSWORD, base_url="https://192.0.2.1")
+    session = MagicMock()
+
+    with pytest.raises(UniFiValidationError):
+        await cm._send(session, "DELETE", INTERNAL_PROJECT_PATH, operation=OP, headers={})
+
+    session.request.assert_not_called()
+
+
+@pytest.mark.parametrize("segment", ["ORDER", "Order", "oRdEr"])
+async def test_the_plan_route_refuses_the_reorder_segment_in_any_case(connected, console, segment):
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError):
+        await connected.request("PATCH", f"{PLAN_PATH_PREFIX}/{segment}", operation=OP, json={}, replay=False)
+
+    assert len(console.requests) == sent_before
