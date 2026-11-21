@@ -2902,6 +2902,31 @@ async def test_dispatch_update_firewall_policy_rejects_selector_only_update_on_i
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("description", ["Why this rule exists", ""])
+async def test_dispatch_update_firewall_policy_puts_the_description(description: str) -> None:
+    """API confirmed execution shares the core boundary: a description, including an
+    empty one that clears it, reaches the PUT body instead of being dropped."""
+    stored = {**_stored_policy({}), "description": "Old reason"}
+    manager, sent = _live_firewall_manager(stored)
+
+    await _dispatch_update_firewall_policy(manager, {"description": description}, confirm=True)
+
+    assert [method for method, _ in sent] == ["put"]
+    assert sent[0][1]["description"] == description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+async def test_dispatch_update_firewall_policy_refuses_unknown_fields_by_name(confirm: bool) -> None:
+    manager, sent = _live_firewall_manager(_stored_policy({}))
+
+    with pytest.raises(ValueError, match="Unknown firewall policy field\\(s\\): notes"):
+        await _dispatch_update_firewall_policy(manager, {"name": "Renamed", "notes": "x"}, confirm=confirm)
+
+    assert sent == []
+
+
+@pytest.mark.asyncio
 async def test_dispatch_update_firewall_policy_activation_change_retires_stored_port() -> None:
     """API confirmed execution: SPECIFIC/53 → ANY must not carry the stale port to the controller."""
     stored = _stored_policy({"port_matching_type": "SPECIFIC", "port": "53"})

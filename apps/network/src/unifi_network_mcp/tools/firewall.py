@@ -304,6 +304,18 @@ def _selector_applied(key: str, expected: Any, actual: Dict[str, Any]) -> bool:
     return actual.get(key) == expected
 
 
+def _field_applied(field: str, expected: Any, actual: Dict[str, Any]) -> bool:
+    """Whether the re-read policy shows an updated top-level, non-dict field as applied.
+
+    A text field cleared with ``""`` (``description``) counts as applied when the
+    controller answers with an empty string or omits the key; any other value
+    must match exactly.
+    """
+    if expected == "":
+        return not actual.get(field)
+    return actual.get(field) == expected
+
+
 async def _read_policy(policy_id: str) -> Dict[str, Any] | None:
     """The stored policy document, or None when the controller has no such policy."""
     try:
@@ -493,9 +505,9 @@ async def create_firewall_policy(
     name="unifi_update_firewall_policy",
     description=(
         "Update specific fields of an existing V2 zone-based firewall policy by ID. "
-        "Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
-        "protocol, ip_version, logging, connection_state_type, connection_states, "
-        "schedule. source/destination are deep-merged with the current policy and accept "
+        "Accepts: name, description, action (ALLOW/BLOCK/REJECT), enabled, source, "
+        "destination, protocol, ip_version, logging, connection_state_type, "
+        "connection_states, schedule. source/destination are deep-merged with the current policy and accept "
         "the same targeting and port fields as create (matching_target, port_matching_type, "
         "port, port_group_id, client_macs); the merged result is checked for port shape and "
         "selector activation, while the zone/IP/NETWORK completeness rules are checked on "
@@ -517,9 +529,10 @@ async def update_firewall_policy(
         Dict[str, Any],
         Field(
             description=(
-                "Dictionary of V2 zone-based fields to update: name, action "
-                "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
-                "logging, connection_state_type, connection_states, schedule. "
+                "Dictionary of V2 zone-based fields to update: name, description "
+                "('' clears it), action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
+                "protocol, ip_version, logging, connection_state_type, connection_states, "
+                "schedule. Any other top-level key is refused by name, not dropped. "
                 "Partial source/destination dicts are merged with the current policy; "
                 "port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and "
                 "switching port_matching_type, matching_target or matching_target_type "
@@ -601,7 +614,7 @@ async def update_firewall_policy(
                             mismatched.append(field)
                             logger.warning("Firewall policy %s field '%s.%s' not applied", policy_id, field, k)
                             break
-                elif actual != expected:
+                elif not _field_applied(field, expected, updated_details):
                     mismatched.append(field)
                     logger.warning("Firewall policy %s field '%s' not applied", policy_id, field)
             if mismatched:
