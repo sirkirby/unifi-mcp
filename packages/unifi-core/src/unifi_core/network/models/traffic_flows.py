@@ -283,17 +283,22 @@ def dpi_names_api_key_remediation(env_prefix: str | None) -> str:
 class TrafficFlowDpiNameResolution(BaseModel):
     """Why ``top_applications`` names are or are not resolved.
 
-    ``status`` is ``resolved`` (every entry named), ``partial`` (some named),
-    ``unresolved`` (catalogue read but no entry matched) or ``unavailable``
-    (catalogue not read). ``reason`` and ``remediation`` are fixed text set only
-    when names are missing; IDs and byte counts are never affected.
+    An entry counts as resolved only when both its application name and its
+    category name are known. ``status`` is ``resolved`` (every entry fully
+    named), ``partial`` (at least one name found, but not every entry fully
+    named), ``unresolved`` (catalogue read but no application or category name
+    matched) or ``unavailable`` (catalogue not read). ``reason`` and
+    ``remediation`` are fixed text set only when names are missing; IDs and
+    byte counts are never affected.
     """
 
     status: str = Field(
         description="resolved, partial, unresolved or unavailable", json_schema_extra={"mutable": False}
     )
     resolved_count: int = Field(
-        default=0, description="Top applications with a resolved name", json_schema_extra={"mutable": False}
+        default=0,
+        description="Top applications with both application and category name resolved",
+        json_schema_extra={"mutable": False},
     )
     total_count: int = Field(
         default=0, description="Top applications in the ranking", json_schema_extra={"mutable": False}
@@ -465,13 +470,21 @@ def enrich_traffic_flow_statistics_dpi_names(
                 }
             )
         )
-    resolved = sum(1 for application in top_applications if application.application_name is not None)
+    resolved = sum(
+        1
+        for application in top_applications
+        if application.application_name is not None and application.category_name is not None
+    )
+    any_name = any(
+        application.application_name is not None or application.category_name is not None
+        for application in top_applications
+    )
     total = len(top_applications)
     if resolved == total:
         resolution = TrafficFlowDpiNameResolution(status="resolved", resolved_count=resolved, total_count=total)
     else:
         resolution = TrafficFlowDpiNameResolution(
-            status="partial" if resolved else "unresolved",
+            status="partial" if any_name else "unresolved",
             resolved_count=resolved,
             total_count=total,
             reason=DPI_NAMES_NOT_IN_CATALOGUE,
