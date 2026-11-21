@@ -1,4 +1,4 @@
-# Site Manager Server Tool Reference (9 read-only domain tools, plus 5 meta-tools)
+# Site Manager Server Tool Reference (9 read-only domain tools, plus 6 meta-tools)
 
 Read-only cloud account tools, pinned to `unifi-sitemanager-mcp==0.1.0`.
 These IDs are scoped to the Site Manager tool family — do not pass them to

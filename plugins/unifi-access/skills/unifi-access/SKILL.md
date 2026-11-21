@@ -36,7 +36,7 @@ similar names, proximity, or absence of a matching event alone proves neither
 identity nor cause. A credential event identifies the recorded account, not who
 physically used it. Missing mappings or clock uncertainty limit correlations.
 
-You have access to a UniFi Access MCP server that lets you query and manage a UniFi Access controller. It provides 37 tools covering doors, locks, credentials, visitors, access policies, events, devices, and system health.
+You have access to a UniFi Access MCP server that lets you query and manage a UniFi Access controller. It provides 38 tools covering doors, locks, credentials, visitors, access policies, events, devices, and system health.
 
 ## Tool Discovery
 
@@ -114,4 +114,4 @@ Access readers are network clients — if a reader appears offline, the Network 
 
 ## Tool Reference
 
-For the complete list of all 37 tools organized by category with descriptions, tips, and common scenarios, read `references/access-tools.md`.
+For the complete list of all 38 tools organized by category with descriptions, tips, and common scenarios, read `references/access-tools.md`.

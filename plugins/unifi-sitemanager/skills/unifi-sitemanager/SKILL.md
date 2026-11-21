@@ -25,7 +25,7 @@ Site Manager IDs; never translate them by matching names.
 
 ## Discover and read
 
-It provides 9 read-only domain tools, plus 5 meta-tools.
+It provides 9 read-only domain tools, plus 6 meta-tools.
 Domain reads cover hosts, sites, devices, ISP metrics and SD-WAN. In default lazy mode, start
 with `sitemanager_tool_index`, filtered by name or search, and request
 `include_schemas=True` for the intended tool. Use `sitemanager_execute` with

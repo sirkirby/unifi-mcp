@@ -6,7 +6,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-sitemanager-mcp==0.1.4"
+        "unifi-sitemanager-mcp==0.2.0"
       ],
       "env": {
         "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/sitemanager.env"
