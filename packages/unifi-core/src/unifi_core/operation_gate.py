@@ -30,7 +30,9 @@ while the hold lasts. Start a task that must queue on its own with
 its hold budget (``GateSettings.hold_budget_seconds``) or when the caller's own
 optional ``wait_budget`` runs out. A waiter far back in a queue that keeps
 moving never fails otherwise. Inside a held write, :func:`write_request_bound`
-bounds each controller request by what is left of the hold budget.
+bounds each controller request by what is left of the hold budget. An
+operation known to run long declares it in code with :func:`extend_write_hold`,
+next to its own explicit time limit.
 
 **Admission.** A job runner that must start operations in order installs a
 :class:`GateObserver` with :func:`observing_operations`. The gate tells it
@@ -310,9 +312,36 @@ def held_write_remaining_seconds() -> float | None:
     for hold in _holds.get():
         if isinstance(hold, WriteTicket) and hold.active and hold.granted_at is not None:
             gate = hold.gate
-            left = hold.granted_at + gate.settings.hold_budget_seconds - gate.clock.now()
+            left = hold.granted_at + gate.budget_of(hold) - gate.clock.now()
             remaining = left if remaining is None else min(remaining, left)
     return remaining
+
+
+def extend_write_hold(seconds: float) -> bool:
+    """Give the write this operation holds at least ``seconds`` more before it counts as over budget.
+
+    For the rare operation that is known to run long and must not be cut off
+    (a backup restore): its own request bound and the queued waiters measure
+    against the extended budget, so waiters keep waiting while it legitimately
+    runs. Declare it in code next to that operation's own explicit time limit.
+    Returns ``False`` (and changes nothing) outside a held write.
+    """
+    _check_seconds("seconds", seconds)
+    extended = False
+    for hold in _holds.get():
+        if isinstance(hold, WriteTicket) and hold.active and hold.granted_at is not None:
+            gate = hold.gate
+            needed = gate.clock.now() - hold.granted_at + seconds
+            if needed > gate.budget_of(hold):
+                hold.hold_budget = needed
+                logger.info(
+                    "Write gate %s: %s extended its hold budget to %.0fs",
+                    gate.name,
+                    hold.label or "write",
+                    needed,
+                )
+            extended = True
+    return extended
 
 
 @asynccontextmanager
@@ -372,6 +401,8 @@ class WriteTicket(_Hold):
     requested_at: float
     granted_at: float | None = None
     state: str = _WAITING
+    # A budget of its own, set by extend_write_hold; None uses the gate's.
+    hold_budget: float | None = None
     _future: asyncio.Future[None] = field(repr=False, default=None)  # type: ignore[assignment]
 
     @property
@@ -449,6 +480,10 @@ class OperationGate:
 
     # -- inspection ---------------------------------------------------------
 
+    def budget_of(self, ticket: WriteTicket) -> float:
+        """The hold budget that applies to ``ticket``: its own when extended, else the gate's."""
+        return ticket.hold_budget if ticket.hold_budget is not None else self.settings.hold_budget_seconds
+
     @property
     def write_held(self) -> bool:
         """True while any operation holds the write turn."""
@@ -477,7 +512,7 @@ class OperationGate:
             "write_held": holder is not None,
             "holder_label": None if holder is None else holder.label,
             "holder_age_seconds": holder_age,
-            "holder_over_budget": holder_age is not None and holder_age > self.settings.hold_budget_seconds,
+            "holder_over_budget": holder is not None and holder_age is not None and holder_age > self.budget_of(holder),
             "queue_depth": len(self._waiting),
             "oldest_wait_seconds": oldest_wait,
             "reads_in_use": self._reads_in_use,
@@ -582,14 +617,15 @@ class OperationGate:
             self._holder = None
         self._counters["writes_completed"] += 1
         self._record_hold(ticket.label, held)
-        if held > self.settings.hold_budget_seconds:
+        budget = self.budget_of(ticket)
+        if held > budget:
             self._counters["holds_over_budget"] += 1
             logger.warning(
                 "Write gate %s: %s held the write turn for %.1fs, over its %.0fs budget",
                 self.name,
                 ticket.label or "write",
                 held,
-                self.settings.hold_budget_seconds,
+                budget,
             )
         logger.debug(
             "Write gate %s released by %s after %.3fs (%d queued)",
@@ -656,7 +692,7 @@ class OperationGate:
             holder = self._holder
             hold_deadline = None
             if holder is not None and holder.granted_at is not None:
-                hold_deadline = holder.granted_at + self.settings.hold_budget_seconds + HOLD_GRACE_SECONDS
+                hold_deadline = holder.granted_at + self.budget_of(holder) + HOLD_GRACE_SECONDS
             if wait_deadline is not None and now >= wait_deadline:
                 self._counters["writes_busy"] += 1
                 position = ticket.position
@@ -684,11 +720,12 @@ class OperationGate:
                     self.name,
                     holder.label if holder is not None and holder.label else "write",
                     held_for,
-                    self.settings.hold_budget_seconds,
+                    self.budget_of(holder) if holder is not None else self.settings.hold_budget_seconds,
                 )
+                holder_budget = self.budget_of(holder) if holder is not None else self.settings.hold_budget_seconds
                 raise ControllerBusyError(
                     f"The {self.name} controller is busy: an earlier change has run for {held_for:.0f}s, "
-                    f"past its {self.settings.hold_budget_seconds:.0f}s budget. This change was not sent; "
+                    f"past its {holder_budget:.0f}s budget. This change was not sent; "
                     "retry once the earlier change finishes.",
                     reason="holder_over_budget",
                     retry_after=BUSY_RETRY_AFTER_SECONDS,
