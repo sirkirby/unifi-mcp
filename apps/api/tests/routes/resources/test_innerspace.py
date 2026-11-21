@@ -20,7 +20,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceConnectionManager,
     InnerSpaceHttpError,
 )
-from unifi_core.operation_gate import ControllerBusyError
+from unifi_core.operation_gate import BUSY_RETRY_AFTER_SECONDS
 
 from tests.innerspace_data import (
     DEVICE_IP,
@@ -190,13 +190,9 @@ async def test_no_image_bytes_on_any_api_surface(tmp_path):
     )
     fields = await graphql(app, key, '{ __type(name: "InnerSpacePlanAsset") { fields { name } } }')
 
-    assert rest.status_code == 422
-    assert rest.json()["detail"] == {
-        "kind": "invalid_innerspace_request",
-        "message": "Failed to get InnerSpace plan asset: include_image is not supported by the API; read the image "
-        "through the InnerSpace MCP server: its plan image resource, innerspace://plans/{plan_id}/image, serves "
-        "PNG plan images; for other formats use innerspace_get_plan_asset with include_image on the MCP server.",
-    }
+    # No surface takes include_image: REST ignores the unknown query parameter, the action refuses it.
+    assert rest.status_code == 200
+    assert "image_base64" not in rest.json()["data"]
     assert refused == {
         "success": False,
         "error": "Failed to execute action. Check the server audit log for details.",
@@ -210,7 +206,7 @@ async def test_no_image_bytes_on_any_api_surface(tmp_path):
     cm.request_bytes.assert_not_awaited()
     rows = [row for row in await _audit(app) if row.outcome == "error"]
     assert [row.error_kind for row in rows] == ["ValueError"]
-    assert "innerspace://plans/{plan_id}/image" in rows[0].detail
+    assert "unknown argument(s) include_image" in rows[0].detail
 
 
 # ---------------------------------------------------------------------------
@@ -343,10 +339,11 @@ async def test_console_failures_map_to_fixed_statuses(tmp_path, error, status, k
     assert rest.status_code == status
     assert rest.json()["detail"]["kind"] == kind
     # Only the InnerSpace application's own 503 is retryable.
-    assert ("Retry-After" in rest.headers) == (status == 503)
+    assert rest.headers.get("Retry-After") == (str(BUSY_RETRY_AFTER_SECONDS) if status == 503 else None)
     # The core text already names the operation; it is not repeated.
     assert rest.json()["detail"]["message"] == f"Failed to {error}"
     assert gql["errors"][0]["extensions"]["code"] == (code or "UPSTREAM_ERROR")
+    assert gql["errors"][0]["extensions"].get("retryAfter") == (BUSY_RETRY_AFTER_SECONDS if status == 503 else None)
 
 
 @pytest.mark.asyncio
@@ -447,25 +444,79 @@ async def test_a_result_without_a_required_field_is_502(tmp_path, monkeypatch):
     assert gql["data"] is None
 
 
+@pytest.fixture
+def one_read_slot():
+    """Call after the app is built (it configures the gate from its own config): one slot, a short wait."""
+    from unifi_api.services.operation_gate import configure_gate_settings
+    from unifi_core.operation_gate import GateSettings, reset_gate_registry_for_tests
+
+    def apply() -> None:
+        reset_gate_registry_for_tests()
+        configure_gate_settings(GateSettings(read_cap=1, direct_call_wait_seconds=0.05))
+
+    yield apply
+    configure_gate_settings(GateSettings())
+    reset_gate_registry_for_tests()
+
+
 @pytest.mark.asyncio
-async def test_a_busy_gate_is_the_shared_retryable_503_not_an_upstream_error(tmp_path, monkeypatch):
-    """The read slot is taken inside the InnerSpace read; its refusal keeps the shared busy answer."""
-    app, headers, key, cid = await _app(tmp_path, console_cm())
-    cm = app.state.manager_factory
+async def test_every_innerspace_surface_reads_under_the_real_gate(tmp_path, one_read_slot):
+    """With the console's only read slot held, REST and GraphQL get the shared busy answer, and nothing is sent."""
+    import asyncio
 
-    async def busy(controller_id, product):
-        raise ControllerBusyError(
-            "The innerspace controller is busy: all 1 read slots stayed in use for 25s. Nothing was sent.",
-            reason="wait_budget",
-            retry_after=3,
+    from unifi_api.services.operation_gate import gate_for
+
+    cm = console_cm()
+    app, headers, key, cid = await _app(tmp_path, cm)
+    one_read_slot()
+    held, release = asyncio.Event(), asyncio.Event()
+
+    async def hold_the_slot():
+        async with gate_for(cid, "innerspace").read(label="holder"):
+            held.set()
+            await release.wait()
+
+    holder = asyncio.create_task(hold_the_slot())
+    await held.wait()
+    try:
+        sent_before = cm.request.await_count
+        rest = await _get(app, headers, f"{BASE}/floor-plans/{PLAN}/walls")
+        gql = await graphql(
+            app, key, f'{{ innerspace {{ walls(controller: "{cid}", planId: "{PLAN}") {{ total }} }} }}'
         )
-
-    monkeypatch.setattr(cm, "_take_read_slot", busy)
-
-    rest = await _get(app, headers, f"{BASE}/floor-plans/{PLAN}/walls")
-    gql = await graphql(app, key, f'{{ innerspace {{ walls(controller: "{cid}", planId: "{PLAN}") {{ total }} }} }}')
+        sent_while_busy = cm.request.await_count - sent_before
+    finally:
+        release.set()
+        await holder
 
     assert rest.status_code == 503
     assert rest.json()["detail"]["kind"] == "controller_busy"
-    assert rest.headers["Retry-After"] == "3"
+    assert rest.headers["Retry-After"] == str(BUSY_RETRY_AFTER_SECONDS)
     assert gql["errors"][0]["extensions"]["code"] == "CONTROLLER_BUSY"
+    assert sent_while_busy == 0
+
+    # Once the slot is free the same read goes through, and gives its slot back.
+    assert (await _get(app, headers, f"{BASE}/floor-plans/{PLAN}/walls")).status_code == 200
+    assert gate_for(cid, "innerspace").snapshot()["reads_in_use"] == 0
+
+
+def test_a_read_after_its_request_ended_is_not_reported_as_an_innerspace_failure(caplog):
+    """Like the other products, it propagates unchanged: no client sees it, so no failure is logged."""
+    from unifi_api.services.innerspace import map_innerspace_error
+    from unifi_api.services.operation_gate import RequestAlreadyFinished
+
+    late = RequestAlreadyFinished("the request already ended")
+    with caplog.at_level(logging.WARNING):
+        assert map_innerspace_error(late, "list InnerSpace walls") is late
+    assert caplog.records == []
+
+
+def test_an_unexpected_error_is_logged_as_an_error_by_class_only(caplog):
+    from unifi_api.services.innerspace import map_innerspace_error
+
+    with caplog.at_level(logging.WARNING):
+        mapped = map_innerspace_error(RuntimeError("secret detail"), "list InnerSpace walls")
+    assert mapped.status == 500
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+        (logging.ERROR, "InnerSpace list InnerSpace walls failed (RuntimeError)")
+    ]

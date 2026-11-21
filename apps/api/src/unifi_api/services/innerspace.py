@@ -28,6 +28,7 @@ from unifi_core.innerspace.models.reads import InnerSpaceListInput
 from unifi_core.operation_gate import BUSY_RETRY_AFTER_SECONDS, ControllerBusyError
 
 from unifi_api.services.managers import ControllerInitializationFailed
+from unifi_api.services.operation_gate import RequestAlreadyFinished
 
 _log = logging.getLogger("unifi-api.innerspace")
 
@@ -64,14 +65,18 @@ def _failed(operation: str, exc: BaseException) -> str:
     return f"Failed to {text}" if text.startswith(f"{operation}:") else f"Failed to {operation}: {text}"
 
 
-def map_innerspace_error(exc: BaseException, operation: str) -> InnerSpaceAPIError | ControllerBusyError:
+def map_innerspace_error(exc: BaseException, operation: str) -> BaseException:
     """Map a failure to a status and fixed text. ``operation`` is a fixed label, never caller input.
 
-    A refusal at the operation gate is returned unchanged, so every surface
-    gives it the same retryable busy answer it gives the other products.
+    A refusal at the operation gate, and a read started after its request
+    ended, are returned unchanged, so they get the answer they get for the
+    other products.
     """
-    if isinstance(exc, (InnerSpaceAPIError, ControllerBusyError)):
+    if isinstance(exc, (InnerSpaceAPIError, ControllerBusyError, RequestAlreadyFinished)):
         return exc
+    if not isinstance(exc, (ValidationError, UniFiError, ControllerInitializationFailed)):
+        _log.error("InnerSpace %s failed (%s)", operation, type(exc).__name__)
+        return InnerSpaceAPIError(500, "innerspace_internal_error", f"Failed to {operation}: unexpected error.")
     _log.warning("InnerSpace %s failed (%s)", operation, type(exc).__name__)
     if isinstance(exc, (ValidationError, UniFiValidationError)):
         return InnerSpaceAPIError(422, "invalid_innerspace_request", f"Failed to {operation}: invalid arguments.")
@@ -86,10 +91,8 @@ def map_innerspace_error(exc: BaseException, operation: str) -> InnerSpaceAPIErr
         return InnerSpaceAPIError(
             503, "innerspace_unavailable", _failed(operation, exc), retry_after=BUSY_RETRY_AFTER_SECONDS
         )
-    if isinstance(exc, (UniFiError, ControllerInitializationFailed)):
-        # Connection, not installed or not running, HTTP, malformed, refused login.
-        return InnerSpaceAPIError(502, "innerspace_upstream_error", _failed(operation, exc))
-    return InnerSpaceAPIError(500, "innerspace_internal_error", f"Failed to {operation}: unexpected error.")
+    # Connection, not installed or not running, HTTP, malformed, refused login.
+    return InnerSpaceAPIError(502, "innerspace_upstream_error", _failed(operation, exc))
 
 
 def page_with_limit(page: Any, limit: int) -> dict[str, Any]:

@@ -101,6 +101,8 @@ def format_graphql_error(error: GraphQLError) -> dict[str, Any]:
     extensions: dict[str, Any] = {"code": code}
     if isinstance(error.original_error, ControllerBusyError):
         extensions["retryAfter"] = error.original_error.retry_after
+    elif isinstance(error.original_error, InnerSpaceAPIError) and error.original_error.retry_after is not None:
+        extensions["retryAfter"] = error.original_error.retry_after
     return {
         "message": safe_message(error),
         "path": list(error.path) if error.path else None,
