@@ -13,6 +13,7 @@ Network, Protect, or Access tools.
 | `sitemanager_load_tools` | Load selected lazy tools |
 | `sitemanager_batch` | Dispatch a bounded group of reads |
 | `sitemanager_batch_status` | Check dispatched jobs |
+| `sitemanager_batch_cancel` | Cancel dispatched jobs that have not started |
 
 ## Hosts
 

@@ -46,8 +46,9 @@ The server uses **lazy loading** by default — only meta-tools are registered i
 |-----------|---------|
 | `protect_tool_index` | Discover tools by name/description; use `category`, `search`, or `include_schemas` to filter |
 | `protect_execute` | Call any tool by name (essential in lazy mode) |
-| `protect_batch` | Run multiple tools in parallel |
-| `protect_batch_status` | Check async batch job status |
+| `protect_batch` | Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap |
+| `protect_batch_status` | Check job status: `queued` (with its `position` among the writes ahead), `running`, `done`, `error` or `cancelled` |
+| `protect_batch_cancel` | Cancel jobs that are still `queued`; a running or finished job is reported, not cancelled |
 
 **Workflow:** Call `protect_tool_index` to find the right tool, then `protect_execute` to call it. Use `protect_batch` for multiple independent queries.
 
@@ -93,7 +94,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 
 ## Efficiency Tips
 
-- **Use `protect_batch` for parallel queries** — biggest performance win. Batch smart detections + events in one call.
+- **Use `protect_batch` for independent reads** — biggest performance win: reads in a batch run concurrently, up to a cap. Batch smart detections + events in one call. Writes in a batch run one at a time, in submission order.
 - **Prefer `protect_list_smart_detections` over `protect_list_events`** for security analysis — smart detections are pre-classified (person, vehicle, etc.) and higher signal than raw motion.
 - **Use `protect_search_detections` for Find Anything questions** — if the user asks for "white vans", "animals in the driveway", or other attribute searches, discover labels first and reuse the returned `value` strings.
 - **`protect_recent_events` is fast but small** — only a few minutes of buffered data. For anything beyond real-time monitoring, use `protect_list_events` with time range filters.

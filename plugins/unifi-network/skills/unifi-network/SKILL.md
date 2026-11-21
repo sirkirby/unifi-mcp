@@ -46,10 +46,11 @@ The server uses **lazy loading** by default — only meta-tools are registered i
 |-----------|---------|
 | `unifi_tool_index` | Discover tools by name/description; use `category`, `search`, or `include_schemas` to filter |
 | `unifi_execute` | Call any tool by name (essential in lazy mode) |
-| `unifi_batch` | Run multiple tools in parallel |
-| `unifi_batch_status` | Check async batch job status |
+| `unifi_batch` | Run several tools as jobs: writes one at a time in submission order, reads concurrently up to a cap |
+| `unifi_batch_status` | Check job status: `queued` (with its `position` among the writes ahead), `running`, `done`, `error` or `cancelled` |
+| `unifi_batch_cancel` | Cancel jobs that are still `queued`; a running or finished job is reported, not cancelled |
 
-**Workflow:** Call `unifi_tool_index` to find the right tool, then `unifi_execute` to call it. For multiple independent queries, use `unifi_batch` — it's significantly faster than sequential calls.
+**Workflow:** Call `unifi_tool_index` to find the right tool, then `unifi_execute` to call it. For multiple independent queries, use `unifi_batch` — its reads run concurrently, so it's significantly faster than sequential calls. Confirmed writes run one at a time, in order, whichever way they are called.
 
 ## Safety Model
 
@@ -72,6 +73,6 @@ Always preview first and show the user before confirming.
 
 ## Response Format
 
-All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first. Network/WLAN and VPN-state writes are read back after execution and also report `mutation_applied`, `partial_success`, `persisted_fields`, `unchanged_fields`, `dropped_fields`, `coerced_fields`, and actual post-write details. Already-satisfied no-op fields appear in `unchanged_fields` and do not make a failed write partially successful. A failed confirmed write is not necessarily a rollback; inspect those fields before retrying or compensating.
+All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first. Network/WLAN and VPN-state writes are read back after execution and also report `mutation_applied`, `partial_success`, `persisted_fields`, `unchanged_fields`, `dropped_fields`, `coerced_fields`, and actual post-write details. Already-satisfied no-op fields appear in `unchanged_fields` and do not make a failed write partially successful. A failed confirmed write is not necessarily a rollback; inspect those fields before retrying or compensating. A call refused because the controller is busy returns `success: false` and, for a confirmed write, `mutation_applied: false`: nothing was sent, so retry it after a short wait.
 
 **Redacted secrets:** Secret fields — WLAN passphrases (`x_passphrase`), VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN config files), SNMP community strings, SNMPv3 passwords, and device-SSH credentials — come back as `***REDACTED***` by default. Raw values are controlled by process policy (`UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments. On an update, send **only** the fields you are changing — to keep a secret unchanged, omit it; never echo `***REDACTED***` back, which is rejected so the placeholder can't overwrite the real secret.

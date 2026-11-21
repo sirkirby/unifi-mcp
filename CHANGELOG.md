@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-21 — unifi-network 1.14.1, unifi-protect 1.8.1, unifi-access 1.5.1, unifi-sitemanager 1.1.1
+
+- The skills describe batches as the pinned servers run them: writes in a batch run one at a time in the order you submit them, reads run side by side up to a limit, and the new `*_batch_cancel` tool withdraws jobs that have not started. Batch status now shows `queued` (with the job's place in line) and `cancelled`.
+- `unifi-network`: the firewall manager skill now covers reordering policies with a username and password (`unifi_get_firewall_policy_order` and `unifi_set_firewall_policy_order`), not only with an API key, and names `UNIFI_NETWORK_API_KEY` first. It also says that changing a policy's source or destination target clears the old IP, address-group and network selections, so they cannot come back if you switch the target back later. The skill explains that a call refused because the controller is busy changed nothing and can be retried.
+
 ## 2026-11-21 — unifi-network 1.14.0, unifi-protect 1.8.0, unifi-access 1.5.0, unifi-sitemanager 1.1.0
 
 - Pins `unifi-network-mcp` [0.50.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.0), `unifi-protect-mcp` [0.15.0](https://github.com/sirkirby/unifi-mcp/releases/tag/protect/v0.15.0), `unifi-access-mcp` [0.10.0](https://github.com/sirkirby/unifi-mcp/releases/tag/access/v0.10.0) and `unifi-sitemanager-mcp` [0.2.0](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.2.0).

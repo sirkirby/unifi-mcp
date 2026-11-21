@@ -126,11 +126,18 @@ For app-aware rules (TikTok, YouTube, Steam, BitTorrent, etc.), consult `referen
 - `unifi_create_firewall_policy` — V2 zone-based create. Wraps the payload in `policy_data`. Pre-resolve zone IDs (`unifi_list_firewall_zones`) and network IDs (`unifi_list_networks`) before constructing it.
 - `unifi_update_firewall_policy` — partial update via fetch-merge-put. Pass only the fields you want to change in `update_data` (e.g., `{"enabled": true}`). This is the canonical way to enable/disable a policy because it preserves all other fields.
 - `unifi_toggle_firewall_policy` — convenience wrapper for flipping `enabled`. Prefer `unifi_update_firewall_policy` with `update_data={"enabled": …}` — it's the canonical fetch-merge-put path and produces the same result with no special casing.
-- `unifi_get_firewall_policy_ordering` — read the user-defined policy ordering for a source/destination zone pair. Use this when rule placement matters; do not infer editable order from `index`.
-- `unifi_reorder_firewall_policies` — reorder user-defined policies for a source/destination zone pair. Pass the complete `orderedFirewallPolicyIds` object from the read response as `ordered_firewall_policy_ids`, with only the intended movement applied. These IDs belong to the Integration API ordering family; do not substitute V2 policy IDs. Read the ordering tool schema before calling. Preview first, then confirm.
 
-Policy ordering uses UniFi's official integration API and requires an API key (`UNIFI_API_KEY` or `UNIFI_NETWORK_API_KEY`). Local username/password controller sessions can read policies and zones, but they cannot call the ordering endpoint.
-The ordering endpoint uses integration API zone UUIDs internally. The local MCP manager accepts the normal `unifi_list_firewall_zones` IDs and translates them by zone name before calling the ordering endpoint.
+Two tool pairs change policy order for a source/destination zone pair. Use them when rule placement matters; do not infer editable order from `index`. Keep each pair's IDs to that pair.
+
+- **V2 API, session credentials** (username and password):
+  - `unifi_get_firewall_policy_order` — read the user-defined policies as V2 policy IDs (the IDs `unifi_list_firewall_policies` returns), split into `before_predefined_ids` and `after_predefined_ids`.
+  - `unifi_set_firewall_policy_order` — pass every current ID from the read, in the new order, as `before_predefined_ids` and `after_predefined_ids`. Preview first, then confirm; the tool reads the order back after applying it.
+- **Integration API, API key plus session credentials** (`UNIFI_NETWORK_API_KEY`, or `UNIFI_API_KEY` when Network uses the `UNIFI_HOST` console):
+  - `unifi_get_firewall_policy_ordering` — read the order as Integration API UUIDs.
+  - `unifi_reorder_firewall_policies` — pass the complete `orderedFirewallPolicyIds` object from the read response as `ordered_firewall_policy_ids`, with only the intended movement applied. These IDs belong to the Integration API ordering family; do not substitute V2 policy IDs. Read the ordering tool schema before calling. Preview first, then confirm.
+  - These take the normal `unifi_list_firewall_zones` IDs and translate them by zone name to the Integration API's zone UUIDs, which is what needs the session.
+
+With only a username and password configured, use the V2 pair; the Integration pair also needs an API key.
 
 ---
 

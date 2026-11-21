@@ -32,7 +32,7 @@ with `sitemanager_tool_index`, filtered by name or search, and request
 its `tool` and `arguments` fields when the domain tool is not directly listed.
 `sitemanager_load_tools` loads selected tools for clients that handle tool-list
 changes; `sitemanager_batch` and `sitemanager_batch_status` handle bounded groups
-of reads. The loader and dispatchers' non-read-only annotations describe local
+of reads, and `sitemanager_batch_cancel` withdraws jobs that have not started. The loader and dispatchers' non-read-only annotations describe local
 registration and dispatch, not cloud mutations.
 
 Read [the tool reference](references/sitemanager-tools.md) for all nine tools
