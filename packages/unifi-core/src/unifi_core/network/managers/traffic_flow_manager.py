@@ -176,7 +176,11 @@ class TrafficFlowManager:
                 dpi_catalog = await self._dpi_manager.get_full_dpi_catalog()
             except UniFiAuthError as exc:
                 logger.info("Traffic-flow DPI names unresolved: %s", type(exc).__name__)
-                statistics = dpi_name_resolution_unavailable(statistics, reason=DPI_NAMES_API_KEY_REQUIRED)
+                statistics = dpi_name_resolution_unavailable(
+                    statistics,
+                    reason=DPI_NAMES_API_KEY_REQUIRED,
+                    env_prefix=getattr(self._connection, "tls_env_prefix", None),
+                )
             except Exception as exc:
                 logger.warning("Failed to enrich traffic-flow DPI names: %s", type(exc).__name__)
                 statistics = dpi_name_resolution_unavailable(statistics, reason=DPI_NAMES_CATALOGUE_UNAVAILABLE)

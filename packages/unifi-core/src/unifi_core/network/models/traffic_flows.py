@@ -255,6 +255,31 @@ class TrafficFlowTopPolicy(BaseModel):
     policy_type: Optional[str] = Field(default=None, description="Policy type", json_schema_extra={"mutable": False})
 
 
+DPI_NAMES_API_KEY_REQUIRED = "network_api_key_required"
+DPI_NAMES_CATALOGUE_UNAVAILABLE = "dpi_catalogue_unavailable"
+DPI_NAMES_NOT_IN_CATALOGUE = "not_in_dpi_catalogue"
+DPI_NAMES_CATALOGUE_REMEDIATION = "The DPI catalogue could not be read; retry later. IDs and byte counts are complete."
+DPI_NAMES_NOT_IN_CATALOGUE_REMEDIATION = (
+    "The controller's public DPI catalogue does not list these applications; IDs and byte counts are complete."
+)
+
+
+def dpi_names_api_key_remediation(env_prefix: str | None) -> str:
+    """Fixed text naming where a valid Network API key goes.
+
+    The ``UNIFI_*`` variables are named only for a caller that reads them (an
+    MCP server passes its prefix); the API server keeps the key on the
+    controller record instead.
+    """
+    if isinstance(env_prefix, str) and env_prefix:
+        where = f"Set UNIFI_{env_prefix}_API_KEY (or UNIFI_API_KEY) to a valid Network API key"
+    else:
+        where = "Add a valid Network API key to this controller's configuration"
+    return (
+        f"{where} so the DPI catalogue can be read; application/category IDs and byte counts are complete without it."
+    )
+
+
 class TrafficFlowDpiNameResolution(BaseModel):
     """Why ``top_applications`` names are or are not resolved.
 
@@ -455,12 +480,16 @@ def enrich_traffic_flow_statistics_dpi_names(
     return statistics.model_copy(update={"top_applications": top_applications, "dpi_name_resolution": resolution})
 
 
-def dpi_name_resolution_unavailable(statistics: TrafficFlowStatistics, *, reason: str) -> TrafficFlowStatistics:
+def dpi_name_resolution_unavailable(
+    statistics: TrafficFlowStatistics, *, reason: str, env_prefix: str | None = None
+) -> TrafficFlowStatistics:
     """Mark ``top_applications`` names as unresolved because the catalogue could not be read."""
     if not statistics.top_applications:
         return statistics
     remediation = (
-        DPI_NAMES_API_KEY_REMEDIATION if reason == DPI_NAMES_API_KEY_REQUIRED else DPI_NAMES_CATALOGUE_REMEDIATION
+        dpi_names_api_key_remediation(env_prefix)
+        if reason == DPI_NAMES_API_KEY_REQUIRED
+        else DPI_NAMES_CATALOGUE_REMEDIATION
     )
     resolution = TrafficFlowDpiNameResolution(
         status="unavailable",
@@ -470,16 +499,3 @@ def dpi_name_resolution_unavailable(statistics: TrafficFlowStatistics, *, reason
         remediation=remediation,
     )
     return statistics.model_copy(update={"dpi_name_resolution": resolution})
-
-
-DPI_NAMES_API_KEY_REQUIRED = "network_api_key_required"
-DPI_NAMES_CATALOGUE_UNAVAILABLE = "dpi_catalogue_unavailable"
-DPI_NAMES_NOT_IN_CATALOGUE = "not_in_dpi_catalogue"
-DPI_NAMES_API_KEY_REMEDIATION = (
-    "Configure a Network API key (UNIFI_NETWORK_API_KEY) so the DPI catalogue can be read; "
-    "application/category IDs and byte counts are complete without it."
-)
-DPI_NAMES_CATALOGUE_REMEDIATION = "The DPI catalogue could not be read; retry later. IDs and byte counts are complete."
-DPI_NAMES_NOT_IN_CATALOGUE_REMEDIATION = (
-    "The controller's public DPI catalogue does not list these applications; IDs and byte counts are complete."
-)

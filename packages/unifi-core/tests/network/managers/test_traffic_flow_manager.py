@@ -227,6 +227,7 @@ async def test_statistics_missing_api_key_reports_remediation():
             raise UniFiAuthError("no Network API key configured")
 
     conn = _make_connection(response=_STATS_RESPONSE)
+    conn.tls_env_prefix = "NETWORK"
     mgr = TrafficFlowManager(conn, dpi_manager=NoKeyDpiCatalog())
 
     result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
@@ -239,8 +240,8 @@ async def test_statistics_missing_api_key_reports_remediation():
         "total_count": 1,
         "reason": "network_api_key_required",
         "remediation": (
-            "Configure a Network API key (UNIFI_NETWORK_API_KEY) so the DPI catalogue can be read; "
-            "application/category IDs and byte counts are complete without it."
+            "Set UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY) to a valid Network API key so the DPI catalogue "
+            "can be read; application/category IDs and byte counts are complete without it."
         ),
     }
 
@@ -360,3 +361,23 @@ async def test_statistics_handles_list_wrapped_and_empty():
         result = await mgr.get_traffic_flow_statistics(period="HOUR", top=10)
         assert isinstance(result["top_clients"], list)
         assert isinstance(result["allowed_count_by_risk"], dict)
+
+
+@pytest.mark.asyncio
+async def test_statistics_missing_api_key_without_env_prefix_names_the_controller_record():
+    """A caller without server env vars (the API server) is told to fix the controller record."""
+
+    class NoKeyDpiCatalog:
+        async def get_full_dpi_catalog(self):
+            raise UniFiAuthError("no Network API key configured")
+
+    conn = _make_connection(response=_STATS_RESPONSE)
+    conn.tls_env_prefix = None
+    mgr = TrafficFlowManager(conn, dpi_manager=NoKeyDpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    resolution = result["dpi_name_resolution"]
+    assert resolution["reason"] == "network_api_key_required"
+    assert "this controller's configuration" in resolution["remediation"]
+    assert "UNIFI_" not in resolution["remediation"]
