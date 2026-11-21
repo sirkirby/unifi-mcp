@@ -299,8 +299,13 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             outcome="error",
             error_kind="write_request_timeout",
         )
-        # Fixed text: the change may or may not have reached the controller.
-        return {"success": False, "error": f"Failed to execute action: {e}", "mutation_applied": None}
+        # Fixed text. Refused before sending, the change certainly was not
+        # applied; cut off mid-flight, it may or may not have reached the controller.
+        return {
+            "success": False,
+            "error": f"Failed to execute action: {e}",
+            "mutation_applied": None if e.request_sent else False,
+        }
     except actions_svc.CapabilityMismatch:
         await _write_audit_row(
             sm,

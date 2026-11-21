@@ -29,7 +29,14 @@ from unifi_api.services.operation_gate import (
     gate_for,
     hold_controller_read_slots,
 )
-from unifi_core.operation_gate import ControllerBusyError, GateSettings, gate_registry, reset_gate_registry_for_tests
+from unifi_core.operation_gate import (
+    ControllerBusyError,
+    GateKey,
+    GateSettings,
+    OperationGate,
+    gate_registry,
+    reset_gate_registry_for_tests,
+)
 
 
 class FakeAccessController:
@@ -527,7 +534,40 @@ async def test_an_action_cut_off_by_its_write_budget_reports_an_unknown_outcome(
     await app.state.engine.dispose()
 
 
-@pytest.mark.parametrize("entry", ["get_connection_manager", "get_domain_manager", "get_event_reader"])
+async def test_an_action_refused_before_sending_reports_nothing_applied(tmp_path, monkeypatch):
+    app, key, cid, fake = await _bootstrap(tmp_path, monkeypatch, settings=GateSettings())
+
+    class LeapingClock:
+        """Each reading is far past the last: the budget is spent before the manager call."""
+
+        def __init__(self) -> None:
+            self.value = 0.0
+
+        def now(self) -> float:
+            self.value += 1_000.0
+            return self.value
+
+        async def sleep(self, seconds: float) -> None:
+            await asyncio.sleep(0)
+
+    gate = OperationGate(GateSettings(hold_budget_seconds=120), name="access", clock=LeapingClock())
+    gate_registry()._gates[GateKey.for_controller(cid, "access")] = gate
+    async with _client(app) as client:
+        response = await client.post(
+            "/v1/actions/access_lock_door",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"door_id": "d"}, "confirm": True},
+        )
+    body = response.json()
+    assert body["success"] is False and body["mutation_applied"] is False
+    assert "was not sent" in body["error"]
+    assert fake.writes == []
+    await app.state.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "entry", ["get_connection_manager", "get_domain_manager", "get_event_reader", "get_event_reader_cached"]
+)
 async def test_every_factory_entry_point_takes_the_request_read_slot(tmp_path, monkeypatch, entry):
     app, key, cid, fake = await _bootstrap(
         tmp_path, monkeypatch, settings=GateSettings(read_cap=1, direct_call_wait_seconds=0.05)
@@ -539,11 +579,19 @@ async def test_every_factory_entry_point_takes_the_request_read_slot(tmp_path, m
         async with app.state.sessionmaker() as session:
             if entry == "get_domain_manager":
                 await factory.get_domain_manager(session, cid, "access", "door_manager")
+            elif entry == "get_event_reader_cached":
+                await factory.get_event_reader(session, cid, "access")
             else:
                 await getattr(factory, entry)(session, cid, "access")
 
     # Warm the caches first, so the cached paths are checked too.
     await reach()
+    if entry == "get_event_reader_cached":
+        # A route built the event manager: get_event_reader returns that cached
+        # instance without reaching the connection manager.
+        async with app.state.sessionmaker() as session:
+            cached = await factory.get_domain_manager(session, cid, "access", "event_manager")
+            assert await factory.get_event_reader(session, cid, "access") is cached
     scope = hold_controller_read_slots()
     await scope.__anext__()
     try:
