@@ -104,14 +104,32 @@ async def test_bad_credentials_fixed_error_no_retry(console, caplog):
         assert "TOKEN" not in text
 
 
-@pytest.mark.parametrize("status", [400, 404, 422])
-async def test_login_4xx_is_rejected_with_cooldown(manager, console, status):
+@pytest.mark.parametrize("status", [400, 401, 403])
+async def test_login_credential_refusal_is_rejected_with_cooldown(manager, console, status):
     console.reply("POST", LOGIN, {"error": {"code": "errors.thing"}}, status=status)
 
     assert await manager.initialize() is False
 
     assert manager.last_connection_error == cm_module._REJECTED
     assert manager._reconnect_block_remaining() > 0
+
+
+@pytest.mark.parametrize("status", [404, 405, 422])
+async def test_other_login_4xx_names_the_route_not_the_credentials(console, status):
+    """A login route that is missing or refuses the method is not a credential failure: no hint."""
+    console.reply("POST", LOGIN, {"error": {"code": "errors.thing"}}, status=status)
+    cm = InnerSpaceConnectionManager(
+        HOST, USERNAME, PASSWORD, base_url=console.base_url, auth_failure_hint="HINT-SENTINEL"
+    )
+    try:
+        assert await cm.initialize() is False
+
+        assert cm.last_connection_error == cm_module._LOGIN_ROUTE_REFUSED % status
+        assert "HINT-SENTINEL" not in cm.last_connection_error
+        assert "username and password" not in cm.last_connection_error
+        assert cm._reconnect_block_remaining() > 0
+    finally:
+        await cm.close()
 
 
 async def test_login_success_without_session_takes_cooldown(manager, console):
@@ -539,15 +557,14 @@ async def test_error_text_has_no_body_or_host(console, scenario, caplog, tmp_pat
 
 async def test_logs_use_route_template(connected, console, caplog):
     console.reply("GET", FLOOR_PLANS, {"data": []})
-    unknown = f"/proxy/innerspace/integration/v1/{MARKER}"
-    console.reply("GET", unknown, status=500)
+    console.reply("GET", f"{INTEGRATION_PREFIX}/inventory", status=500)
     with caplog.at_level(logging.DEBUG, logger=cm_module.__name__):
         await connected.request("GET", FLOOR_PLANS, operation=OP, params={"siteId": MARKER})
         with pytest.raises(InnerSpaceHttpError):
-            await connected.request("GET", unknown, operation=OP)
+            await connected.request("GET", f"{INTEGRATION_PREFIX}/inventory", operation=OP, params={"q": MARKER})
 
     assert f"{INTEGRATION_PREFIX}/floor_plans" in caplog.text
-    assert "/{unknown}" in caplog.text
+    assert f"{INTEGRATION_PREFIX}/inventory" in caplog.text
     assert MARKER not in caplog.text
     assert HOST not in caplog.text and console.base_url not in caplog.text
 
@@ -969,3 +986,28 @@ async def test_unverified_tls_warns(console, caplog):
 def test_redaction_covers_session_keys():
     for key in ("TOKEN", "x-csrf-token", "csrfToken", "cookie", "set-cookie"):
         assert is_sensitive_key(key), key
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/proxy/innerspace/api/walls",
+        f"{INTEGRATION_PREFIX}/{MARKER}",
+        "/proxy/network/api/self",
+        "/api/users/self",
+    ],
+)
+async def test_routes_outside_the_allowlist_are_refused_before_sending(connected, console, path):
+    console.reply("GET", path, {"data": []})
+    sent_before = len(console.requests)
+
+    with pytest.raises(UniFiValidationError) as raised:
+        await connected.request("GET", path, operation=OP)
+
+    assert "unsafe InnerSpace request path" in str(raised.value)
+    assert len(console.requests) == sent_before
+
+
+def test_host_is_stripped():
+    cm = InnerSpaceConnectionManager(" 192.0.2.1 ", USERNAME, PASSWORD)
+    assert cm.host == "192.0.2.1"

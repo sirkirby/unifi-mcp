@@ -52,7 +52,7 @@ interchangeable.
 
 | Family | API | IDs | Tools |
 |---|---|---|---|
-| Firewall policy CRUD | V2 | Mongo | `unifi_list_firewall_policies`, `unifi_get_firewall_policy_details`, create / update / delete / toggle |
+| Firewall policy CRUD | V2 | Mongo | `unifi_list_firewall_policies`, `unifi_get_firewall_policy_details`, create / update / delete / toggle, `unifi_get_firewall_policy_order` + `unifi_set_firewall_policy_order` (session credentials) |
 | Firewall policy ordering | Integration | UUID | `unifi_get_firewall_policy_ordering` + `unifi_reorder_firewall_policies` |
 
 If your new tool fits cleanly inside an existing family, join it. If not,
@@ -93,9 +93,7 @@ The scoping clause is not optional for integration-API tools.
 
 ## Step 3: Require the API key, with clear remediation
 
-This step covers the Network Integration API. InnerSpace is session-only and does not use it (see AGENTS.md, InnerSpace session isolation).
-
-Network Integration API endpoints reject session-cookie auth. Without the API key,
+Integration API endpoints reject session-cookie auth. Without the API key,
 the tool MUST fail with a remediation message. Put the check in the manager
 so every tool in the family inherits it:
 
@@ -107,6 +105,11 @@ if self._auth is None or not self._auth.has_api_key:
         "and set UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP."
     )
 ```
+
+Name the server-level variable first in new messages and docs. The shared
+`UNIFI_API_KEY` reaches a server only when its host is the `UNIFI_HOST`
+console; with any other `UNIFI_NETWORK_HOST` it is ignored, so
+`UNIFI_NETWORK_API_KEY` is the one that always works.
 
 See `firewall_manager.py:_request_integration_api` for the canonical
 implementation.

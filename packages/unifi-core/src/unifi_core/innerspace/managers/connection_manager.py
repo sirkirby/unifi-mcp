@@ -127,6 +127,12 @@ _REJECTED = (
     "The UniFi OS console rejected the configured username and password. Check them; "
     "automatic reconnects back off after each rejection."
 )
+# Login answers that mean the console refused these credentials.
+_CREDENTIAL_REFUSED_STATUSES = frozenset({400, 401, 403})
+_LOGIN_ROUTE_REFUSED = (
+    "The UniFi OS console's login route answered HTTP %s. Check that the configured host and port point at a "
+    "UniFi OS console; automatic reconnects back off after each refusal."
+)
 _RATE_LIMITED = "The UniFi OS console rate-limited the login. Automatic reconnects back off after each refusal."
 _NO_SESSION_ISSUED = (
     "The UniFi OS console accepted the login request but issued no session. Automatic reconnects back off "
@@ -149,13 +155,16 @@ _NO_APP_LIST = (
 )
 
 
+_UNKNOWN_ROUTE = "/{unknown}"
+
+
 def _log_route(path: str) -> str:
     """Return fixed route vocabulary only, including for unknown paths and queries."""
     route = path.partition("?")[0].partition("#")[0]
     for pattern, template in _LOG_ROUTES:
         if pattern.fullmatch(route):
             return template
-    return "/{unknown}"
+    return _UNKNOWN_ROUTE
 
 
 def _is_loopback(host: str) -> bool:
@@ -209,6 +218,14 @@ class InnerSpaceHttpError(UniFiOperationError):
 
 class _SessionRejectedError(UniFiAuthError):
     """The console refused a session it had just issued."""
+
+
+class _LoginRouteRefusedError(UniFiAuthError):
+    """The login route refused the request with a status that does not mean bad credentials."""
+
+    def __init__(self, message: str, *, status: int) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class _NoSessionIssuedError(UniFiAuthError):
@@ -319,6 +336,7 @@ class InnerSpaceConnectionManager:
         base_url: str | None = None,
         auth_failure_hint: str | None = None,
     ) -> None:
+        host = host.strip() if isinstance(host, str) else host
         self.host = host
         self.port = port
         self.tls_env_prefix = tls_env_prefix
@@ -479,6 +497,8 @@ class InnerSpaceConnectionManager:
             text = _SESSION_REJECTED
         elif isinstance(error, _NoSessionIssuedError):
             text = _NO_SESSION_ISSUED
+        elif isinstance(error, _LoginRouteRefusedError):
+            text = _LOGIN_ROUTE_REFUSED % error.status
         elif isinstance(error, UniFiAuthError):
             text = self._with_auth_failure_hint(_REJECTED)
         elif isinstance(error, UniFiRateLimitError):
@@ -577,11 +597,16 @@ class InnerSpaceConnectionManager:
         )
 
     def _url(self, path: str, operation: str) -> URL:
-        """Join ``path`` to the console origin, refusing any path that could leave it or re-target it."""
+        """Join ``path`` to the console origin, refusing any path that could leave it or re-target it.
+
+        Only the routes in ``_LOG_ROUTES`` are sent: the console session can reach every
+        console API, so the client itself is the boundary that keeps it on InnerSpace.
+        """
         if self._origin is not None and (
             isinstance(path, str)
             and _SAFE_PATH.fullmatch(path)
             and not any(segment in (".", "..") for segment in path.split("/"))
+            and _log_route(path) != _UNKNOWN_ROUTE
         ):
             url = self._origin.with_path(path, encoded=True)
             if url.origin() == self._origin:
@@ -666,8 +691,11 @@ class InnerSpaceConnectionManager:
         if reply.status == 429:
             raise UniFiRateLimitError(_RATE_LIMITED)
         # Every other refusal of the request, and a success without a session, takes the cool-down.
-        if 400 <= reply.status < 500:
+        # Only a credential refusal names the credentials (and carries the auth-failure hint).
+        if reply.status in _CREDENTIAL_REFUSED_STATUSES:
             raise UniFiAuthError(_REJECTED)
+        if 400 <= reply.status < 500:
+            raise _LoginRouteRefusedError(_LOGIN_ROUTE_REFUSED % reply.status, status=reply.status)
         if 200 <= reply.status < 300:
             raise _NoSessionIssuedError(_NO_SESSION_ISSUED)
         raise UniFiConnectionError(f"{operation}: the console answered HTTP {reply.status} without a session")
