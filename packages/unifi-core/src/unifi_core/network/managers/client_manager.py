@@ -23,6 +23,10 @@ CACHE_PREFIX_CLIENTS = "clients"
 # V2 active-client list as the Network UI requests it to include Thread end devices.
 MATTER_THREAD_ACTIVE_CLIENTS_PATH = "/clients/active?includeMatterThreadClients=true"
 MATTER_THREAD_CLIENT_TYPE = "MATTER_THREAD"
+MATTER_THREAD_SESSION_REQUIRED = (
+    "Matter/Thread client inventory requires Network session authentication. "
+    "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD."
+)
 
 UNKNOWN_USER_CODE = "api.err.UnknownUser"
 
@@ -560,10 +564,14 @@ class ClientManager:
         list with ``includeMatterThreadClients=true``, where they carry
         ``type == "MATTER_THREAD"`` and no MAC address. Only those records are
         returned; the wired/Wi-Fi records in the same response stay with
-        :meth:`get_clients`. Requires a Network session (V2 API).
+        :meth:`get_clients`. Requires a Network session (V2 API); an API-key
+        route is never used for this session-only endpoint.
+
+        Errors carry fixed text and the exception class only, so controller
+        response text (device names, addresses) never reaches the caller.
         """
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
+        if not await self._connection.ensure_session_connected():
+            raise UniFiAuthError(MATTER_THREAD_SESSION_REQUIRED)
         cache_key = f"{CACHE_PREFIX_CLIENTS}_matter_thread_{self._connection.site}"
         cached_data: Optional[List[dict[str, Any]]] = self._connection.get_cached(cache_key)
         if cached_data is not None:
@@ -574,10 +582,20 @@ class ClientManager:
             )
         except Exception as e:
             logger.error("Error getting Matter/Thread clients: %s", type(e).__name__)
-            raise
-        records = response if isinstance(response, list) else []
+            raise UniFiOperationError(
+                f"Failed to list Matter/Thread clients ({type(e).__name__}). "
+                "Verify controller availability and Network session permissions."
+            ) from None
+        if not isinstance(response, list):
+            logger.warning("Matter/Thread client list returned an unexpected response shape")
+            raise UniFiOperationError(
+                "Failed to list Matter/Thread clients: the controller returned an unexpected response shape. "
+                "Verify that this Network version supports Matter/Thread client inventory."
+            )
         thread_clients = [
-            record for record in records if isinstance(record, dict) and record.get("type") == MATTER_THREAD_CLIENT_TYPE
+            record
+            for record in response
+            if isinstance(record, dict) and record.get("type") == MATTER_THREAD_CLIENT_TYPE
         ]
         self._connection._update_cache(cache_key, thread_clients)
         return thread_clients
