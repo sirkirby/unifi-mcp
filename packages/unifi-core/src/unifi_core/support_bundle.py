@@ -293,12 +293,63 @@ ConnectionCapabilities = Annotated[
 ]
 
 
+class OperationGateSummary(_ClosedModel):
+    """How the server's controller operation gate is doing: flags and counts only.
+
+    Never names the controller or the tools: the gate belongs to the bundle's
+    product, and its counters are bucketed like every other count here.
+    """
+
+    write_held: bool
+    holder_over_budget: bool
+    queue_depth: CountBucket
+    reads_in_use: int = Field(ge=0, le=256)
+    read_cap: int = Field(ge=1, le=256)
+    hold_budget_seconds: int = Field(ge=1, le=3_600)
+    writes_completed: CountBucket
+    writes_refused_busy: CountBucket
+    writes_withdrawn: CountBucket
+    holds_over_budget: CountBucket
+    reads_refused_busy: CountBucket
+
+
+def operation_gate_summary(snapshot: Mapping[str, Any]) -> OperationGateSummary:
+    """Reduce an ``OperationGate.snapshot()`` to the support bundle's closed summary."""
+    counters = snapshot.get("counters") if isinstance(snapshot.get("counters"), Mapping) else {}
+
+    def _count(name: str) -> CountBucket:
+        value = counters.get(name, 0)
+        return count_bucket(value if isinstance(value, int) and not isinstance(value, bool) else 0)
+
+    def _int(name: str, low: int, high: int) -> int:
+        value = snapshot.get(name)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return low
+        return max(low, min(high, int(value)))
+
+    return OperationGateSummary(
+        write_held=snapshot.get("write_held") is True,
+        holder_over_budget=snapshot.get("holder_over_budget") is True,
+        queue_depth=count_bucket(_int("queue_depth", 0, 1_000_000)),
+        reads_in_use=_int("reads_in_use", 0, 256),
+        read_cap=_int("read_cap", 1, 256),
+        hold_budget_seconds=_int("hold_budget_seconds", 1, 3_600),
+        writes_completed=_count("writes_completed"),
+        writes_refused_busy=_count("writes_busy"),
+        writes_withdrawn=_count("writes_withdrawn"),
+        holds_over_budget=_count("holds_over_budget"),
+        reads_refused_busy=_count("reads_busy"),
+    )
+
+
 class ConnectionSection(_ClosedModel):
     initialized: bool
     connected: bool
     tls_verification_enabled: bool
     last_attempt: SafeConnectionAttempt
     capabilities: ConnectionCapabilities
+    # The controller operation gate, when the server runs one.
+    operation_gate: OperationGateSummary | None = None
 
 
 class ServerSection(_ClosedModel):
