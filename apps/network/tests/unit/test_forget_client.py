@@ -34,23 +34,37 @@ class TestForgetClient:
 
     @pytest.fixture
     def client_manager(self, mock_connection):
-        """Create a ClientManager with mocked connection."""
+        """Create a ClientManager with mocked connection whose settle waits never sleep."""
         from unifi_core.network.managers.client_manager import ClientManager
 
-        return ClientManager(mock_connection)
+        return ClientManager(mock_connection, readback_sleep=AsyncMock())
 
     @staticmethod
     def _controller(
-        mock_connection, *, before=True, after=False, stat_user_served=True, forget_error=None, user_table=_UNSET
+        mock_connection,
+        *,
+        before=True,
+        after=False,
+        stat_user_served=True,
+        forget_error=None,
+        user_table=_UNSET,
+        stale_reads=0,
     ):
-        """Answer the per-MAC lookup with the record before and after the forget command."""
-        state = {"known": before, "forgotten": False}
+        """Answer the per-MAC lookup with the record before and after the forget command.
+
+        ``stale_reads`` per-MAC lookups after the command still answer with the
+        record, as a controller does whose read lags its write.
+        """
+        state = {"known": before, "forgotten": False, "stale": 0}
         record = {"_id": "u1", "mac": "aa:bb:cc:dd:ee:ff"}
 
         async def request(api_request):
             if api_request.path.startswith("/stat/user/"):
                 if not stat_user_served:
                     raise ResponseError("Call https://h/proxy/network/api/s/default/stat/user/x received 404 Not Found")
+                if state["stale"]:
+                    state["stale"] -= 1
+                    return [record]
                 if state["known"]:
                     return [record]
                 raise AiounifiException({"meta": {"rc": "error", "msg": "api.err.UnknownUser"}, "data": []})
@@ -63,6 +77,7 @@ class TestForgetClient:
                     raise forget_error
                 state["known"] = after
                 state["forgotten"] = True
+                state["stale"] = stale_reads
                 return [record] if not after else []
             raise AssertionError(f"unexpected request {api_request.path}")
 
@@ -102,10 +117,33 @@ class TestForgetClient:
 
     @pytest.mark.asyncio
     async def test_record_still_listed_after_the_command_is_an_error(self, client_manager, mock_connection):
+        from unifi_core.write_verification import READBACK_SETTLE_DELAYS_SECONDS
+
         self._controller(mock_connection, after=True)
 
-        with pytest.raises(UniFiOperationError, match="still lists"):
+        with pytest.raises(UniFiOperationError, match="still lists") as caught:
             await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
+        assert "Re-read the client before retrying" in str(caught.value)
+        waits = [call.args[0] for call in client_manager._readback_sleep.await_args_list]
+        assert waits == list(READBACK_SETTLE_DELAYS_SECONDS)
+
+    @pytest.mark.asyncio
+    async def test_a_record_that_lingers_briefly_after_the_command_is_forgotten(self, client_manager, mock_connection):
+        """A read made right after the command can still list the client; a later one decides."""
+        self._controller(mock_connection, stale_reads=2)
+
+        assert await client_manager.forget_client("AA:BB:CC:DD:EE:FF") is True
+        waits = [call.args[0] for call in client_manager._readback_sleep.await_args_list]
+        assert waits == [0.25, 0.5]
+
+    @pytest.mark.asyncio
+    async def test_a_forget_confirmed_at_once_reads_back_once(self, client_manager, mock_connection):
+        self._controller(mock_connection)
+
+        assert await client_manager.forget_client("AA:BB:CC:DD:EE:FF") is True
+        lookups = [c[0][0] for c in mock_connection.request.call_args_list if c[0][0].path.startswith("/stat/user/")]
+        assert len(lookups) == 2  # One before the command, one after.
+        client_manager._readback_sleep.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_without_the_per_mac_endpoint_the_user_table_decides(self, client_manager, mock_connection):

@@ -1,5 +1,7 @@
+import asyncio
 import ipaddress
 import logging
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Any, List, Optional
 
@@ -15,6 +17,7 @@ from unifi_core.network.managers.connection_manager import (
     response_status,
 )
 from unifi_core.request_paths import object_id
+from unifi_core.write_verification import settle_readback
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -61,13 +64,21 @@ class FixedApOperationError(UniFiOperationError):
 class ClientManager:
     """Manages client-related operations on the Unifi Controller."""
 
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        *,
+        readback_sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+    ):
         """Initialize the Client Manager.
 
         Args:
             connection_manager: The shared ConnectionManager instance.
+            readback_sleep: How to wait between read-backs while a write
+                settles; tests pass a fake so they never sleep.
         """
         self._connection = connection_manager
+        self._readback_sleep = readback_sleep
 
     async def get_clients(self, include_offline: bool = False) -> List[Client | dict[str, Any]]:
         """Get clients for the current site.
@@ -505,7 +516,7 @@ class ClientManager:
             UniFiNotFoundError: The controller has no known-client record for
                 the MAC, so nothing was sent.
             UniFiOperationError: The controller still lists the client after
-                accepting the command.
+                accepting the command and a short settle wait.
         """
         client_mac = normalize_mac(client_mac) or client_mac
         path_mac = canonical_mac(client_mac)
@@ -528,9 +539,19 @@ class ClientManager:
         except Exception as e:
             logger.error("Error forgetting client [redacted]: %s", type(e).__name__)
             raise
-        if await self._is_known_client(path_mac):
+        settled = await settle_readback(
+            lambda: self._user_record(path_mac), lambda record: record is None, sleep=self._readback_sleep
+        )
+        if not settled.matched:
+            logger.warning(
+                "Forget read-back still listed the client after %d reads over %.1fs",
+                settled.reads,
+                settled.waited_seconds,
+            )
             raise UniFiOperationError(
-                f"the controller accepted the forget command but still lists client '{client_mac}'"
+                f"the controller accepted the forget command but still lists client '{client_mac}' after "
+                f"waiting {settled.waited_seconds:.1f}s; the forget may not have applied. "
+                "Re-read the client before retrying."
             )
         return True
 
@@ -939,7 +960,9 @@ class ClientManager:
         The controller accepts this only through the session-authenticated
         ``/rest/user/{id}`` surface. The write starts from a freshly read user
         record, preserving unrelated settings, and verifies the persisted
-        fixed-AP state rather than trusting the PUT acknowledgement.
+        fixed-AP state rather than trusting the PUT acknowledgement. The
+        read-back is retried for a few seconds before a mismatch is reported,
+        because a read made right after the PUT can still show the old record.
         """
         client_mac = canonical_mac(client_mac)
         ap_mac = canonical_mac(fixed_ap_mac) if fixed_ap_mac is not None else None
@@ -985,17 +1008,24 @@ class ClientManager:
             # Mark a not-yet-noted client as known first, best effort: Network
             # 10.6 keeps the record unnoted yet still honours the fixed AP, and
             # the read-back below is what verifies the outcome. Re-read before
-            # the final full-record PUT so that it cannot undo the note.
+            # the final full-record PUT so that it cannot undo the note; a read
+            # made right after the PUT can still show the old record, so give
+            # it a short settle wait.
             if not persisted.get("noted"):
                 noted = dict(persisted)
                 noted["noted"] = True
                 await self._connection.request(
                     ApiRequest(method="put", path=f"/rest/user/{object_id(client_id, 'client')}", data=noted)
                 )
-                persisted = await self._get_user_by_mac(client_mac)
+                settled_note = await settle_readback(
+                    lambda: self._get_user_by_mac(client_mac),
+                    lambda record: record is not None and bool(record.get("noted")),
+                    sleep=self._readback_sleep,
+                )
+                persisted = settled_note.value
                 if persisted is None:
                     raise FixedApOperationError("Controller did not return the client before fixed AP update")
-                if not persisted.get("noted"):
+                if not settled_note.matched:
                     logger.info("Controller kept client [redacted] unnoted; continuing with the fixed AP update")
 
             update = dict(persisted)
@@ -1009,13 +1039,28 @@ class ClientManager:
             )
             self._connection._invalidate_cache(f"{CACHE_PREFIX_CLIENTS}")
 
-            readback = await self._get_user_by_mac(client_mac)
-            if readback is None:
-                raise FixedApOperationError("Controller did not return the client after fixed AP update")
-            enabled_matches = readback.get("fixed_ap_enabled") is fixed_ap_enabled
-            ap_matches = not fixed_ap_enabled or mac_equal(readback.get("fixed_ap_mac"), ap_mac)
-            if not enabled_matches or not ap_matches:
-                raise FixedApOperationError("Controller did not persist the requested fixed AP settings")
+            def applied(record: Optional[dict]) -> bool:
+                if record is None or record.get("fixed_ap_enabled") is not fixed_ap_enabled:
+                    return False
+                return not fixed_ap_enabled or mac_equal(record.get("fixed_ap_mac"), ap_mac)
+
+            # A read made right after the PUT can still show the old record
+            # (seen on Network 11.0), so the read-back gets a short settle wait.
+            settled = await settle_readback(
+                lambda: self._get_user_by_mac(client_mac), applied, sleep=self._readback_sleep
+            )
+            readback = settled.value
+            if not settled.matched:
+                logger.warning(
+                    "Fixed AP read-back did not match after %d reads over %.1fs", settled.reads, settled.waited_seconds
+                )
+                if readback is None:
+                    raise FixedApOperationError("Controller did not return the client after fixed AP update")
+                raise FixedApOperationError(
+                    "Controller accepted the fixed AP update, but the client read back after waiting "
+                    f"{settled.waited_seconds:.1f}s did not show the requested settings; the update may not have "
+                    "applied. Re-read the client before retrying."
+                )
             logger.info("Fixed AP setting updated for client [redacted]")
             return {
                 "success": True,

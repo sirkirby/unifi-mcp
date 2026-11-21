@@ -2,15 +2,76 @@
 
 UniFi's legacy endpoints can return ``rc: ok`` while dropping or coercing
 individual fields.  This module classifies the post-write state without tying
-the result to MCP, REST, or GraphQL response formatting.
+the result to MCP, REST, or GraphQL response formatting, and gives a write a
+short, bounded wait for its read-back to show the change.
 """
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Collection, Mapping
+from typing import Any, Collection, Generic, Mapping, TypeVar
+
+from unifi_core.operation_gate import held_write_remaining_seconds
 
 _MISSING = object()
+
+T = TypeVar("T")
+
+# Waits between read-backs while a write settles: five reads over 3 s at most.
+READBACK_SETTLE_DELAYS_SECONDS: tuple[float, ...] = (0.25, 0.5, 1.0, 1.25)
+
+# Hold budget a settle wait leaves for the read that follows it and for the
+# rest of the write, so waiting never spends the write's last seconds.
+READBACK_SETTLE_HOLD_RESERVE_SECONDS = 2.0
+
+
+@dataclass(frozen=True)
+class SettledReadback(Generic[T]):
+    """The last read-back of a settle wait and whether it matched."""
+
+    value: T
+    matched: bool
+    reads: int
+    waited_seconds: float
+
+
+async def settle_readback(
+    read: Callable[[], Awaitable[T]],
+    matches: Callable[[T], bool],
+    *,
+    delays: Sequence[float] = READBACK_SETTLE_DELAYS_SECONDS,
+    sleep: Callable[[float], Awaitable[Any]] | None = None,
+) -> SettledReadback[T]:
+    """Read back a write until ``matches`` accepts the result or the waits run out.
+
+    Some controllers answer a read made just after a write with the record as
+    it was before it, and a read a few seconds later with the change applied.
+    The first read is immediate; each later one follows the next of ``delays``.
+    A read that raises propagates at once: only a read that does not match yet
+    is retried. Inside a held write a wait is skipped once it would leave less
+    than :data:`READBACK_SETTLE_HOLD_RESERVE_SECONDS` of the hold budget, so
+    settling never runs the write out of time. The caller decides what an
+    unmatched result means.
+    """
+    pause = asyncio.sleep if sleep is None else sleep
+    value = await read()
+    reads = 1
+    waited = 0.0
+    if matches(value):
+        return SettledReadback(value, True, reads, waited)
+    for delay in delays:
+        remaining = held_write_remaining_seconds()
+        if remaining is not None and remaining < delay + READBACK_SETTLE_HOLD_RESERVE_SECONDS:
+            break
+        await pause(delay)
+        waited += delay
+        value = await read()
+        reads += 1
+        if matches(value):
+            return SettledReadback(value, True, reads, waited)
+    return SettledReadback(value, False, reads, waited)
 
 
 @dataclass(frozen=True)
