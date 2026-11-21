@@ -5987,11 +5987,12 @@
             "type": "string"
           },
           "filter_type": {
-            "description": "Filter clients by connection type: 'all' (default), 'wired', or 'wireless'",
+            "description": "Filter clients by connection type: 'all' (default, wired + Wi-Fi), 'wired', 'wireless', or 'thread' (connected Matter/Thread end devices only)",
             "enum": [
               "all",
               "wired",
-              "wireless"
+              "wireless",
+              "thread"
             ],
             "type": "string"
           },

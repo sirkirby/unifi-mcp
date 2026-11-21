@@ -13,7 +13,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from unifi_core.network.models.clients import _is_online, client_from_controller
+from unifi_core.network.models.clients import _is_online, _stringify_dt, client_from_controller
 from unifi_core.network.models.devices import normalize_radio_channel
 from unifi_core.network.models.firewall import SELECTOR_ACTIVATION, _activator_matches, activator_is_known
 from unifi_core.network.models.firewall import from_controller as firewall_policy_from_controller
@@ -220,6 +220,110 @@ def shape_client_list(
     if unknown_fields:
         response["unknown_fields"] = unknown_fields
     return _with_inventory_source(response, clients)
+
+
+THREAD_CLIENT_FIELDS = (
+    "thread_client_id",
+    "name",
+    "model",
+    "vendor",
+    "connection_type",
+    "status",
+    "matter_status",
+    "first_seen",
+    "last_seen",
+    "ipv6_addresses",
+    "thread_network_name",
+    "thread_network_id",
+    "channel",
+    "signal_dbm",
+    "parent_mac",
+    "parent_name",
+    "border_router_mac",
+    "border_router_name",
+)
+
+
+def thread_client_from_controller(raw: dict[str, Any]) -> dict[str, Any]:
+    """Public shape of one V2 ``MATTER_THREAD`` active-client record.
+
+    Thread end devices have no MAC address; ``thread_client_id`` is the
+    controller's own identifier for the record. Serial numbers and Matter
+    fabric/endpoint internals are deliberately not exposed.
+    """
+    matter = raw.get("matter") if isinstance(raw.get("matter"), dict) else {}
+    basic_info = matter.get("basic_info") if isinstance(matter.get("basic_info"), dict) else {}
+    ipv6 = raw.get("ipv6_address")
+    shaped = {
+        "thread_client_id": raw.get("id"),
+        "name": raw.get("name") or raw.get("display_name"),
+        "model": raw.get("model_name") or basic_info.get("product_name"),
+        "vendor": basic_info.get("vendor_name"),
+        "connection_type": "Thread",
+        "status": raw.get("status"),
+        "matter_status": matter.get("status"),
+        "first_seen": _stringify_dt(raw.get("first_seen")),
+        "last_seen": _stringify_dt(raw.get("last_seen")),
+        "ipv6_addresses": [addr for addr in ipv6 if isinstance(addr, str)] if isinstance(ipv6, list) else None,
+        "thread_network_name": raw.get("network_name"),
+        "thread_network_id": raw.get("network_id"),
+        "channel": raw.get("channel"),
+        "signal_dbm": raw.get("signal") if raw.get("signal") is not None else raw.get("last_rssi"),
+        "parent_mac": raw.get("uplink_id"),
+        "parent_name": raw.get("uplink_name"),
+        "border_router_mac": raw.get("uplink_tbr_mac"),
+        "border_router_name": raw.get("uplink_tbr_name"),
+    }
+    return {key: value for key, value in shaped.items() if value is not None}
+
+
+def shape_thread_client_list(
+    clients: list[Any],
+    *,
+    site: str,
+    search: str | None = None,
+    limit: int = 100,
+    fields: str | None = None,
+) -> dict[str, Any]:
+    """Apply the public client-list filters and envelope to Matter/Thread clients."""
+    shaped = [thread_client_from_controller(_raw(client)) for client in clients]
+    if search and search.strip():
+        needle = search.strip().lower()
+        shaped = [
+            client
+            for client in shaped
+            if any(
+                needle in str(client.get(key) or "").lower()
+                for key in ("name", "model", "vendor", "thread_client_id", "parent_mac", "border_router_mac")
+            )
+            or any(needle in addr.lower() for addr in client.get("ipv6_addresses", []))
+        ]
+    total_count = len(shaped)
+    shaped = shaped[:limit]
+    unknown_fields: list[str] = []
+    if fields and fields.strip():
+        requested = {field.strip() for field in fields.split(",")}
+        unknown_fields = sorted(requested - set(THREAD_CLIENT_FIELDS))
+        shaped = [{key: value for key, value in client.items() if key in requested} for client in shaped]
+    response: dict[str, Any] = {
+        "success": True,
+        "site": site,
+        "filter_type": "thread",
+        "search": search,
+        "fields": fields,
+        "total_count": total_count,
+        "returned_count": len(shaped),
+        "count": len(shaped),
+        "limit": limit,
+        "clients": shaped,
+        "note": (
+            "Matter/Thread clients have no MAC address and cannot be passed to the MAC-based client tools. "
+            "thread_client_id is scoped to Thread client listings."
+        ),
+    }
+    if unknown_fields:
+        response["unknown_fields"] = unknown_fields
+    return response
 
 
 def shape_client_details(

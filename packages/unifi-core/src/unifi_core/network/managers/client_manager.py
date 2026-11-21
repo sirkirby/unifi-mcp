@@ -3,7 +3,7 @@ import logging
 from types import SimpleNamespace
 from typing import Any, List, Optional
 
-from aiounifi.models.api import ApiRequest
+from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.client import Client
 
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
@@ -19,6 +19,10 @@ from unifi_core.request_paths import object_id
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_CLIENTS = "clients"
+
+# V2 active-client list as the Network UI requests it to include Thread end devices.
+MATTER_THREAD_ACTIVE_CLIENTS_PATH = "/clients/active?includeMatterThreadClients=true"
+MATTER_THREAD_CLIENT_TYPE = "MATTER_THREAD"
 
 UNKNOWN_USER_CODE = "api.err.UnknownUser"
 
@@ -547,6 +551,36 @@ class ClientManager:
     async def _is_known_client(self, path_mac: str) -> bool:
         """Whether the controller has a user-table record for the MAC, read per MAC."""
         return await self._user_record(path_mac) is not None
+
+    async def get_matter_thread_clients(self) -> List[dict[str, Any]]:
+        """Get connected Matter-over-Thread clients for the current site.
+
+        Thread end devices never appear in ``/stat/sta`` or ``/rest/user``. The
+        Network UI (verified on Network 11.0) reads them from the V2 active-client
+        list with ``includeMatterThreadClients=true``, where they carry
+        ``type == "MATTER_THREAD"`` and no MAC address. Only those records are
+        returned; the wired/Wi-Fi records in the same response stay with
+        :meth:`get_clients`. Requires a Network session (V2 API).
+        """
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        cache_key = f"{CACHE_PREFIX_CLIENTS}_matter_thread_{self._connection.site}"
+        cached_data: Optional[List[dict[str, Any]]] = self._connection.get_cached(cache_key)
+        if cached_data is not None:
+            return cached_data
+        try:
+            response = await self._connection.request(
+                ApiRequestV2(method="get", path=MATTER_THREAD_ACTIVE_CLIENTS_PATH)
+            )
+        except Exception as e:
+            logger.error("Error getting Matter/Thread clients: %s", type(e).__name__)
+            raise
+        records = response if isinstance(response, list) else []
+        thread_clients = [
+            record for record in records if isinstance(record, dict) and record.get("type") == MATTER_THREAD_CLIENT_TYPE
+        ]
+        self._connection._update_cache(cache_key, thread_clients)
+        return thread_clients
 
     async def get_blocked_clients(self) -> List[Client]:
         """Get a list of currently blocked clients."""
