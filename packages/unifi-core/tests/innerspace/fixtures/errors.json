@@ -1,0 +1,33 @@
+{
+  "forbidden_no_session": {
+    "body": {
+      "error": {
+        "code": "errors.api.access",
+        "errors": [],
+        "message": "Headers missing. Access denied",
+        "type": "access"
+      }
+    },
+    "status": 403
+  },
+  "logout_forbidden": {
+    "body": {
+      "error": {
+        "code": 403,
+        "message": "Forbidden"
+      }
+    },
+    "status": 403
+  },
+  "not_found": {
+    "body": {
+      "error": {
+        "code": "errors.route.notFound",
+        "errors": [],
+        "message": "Route not found",
+        "type": "not_found"
+      }
+    },
+    "status": 404
+  }
+}

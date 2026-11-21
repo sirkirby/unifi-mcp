@@ -113,6 +113,8 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 
 UniFi exposes three API surfaces with disjoint ID/auth models: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields), the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields), and the UniFi-OS **Alarm Manager v2** service (`/api/v2/alarms/`, session + **SuperAdmin** auth, UUIDs, `snake_case` fields). They are **not interchangeable**.
 
+InnerSpace's `/proxy/innerspace/integration/v1` is session-only; see InnerSpace session isolation.
+
 Authentication credentials and API surfaces are separate concepts. Network 10.6.106
 and 11.1 also accept API keys on verified legacy and V2 GET read endpoints, preserving
 legacy IDs and fields. Add a path to the key-read allowlist only after a live GET with
@@ -132,6 +134,18 @@ Site Manager is a fourth, cloud-only API surface: Ubiquiti's `api.ui.com`, authe
 - Site Manager host, site, and device IDs are scoped to the Site Manager tool family. Do not pass them to Network, Protect, or Access tools, and do not translate between them.
 - Setup tooling MUST NOT offer to reuse or migrate `UNIFI_API_KEY` as a Site Manager key.
 - **Anchor:** `packages/unifi-core/src/unifi_core/sitemanager/managers/connection_manager.py`
+
+### InnerSpace session isolation
+
+InnerSpace is a separate UniFi OS application under `/proxy/innerspace/` with its own routes and ID family; the Network surface rules above do not apply to it.
+
+- InnerSpace uses the console session only (login on `/api/auth/login`, the `TOKEN` cookie plus its CSRF token). A console's local API key MUST NOT be used for InnerSpace. Do not add the Site Manager cloud-connector key path without its own credential isolation rules.
+- The session client sends only the routes in its route allowlist (`_LOG_ROUTES`). Reads use the documented integration API (`/proxy/innerspace/integration/v1`); the only internal route is the project's display unit. Any other internal route is **banned** until it is added to the allowlist and to this rule.
+- InnerSpace IDs are scoped to the InnerSpace tool family: never pass them to other products' tools or translate between them. Caller-supplied IDs placed in a path MUST pass through `object_id`; a plan image is fetched only from that plan's own `image_url`, never from a caller-supplied filename.
+- Whether InnerSpace is installed and running comes only from the `/api/system` application list, never from a 403 or a 404.
+- The HTTP session MUST NOT follow redirects or honor proxy environment variables.
+- Errors are built from fixed text, the HTTP status and a pattern-checked `errors.*` code, never the response body, console address, request path or exception text. Logs carry the operation, a route template and the exception class.
+- **Anchor:** `packages/unifi-core/src/unifi_core/innerspace/managers/connection_manager.py`
 
 ### Authentication routing golden path
 

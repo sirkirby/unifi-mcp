@@ -297,3 +297,46 @@ class TestAccess:
             for marker in detail_markers:
                 assert marker not in message
         assert "UNIFI_ACCESS_SSL_FINGERPRINT" in manager._unreachable_message()
+
+
+class TestInnerSpace:
+    @pytest.fixture
+    def manager_cls(self):
+        from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
+
+        return InnerSpaceConnectionManager
+
+    async def test_off_by_default_and_silent(self, manager_cls, caplog):
+        """A library consumer gets no warning at construction; the warning needs ``tls_env_prefix``."""
+        with caplog.at_level(logging.WARNING):
+            manager = manager_cls("192.0.2.1", "admin", "secret")
+        session = manager._new_session()
+        try:
+            assert _connector_ssl(session) is False
+            assert session.trust_env is False
+        finally:
+            await session.close()
+        assert caplog.records == []
+
+    async def test_verification_on(self, manager_cls):
+        manager = manager_cls("192.0.2.1", "admin", "secret", verify_ssl=True)
+        session = manager._new_session()
+        try:
+            assert _connector_ssl(session) is True
+            assert len(session._middlewares) == 1
+        finally:
+            await session.close()
+
+    async def test_pin_reaches_the_session_connector(self, manager_cls):
+        manager = manager_cls("192.0.2.1", "admin", "secret", verify_ssl=False, ssl_fingerprint=FINGERPRINT)
+        session = manager._new_session()
+        try:
+            pin = _connector_ssl(session)
+            assert isinstance(pin, aiohttp.Fingerprint)
+            assert pin.fingerprint == bytes.fromhex(FINGERPRINT)
+        finally:
+            await session.close()
+
+    def test_malformed_fingerprint_fails_at_construction(self, manager_cls):
+        with pytest.raises(ValueError, match="SHA-256"):
+            manager_cls("192.0.2.1", "admin", "secret", ssl_fingerprint="abc")

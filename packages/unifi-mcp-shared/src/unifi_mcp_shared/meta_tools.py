@@ -78,6 +78,7 @@ _DEFAULT_DOMAIN_HINTS = {
     "access": "door locks, access readers, credentials, visitors, access policies, and entry events",
     "sitemanager": "hosts, sites and devices across consoles, ISP metrics, and SD-WAN status from UniFi Site Manager",
     "drive": "NAS storage pools, RAID and disk health, shared drives, and SMB/NFS file services on UniFi Drive",
+    "innerspace": "floor plans, walls, wall types and device placement from UniFi InnerSpace",
 }
 
 

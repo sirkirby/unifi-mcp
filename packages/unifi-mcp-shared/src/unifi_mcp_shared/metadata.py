@@ -11,7 +11,7 @@ from mcp.types import Icon
 
 PROJECT_WEBSITE_URL = "https://github.com/sirkirby/unifi-mcp"
 _ICON_SIZES = (48, 96, 192)
-_ICON_FAMILIES = frozenset({"access", "drive", "network", "protect", "relay", "sitemanager"})
+_ICON_FAMILIES = frozenset({"access", "drive", "innerspace", "network", "protect", "relay", "sitemanager"})
 
 _TITLE_WORDS = {
     "acl": "ACL",
@@ -19,6 +19,7 @@ _TITLE_WORDS = {
     "dns": "DNS",
     "dpi": "DPI",
     "fastmcp": "FastMCP",
+    "innerspace": "InnerSpace",
     "ip": "IP",
     "ips": "IPS",
     "isp": "ISP",
@@ -37,7 +38,7 @@ _TITLE_WORDS = {
     "wlan": "WLAN",
 }
 
-_TOOL_PREFIXES = ("unifi_", "protect_", "access_", "sitemanager_", "drive_")
+_TOOL_PREFIXES = ("unifi_", "protect_", "access_", "sitemanager_", "drive_", "innerspace_")
 
 _ICON_CACHE: dict[str, tuple[Icon, ...]] = {}
 

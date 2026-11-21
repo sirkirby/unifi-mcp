@@ -609,3 +609,68 @@ class TestProtectRequests:
         message = manager._not_connected_message()
         assert "reachable" in message
         assert "FINGERPRINT" not in message
+
+
+# ---------------------------------------------------------------------------
+# InnerSpace
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def innerspace_manager():
+    from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
+
+    manager = InnerSpaceConnectionManager(
+        HOST, "admin", "secret", port=PORT, ssl_fingerprint=EXPECTED.hex(), tls_env_prefix="INNERSPACE"
+    )
+    yield manager
+    await manager.close()
+
+
+class TestInnerSpaceRequests:
+    async def test_login_records_fixed_text(self, innerspace_manager, caplog):
+        with patch("aiohttp.TCPConnector", _StalePinConnector), caplog.at_level(logging.DEBUG):
+            assert await innerspace_manager.initialize() is False
+        message = innerspace_manager.last_connection_error
+        assert "UNIFI_INNERSPACE_SSL_FINGERPRINT" in message
+        _assert_absent(message)
+        _assert_absent(_rendered(caplog))
+
+    async def test_request_raises_fixed_text(self, innerspace_manager, caplog):
+        from unifi_core.innerspace.managers.connection_manager import _SessionAuth
+
+        innerspace_manager._session = aiohttp.ClientSession(
+            connector=_StalePinConnector(), middlewares=innerspace_manager._session_middlewares()
+        )
+        innerspace_manager._auth = _SessionAuth(token="session", csrf="csrf")
+        with caplog.at_level(logging.DEBUG):
+            with pytest.raises(CertificateVerificationError) as excinfo:
+                await innerspace_manager.request("GET", "/api/system", operation="Read InnerSpace status")
+        _assert_safe(excinfo.value, "INNERSPACE")
+        _assert_absent(_rendered(caplog))
+
+    async def test_wrong_pin_refused_in_a_real_handshake(self, tmp_path):
+        """A real TLS server on loopback whose certificate does not match the pin: nothing is sent."""
+        from fake_controller import FakeController, closed_port
+        from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
+
+        controller = FakeController("access")
+        port = closed_port()
+        await controller.start(port, tmp_path)
+        manager = InnerSpaceConnectionManager(
+            HOST,
+            "admin",
+            "secret",
+            ssl_fingerprint=EXPECTED.hex(),
+            tls_env_prefix="INNERSPACE",
+            base_url=f"https://127.0.0.1:{port}",
+        )
+        try:
+            assert await manager.initialize() is False
+        finally:
+            await manager.close()
+            await controller.close()
+        assert controller.seen == []
+        message = manager.last_connection_error
+        assert "UNIFI_INNERSPACE_SSL_FINGERPRINT" in message
+        _assert_absent(message, [*FINGERPRINT_MARKERS, f"127.0.0.1:{port}"])
