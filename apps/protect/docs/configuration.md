@@ -123,6 +123,18 @@ The other standard `OTEL_*` variables apply as usual, for example `OTEL_TRACES_S
 
 A failed request records its error message in the span status. For `resources/read`, the SDK's message contains the requested resource URI, so a failed camera snapshot read (`protect://cameras/{camera_id}/snapshot`) records the camera ID. Tools return their errors as results; if an exception escapes a request handler anyway, the SDK also records its type, message and stack trace on the span.
 
+## Controller Operation Gate
+
+Every tool call takes its turn at this server's operation gate for the controller before it reaches the controller. Confirmed writes (create, update and delete tools called with `confirm=true`) run one at a time, in the order they arrive, whether they come from direct tool calls, `protect_execute` or `protect_batch`. Reads and previews run side by side, up to a cap, and never wait behind writes. The guarantee is per server process: two servers, or two copies of one, pointed at the same controller do not coordinate.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `UNIFI_PROTECT_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | How long one write may hold its turn (10 to 3600). Once it has held longer, calls queued behind it are refused as busy, with nothing sent; a write's own controller requests stop at this budget (uiprotect retries requests itself, so Protect bounds the whole write instead). |
+| `UNIFI_PROTECT_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
+| `UNIFI_PROTECT_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
+
+A value that is not a number in range stops the server at startup, naming the variable. Unlike the preview-token lifetime, which is clamped, these are not guessed at: a wrong lock budget is a configuration error to fix. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write. `protect_batch_cancel` withdraws batch jobs that are still queued. The support bundle reports the gate's state as flags and bucketed counts.
+
 ## Permissions
 
 Authorization is enforced at call time. All tools remain visible regardless of permission configuration. See [permissions.md](permissions.md) for full details.

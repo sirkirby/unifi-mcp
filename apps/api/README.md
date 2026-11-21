@@ -338,6 +338,23 @@ standard local install; override only what you need.
 | `UNIFI_API_HTTP_HOST` | `127.0.0.1` | Bind address (set to `0.0.0.0` for non-localhost access) |
 | `UNIFI_API_HTTP_PORT` | `8080` | Listen port |
 | `UNIFI_API_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `UNIFI_API_GATE_WRITE_HOLD_SECONDS` | `120` | How long one write to a controller application may hold its turn (10 to 3600) before requests queued behind it are refused as busy |
+| `UNIFI_API_GATE_CALL_WAIT_SECONDS` | `25` | How long a request waits for its turn before it is refused as busy (1 to 3600) |
+| `UNIFI_API_GATE_READ_CONCURRENCY` | `8` | Reads per controller application that may run at once (1 to 64) |
+
+### Controller operation gate
+
+Writes to one controller application (a stored controller's Network, Protect
+or Access) run one at a time, in the order they arrive: a confirmed action
+holds the write turn for the manager call, so two clients never interleave a
+read-modify-write. Reads (read actions, resource routes, GraphQL) share a
+capped number of slots per controller application and never wait behind
+writes; event streams take none. A request that cannot get its turn in time
+gets `503` with `Retry-After` (GraphQL: error code `CONTROLLER_BUSY` with
+`retryAfter`), nothing is sent to the controller, and an audit row records it.
+A value out of range stops the server at startup. The guarantee is per API
+server process; these variables apply to the API server only, not to the MCP
+servers, which have their own (`UNIFI_<SERVER>_WRITE_HOLD_SECONDS` and so on).
 
 Per-controller credentials are stored encrypted in the state DB after the first
 `POST /v1/controllers` call — no controller credentials in env vars. The

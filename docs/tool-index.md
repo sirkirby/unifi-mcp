@@ -100,6 +100,10 @@ Example:
 `*_batch`, `*_batch_status` and `*_batch_cancel` provide the same indirect execution path
 for several operations. Writes run one at a time in submission order; reads run
 concurrently, up to a cap. `*_batch_cancel` withdraws jobs that are still queued.
+Direct tool calls take their turn at the same per-controller gate, so a batch and
+a direct write never run at once. The guarantee is per server process; see each
+server's configuration page for its `*_WRITE_HOLD_SECONDS`, `*_CALL_WAIT_SECONDS`
+and `*_READ_CONCURRENCY` settings.
 
 ### Load Tools
 

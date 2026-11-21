@@ -70,6 +70,8 @@ Settings are read once at startup. Restart the server, or start a new client ses
 
 There are no console settings (host, port, username, password, TLS verification or certificate pinning) and no event or websocket settings: this server has no console connection and no event stream.
 
+There are no operation-gate settings either. The other servers run confirmed writes one at a time per controller; every Site Manager tool only reads Ubiquiti's cloud API, so its calls are never queued.
+
 ## MCP response content
 
 `UNIFI_SITEMANAGER_MCP_CONTENT_MODE` (falling back to `UNIFI_MCP_CONTENT_MODE`) controls how tool results are returned to the client.
