@@ -28,7 +28,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 Network, Protect, Access and InnerSpace each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
-InnerSpace is also not yet released. It reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. There is no package, image or plugin for it yet; [run it from a checkout](#innerspace-from-source).
+InnerSpace is not yet released. It reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. There is no released package, image or plugin for it yet; [run it from a checkout](#innerspace-from-source).
 
 ## Plugins
 

@@ -70,7 +70,7 @@ and listens on port 3003. See the [Site Manager README](apps/sitemanager/README.
 
 The InnerSpace server reads the floor plans, walls and device placements of the
 InnerSpace application on a UniFi OS console. It is not yet released: there is
-no package, image or plugin, so run it from a source checkout (see
+no released package, image or plugin, so run it from a source checkout (see
 [Source Checkout](#source-checkout) below). It logs in to the console with a
 username and password and never uses `UNIFI_API_KEY`. It has nine read-only
 domain tools. Stdio is the default; HTTP is opt-in and listens on port 3005.

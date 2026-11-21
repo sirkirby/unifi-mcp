@@ -212,8 +212,8 @@ in [AGENTS.md](AGENTS.md) before adding a tool.
 
 The InnerSpace server is read-only in this version, and it reads through a
 console login session only. Follow the "InnerSpace session isolation" rules in
-[AGENTS.md](AGENTS.md) before adding a tool. A tool that writes needs its own
-design first: open an issue.
+[AGENTS.md](AGENTS.md) before adding a tool. Writes are planned: they land as
+a core writes change first, then the write tools.
 
 1. Add the manager method under `packages/unifi-core/src/unifi_core/innerspace/managers/`
 2. Add the tool function in `apps/innerspace/src/unifi_innerspace_mcp/tools/<category>.py`, with the `ToolAnnotations(readOnlyHint=True, ...)`, `permission_category`, `permission_action="read"` and `auth="local_only"` the other tools carry

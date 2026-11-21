@@ -788,9 +788,26 @@ class LiveSmokeRunner:
         whether the file header matches.
         """
         plans = ((self.cache.by_tool.get("innerspace_list_floor_plans") or {}).get("data") or {}).get("floor_plans")
-        for plan in plans or []:
+        if not plans:
+            self.skip("innerspace plan image resource", "resources", "no floor plans listed")
+            return
+        for plan in plans:
             plan_id = plan.get("id")
-            asset = self.unwrap_result(await self.server.call_tool("innerspace_get_plan_asset", {"plan_id": plan_id}))
+            try:
+                asset = self.unwrap_result(
+                    await self.server.call_tool("innerspace_get_plan_asset", {"plan_id": plan_id})
+                )
+            except Exception as exc:
+                self.report.records.append(
+                    SmokeRecord(
+                        tool="innerspace plan image resource",
+                        phase="resources",
+                        status="exception",
+                        success=False,
+                        error=f"plan asset read raised {type(exc).__name__}",
+                    )
+                )
+                continue
             data = asset.get("data") if isinstance(asset, dict) else None
             content_type = data.get("content_type") if isinstance(data, dict) else None
             if content_type not in INNERSPACE_IMAGE_TEMPLATES or not data.get("resource_uri"):
@@ -823,7 +840,9 @@ class LiveSmokeRunner:
                 ok = content.mime_type == expected_type and body.startswith(magic)
                 record.status, record.success = ("ok", True) if ok else ("failed", False)
         except Exception as exc:
-            refused = expected_type is None and str(exc).startswith("Failed to read InnerSpace plan image:")
+            # Only the type refusal counts: a busy gate, an unreachable console or a missing
+            # plan share the "Failed to read" prefix and must not pass the negative control.
+            refused = expected_type is None and "the image is a" in str(exc)
             record.status, record.success = ("refused", True) if refused else ("exception", False)
             if not refused:
                 record.error = f"unexpected {type(exc).__name__}"

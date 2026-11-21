@@ -1827,3 +1827,56 @@ def test_innerspace_plan_images_are_read_through_their_resources_and_the_other_t
     assert reads[0].summary == {"mime_type": "image/png", "bytes": len(png), "magic_ok": True}
     assert reads[2].summary == {"mime_type": "image/jpeg", "bytes": len(jpeg), "magic_ok": True}
     assert all(r.success is True for r in reads)
+
+
+def _innerspace_resource_runner(call_tool, read_resource, plans):
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=call_tool, read_resource=read_resource)
+    runner.unwrap_result = lambda raw: raw
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": plans}})
+    return runner
+
+
+def test_innerspace_negative_control_fails_on_an_unrelated_read_failure():
+    """A busy gate shares the "Failed to read" prefix; only the type refusal passes the control."""
+    from mcp.server.mcpserver.exceptions import ResourceError
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+
+    async def call_tool(tool, args):
+        return {"success": True, "data": {"content_type": "image/png", "resource_uri": "innerspace://plans/p/image"}}
+
+    async def read_resource(uri):
+        if uri.endswith("/image"):
+            return [SimpleNamespace(content=png, mime_type="image/png")]
+        raise ResourceError("Failed to read InnerSpace plan image: the console is busy; retry shortly.")
+
+    runner = _innerspace_resource_runner(call_tool, read_resource, [{"id": "p"}])
+    asyncio.run(runner.run_innerspace_resources())
+
+    reads = [r for r in runner.report.records if r.phase == "resources"]
+    assert [r.status for r in reads] == ["ok", "exception"]
+    assert reads[1].success is False
+
+
+def test_innerspace_resources_record_a_skip_without_plans_and_survive_an_asset_failure():
+    async def read_resource(uri):  # pragma: no cover - never reached
+        raise AssertionError("no resource read expected")
+
+    async def no_call(tool, args):  # pragma: no cover - never reached
+        raise AssertionError("no tool call expected")
+
+    runner = _innerspace_resource_runner(no_call, read_resource, [])
+    asyncio.run(runner.run_innerspace_resources())
+    assert [(r.status, r.error) for r in runner.report.records] == [("skipped", "no floor plans listed")]
+
+    async def failing_call(tool, args):
+        raise RuntimeError("controller detail that must not be recorded")
+
+    runner = _innerspace_resource_runner(failing_call, read_resource, [{"id": "p"}])
+    asyncio.run(runner.run_innerspace_resources())
+    (record,) = runner.report.records
+    assert (record.status, record.success) == ("exception", False)
+    assert record.error == "plan asset read raised RuntimeError"

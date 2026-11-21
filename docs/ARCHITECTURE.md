@@ -126,7 +126,7 @@ Unlike the console servers, it has no controller: every request goes to the fixe
 
 ### apps/innerspace
 
-The UniFi InnerSpace MCP server, not yet released. 9 read-only domain tools over the InnerSpace application on a UniFi OS console: its status, the project, floor plans, walls, placed devices, access points, switches, unplaced inventory and a plan's image metadata, plus the five shared meta-tools. It has no writes, no policy gates in this version, no events, and no support-bundle tool. It registers one MCP resource, `innerspace://plans/{plan_id}/image`.
+The UniFi InnerSpace MCP server, not yet released. 9 read-only domain tools over the InnerSpace application on a UniFi OS console: its status, the project, floor plans, walls, placed devices, access points, switches, unplaced inventory and a plan's image metadata, plus the six shared meta-tools. It has no writes, no policy gates in this version, no events, and no support-bundle tool. It registers two MCP resource templates for a plan's image, `innerspace://plans/{plan_id}/image` (PNG) and `innerspace://plans/{plan_id}/image.jpg` (JPEG).
 
 - `src/unifi_innerspace_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch

@@ -166,7 +166,7 @@ and it adjusts the shared model the same way Site Manager does:
 
 - In `lazy` mode it lists all nine domain tools directly. `innerspace_tool_index`
   and `innerspace_batch_status` are marked read-only, while `innerspace_execute`,
-  `innerspace_batch` and `innerspace_load_tools` are not, so the read-only
+  `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools` are not, so the read-only
   guarantee covers the nine domain tools and not the meta-tools.
 - In `meta_only` mode the nine tools are reachable only through
   `innerspace_execute`, so a client that allows only read-only tools reaches

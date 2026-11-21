@@ -21,7 +21,7 @@ Its dispatch meta-tools carry conservative annotations, because a dispatcher's h
 
 ### InnerSpace: nothing to gate
 
-The InnerSpace server (not yet released) is read-only in the same way. Its nine domain tools only read and are annotated `readOnlyHint: true`; they need no permission mode, confirmation, preview token or policy gate, and this version has no `UNIFI_POLICY_*` actions for InnerSpace. The guarantee covers the nine domain tools. Its meta-tools are dispatchers and are not counted as read-only tools: `innerspace_tool_index` and `innerspace_batch_status` are read-only, while `innerspace_execute`, `innerspace_batch` and `innerspace_load_tools` are not. What limits it is the console account whose login the server uses, which must be able to open InnerSpace. See [InnerSpace permissions](../apps/innerspace/docs/permissions.md).
+The InnerSpace server (not yet released) is read-only in the same way. Its nine domain tools only read and are annotated `readOnlyHint: true`; they need no permission mode, confirmation, preview token or policy gate, and this version has no `UNIFI_POLICY_*` actions for InnerSpace. The guarantee covers the nine domain tools. Its meta-tools are dispatchers and are not counted as read-only tools: `innerspace_tool_index` and `innerspace_batch_status` are read-only, while `innerspace_execute`, `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools` are not. What limits it is the console account whose login the server uses, which must be able to open InnerSpace. See [InnerSpace permissions](../apps/innerspace/docs/permissions.md).
 
 The rest of this page applies to the Network, Protect and Access servers and, where stated, the API server.
 

@@ -166,7 +166,7 @@ the published count is `len(module_map)` (nine: `innerspace_get_status`,
 `innerspace_get_project`, `innerspace_list_floor_plans`, `innerspace_list_walls`,
 `innerspace_list_placed_devices`, `innerspace_list_access_points`,
 `innerspace_list_switches`, `innerspace_list_inventory`, `innerspace_get_plan_asset`),
-without the five shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
+without the six shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
 convention, and `tests/docs/test_site_content.py` checks the count in the root README,
 `docs/ARCHITECTURE.md` and `apps/innerspace/docs/tools.md`. A change to a tool signature
 regenerates the manifest (`make -C apps/innerspace manifest`) and moves that count and the
