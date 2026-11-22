@@ -1735,6 +1735,31 @@
         "title": "Detail[GatewaySettingsModel]",
         "type": "object"
       },
+      "Detail_IpsSuppressionsModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/IpsSuppressionsModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[IpsSuppressionsModel]",
+        "type": "object"
+      },
       "Detail_MdnsSettingsModel_": {
         "additionalProperties": true,
         "properties": {
@@ -3989,6 +4014,192 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IpsExclusionModel": {
+        "additionalProperties": true,
+        "properties": {
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw controller direction.",
+            "title": "Direction"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw controller target kind, such as ip or subnet.",
+            "title": "Mode"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "source, destination, or both; null if unknown.",
+            "title": "Scope"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Excluded address, subnet, or network.",
+            "title": "Target"
+          }
+        },
+        "title": "IpsExclusionModel",
+        "type": "object"
+      },
+      "IpsSuppressionModel": {
+        "additionalProperties": true,
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature category.",
+            "title": "Category"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw controller direction.",
+            "title": "Direction"
+          },
+          "gid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature generator ID.",
+            "title": "Gid"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw controller target kind, such as ip or subnet.",
+            "title": "Mode"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "global, source, destination, or both; null if unknown.",
+            "title": "Scope"
+          },
+          "signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature name.",
+            "title": "Signature"
+          },
+          "signature_id": {
+            "description": "Signature ID.",
+            "title": "Signature Id",
+            "type": "integer"
+          },
+          "suppression_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw controller type, such as all or track.",
+            "title": "Suppression Type"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Suppressed address, subnet, or network.",
+            "title": "Target"
+          }
+        },
+        "title": "IpsSuppressionModel",
+        "type": "object"
+      },
+      "IpsSuppressionsModel": {
+        "additionalProperties": true,
+        "properties": {
+          "exclusions": {
+            "description": "Addresses excluded from all detection.",
+            "items": {
+              "$ref": "#/components/schemas/IpsExclusionModel"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "suppressions": {
+            "description": "One entry per signature and target.",
+            "items": {
+              "$ref": "#/components/schemas/IpsSuppressionModel"
+            },
+            "title": "Suppressions",
+            "type": "array"
+          }
+        },
+        "title": "IpsSuppressionsModel",
         "type": "object"
       },
       "KnownFaceModel": {
@@ -20600,6 +20811,66 @@
         "summary": "Get Ips Events",
         "tags": [
           "network/observability"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/ips-suppressions": {
+      "get": {
+        "operationId": "list_ips_suppressions_v1_sites__site_id__ips_suppressions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_IpsSuppressionsModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ips Suppressions",
+        "tags": [
+          "network/ips_suppression"
         ]
       }
     },

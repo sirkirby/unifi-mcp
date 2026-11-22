@@ -1,5 +1,5 @@
 {
-  "count": 217,
+  "count": 218,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -134,6 +134,7 @@
     "unifi_list_firewall_groups": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_zones": "unifi_network_mcp.tools.firewall",
+    "unifi_list_ips_suppressions": "unifi_network_mcp.tools.system",
     "unifi_list_legacy_firewall_rules": "unifi_network_mcp.tools.firewall",
     "unifi_list_nat_rules": "unifi_network_mcp.tools.nat",
     "unifi_list_networks": "unifi_network_mcp.tools.network",
@@ -15777,6 +15778,105 @@
         }
       },
       "title": "List Firewall Zones"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "either",
+      "description": "List IPS signature suppressions (one entry per signature and target, with scope global, source, destination, or both) and detection exclusions. Use to explain missing IPS events or audit stale suppressions. The controller records no creation time.",
+      "name": "unifi_list_ips_suppressions",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List IPS Suppressions"
     },
     {
       "annotations": {

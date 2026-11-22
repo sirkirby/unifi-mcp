@@ -67,6 +67,7 @@ from unifi_api.graphql.types.network.firewall import (
     LegacyFirewallRule,
 )
 from unifi_api.graphql.types.network.gateway_settings import GatewaySettings
+from unifi_api.graphql.types.network.ips_suppression import IpsSuppressions
 from unifi_api.graphql.types.network.mdns import MdnsSettings
 from unifi_api.graphql.types.network.nat import NatRule
 from unifi_api.graphql.types.network.network import Network
@@ -1321,6 +1322,11 @@ async def _fetch_teleport_settings(ctx: GraphQLContext, controller: str, site: s
 async def _fetch_threat_management_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
     key = f"network/threat-management-settings/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "get_threat_management_settings")
+
+
+async def _fetch_ips_suppressions(ctx: GraphQLContext, controller: str, site: str) -> Any:
+    key = f"network/ips-suppressions/{controller}/{site}"
+    return await _system_mgr_fetch(ctx, controller, site, key, "list_ips_suppressions")
 
 
 async def _fetch_threat_posture(ctx: GraphQLContext, controller: str, site: str, period: str) -> Any:
@@ -3708,6 +3714,20 @@ class NetworkQuery:
         if raw is None:
             return None
         return ThreatManagementSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="List IPS signature suppressions and detection exclusions.",
+    )
+    async def ips_suppressions(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> IpsSuppressions:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_ips_suppressions(ctx, controller, site)
+        return IpsSuppressions.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

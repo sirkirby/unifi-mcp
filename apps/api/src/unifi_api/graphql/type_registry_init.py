@@ -136,6 +136,9 @@ from unifi_api.graphql.types.network.firewall import (
 from unifi_api.graphql.types.network.gateway_settings import (
     GatewaySettings as NetworkGatewaySettingsType,
 )
+from unifi_api.graphql.types.network.ips_suppression import (
+    IpsSuppressions as NetworkIpsSuppressionsType,
+)
 from unifi_api.graphql.types.network.mdns import MdnsSettings as NetworkMdnsSettingsType
 from unifi_api.graphql.types.network.nat import (
     NatRule as NetworkNatRuleType,
@@ -586,6 +589,7 @@ def build_type_registry() -> TypeRegistry:
         NetworkThreatManagementSettingsType,
         "detail",
     )
+    reg.register_tool_type("unifi_list_ips_suppressions", NetworkIpsSuppressionsType, "detail")
     reg.register_tool_type("unifi_get_threat_posture", NetworkThreatPostureType, "detail")
     reg.register_tool_type("unifi_get_incident_evidence", IncidentEvidenceType, "detail")
     reg.register_tool_type("unifi_get_mgmt_settings", NetworkMgmtSettingsType, "detail")

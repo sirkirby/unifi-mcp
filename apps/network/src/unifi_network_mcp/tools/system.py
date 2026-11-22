@@ -197,6 +197,34 @@ async def get_threat_management_settings() -> Dict[str, Any]:
 
 
 @server.tool(
+    name="unifi_list_ips_suppressions",
+    auth="either",
+    description=(
+        "List IPS signature suppressions (one entry per signature and target, with scope global, source, "
+        "destination, or both) and detection exclusions. Use to explain missing IPS events or audit stale "
+        "suppressions. The controller records no creation time."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def list_ips_suppressions() -> Dict[str, Any]:
+    """List IPS signature suppressions and detection exclusions."""
+    try:
+        result = await system_manager.list_ips_suppressions()
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": system_manager._connection.site,
+                "count": len(result.suppressions),
+                **result.model_dump(),
+            },
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to list IPS suppressions: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to list IPS suppressions"}
+
+
+@server.tool(
     name="unifi_get_threat_posture",
     auth="local_only",
     description=(

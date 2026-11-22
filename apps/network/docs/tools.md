@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 217 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 218 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -333,6 +333,17 @@ Set via `UNIFI_TOOL_REGISTRATION_MODE`. Lazy mode is recommended for LLM clients
 `DAY` (default), `WEEK`, or `MONTH`, plus gateway signature status. Missing values
 remain null. Signature and summary timestamps use Unix milliseconds. The typed
 settings read also exposes the controller's category selection preference.
+
+`unifi_list_ips_suppressions` lists signature suppressions and detection exclusions
+from the `ips_suppression` settings section (verified on Network 11.0):
+
+- `suppressions`: one entry per signature and target, with `signature_id`, `signature`,
+  `category`, `scope` (`global`, `source`, `destination`, `both`, or null if unknown),
+  `mode` and `target`. The raw `suppression_type` and `direction` are kept.
+- `exclusions`: addresses excluded from all detection, with the same scope and target fields.
+
+The controller records no creation time. A missing or unreadable section is an error,
+never an empty list.
 
 `unifi_update_threat_management_settings` accepts partial `update_data`:
 
