@@ -230,3 +230,62 @@ async def test_audit_stream_returns_event_stream_content_type(
         async with c.stream("GET", "/admin/audit/_stream", headers=headers) as resp:
             assert resp.status_code == 200
             assert resp.headers["content-type"].startswith("text/event-stream")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("param", "value", "expect_row"),
+    [
+        # The seeded row is 2026-04-01T12:00:00Z.
+        ("since", "2026-04-01T17:30:00+05:30", True),  # == 12:00Z, inclusive
+        ("since", "2026-04-01T18:30:00+05:30", False),  # == 13:00Z
+        ("until", "2026-04-01T06:00:00-08:00", True),  # == 14:00Z
+        ("until", "2026-04-01T03:00:00-08:00", False),  # == 11:00Z
+    ],
+)
+async def test_audit_rows_since_until_honour_utc_offset(
+    tmp_path: Path, monkeypatch, param: str, value: str, expect_row: bool
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app_with_admin_key(tmp_path)
+    await _seed_audit(
+        app,
+        [
+            {
+                "ts": datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "offset-row",
+                "outcome": "success",
+            },
+        ],
+    )
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get("/admin/audit/_rows", params={param: value}, headers=headers)
+        assert r.status_code == 200, r.text
+        assert ("offset-row" in r.text) is expect_row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/admin/audit/_rows", "/admin/audit/export.csv"])
+@pytest.mark.parametrize("param", ["since", "until"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "0001-01-01T00:00:00+05:00",  # UTC instant before datetime.min
+        "9999-12-31T23:59:59-05:00",  # UTC instant after datetime.max
+        "not-a-date",
+    ],
+)
+async def test_audit_admin_unusable_bound_is_400(
+    tmp_path: Path, monkeypatch, path: str, param: str, value: str
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app_with_admin_key(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.get(path, params={param: value}, headers=headers)
+        assert r.status_code == 400, r.text
+        assert f"invalid '{param}' timestamp" in r.text
