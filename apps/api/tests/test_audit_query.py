@@ -206,3 +206,25 @@ async def test_since_until_honour_utc_offset(
         r = await c.get("/v1/audit", params={param: value}, headers=headers)
         assert r.status_code == 200, r.text
         assert [item["target"] for item in r.json()["items"]] == (["t1"] if expect_row else [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("param", ["since", "until"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "0001-01-01T00:00:00+05:00",  # UTC instant before datetime.min
+        "9999-12-31T23:59:59-05:00",  # UTC instant after datetime.max
+        "not-a-date",
+    ],
+)
+async def test_unusable_bound_is_400(tmp_path: Path, monkeypatch, param: str, value: str) -> None:
+    """A bound that does not parse, or whose UTC instant is out of range, is a 400, never a 500."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.get("/v1/audit", params={param: value}, headers=headers)
+        assert r.status_code == 400, r.text
+        assert r.json()["detail"] == f"invalid '{param}' timestamp"
