@@ -11,7 +11,8 @@ dependencies = [
     # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
     # Taking credentials only from the level the host came from requires Shared 0.6.44.
     # Naming ignored shared credentials in the login error requires Shared 0.6.45.
-    "unifi-mcp-shared>=0.6.46,<0.7",
+    # Auto-confirming a write in bypass mode when the caller omits confirm requires Shared 0.6.48.
+    "unifi-mcp-shared>=0.6.48,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
