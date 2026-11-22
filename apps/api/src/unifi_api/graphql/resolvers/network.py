@@ -23,6 +23,7 @@ import time
 from typing import Any
 
 import strawberry
+from aiounifi.errors import AiounifiException
 from strawberry.types import Info
 from unifi_core.incident_collection import (
     DEFAULT_CALLS,
@@ -34,6 +35,7 @@ from unifi_core.mac import mac_equal
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.scalars import BigInt
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.network.acl import AclRule
 from unifi_api.graphql.types.network.ap_group import ApGroup
@@ -121,6 +123,7 @@ from unifi_api.services.incident_evidence import (
     presentation,
     require_product,
 )
+from unifi_api.services.traffic_flow_query import REJECTED, build_query, is_rejection
 
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
@@ -4038,14 +4041,25 @@ class NetworkQuery:
         controller: strawberry.ID,
         site: str = "default",
         within_hours: int = 24,
-        time_from: int | None = None,
-        time_to: int | None = None,
+        time_from: BigInt | None = None,
+        time_to: BigInt | None = None,
         search_text: str | None = None,
+        risk: list[str] | None = None,
+        action: list[str] | None = None,
+        direction: list[str] | None = None,
+        protocol: list[str] | None = None,
+        service: list[str] | None = None,
+        source_mac: list[str] | None = None,
+        source_ip: list[str] | None = None,
+        source_network_id: list[str] | None = None,
+        source_port: list[int] | None = None,
+        destination_domain: list[str] | None = None,
+        destination_ip: list[str] | None = None,
+        destination_port: list[int] | None = None,
+        destination_region: list[str] | None = None,
         page_size: int = 100,
         cursor: str | None = None,
     ) -> TrafficFlowPage:
-        from unifi_core.network.models.traffic_flows import TrafficFlowQuery
-
         ctx: GraphQLContext = info.context
         page = _decode_flow_cursor(cursor)
         if (time_from is None) != (time_to is None):
@@ -4055,14 +4069,32 @@ class NetworkQuery:
                 raise ValueError("within_hours must be between 1 and 8760")
             now_ms = int(time.time() * 1000)
             time_from, time_to = now_ms - within_hours * 3600 * 1000, now_ms
-        query = TrafficFlowQuery(
+        query = build_query(
             time_from=time_from,
             time_to=time_to,
             page_number=page,
             page_size=max(1, min(page_size, 1000)),
             search_text=search_text,
+            risk=risk,
+            action=action,
+            direction=direction,
+            protocol=protocol,
+            service=service,
+            source_mac=source_mac,
+            source_ip=source_ip,
+            source_network_id=source_network_id,
+            source_port=source_port,
+            destination_domain=destination_domain,
+            destination_ip=destination_ip,
+            destination_port=destination_port,
+            destination_region=destination_region,
         )
-        result = await _fetch_traffic_flows(ctx, controller, site, query)
+        try:
+            result = await _fetch_traffic_flows(ctx, controller, site, query)
+        except AiounifiException as exc:
+            if is_rejection(exc):
+                raise ValueError(REJECTED) from None
+            raise
         items = [TrafficFlow.from_manager_output(f) for f in result.get("flows", [])]
         next_cursor = _encode_flow_cursor(page + 1) if result.get("has_next") else None
         return TrafficFlowPage(items=items, next_cursor=next_cursor)
