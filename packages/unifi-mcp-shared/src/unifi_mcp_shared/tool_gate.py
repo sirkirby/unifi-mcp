@@ -19,6 +19,12 @@ calls made by a batch job wait as long as the queue keeps moving. A call that
 cannot get its turn returns the tool error contract with the busy reason,
 having sent nothing to the controller.
 
+A write whose controller request is cut off at its hold budget fails with
+``mutation_applied``: ``false`` when nothing of it was sent, ``null`` when the
+change may have reached the controller. The gate records the cut-off on the
+write ticket, so this holds even when the tool caught the timeout; a tool
+that reports ``mutation_applied`` itself is left as it is.
+
 Every domain tool signals its admission to a batch job runner, gate or not: a
 server that wires no gate provider gets an admission-only wrapper, so its batch
 jobs, which start one after another once the job before is admitted, still run
@@ -48,7 +54,14 @@ from functools import wraps
 from typing import Any, Callable, Literal, NoReturn
 
 from unifi_core.jobs import current_job_id
-from unifi_core.operation_gate import ControllerBusyError, GateSettings, OperationGate, signal_admitted
+from unifi_core.operation_gate import (
+    ControllerBusyError,
+    GateSettings,
+    OperationGate,
+    WriteRequestTimeout,
+    WriteTicket,
+    signal_admitted,
+)
 
 from unifi_mcp_shared.bootstrap import resolve_env
 from unifi_mcp_shared.call_arguments import caller_supplied
@@ -210,9 +223,20 @@ def gate_tool_call(
         enter = gate.write if mode == "write" else gate.read
         entered = False
         try:
-            async with enter(wait_budget=wait_budget, label=tool_name):
+            async with enter(wait_budget=wait_budget, label=tool_name) as ticket:
                 entered = True
-                return await func(*args, **kwargs)
+                if not isinstance(ticket, WriteTicket):
+                    return await func(*args, **kwargs)
+                try:
+                    result = await func(*args, **kwargs)
+                except WriteRequestTimeout as exc:
+                    cut_off = ticket.cut_off or exc
+                    return {
+                        "success": False,
+                        "error": f"Failed to run {tool_name}: {cut_off}",
+                        "mutation_applied": None if cut_off.request_sent else False,
+                    }
+                return _with_cut_off_outcome(result, ticket.cut_off, tool_name)
         except ControllerBusyError as exc:
             if entered:
                 raise
@@ -223,6 +247,23 @@ def gate_tool_call(
             return refusal
 
     return gated_call
+
+
+def _with_cut_off_outcome(result: Any, cut_off: WriteRequestTimeout | None, tool_name: str) -> Any:
+    """Add the cut-off's outcome and guidance to a failed write the tool reported without one."""
+    if cut_off is None or not isinstance(result, dict) or result.get("success") is not False:
+        return result
+    if "mutation_applied" in result:
+        return result
+    guidance = str(cut_off)
+    error = result.get("error")
+    reported = dict(result)
+    if not isinstance(error, str) or not error:
+        reported["error"] = f"Failed to run {tool_name}: {guidance}"
+    elif guidance not in error:
+        reported["error"] = f"{error} {guidance}"
+    reported["mutation_applied"] = None if cut_off.request_sent else False
+    return reported
 
 
 def _no_gate() -> None:
