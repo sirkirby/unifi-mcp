@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 _FLOWS_CACHE_TTL = 45  # seconds; short-lived, matching the 60s alerts-cache precedent
 
+# Network 11 serves at most this many rows for one query: the page after the last
+# one comes back empty with has_next false and or_more false, and the count reads
+# 5,000 or a few over. A response with or_more set counts only a lower bound.
+_RESULT_LIMIT = 5000
+
 # Periods accepted by /traffic-flow-latest-statistics (the UI's 1h/1D/1W/1M).
 _STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
 
@@ -131,13 +136,18 @@ class TrafficFlowManager:
 
         raw_flows = response.get("data") or []
         flows = [traffic_flow_from_controller(f).model_dump(exclude_none=True) for f in raw_flows]
+        total = response.get("total_element_count", len(flows))
+        or_more = response.get("or_more", False)
         result = {
             "flows": flows,
             "page_number": response.get("page_number", query.page_number),
-            "total_element_count": response.get("total_element_count", len(flows)),
+            "total_element_count": total,
             "total_page_count": response.get("total_page_count", 1),
             "has_next": response.get("has_next", False),
-            "or_more": response.get("or_more", False),
+            "or_more": or_more,
+            # True when the pages may end before the window's last flow: narrow the
+            # window to read the rest.
+            "truncated": bool(or_more) or (isinstance(total, int) and total >= _RESULT_LIMIT),
         }
         self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)
         return result
