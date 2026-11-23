@@ -110,9 +110,8 @@ class DpiManager:
         report "no DPI applications" for what is a configuration problem.
         """
         if self._auth is None or not self._auth.has_api_key:
-            message = _missing_key_message(self._connection.tls_env_prefix)
-            logger.warning("%s", message)
-            raise UniFiAuthError(message)
+            logger.warning("The DPI catalog needs a Network API key and none is configured.")
+            raise UniFiAuthError(_missing_key_message(self._connection.tls_env_prefix))
 
         base_url = f"https://{self._connection.host}:{self._connection.port}"
         url = f"{base_url}/proxy/network/integration{path}"
