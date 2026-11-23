@@ -16,6 +16,7 @@ import pytest
 
 import unifi_access_mcp.main as main_mod
 from unifi_access_mcp import runtime
+from unifi_core.access.managers.door_manager import DoorManager
 from unifi_core.operation_gate import (
     GateKey,
     GateSettings,
@@ -163,8 +164,10 @@ async def test_a_lock_cut_off_at_its_hold_budget_reports_its_outcome(wiring, mon
     gate = OperationGate(GateSettings(hold_budget_seconds=0.05), name="access", clock=clock())
     gate_registry()._gates[GateKey.for_host("access.test", 443, "access")] = gate
     session = _HangingProxySession()
-    # The manager the tool module holds: other tests may have rebuilt the runtime's since.
-    connection_manager = doors.door_manager._cm
+    # A manager on the real connection: the one the tool module captured at import
+    # may be another test's mock, depending on test order.
+    connection_manager = runtime.connection_manager
+    monkeypatch.setattr(doors, "door_manager", DoorManager(connection_manager))
     monkeypatch.setattr(connection_manager, "_api_client_available", False)
     monkeypatch.setattr(connection_manager, "_proxy_available", True)
     monkeypatch.setattr(connection_manager, "_proxy_session", session)

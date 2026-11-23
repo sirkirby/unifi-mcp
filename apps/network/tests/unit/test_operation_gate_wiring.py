@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import unifi_network_mcp.main as main_mod
+from unifi_core.network.managers.device_manager import DeviceManager
 from unifi_core.operation_gate import (
     GateKey,
     GateSettings,
@@ -195,13 +196,16 @@ async def test_a_reboot_cut_off_at_its_hold_budget_reports_its_outcome(wiring, m
         sent.append(api_request.method)
         await asyncio.sleep(10)  # a controller that does not answer
 
-    # The managers the tool module holds: other tests may have rebuilt the runtime's since.
+    # A manager on the real connection: the one the tool module captured at import
+    # may be another test's mock, depending on test order.
+    manager = DeviceManager(runtime.connection_manager)
+    monkeypatch.setattr(devices, "device_manager", manager)
     monkeypatch.setattr(
-        devices.device_manager._connection,
+        runtime.connection_manager,
         "controller",
         SimpleNamespace(request=hang, connectivity=SimpleNamespace(is_unifi_os=True)),
     )
-    monkeypatch.setattr(devices.device_manager, "get_device_details", AsyncMock(return_value=object()))
+    monkeypatch.setattr(manager, "get_device_details", AsyncMock(return_value=object()))
 
     main_mod.server.tool(name=PROBES[0], permission_category="devices", permission_action="update")(
         inspect.unwrap(devices.reboot_device)
