@@ -79,6 +79,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Controller concurrency is owned by the operation gate: confirmed writes run one at a time per controller application, reads are capped. Do not add ad-hoc write locks in managers, tools or meta-tools.
 - Every tool that is not read-only MUST declare `permission_action`, and every create/update/delete tool MUST declare `confirm`: the gate classifies each call from them.
 - Every MCP app MUST pass `gate_provider` (`None` only for a server with no controller) and hand its connection wait over as `connection_decorator`, never pre-wrapped.
+- Every core transport that can carry a write MUST send through `write_request_bound()`, so a sent request marks the write ticket. Logins, connect probes and support probes stay outside it.
 - **Anchor:** `packages/unifi-core/src/unifi_core/operation_gate.py`, `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_gate.py`
 
 ### Logging
