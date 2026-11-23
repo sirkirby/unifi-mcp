@@ -3,7 +3,11 @@
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for UniFi InnerSpace, the floor-plan application that runs on a UniFi OS console. It lets an AI assistant read your project's floor plans, walls, placed devices, access points, switches and unplaced inventory.
 
-The InnerSpace server is not yet released. There is no PyPI package, container image or plugin, and this page gives no install command for one. Run it from a source checkout, as described below.
+[![PyPI](https://img.shields.io/pypi/v/unifi-innerspace-mcp)](https://pypi.org/project/unifi-innerspace-mcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
+
+The InnerSpace server is in beta. There is no plugin for it yet: add it to your MCP client with `uvx` or Docker, as described below.
 
 ## How it connects
 
@@ -11,43 +15,57 @@ InnerSpace is a separate application on the console, served under `/proxy/inners
 
 There is no API key setting. A console's local `UNIFI_API_KEY` is never read or sent to InnerSpace, and an InnerSpace controller on the API server needs a username and password too. The account must be able to open the InnerSpace application, for example a Super Admin.
 
-## Run from source
+## Install
 
-The package is not published yet. You need [uv](https://docs.astral.sh/uv/) and Python 3.13 or later.
-
-```bash
-git clone https://github.com/sirkirby/unifi-mcp.git
-cd unifi-mcp
-uv sync
-```
-
-Put the console login in the environment, with the password in a file only you can read, and start the server:
+**PyPI and Docker.**
 
 ```bash
-export UNIFI_INNERSPACE_HOST=192.168.1.1
-export UNIFI_INNERSPACE_USERNAME=innerspace-reader
-export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
-uv run --package unifi-innerspace-mcp unifi-innerspace-mcp
+# PyPI
+uvx unifi-innerspace-mcp@latest
+# or: pip install unifi-innerspace-mcp
+
+# Docker
+docker pull ghcr.io/sirkirby/unifi-innerspace-mcp:latest
 ```
 
-Without a host the server still starts. It answers the client in setup mode, offers only `innerspace_setup_status`, explains what to set, and makes no request. With a host that cannot be reached, it serves its tools anyway and each call returns fixed text until the console answers; the next call after that logs in once and succeeds.
+There is no Claude Code, Codex or OpenClaw plugin for this server yet. Register it with your MCP client as shown in [Claude Desktop](#claude-desktop).
 
-To register it with a client from a checkout, point the client at that command and pass the same variables in the entry's `env` block (use the `_FILE` form for the password):
+### Claude Desktop
+
+Add to `claude_desktop_config.json`, with the password in a file only you can read:
 
 ```jsonc
 {
   "mcpServers": {
     "unifi-innerspace": {
-      "command": "uv",
-      "args": ["run", "--package", "unifi-innerspace-mcp", "unifi-innerspace-mcp"],
-      "cwd": "/path/to/unifi-mcp",
+      "command": "uvx",
+      "args": ["unifi-innerspace-mcp@latest"],
       "env": {
         "UNIFI_INNERSPACE_HOST": "192.168.1.1",
-        "UNIFI_INNERSPACE_USERNAME": "innerspace-reader"
+        "UNIFI_INNERSPACE_USERNAME": "innerspace-reader",
+        "UNIFI_INNERSPACE_PASSWORD_FILE": "/Users/you/.config/unifi-mcp/innerspace-password"
       }
     }
   }
 }
+```
+
+Use the `_FILE` or `_COMMAND` form rather than putting the password itself in the config file.
+
+Without a host the server still starts. It answers the client in setup mode, offers only `innerspace_setup_status`, explains what to set, and makes no request. With a host that cannot be reached, it serves its tools anyway and each call returns fixed text until the console answers; the next call after that logs in once and succeeds.
+
+### Install from source
+
+For development, run it from a checkout. You need [uv](https://docs.astral.sh/uv/) and Python 3.13 or later.
+
+```bash
+git clone https://github.com/sirkirby/unifi-mcp.git
+cd unifi-mcp
+uv sync
+export UNIFI_INNERSPACE_HOST=192.168.1.1
+export UNIFI_INNERSPACE_USERNAME=innerspace-reader
+export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
+uv run --package unifi-innerspace-mcp unifi-innerspace-mcp
 ```
 
 ## Configure

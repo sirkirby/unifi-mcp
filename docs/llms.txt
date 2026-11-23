@@ -26,6 +26,8 @@ Ubiquiti's Site Manager API is a fourth, cloud-only surface. The Site Manager se
 - [Site Manager tools](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/tools.md): The nine read-only tools with arguments, paging, and response shapes.
 - [Site Manager configuration](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/configuration.md): The account key, HTTP transport on port 3003, and runtime settings.
 - [Site Manager troubleshooting](https://github.com/sirkirby/unifi-mcp/blob/main/apps/sitemanager/docs/troubleshooting.md): Key, network, missing-tool, and Docker problems.
+- [InnerSpace MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/README.md): Read-only floor plans, walls, and device placements from a console's InnerSpace application, through a console login with no API key.
+- [InnerSpace configuration](https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/docs/configuration.md): The console login, TLS, HTTP transport on port 3005, and runtime settings.
 
 ## API Server
 

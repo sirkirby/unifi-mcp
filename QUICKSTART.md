@@ -1,10 +1,9 @@
 # Quick Start
 
 UniFi MCP ships independent MCP servers for Network, Protect, and Access, a
-read-only Site Manager server for a whole UniFi cloud account, an InnerSpace
-server for a console's floor plans (not yet released), an HTTP API for
-custom applications, and optional Cloud Relay components for remote MCP
-clients.
+read-only Site Manager server for a whole UniFi cloud account, a read-only
+InnerSpace server for a console's floor plans, an HTTP API for custom
+applications, and optional Cloud Relay components for remote MCP clients.
 
 This guide starts with the MCP servers. If you are building software that
 integrates over HTTP, including an automation service or MCP adapter, start
@@ -66,15 +65,26 @@ or `UNIFI_SITEMANAGER_API_KEY_COMMAND`. The server never uses `UNIFI_API_KEY`
 or the other `UNIFI_*` variables above. Stdio is the default; HTTP is opt-in
 and listens on port 3003. See the [Site Manager README](apps/sitemanager/README.md).
 
-## InnerSpace (not yet released)
+## InnerSpace (floor plans)
 
 The InnerSpace server reads the floor plans, walls and device placements of the
-InnerSpace application on a UniFi OS console. It is not yet released: there is
-no released package, image or plugin, so run it from a source checkout (see
-[Source Checkout](#source-checkout) below). It logs in to the console with a
-username and password and never uses `UNIFI_API_KEY`. It has nine read-only
-domain tools. Stdio is the default; HTTP is opt-in and listens on port 3005.
-See the [InnerSpace README](apps/innerspace/README.md).
+InnerSpace application on a UniFi OS console. It logs in to the console with a
+username and password and never uses `UNIFI_API_KEY`. Save the password in a
+file only you can read, and run the server:
+
+```bash
+export UNIFI_INNERSPACE_HOST=192.168.1.1
+export UNIFI_INNERSPACE_USERNAME=innerspace-reader
+export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
+uvx unifi-innerspace-mcp@latest
+```
+
+There is no plugin for it yet; add it to your MCP client's config with the same
+command and variables. The container image is
+`ghcr.io/sirkirby/unifi-innerspace-mcp:latest`.
+
+It has nine read-only domain tools. Stdio is the default; HTTP is opt-in and
+listens on port 3005. See the [InnerSpace README](apps/innerspace/README.md).
 
 ## Claude Desktop
 
