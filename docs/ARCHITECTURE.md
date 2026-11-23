@@ -40,6 +40,11 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
 | `event_timeline.py` | Legacy timeline shape, with a projection from evidence records |
 | `sitemanager/` | Site Manager cloud client, managers and models; the fixed `https://api.ui.com` origin lives in `sitemanager/managers/connection_manager.py` |
+| `confirmation.py` | Preview-then-confirm helpers for mutations |
+| `policy_gate.py` | Policy gates (`UNIFI_POLICY_*`) and permission mode resolution |
+| `permission.py` | Input JSON Schema inference for tool functions (validation keywords from type annotations) |
+| `formatting.py` | Standard tool response formatting |
+| `config.py` | Logging setup and YAML config loading |
 | `innerspace/` | InnerSpace client, managers and models; reads under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py` |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/api`.
@@ -52,14 +57,17 @@ per connection, so one process can serve clients at either migration state.
 
 | Module | Purpose |
 |--------|---------|
-| `permissions.py` | Permission checking (category/action, env var overrides) |
-| `confirmation.py` | Preview-then-confirm flow for mutations |
+| `permissioned_tool.py` | Tool decorator that checks permissions and the confirm flow at call time |
+| `call_arguments.py` | The argument names the MCP caller actually sent (so bypass mode can auto-confirm) |
+| `preview_token.py` | Opt-in preview tokens that make `confirm=true` follow a preview |
 | `lazy_tools.py` | Lazy tool loading (on-demand registration) |
 | `tool_loader.py` | Tool module import and registration |
 | `meta_tools.py` | Meta-tools (tool_index, execute, batch, batch_status, batch_cancel) |
 | `tool_gate.py` | Runs each domain tool call through its controller's operation gate |
-| `config.py` | OmegaConf config loading with env var interpolation |
-| `formatting.py` | Response formatting helpers |
+| `strict_dispatch.py` | Rejects unknown tool arguments at the transport layer |
+| `settings_file.py` | Per-user settings file named by `UNIFI_SETTINGS_FILE` |
+| `setup_required.py` | Setup mode: serve MCP before a controller host is configured |
+| `support_bundle.py` | Sanitized support bundle assembly |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`.
 
