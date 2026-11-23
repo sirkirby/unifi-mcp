@@ -32,6 +32,7 @@ from unifi_core.network.models.firewall import (
     validate_policy_selectors,
     validate_zone_targeting,
 )
+from unifi_core.operation_gate import write_request_bound
 from unifi_core.request_paths import check_request_path, object_id
 from unifi_core.tls import CertificateVerificationError, certificate_failure, is_certificate_error
 
@@ -224,15 +225,19 @@ class FirewallManager:
 
         cert_failure: CertificateVerificationError | None = None
         try:
-            async with session.request(
-                method.upper(),
-                url,
-                params=params,
-                json=data,
-                ssl=self._connection.ssl,
-                timeout=timeout,
-                allow_redirects=False,
-            ) as resp:
+            # Inside a held write, bounded by what is left of its hold budget.
+            async with (
+                write_request_bound(),
+                session.request(
+                    method.upper(),
+                    url,
+                    params=params,
+                    json=data,
+                    ssl=self._connection.ssl,
+                    timeout=timeout,
+                    allow_redirects=False,
+                ) as resp,
+            ):
                 try:
                     body = await resp.json(content_type=None)
                 except Exception:

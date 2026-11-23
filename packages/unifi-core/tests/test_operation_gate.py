@@ -586,7 +586,7 @@ async def test_write_request_bound_is_a_no_op_outside_a_held_write() -> None:
 
 async def test_write_request_bound_times_out_at_the_remaining_hold_budget() -> None:
     gate, clock = make_gate(hold_budget_seconds=10)
-    async with gate.write():
+    async with gate.write() as ticket:
         await clock.advance(9.995)
         remaining = held_write_remaining_seconds()
         assert remaining is not None and remaining == pytest.approx(0.005)
@@ -594,11 +594,38 @@ async def test_write_request_bound_times_out_at_the_remaining_hold_budget() -> N
             async with write_request_bound():
                 await asyncio.sleep(1)
         assert isinstance(timeout.value, TimeoutError)
+        assert timeout.value.request_sent is True
+        assert ticket.cut_off is timeout.value
 
         await clock.advance(1)
-        with pytest.raises(WriteRequestTimeout, match="not sent"):
+        # This request is refused unsent, but the one before it went out.
+        with pytest.raises(WriteRequestTimeout, match="may or may not have been applied") as refused:
             async with write_request_bound():
                 raise AssertionError("no request may be sent once the budget is spent")
+        assert refused.value.request_sent is True
+        assert ticket.cut_off is timeout.value
+
+
+async def test_a_refusal_before_any_request_of_the_write_says_nothing_was_sent() -> None:
+    gate, clock = make_gate(hold_budget_seconds=10)
+    async with gate.write() as ticket:
+        assert ticket.request_sent is False and ticket.cut_off is None
+        await clock.advance(11)
+        with pytest.raises(WriteRequestTimeout, match="not sent") as refused:
+            async with write_request_bound():
+                raise AssertionError("no request may be sent once the budget is spent")
+    assert refused.value.request_sent is False
+    assert ticket.request_sent is False
+    assert ticket.cut_off is refused.value
+
+
+async def test_a_request_inside_the_hold_marks_the_ticket_sent_and_leaves_no_cut_off() -> None:
+    gate, _clock = make_gate(hold_budget_seconds=10)
+    async with gate.write() as ticket:
+        async with write_request_bound():
+            pass
+    assert ticket.request_sent is True
+    assert ticket.cut_off is None
 
 
 async def test_write_request_bound_leaves_other_timeouts_alone() -> None:
