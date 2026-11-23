@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from mcp.server.mcpserver import MCPServer as FastMCP
 from unifi_core.jobs import JobStore
-from unifi_core.operation_gate import GateSettings, OperationGate, observing_operations
+from unifi_core.operation_gate import GateSettings, OperationGate, observing_operations, write_request_bound
 from unifi_core.policy_gate import PolicyGateChecker
 from unifi_mcp_shared.meta_tools import BATCH_JOB_STATUSES, register_meta_tools
 from unifi_mcp_shared.permissioned_tool import create_permissioned_tool
@@ -755,6 +755,135 @@ async def test_a_busy_refusal_of_a_confirmed_write_says_nothing_was_applied():
     assert read_refusal["success"] is False and "mutation_applied" not in read_refusal
     slot_free.set()
     await filler
+
+
+# ---------------------------------------------------------------------------
+# A write cut off at its hold budget
+# ---------------------------------------------------------------------------
+
+CUT_OFF_BUDGET = 10.0
+UNKNOWN_GUIDANCE = "The change may or may not have been applied; read the resource back before retrying."
+
+
+def _cut_off_harness():
+    """A harness whose writes reach the controller through the hold-budget bound, like the apps' managers."""
+    clock = FakeClock()
+    gate = OperationGate(GateSettings(hold_budget_seconds=CUT_OFF_BUDGET), name="network", clock=clock)
+    harness = Harness(gate=gate)
+
+    async def send(*, sent_first: bool = False, budget_left: float) -> None:
+        """One bounded controller request, made when ``budget_left`` seconds of the hold remain."""
+        if sent_first:
+            async with write_request_bound():
+                pass
+        clock.value += CUT_OFF_BUDGET - budget_left
+        async with write_request_bound():
+            await asyncio.sleep(1)  # a controller that does not answer
+
+    return harness, send
+
+
+@pytest.mark.parametrize(
+    ("sent_first", "budget_left", "expected"),
+    [
+        (False, 0.005, None),  # sent, then cut off: the outcome is unknown
+        (False, -1.0, False),  # refused before anything was sent
+        (True, -1.0, None),  # refused, but an earlier request of the write went out
+    ],
+)
+async def test_a_tool_that_catches_the_cut_off_reports_its_outcome(sent_first, budget_left, expected):
+    harness, send = _cut_off_harness()
+
+    @harness.server.tool(name="unifi_delete_thing", permission_category="things", permission_action="delete")
+    async def delete_thing(confirm: bool = False) -> dict:
+        try:
+            await send(sent_first=sent_first, budget_left=budget_left)
+        except Exception as exc:  # noqa: BLE001 - tools catch everything
+            return {"success": False, "error": f"Failed to delete thing: {exc}"}
+        return {"success": True}
+
+    result = await harness.server.call_tool("unifi_delete_thing", {"confirm": True})
+    payload = _payload(result)
+    assert payload["success"] is False
+    assert payload["mutation_applied"] is expected
+    assert result.structured_content["mutation_applied"] is expected
+    assert payload["error"].startswith("Failed to delete thing: The ")
+    # The fixed guidance appears once: the tool's message already carried it.
+    guidance = UNKNOWN_GUIDANCE if expected is None else "the controller request was not sent"
+    assert payload["error"].count(guidance) == 1
+    assert not harness.gate.write_held
+
+
+async def test_a_tool_error_without_the_guidance_gets_it_appended():
+    harness, send = _cut_off_harness()
+
+    @harness.server.tool(name="unifi_delete_thing", permission_category="things", permission_action="delete")
+    async def delete_thing(confirm: bool = False) -> dict:
+        try:
+            await send(budget_left=0.005)
+        except Exception:  # noqa: BLE001 - a manager that reports failure as False
+            return {"success": False, "error": "Failed to delete thing."}
+        return {"success": True}
+
+    payload = _payload(await harness.server.call_tool("unifi_delete_thing", {"confirm": True}))
+    assert payload == {
+        "success": False,
+        "error": "Failed to delete thing. The controller did not answer within the write's time budget. "
+        + UNKNOWN_GUIDANCE,
+        "mutation_applied": None,
+    }
+
+
+@pytest.mark.parametrize(("budget_left", "expected"), [(0.005, None), (-1.0, False)])
+async def test_a_cut_off_that_escapes_the_tool_becomes_the_error_contract(budget_left, expected):
+    harness, send = _cut_off_harness()
+
+    @harness.server.tool(name="unifi_delete_thing", permission_category="things", permission_action="delete")
+    async def delete_thing(confirm: bool = False) -> dict:
+        await send(budget_left=budget_left)
+        return {"success": True}
+
+    payload = _payload(await harness.server.call_tool("unifi_delete_thing", {"confirm": True}))
+    assert payload["success"] is False
+    assert payload["error"].startswith("Failed to run unifi_delete_thing: The ")
+    assert payload["mutation_applied"] is expected
+
+
+async def test_a_tool_that_reports_its_own_outcome_is_left_as_it_is():
+    harness, send = _cut_off_harness()
+
+    @harness.server.tool(name="unifi_delete_thing", permission_category="things", permission_action="delete")
+    async def delete_thing(confirm: bool = False) -> dict:
+        try:
+            await send(sent_first=True, budget_left=-1.0)
+        except Exception:  # noqa: BLE001 - the delete went out; only the read-back was refused
+            return {"success": False, "error": "Deleted, but the read-back failed", "mutation_applied": True}
+        return {"success": True}
+
+    payload = _payload(await harness.server.call_tool("unifi_delete_thing", {"confirm": True}))
+    assert payload == {"success": False, "error": "Deleted, but the read-back failed", "mutation_applied": True}
+
+
+async def test_a_failed_write_that_was_not_cut_off_is_unchanged():
+    harness, _send = _cut_off_harness()
+
+    @harness.server.tool(name="unifi_delete_thing", permission_category="things", permission_action="delete")
+    async def delete_thing(confirm: bool = False) -> dict:
+        async with write_request_bound():
+            pass
+        return {"success": False, "error": "Failed to delete thing: controller answered 400"}
+
+    @harness.server.tool(name="unifi_remove_thing", permission_category="things", permission_action="delete")
+    async def remove_thing(confirm: bool = False) -> dict:
+        raise RuntimeError("not a cut-off")
+
+    payload = _payload(await harness.server.call_tool("unifi_delete_thing", {"confirm": True}))
+    assert payload == {"success": False, "error": "Failed to delete thing: controller answered 400"}
+    # Any other exception propagates as before.
+    with pytest.raises(Exception, match="unifi_remove_thing") as raised:
+        await harness.server.call_tool("unifi_remove_thing", {"confirm": True})
+    assert isinstance(raised.value.__cause__, RuntimeError)
+    assert not harness.gate.write_held
 
 
 # ---------------------------------------------------------------------------
