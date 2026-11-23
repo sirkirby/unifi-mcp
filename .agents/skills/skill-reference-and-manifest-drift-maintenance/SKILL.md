@@ -172,9 +172,9 @@ convention, and `tests/docs/test_site_content.py` checks the count in the root R
 regenerates the manifest (`make -C apps/innerspace manifest`) and moves that count and the
 tool catalog together.
 
-InnerSpace is not yet released. The docs test keeps release-only install text (a PyPI
-command, image pull, plugin marketplace id or package badge) off the public pages while
-`INNERSPACE_RELEASED` is `False`; flip it in the same change that publishes the first tag.
+InnerSpace is released (beta), with `INNERSPACE_RELEASED` set to `True` in the docs test, so
+the homepage lists it with its manifest count and the README status table shows it as Beta.
+It still has no plugin, so no page offers a plugin marketplace id for it.
 `generate_support_skills.py` stays limited to Network, Protect and Access: InnerSpace has no
 support-bundle tool.
 

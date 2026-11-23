@@ -317,12 +317,10 @@ A probe without a connection answers `503` with `"ok": false` and
 ## InnerSpace console product
 
 The API server serves the nine reads of the [InnerSpace MCP server](../innerspace/)
-(not yet released) for a controller that declares the `innerspace` product. It
-is a read-only console product: it reads the console's InnerSpace application
-through a console login session, through the same `unifi-core` managers as the
-MCP server. Run the API from a source checkout
-([Quickstart A](#a-local-clone-developing-or-testing-changes)) to use it before
-the next API release.
+for a controller that declares the `innerspace` product. It is a read-only
+console product: it reads the console's InnerSpace application through a
+console login session, through the same `unifi-core` managers as the MCP
+server. It needs `unifi-api-server` 0.34.2 or later.
 
 ### Register the controller
 

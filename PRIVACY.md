@@ -4,7 +4,7 @@
 
 ## Summary
 
-UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). The InnerSpace server, not yet released, also talks only to your console, with a console login (see [InnerSpace floor plan data](#innerspace-floor-plan-data)). We have no servers, no analytics, no telemetry, and no tracking.
+UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). The InnerSpace server also talks only to your console, with a console login (see [InnerSpace floor plan data](#innerspace-floor-plan-data)). We have no servers, no analytics, no telemetry, and no tracking.
 
 ## How UniFi MCP Works
 
@@ -56,7 +56,7 @@ Your AI Agent <--local--> Site Manager server (on your machine) <--internet--> U
 
 ### InnerSpace floor plan data
 
-The InnerSpace server is not yet released. It is local-first: it logs in to the console you name with a username and password and reads InnerSpace through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
+The InnerSpace server is local-first: it logs in to the console you name with a username and password and reads InnerSpace through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
 
 - The data it returns describes a building: floor plans, wall positions, device placements, MAC addresses and serial numbers. Response redaction hides secret-looking fields by name; it does not mask MAC addresses, serial numbers or plan geometry, so review results before you share them.
 - A floor plan image is returned to your AI agent only by the MCP server, on request, and never by `unifi-api-server`.

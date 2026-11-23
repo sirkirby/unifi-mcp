@@ -66,7 +66,7 @@ This installs all Python workspace packages in development mode plus the self-co
 | `apps/protect/` | Protect MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/access/` | Access MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/sitemanager/` | Site Manager MCP server (cloud account, read-only) | `make test`, `make lint`, `make manifest` |
-| `apps/innerspace/` | InnerSpace MCP server (console login, read-only; not yet released) | `make test`, `make lint`, `make manifest` |
+| `apps/innerspace/` | InnerSpace MCP server (console login, read-only) | `make test`, `make lint`, `make manifest` |
 | `apps/worker/` | Cloudflare Worker gateway + npm CLI | `make check` |
 | `packages/unifi-core/` | Shared connectivity | Tested via root `make core-test` |
 | `packages/unifi-mcp-shared/` | Shared MCP patterns | Tested via root `make shared-test` |
