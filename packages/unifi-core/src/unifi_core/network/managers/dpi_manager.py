@@ -4,10 +4,10 @@ Provides read-only access to the DPI application and category database
 via the official UniFi integration API. Applications are identified by
 compound IDs: (category_id << 16) | app_id.
 
-Requires an API key (UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP
-server; the controller's API token for the API server). Without one, or on
-any non-200 answer, requests raise with fixed text rather than returning an
-empty catalog.
+Requires an API key (UNIFI_NETWORK_API_KEY, or UNIFI_API_KEY on the
+UNIFI_HOST console, for the MCP server; the controller's API token for the
+API server). Without one, or on any non-200 answer, requests raise with
+fixed text rather than returning an empty catalog.
 
 API endpoints (official integration API):
   GET /proxy/network/integration/v1/dpi/applications  (paginated; maximum
@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 
-from unifi_core.auth import UniFiAuth
+from unifi_core.auth import UniFiAuth, api_key_variables
 from unifi_core.exceptions import (
     UniFiAuthError,
     UniFiMalformedResponseError,
@@ -52,8 +52,9 @@ def _missing_key_message(env_prefix: str | None) -> str:
     (``env_prefix`` set by an MCP server); the API server keeps the key on the
     controller record instead.
     """
-    if isinstance(env_prefix, str) and env_prefix:
-        where = f"set UNIFI_{env_prefix}_API_KEY (or UNIFI_API_KEY) in the server environment"
+    variables = api_key_variables(env_prefix)
+    if variables:
+        where = f"set {variables} in the server environment"
     else:
         where = "add it to this controller's configuration"
     return (
@@ -109,9 +110,8 @@ class DpiManager:
         report "no DPI applications" for what is a configuration problem.
         """
         if self._auth is None or not self._auth.has_api_key:
-            message = _missing_key_message(self._connection.tls_env_prefix)
-            logger.warning("%s", message)
-            raise UniFiAuthError(message)
+            logger.warning("The DPI catalog needs a Network API key and none is configured.")
+            raise UniFiAuthError(_missing_key_message(self._connection.tls_env_prefix))
 
         base_url = f"https://{self._connection.host}:{self._connection.port}"
         url = f"{base_url}/proxy/network/integration{path}"

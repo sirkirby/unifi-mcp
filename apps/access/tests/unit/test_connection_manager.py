@@ -812,6 +812,7 @@ class TestDeveloperRequest:
 
     @pytest.mark.asyncio
     async def test_requires_configured_api_key(self, cm_proxy_only):
+        cm_proxy_only.tls_env_prefix = "ACCESS"
         with pytest.raises(UniFiAuthError, match="UNIFI_ACCESS_API_KEY"):
             await cm_proxy_only.developer_request("GET", "visitors", operation="List visitors")
 

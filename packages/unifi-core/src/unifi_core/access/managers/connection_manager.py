@@ -32,7 +32,7 @@ from typing import Any, Awaitable, Callable, Dict, TypeVar
 
 import aiohttp
 
-from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.auth import AuthenticationStatus, AuthMethod, api_key_variables
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiRateLimitError
 from unifi_core.operation_gate import write_request_bound
@@ -107,6 +107,14 @@ def _hint_forbidden_api_token(error: BaseException) -> None:
         return
     if isinstance(error, ApiForbiddenError):
         append_exception_hint(error, _API_TOKEN_FORBIDDEN_HINT)
+
+
+def access_api_token_remediation(env_prefix: str | None) -> str:
+    """Fixed text naming where a valid Access API token goes."""
+    variables = api_key_variables(env_prefix)
+    if variables:
+        return f"Set {variables} to a valid UniFi Access API token."
+    return "Add a valid UniFi Access API token to this controller's configuration."
 
 
 class AccessUnavailableError(UniFiConnectionError):
@@ -704,9 +712,7 @@ class AccessConnectionManager:
         ``Authorization: Bearer``. This differs from Network's public
         Integration API, which uses ``X-API-Key``.
         """
-        remediation = (
-            "Create a UniFi Access API token and set UNIFI_ACCESS_API_KEY (or UNIFI_API_KEY) for the Access MCP server."
-        )
+        remediation = access_api_token_remediation(self.tls_env_prefix)
         if not self._api_key:
             raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {remediation}")
         if self._api_certificate_failure:
