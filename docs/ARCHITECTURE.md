@@ -42,7 +42,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `sitemanager/` | Site Manager cloud client, managers and models; the fixed `https://api.ui.com` origin lives in `sitemanager/managers/connection_manager.py` |
 | `confirmation.py` | Preview-then-confirm helpers for mutations |
 | `policy_gate.py` | Policy gates (`UNIFI_POLICY_*`) and permission mode resolution |
-| `permission.py` | Auth and policy resolution shared by the MCP servers and the API server |
+| `permission.py` | Input JSON Schema inference for tool functions (validation keywords from type annotations) |
 | `formatting.py` | Standard tool response formatting |
 | `config.py` | Logging setup and YAML config loading |
 | `innerspace/` | InnerSpace client, managers and models; reads under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py` |
