@@ -60,13 +60,13 @@ async def api(tmp_path, monkeypatch):
     app, key, cid = await bootstrap(tmp_path, product="network")
     stub_managers(monkeypatch, {})
     queries = []
-    state = SimpleNamespace(app=app, key=key, cid=cid, queries=queries, error=None)
+    state = SimpleNamespace(app=app, key=key, cid=cid, queries=queries, error=None, truncated=False)
 
     async def get_traffic_flows(query):
         if state.error:
             raise state.error
         queries.append(query)
-        return {"flows": [FLOW], "has_next": False}
+        return {"flows": [FLOW], "has_next": False, "truncated": state.truncated}
 
     async def get_manager(self, *args, **kwargs):
         return SimpleNamespace(get_traffic_flows=get_traffic_flows)
@@ -325,3 +325,36 @@ async def test_rest_does_not_blame_the_query_for_a_controller_outage(api):
         )
     assert response.status_code >= 500
     assert "rejected" not in response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("truncated", [True, False])
+async def test_rest_says_when_the_controller_stopped_early(api, truncated):
+    api.truncated = truncated
+    response = await _get(api, [])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["truncated"] is truncated
+    assert body["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("truncated", [True, False])
+async def test_graphql_says_when_the_controller_stopped_early(api, truncated):
+    api.truncated = truncated
+    body = await graphql_query(
+        api.app, api.key, f'{{ network {{ trafficFlows(controller: "{api.cid}") {{ truncated nextCursor }} }} }}'
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["trafficFlows"] == {"truncated": truncated, "nextCursor": None}
+
+
+@pytest.mark.asyncio
+async def test_openapi_declares_truncated(api):
+    schema = api.app.openapi()
+    ref = schema["paths"]["/v1/sites/{site_id}/traffic-flows"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["$ref"]
+    page = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
+    assert page["properties"]["truncated"]["type"] == "boolean"
+    assert "truncated" in page["required"]

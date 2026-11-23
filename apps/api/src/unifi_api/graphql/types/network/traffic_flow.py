@@ -157,6 +157,12 @@ class TrafficFlow:
 class TrafficFlowPage:
     items: list[TrafficFlow]
     next_cursor: str | None = None
+    truncated: bool = strawberry.field(
+        default=False,
+        description=(
+            "True when the controller stopped before the window's last flow; narrow the window to read the rest."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

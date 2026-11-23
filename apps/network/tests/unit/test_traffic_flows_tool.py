@@ -24,6 +24,7 @@ _ENVELOPE = {
     "total_page_count": 5,
     "has_next": True,
     "or_more": True,
+    "truncated": True,
 }
 
 
@@ -45,7 +46,7 @@ async def test_tool_maps_params_and_returns_success():
 
     assert out["success"] is True
     assert out["site"] == traffic_flow_manager._connection.site
-    # Whole manager envelope must spread through unchanged (all 6 keys).
+    # Whole manager envelope must spread through unchanged (all 7 keys).
     for key, value in _ENVELOPE.items():
         assert out[key] == value
 

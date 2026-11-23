@@ -13,6 +13,7 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import Field
 from unifi_core.network.models.traffic_flows import Port
 
 from unifi_api.auth.middleware import require_scope
@@ -32,6 +33,14 @@ from unifi_api.services.traffic_flow_query import REJECTED, InvalidTrafficFlowFi
 router = APIRouter()
 
 
+class TrafficFlowPage(Page[to_pydantic_model(TrafficFlow)]):
+    truncated: bool = Field(
+        description=(
+            "True when the controller stopped before the window's last flow; narrow the window to read the rest."
+        )
+    )
+
+
 def _encode_flow_cursor(page: int) -> str:
     return base64.urlsafe_b64encode(str(page).encode()).decode()
 
@@ -47,9 +56,14 @@ def _decode_flow_cursor(cursor: str | None) -> int:
 
 @router.get(
     "/sites/{site_id}/traffic-flows",
-    response_model=Page[to_pydantic_model(TrafficFlow)],
+    response_model=TrafficFlowPage,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/traffic-flows"],
+    description=(
+        "The controller serves at most 5,000 flows per query and may leave rarer records out of a broad one: "
+        "a query with no risk or action filter, or several risk values, can omit medium/high-risk and "
+        "blocked flows that a single-value query returns. Query risky and blocked flows on their own."
+    ),
 )
 async def get_traffic_flows(
     request: Request,
@@ -148,6 +162,7 @@ async def get_traffic_flows(
         "items": rows,
         "next_cursor": next_cursor,
         "render_hint": hint,
+        "truncated": bool(result.get("truncated")),
     }
 
 

@@ -3082,7 +3082,9 @@ type NetworkQuery {
   """Get a client's current WiFi parameters (signal, rates)."""
   clientWifiDetails(controller: ID!, mac: ID!, site: String! = "default"): ClientWifiDetails
 
-  """Query historical traffic flows (Insights > Flows), paginated."""
+  """
+  Query historical traffic flows (Insights > Flows), paginated. The controller serves at most 5,000 per query (see truncated), and a broad query can omit medium/high-risk and blocked flows that a single-value query returns: query those on their own.
+  """
   trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: BigInt = null, timeTo: BigInt = null, searchText: String = null, risk: [String!] = null, action: [String!] = null, direction: [String!] = null, protocol: [String!] = null, service: [String!] = null, sourceMac: [String!] = null, sourceIp: [String!] = null, sourceNetworkId: [String!] = null, sourcePort: [Int!] = null, destinationDomain: [String!] = null, destinationIp: [String!] = null, destinationPort: [Int!] = null, destinationRegion: [String!] = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
 
   """
@@ -4335,6 +4337,11 @@ type TrafficFlowEndpoint {
 type TrafficFlowPage {
   items: [TrafficFlow!]!
   nextCursor: String
+
+  """
+  True when the controller stopped before the window's last flow; narrow the window to read the rest.
+  """
+  truncated: Boolean!
 }
 
 """A policy that matched a traffic flow."""
@@ -4799,7 +4806,7 @@ Read-only access to UniFi Network resources.
 - `threatPosture: ThreatPosture`  — Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
 - `trafficFlowStatistics: TrafficFlowStatistics!`  — Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
-- `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.
+- `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated. The controller serves at most 5,000 per query (see truncated), and a broad query can omit medium/high-risk and blocked flows that a single-value query returns: query those on their own.
 - `trafficRoute: TrafficRoute`  — Look up a single traffic-route policy by id.
 - `trafficRoutes: TrafficRoutePage!`  — List traffic-route policies (V2 /trafficroutes) (paginated).
 - `userGroup: UserGroup`  — Look up a single QoS user group by id.

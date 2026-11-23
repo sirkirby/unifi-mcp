@@ -33,7 +33,11 @@ def _as_port_list(value: Optional[int]) -> Optional[List[int]]:
         "records — source/destination (incl. ports and resolved destination domains), service, risk, "
         "action, bytes, and timestamps — for a time window, with server-side filtering and "
         "pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or "
-        "use within_hours. Read-only; one page per call (use page/total_page_count to paginate)."
+        "use within_hours. Read-only; one page per call (use page/total_page_count to paginate). "
+        "The controller serves at most 5,000 flows per query; truncated=true means the pages end "
+        "early, so narrow the window. A broad query (no risk or action filter, or several risk values) "
+        "can omit medium/high-risk and blocked flows that a single-value query returns: query those "
+        "on their own."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
 )

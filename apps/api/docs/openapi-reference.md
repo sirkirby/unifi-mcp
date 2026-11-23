@@ -1978,6 +1978,9 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 ### `GET /v1/sites/{site_id}/traffic-flows` — Get Traffic Flows
 
 
+The controller serves at most 5,000 flows per query and may leave rarer records out of a broad one: a query with no risk or action filter, or several risk values, can omit medium/high-risk and blocked flows that a single-value query returns. Query risky and blocked flows on their own.
+
+
 **Parameters:**
 
 - `site_id` (path) (required)
@@ -2003,7 +2006,7 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 - `controller` (query)
 
 
-**Returns:** `Page_TrafficFlowModel_`
+**Returns:** `TrafficFlowPage`
 
 
 ## network/vouchers
