@@ -89,6 +89,7 @@ async def main_async():
             port=port,
             http_transport=http_transport,
             logger=logger,
+            env_prefix="DRIVE",
             auth_token=resolve_http_auth_token(
                 env_prefix="DRIVE", logger=logger, configured=config.server.get("http", {}).get("auth_token")
             )

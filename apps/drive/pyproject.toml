@@ -7,7 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     # The drive icon family, drive_ tool titles and isolated_keys require Shared 0.6.43.
     # The operation gate, batch cancel and reporting a write cut off at its hold budget require Shared 0.6.49.
-    "unifi-mcp-shared>=0.6.49,<0.7",
+    # Per-server HTTP trusted networks (run_transports env_prefix) require Shared 0.6.50.
+    "unifi-mcp-shared>=0.6.50,<0.7",
     # The UniFi Drive managers and models (unifi_core.drive) require Core 0.4.98.
     # The operation gate and recording a write's hold-budget cut-off on its ticket require Core 0.4.107.
     "unifi-core>=0.4.107,<0.5",
