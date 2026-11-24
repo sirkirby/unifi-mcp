@@ -10,12 +10,13 @@ from unifi_core.protect.managers.connection_manager import ProtectConnectionMana
 from unifi_core.protect.managers.id_portability import compare_id_portability
 
 
-def _make_connection_manager(api_key: str | None = None) -> ProtectConnectionManager:
+def _make_connection_manager(api_key: str | None = None, tls_env_prefix: str | None = None) -> ProtectConnectionManager:
     return ProtectConnectionManager(
         host="protect.example.test",
         username="admin",
         password="secret",
         api_key=api_key,
+        tls_env_prefix=tls_env_prefix,
     )
 
 
@@ -40,7 +41,18 @@ def test_require_public_api_key_returns_cleanly_when_configured() -> None:
     cm.require_public_api_key("update sensor settings")
 
 
-def test_require_public_api_key_raises_actionable_error_when_missing() -> None:
+def test_require_public_api_key_names_server_variables_for_an_mcp_caller() -> None:
+    cm = _make_connection_manager(tls_env_prefix="PROTECT")
+
+    with pytest.raises(ValueError) as exc_info:
+        cm.require_public_api_key("update sensor settings")
+
+    message = str(exc_info.value)
+    assert "update sensor settings" in message
+    assert "Set UNIFI_PROTECT_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) and restart the server." in message
+
+
+def test_require_public_api_key_points_at_the_controller_record_without_a_prefix() -> None:
     cm = _make_connection_manager()
 
     with pytest.raises(ValueError) as exc_info:
@@ -48,8 +60,8 @@ def test_require_public_api_key_raises_actionable_error_when_missing() -> None:
 
     message = str(exc_info.value)
     assert "update sensor settings" in message
-    assert "UNIFI_PROTECT_API_KEY" in message
-    assert "UNIFI_API_KEY" in message
+    assert "Add one to this controller's configuration." in message
+    assert "UNIFI_" not in message
 
 
 @pytest.mark.parametrize("resource_type", ["sensors", "chimes", "viewers", "liveviews", "cameras"])
@@ -106,7 +118,7 @@ async def test_connection_manager_validates_public_id_portability_without_tool_l
 async def test_connection_manager_id_portability_check_requires_api_key() -> None:
     cm = _make_connection_manager()
 
-    with pytest.raises(ValueError, match="UNIFI_PROTECT_API_KEY"):
+    with pytest.raises(ValueError, match="requires an API key"):
         await cm.validate_public_id_portability(
             resource_type="sensors",
             bootstrap_collection="sensors",

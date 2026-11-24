@@ -15,6 +15,7 @@ from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from unifi_core.auth import api_key_variables
 from unifi_core.mac import normalize_mac
 
 Port = Annotated[int, Field(ge=0, le=65535)]
@@ -271,8 +272,9 @@ def dpi_names_api_key_remediation(env_prefix: str | None) -> str:
     MCP server passes its prefix); the API server keeps the key on the
     controller record instead.
     """
-    if isinstance(env_prefix, str) and env_prefix:
-        where = f"Set UNIFI_{env_prefix}_API_KEY (or UNIFI_API_KEY) to a valid Network API key"
+    variables = api_key_variables(env_prefix)
+    if variables:
+        where = f"Set {variables} to a valid Network API key"
     else:
         where = "Add a valid Network API key to this controller's configuration"
     return (

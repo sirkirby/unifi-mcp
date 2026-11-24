@@ -34,7 +34,7 @@ Each app exposes the following lazy-loading meta-tools:
 | Protect | `protect_` | `protect_tool_index`, `protect_execute`, `protect_batch`, `protect_batch_status`, `protect_batch_cancel`, `protect_load_tools` in lazy mode |
 | Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_batch_cancel`, `access_load_tools` in lazy mode |
 | Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_batch_cancel`, `sitemanager_load_tools` in lazy mode |
-| InnerSpace (not yet released) | `innerspace_` | `innerspace_tool_index`, `innerspace_execute`, `innerspace_batch`, `innerspace_batch_status`, `innerspace_batch_cancel`, `innerspace_load_tools` in lazy mode |
+| InnerSpace | `innerspace_` | `innerspace_tool_index`, `innerspace_execute`, `innerspace_batch`, `innerspace_batch_status`, `innerspace_batch_cancel`, `innerspace_load_tools` in lazy mode |
 
 These tools are not replacements for `tools/list`. They are UniFi-specific
 extensions for clients and models that need a compact, filterable catalog or
@@ -161,8 +161,8 @@ See [Site Manager permissions](../apps/sitemanager/docs/permissions.md#meta-tool
 
 ### InnerSpace differences
 
-The InnerSpace server, not yet released, has nine domain tools, all read-only,
-and it adjusts the shared model the same way Site Manager does:
+The InnerSpace server has nine domain tools, all read-only, and it adjusts the
+shared model the same way Site Manager does:
 
 - In `lazy` mode it lists all nine domain tools directly. `innerspace_tool_index`
   and `innerspace_batch_status` are marked read-only, while `innerspace_execute`,

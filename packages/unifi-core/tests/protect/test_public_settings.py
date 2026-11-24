@@ -129,7 +129,7 @@ async def test_preflight_failure_prevents_all_writes(devices, domain, failure):
     cm, api, camera, light = devices
     if failure == "missing_key":
         cm._api_key = " "
-        expected = "UNIFI_PROTECT_API_KEY"
+        expected = "requires an API key"
     else:
         getter = api.get_cameras_public if domain == "camera" else api.get_lights_public
         getter.return_value = [SimpleNamespace(id="different")]

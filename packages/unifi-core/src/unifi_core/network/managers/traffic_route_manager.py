@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from aiounifi.models.api import ApiRequestV2
 
-from unifi_core.auth import AuthenticationStatus
+from unifi_core.auth import AuthenticationStatus, session_credentials_remediation
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
 from unifi_core.mac import canonical_mac
 from unifi_core.network.managers.connection_manager import ConnectionManager
@@ -139,10 +139,8 @@ class TrafficRouteManager:
         auth_status = getattr(self._connection, "authentication_status", None)
         if isinstance(auth_status, AuthenticationStatus) and not auth_status.session_available:
             if not await self._connection.ensure_session_connected():
-                raise UniFiAuthError(
-                    "INTERNET Traffic Routes require Network session authentication. "
-                    "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD."
-                )
+                remediation = session_credentials_remediation(getattr(self._connection, "tls_env_prefix", None))
+                raise UniFiAuthError(f"INTERNET Traffic Routes require Network session authentication. {remediation}")
 
         try:
             target_network = await self._network_manager.get_network_details(network_id, force_refresh=True)

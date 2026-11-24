@@ -22,6 +22,25 @@ _log = logging.getLogger("unifi-api.audit")
 _audit_subscribers: list[Callable[[dict], None]] = []
 
 
+def parse_ts_bound(value: str) -> datetime:
+    """Parse an ISO-8601 ``since``/``until`` filter value for comparison with ``AuditLog.ts``.
+
+    Audit rows are stored as UTC wall-clock time and SQLite drops the tzinfo when
+    binding, so an aware value with a non-UTC offset is converted to UTC first.
+    Offset-free values are left as they are (treated as UTC, as before).
+    Raises ``ValueError`` on a malformed value, and on one whose UTC instant is
+    outside the datetime range (``astimezone`` raises ``OverflowError`` there), so
+    every caller keeps its 400 answer.
+    """
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is not None:
+        try:
+            parsed = parsed.astimezone(timezone.utc)
+        except OverflowError as exc:
+            raise ValueError("timestamp's UTC instant is out of range") from exc
+    return parsed
+
+
 def add_audit_subscriber(cb: Callable[[dict], None]) -> Callable[[], None]:
     """Register a subscriber callback. Returns an unsubscribe callable."""
     _audit_subscribers.append(cb)

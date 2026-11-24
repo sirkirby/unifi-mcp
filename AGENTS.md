@@ -57,7 +57,7 @@ All state-changing tools MUST implement preview-then-confirm:
 - `confirm=False` (default): validate input, return preview payload
 - `confirm=True`: execute the mutation on the controller
 - Bypass mode injects `confirm=True` automatically
-- **Anchor:** `packages/unifi-mcp-shared/src/unifi_mcp_shared/confirmation.py`
+- **Anchor:** `packages/unifi-core/src/unifi_core/confirmation.py`
 
 ### MCP Tool Annotations
 
@@ -79,6 +79,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Controller concurrency is owned by the operation gate: confirmed writes run one at a time per controller application, reads are capped. Do not add ad-hoc write locks in managers, tools or meta-tools.
 - Every tool that is not read-only MUST declare `permission_action`, and every create/update/delete tool MUST declare `confirm`: the gate classifies each call from them.
 - Every MCP app MUST pass `gate_provider` (`None` only for a server with no controller) and hand its connection wait over as `connection_decorator`, never pre-wrapped.
+- Every core transport that can carry a write MUST send through `write_request_bound()`, so a sent request marks the write ticket. Logins, connect probes and support probes stay outside it.
 - **Anchor:** `packages/unifi-core/src/unifi_core/operation_gate.py`, `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_gate.py`
 
 ### Logging
@@ -209,7 +210,7 @@ Actions: `CREATE`, `UPDATE`, `DELETE`. Unset = allowed.
 
 All tools MUST remain visible and discoverable regardless of policy gates. Authorization is checked at call time by the `permissioned_tool` decorator.
 
-- **Anchor:** `packages/unifi-mcp-shared/src/unifi_mcp_shared/policy_gate.py`
+- **Anchor:** `packages/unifi-core/src/unifi_core/policy_gate.py`
 
 ## Golden Paths
 
@@ -217,9 +218,9 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 
 ### Add a new tool to an existing category
 
-1. Add manager method in `apps/<server>/src/<pkg>/managers/<domain>_manager.py`
-   - **Anchor (read-only):** `apps/network/src/unifi_network_mcp/managers/client_manager.py`
-   - **Anchor (mutating):** `apps/network/src/unifi_network_mcp/managers/firewall_manager.py`
+1. Add manager method in `packages/unifi-core/src/unifi_core/<server>/managers/<domain>_manager.py`
+   - **Anchor (read-only):** `packages/unifi-core/src/unifi_core/network/managers/client_manager.py`
+   - **Anchor (mutating):** `packages/unifi-core/src/unifi_core/network/managers/firewall_manager.py`
 2. Add tool function in `apps/<server>/src/<pkg>/tools/<category>.py`
    - **Anchor (read-only):** `apps/network/src/unifi_network_mcp/tools/clients.py:lookup_by_ip`
    - **Anchor (mutating):** `apps/network/src/unifi_network_mcp/tools/firewall.py:create_firewall_policy`
@@ -231,8 +232,8 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 
 ### Add a new tool category
 
-1. Create manager: `apps/<server>/src/<pkg>/managers/<domain>_manager.py`
-   - **Anchor:** `apps/network/src/unifi_network_mcp/managers/routing_manager.py`
+1. Create manager: `packages/unifi-core/src/unifi_core/<server>/managers/<domain>_manager.py`
+   - **Anchor:** `packages/unifi-core/src/unifi_core/network/managers/routing_manager.py`
 2. Add `@lru_cache` factory + alias in `<pkg>/runtime.py`
 3. Create tool module: `apps/<server>/src/<pkg>/tools/<category>.py`
    - **Anchor:** `apps/network/src/unifi_network_mcp/tools/clients.py`
@@ -254,14 +255,14 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 Update tools MUST use the fetch-merge-put pattern. The manager fetches current state, merges the caller's partial updates, and PUTs the full object. The tool layer accepts a partial dict, validates via the domain's pydantic model (`<Model>.to_controller_update`), and shows a before/after preview.
 
 1. Manager method: fetch existing → copy → merge updates → PUT full object
-   - **Anchor:** `apps/network/src/unifi_network_mcp/managers/network_manager.py:update_network`
+   - **Anchor:** `packages/unifi-core/src/unifi_core/network/managers/network_manager.py:update_network`
 2. Define or extend the pydantic model in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`. Mark mutable fields as such (default mutability); read-only fields use `json_schema_extra={"mutable": False}`.
 3. Tool function: validate the caller's partial dict via `<Model>.to_controller_update(fields)`, fetch current state for preview, use `update_preview`.
    - **Anchor (model):** `packages/unifi-core/src/unifi_core/network/models/wlans.py`
-   - **Anchor (tool):** `apps/network/src/unifi_network_mcp/tools/wlans.py:update_wlan`
-5. Tool description MUST include: "Pass only the fields you want to change — current values are automatically preserved."
-6. Run `make manifest`
-7. Add tests covering: partial merge preserves unmentioned fields, not-found returns False, empty update is a no-op
+   - **Anchor (tool):** `apps/network/src/unifi_network_mcp/tools/network.py:update_wlan`
+4. Tool description MUST include: "Pass only the fields you want to change — current values are automatically preserved."
+5. Run `make manifest`
+6. Add tests covering: partial merge preserves unmentioned fields, not-found returns False, empty update is a no-op
 
 ### Add or migrate a domain to shared field models
 
@@ -294,7 +295,7 @@ When a tool domain has list/create/update tools, define a shared pydantic model 
 
 ### Modify the permission system
 
-1. Shared logic: `packages/unifi-mcp-shared/src/unifi_mcp_shared/policy_gate.py`
+1. Shared logic: `packages/unifi-core/src/unifi_core/policy_gate.py`
 2. Server-specific categories: `CATEGORY_MAP` in the app's `categories.py`
 3. Enforcement: `permissioned_tool` decorator in the app's `main.py`
 4. Policy gates configured via `UNIFI_POLICY_*` env vars (no config.yaml section)
