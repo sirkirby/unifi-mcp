@@ -52,19 +52,19 @@ async def drive_set_file_service(
 ) -> Dict[str, Any]:
     """Enable or disable a file service, with preview/confirm."""
     try:
+        if confirm:
+            change, after = await file_service_manager.set_file_service(service, enabled)
+            return tool_success({"service": service, "enabled": after, "changed": change.changes_anything})
         change = await file_service_manager.plan_set_file_service(service, enabled)
         if not change.changes_anything:
             return tool_success({"service": service, "enabled": enabled, "changed": False})
-        if not confirm:
-            return preview_response(
-                action="update",
-                resource_type="file_service",
-                resource_id=service,
-                current_state={"enabled": change.enabled_before},
-                proposed_changes={"enabled": change.enabled_after},
-                warnings=change.warnings or None,
-            )
-        after = await file_service_manager.apply_set_file_service(change)
-        return tool_success({"service": service, "enabled": after, "changed": True})
+        return preview_response(
+            action="update",
+            resource_type="file_service",
+            resource_id=service,
+            current_state={"enabled": change.enabled_before},
+            proposed_changes={"enabled": change.enabled_after},
+            warnings=change.warnings or None,
+        )
     except Exception as exc:
         return tool_failure("set file service", exc)

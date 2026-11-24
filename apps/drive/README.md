@@ -78,11 +78,11 @@ Every tool call takes a read slot at this server's operation gate for the NAS be
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `UNIFI_DRIVE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | How long one write may hold its turn (10 to 3600). Once it has held longer, calls queued behind it are refused as busy, with nothing sent; a write's own requests to the NAS stop at this budget. |
+| `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
 | `UNIFI_DRIVE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
-| `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a call waits for a read slot before it is refused as busy (1 to 3600). |
-| `UNIFI_DRIVE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | Checked at startup (10 to 3600). It has no effect yet: this server has no write tools. |
 
-A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, and nothing is sent to the NAS.
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write; nothing is sent to the NAS. A confirmed write whose budget runs out before its change is sent also returns `mutation_applied: false`; one cut off after the change was sent returns `mutation_applied: null`, and the NAS should be read back before retrying.
 
 ## Tools
 
@@ -115,7 +115,7 @@ The Drive server has no `drive_get_support_bundle` tool. Support bundles are one
 
 ### NFS on UniFi Drive
 
-- Drive keeps every NFS client in one list, and its API replaces that list as a whole. Each NFS tool reads the list, changes one client and writes the list back with every other client exactly as it was read, then reads it back to check. NFS writes run one at a time, and a write stops without writing if the list changed since it was planned.
+- Drive keeps every NFS client in one list, and its API replaces that list as a whole. Each NFS tool reads the list, changes one client and writes the list back with every other client exactly as it was read, then reads it back to check. Confirmed writes from one server run one at a time, and a write stops without writing if the list changed since it was planned.
 - Before saving a new or changed client, the tools run Drive's own hostname check, as the web app does.
 - A client mounts `<nas>:/var/nfs/shared/<Shared Drive Name>` over NFSv3. Drive maps every client user to one Drive user; there is no squash option to set.
 - Turning NFS off with `drive_set_file_service` keeps the client list, so it applies again when NFS comes back on. The Drive web app clears the list instead.

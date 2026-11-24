@@ -3,10 +3,10 @@
 Drive stores every NFS client in one list and its API replaces the list as a
 whole. Each tool here reads the list, changes one client and writes the list
 back with every other client unchanged. A confirmed write plans again from
-fresh state under the manager's NFS lock, so concurrent writes from this server
-run one after the other instead of dropping each other's clients.
+fresh state, and the server's operation gate runs confirmed writes one at a
+time, so concurrent writes from this server do not drop each other's clients.
 
-The lock only covers this process. Drive keeps no version on the list, so a
+The gate only covers this process. Drive keeps no version on the list, so a
 write from another process (a second MCP server, or the API server, pointed at
 the same NAS) that lands between the last re-read and the ``PUT`` is
 overwritten without either call reporting it.

@@ -1,17 +1,144 @@
 {
-  "count": 13,
+  "count": 17,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
+    "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",
     "drive_get_file_services": "unifi_drive_mcp.tools.file_services",
     "drive_get_shared_drive": "unifi_drive_mcp.tools.shared_drives",
     "drive_get_system_info": "unifi_drive_mcp.tools.system",
     "drive_list_disks": "unifi_drive_mcp.tools.storage",
     "drive_list_nfs_connections": "unifi_drive_mcp.tools.nfs",
     "drive_list_shared_drives": "unifi_drive_mcp.tools.shared_drives",
-    "drive_list_storage_pools": "unifi_drive_mcp.tools.storage"
+    "drive_list_storage_pools": "unifi_drive_mcp.tools.storage",
+    "drive_remove_nfs_connection": "unifi_drive_mcp.tools.nfs",
+    "drive_set_file_service": "unifi_drive_mcp.tools.file_services",
+    "drive_update_nfs_connection": "unifi_drive_mcp.tools.nfs"
   },
   "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
   "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Allows a new NFS client (IP address or hostname) to mount one or more shared drives. Other clients are kept as they are. Drive checks the client name before saving. Requires confirm=true to execute; without it, returns a preview.",
+      "name": "drive_add_nfs_connection",
+      "permission_action": "create",
+      "permission_category": "nfs_connection",
+      "schema": {
+        "input": {
+          "properties": {
+            "async_writes": {
+              "description": "Use async writes: faster, but writes can be lost on a NAS power loss (default false)",
+              "type": "boolean"
+            },
+            "client": {
+              "description": "Client IP address or hostname allowed to mount",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, saves the connection. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "shared_drives": {
+              "description": "Shared drives the client may mount, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"rw\"}]. permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives.",
+              "type": "array"
+            }
+          },
+          "required": [
+            "client",
+            "shared_drives"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Add NFS Connection"
+    },
     {
       "annotations": {
         "destructiveHint": false,
@@ -808,7 +935,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; do not pass them to other products' tools.",
+      "description": "Lists shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. These IDs are scoped to the UniFi Drive tool family; pass them as shared_drives[].id to the drive_*_nfs_connection tools, not to other products' tools.",
       "name": "drive_list_shared_drives",
       "permission_action": "read",
       "permission_category": "shared_drive",
@@ -1054,6 +1181,244 @@
     },
     {
       "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Removes an NFS client, so it can no longer mount any shared drive. Other clients are kept as they are. No data on the shared drives is touched. Requires confirm=true to execute; without it, returns a preview.",
+      "name": "drive_remove_nfs_connection",
+      "permission_action": "delete",
+      "permission_category": "nfs_connection",
+      "schema": {
+        "input": {
+          "properties": {
+            "client": {
+              "description": "The client's IP address or hostname, as listed",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, removes the connection. When false (default), returns a preview.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "client"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Remove NFS Connection"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Turns a file-sharing service on or off: smb, nfs or time_machine (Time Machine runs over SMB and needs SMB on). Turning a service off disconnects its clients. Turning NFS off keeps the NFS connection list, so it applies again when NFS is turned back on. Requires confirm=true to execute; without it, returns a preview.",
+      "name": "drive_set_file_service",
+      "permission_action": "update",
+      "permission_category": "file_service",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the change. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "enabled": {
+              "description": "true to turn the service on, false to turn it off",
+              "type": "boolean"
+            },
+            "service": {
+              "description": "smb, nfs or time_machine",
+              "enum": [
+                "smb",
+                "nfs",
+                "time_machine"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "service",
+            "enabled"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Set File Service"
+    },
+    {
+      "annotations": {
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
@@ -1111,6 +1476,128 @@
         }
       },
       "title": "UniFi Drive Tool Index"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Changes an existing NFS client's shared drives and/or async writes. Pass only the fields you want to change \u2014 current values are automatically preserved. shared_drives, when passed, replaces the client's whole list. Other clients are kept as they are. Requires confirm=true to execute; without it, returns a preview.",
+      "name": "drive_update_nfs_connection",
+      "permission_action": "update",
+      "permission_category": "nfs_connection",
+      "schema": {
+        "input": {
+          "properties": {
+            "async_writes": {
+              "description": "Use async writes",
+              "type": "boolean"
+            },
+            "client": {
+              "description": "The client's IP address or hostname, as listed",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, saves the change. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "shared_drives": {
+              "description": "The client's new shared drive list, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"ro\"}]. It replaces the whole list. A drive the client already has keeps its current permission when permission is left out; a newly granted drive defaults to rw. IDs come from drive_list_shared_drives.",
+              "type": "array"
+            }
+          },
+          "required": [
+            "client"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update NFS Connection"
     }
   ]
 }

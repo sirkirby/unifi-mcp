@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from unifi_core.drive.managers.connection_manager import DriveWriteNotSent
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
 from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
@@ -125,27 +126,53 @@ async def test_set_file_service_previews_without_writing(files):
     assert result["requires_confirmation"] is True
     assert result["preview"] == {"current": {"enabled": True}, "proposed": {"enabled": False}}
     assert result["warnings"] == ["NFS clients lose their mounts."]
-    files.apply_set_file_service.assert_not_awaited()
+    files.set_file_service.assert_not_awaited()
 
 
-async def test_set_file_service_confirmed_applies(files):
-    change = ServiceChange("smb", False, True)
-    files.plan_set_file_service.return_value = change
-    files.apply_set_file_service.return_value = True
+async def test_set_file_service_confirmed_plans_again_and_applies(files):
+    files.set_file_service.return_value = (ServiceChange("smb", False, True), True)
 
     result = await file_services.drive_set_file_service("smb", True, confirm=True)
 
-    files.apply_set_file_service.assert_awaited_once_with(change)
+    files.set_file_service.assert_awaited_once_with("smb", True)
+    # The confirmed write plans inside the manager's call, not from a separate plan.
+    files.plan_set_file_service.assert_not_awaited()
     assert result == {"success": True, "data": {"service": "smb", "enabled": True, "changed": True}}
 
 
 async def test_set_file_service_already_in_state_is_a_no_op(files):
-    files.plan_set_file_service.return_value = ServiceChange("smb", True, True)
+    files.set_file_service.return_value = (ServiceChange("smb", True, True), True)
 
     result = await file_services.drive_set_file_service("smb", True, confirm=True)
 
     assert result["data"]["changed"] is False
-    files.apply_set_file_service.assert_not_awaited()
+
+
+async def test_set_file_service_preview_already_in_state_is_a_no_op(files):
+    files.plan_set_file_service.return_value = ServiceChange("smb", True, True)
+
+    result = await file_services.drive_set_file_service("smb", True)
+
+    assert result == {"success": True, "data": {"service": "smb", "enabled": True, "changed": False}}
+
+
+async def test_a_change_stopped_before_it_was_sent_reports_nothing_applied(files):
+    files.set_file_service.side_effect = DriveWriteNotSent(
+        "Set SMB: the write's time budget ran out before the change was sent, so nothing was changed"
+    )
+
+    result = await file_services.drive_set_file_service("smb", False, confirm=True)
+
+    assert result["success"] is False and result["mutation_applied"] is False
+    assert "nothing was changed" in result["error"]
+
+
+async def test_an_nfs_change_stopped_before_it_was_sent_reports_nothing_applied(files):
+    files.remove_nfs_connection.side_effect = DriveWriteNotSent("Remove NFS connection: nothing was changed")
+
+    result = await nfs.drive_remove_nfs_connection(CLIENT, confirm=True)
+
+    assert result["success"] is False and result["mutation_applied"] is False
 
 
 # --- NFS connections ---------------------------------------------------------------
@@ -183,14 +210,14 @@ async def test_add_previews_the_new_client_and_the_ones_kept(files):
     files.add_nfs_connection.assert_not_awaited()
 
 
-async def test_add_confirmed_writes_under_the_lock_and_returns_the_saved_connection(files):
+async def test_add_confirmed_plans_again_and_returns_the_saved_connection(files):
     files.add_nfs_connection.return_value = (_nfs_change("add"), CONNECTION)
 
     result = await nfs.drive_add_nfs_connection(CLIENT, [{"id": DRIVE_ID}], confirm=True)
 
     (planned,) = files.add_nfs_connection.await_args.args
     assert planned.client == CLIENT
-    # The confirmed write plans inside the manager's locked method, not from a separate plan.
+    # The confirmed write plans inside the manager's call, not from a separate plan.
     files.plan_add_nfs_connection.assert_not_awaited()
     assert result["data"]["connection"]["client"] == CLIENT
 
@@ -222,7 +249,7 @@ async def test_update_passes_only_given_fields(files):
     files.update_nfs_connection.assert_not_awaited()
 
 
-async def test_update_confirmed_writes_under_the_lock(files):
+async def test_update_confirmed_plans_again(files):
     files.update_nfs_connection.return_value = (_nfs_change("update", before=CONNECTION), CONNECTION)
 
     result = await nfs.drive_update_nfs_connection(CLIENT, shared_drives=[{"id": DRIVE_ID}], confirm=True)

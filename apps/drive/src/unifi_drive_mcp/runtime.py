@@ -15,7 +15,7 @@ from typing import Any
 
 from mcp.server.transport_security import TransportSecuritySettings
 
-from unifi_core.drive.managers.connection_manager import DriveConnectionManager
+from unifi_core.drive.managers.connection_manager import DriveConnectionManager, DriveWriteNotSent
 from unifi_core.drive.managers.file_service_manager import FileServiceManager
 from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.drive.managers.storage_manager import StorageManager
@@ -199,8 +199,13 @@ def tool_failure(operation: str, exc: Exception) -> dict[str, Any]:
     Drive errors are built from fixed text, the request path, the HTTP status
     and a length-capped upstream message with the NAS address removed; their
     message is returned. Anything else may carry request details: only its
-    class is returned.
+    class is returned. A change stopped before it was sent reports
+    ``mutation_applied: false``: the gate's own outcome counts the write's
+    earlier reads as sent.
     """
+    if isinstance(exc, DriveWriteNotSent):
+        logger.error("Failed to %s: %s", operation, exc)
+        return {"success": False, "error": f"Failed to {operation}: {exc}", "mutation_applied": False}
     if isinstance(exc, UniFiError):
         logger.error("Failed to %s: %s", operation, exc)
         return {"success": False, "error": f"Failed to {operation}: {exc}"}
