@@ -187,6 +187,9 @@ uv run --all-packages python scripts/live_smoke.py --server sitemanager --phase 
 # InnerSpace (console login, read-only) — see Procedure B3
 uv run --all-packages python scripts/live_smoke.py --server innerspace --phase readonly
 
+# Drive (NAS login, read-only) — see Procedure B4
+uv run --all-packages python scripts/live_smoke.py --server drive --phase readonly
+
 # Inventory — prints safety_tier classification for every tool; no live calls
 uv run python scripts/live_smoke.py --server network --phase inventory
 ```
@@ -257,6 +260,25 @@ protect and access.
   out of the repository.
 - **Negative control:** with the InnerSpace application stopped, a read must fail with the fixed
   "not running" text (HTTP 502 over the API), never as a missing resource.
+
+## Procedure B4: Drive Target (`--server drive`)
+
+UniFi Drive is read through a login session on the NAS (a UNAS or another console running
+Drive). It is a registered harness target with no support-bundle tool.
+
+- **Credentials:** `UNIFI_DRIVE_HOST`, `UNIFI_DRIVE_USERNAME` and `UNIFI_DRIVE_PASSWORD` (or the
+  `_FILE` / `_COMMAND` forms), a local UniFi OS account on the NAS. They never fall back to the
+  shared `UNIFI_*` connection values.
+- **Connection check:** the server makes no startup login, so the first read
+  (`drive_get_system_info`, run in the `seed` phase after registration) is the connection check.
+  When it leaves no session, setup is a failed record naming the login error and no other tool runs.
+- **What runs:** the seven domain tools are all read-only. `drive_get_shared_drive` takes the first
+  id from the `drive_list_shared_drives` seed result and is skipped only when that list is empty or
+  failed. An empty NFS connection list is a valid result on a NAS with no NFS clients.
+- **Phases:** `readonly` and `safe` run the reads; `preview` only skips the meta-tools, and
+  `lifecycle` and `approved` have nothing to run. `--phase support --server drive` is unsupported.
+- **Evidence:** record the NAS model, UniFi OS version and Drive app version. Disk serials, share
+  names and interface addresses describe the hardware: keep reports out of the repository.
 
 ## Procedure C: Human-in-the-Loop Mutation Gate
 
