@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-24 — unifi-network 1.14.5, unifi-protect 1.8.2, unifi-access 1.5.2, unifi-sitemanager 1.1.2
+
+- Pins `unifi-network-mcp` [0.50.3](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.3), `unifi-protect-mcp` [0.15.1](https://github.com/sirkirby/unifi-mcp/releases/tag/protect/v0.15.1), `unifi-access-mcp` [0.10.1](https://github.com/sirkirby/unifi-mcp/releases/tag/access/v0.10.1) and `unifi-sitemanager-mcp` [0.2.1](https://github.com/sirkirby/unifi-mcp/releases/tag/sitemanager/v0.2.1).
+
+
 ## 2026-11-22 — unifi-network 1.14.4
 
 - Pins `unifi-network-mcp` [0.50.2](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.2).

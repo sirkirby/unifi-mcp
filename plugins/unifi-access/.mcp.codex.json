@@ -6,7 +6,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-access-mcp==0.10.0"
+        "unifi-access-mcp==0.10.1"
       ],
       "env": {
         "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/access.env"
