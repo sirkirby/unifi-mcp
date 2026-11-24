@@ -1276,7 +1276,7 @@ def _only_report(tmp_path, server="sitemanager"):
 def test_sitemanager_is_a_server_target_and_part_of_all():
     import live_smoke
 
-    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager", "innerspace"]
+    assert list(live_smoke.SERVER_PACKAGES) == ["network", "protect", "access", "sitemanager", "innerspace", "drive"]
     assert live_smoke.SERVER_PACKAGES["sitemanager"] == "unifi-sitemanager-mcp"
     assert live_smoke.SERVER_CONFIGS["sitemanager"]["prefix"] == "sitemanager"
     assert live_smoke.SUPPORT_BUNDLE_SERVERS == ("network", "protect", "access")
@@ -1294,13 +1294,28 @@ def test_innerspace_is_a_server_target_without_a_support_bundle():
     assert "innerspace_list_floor_plans" in names
 
 
-def test_an_innerspace_exception_is_recorded_by_its_class_only():
+def test_drive_is_a_server_target_without_a_support_bundle():
     import live_smoke
 
-    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="readonly", tool=[], delay=0))
-    runner.server = SimpleNamespace(call_tool=AsyncMock(side_effect=RuntimeError("FAKE-plan-title on 192.0.2.10")))
+    assert live_smoke.SERVER_PACKAGES["drive"] == "unifi-drive-mcp"
+    config = live_smoke.SERVER_CONFIGS["drive"]
+    assert (config["prefix"], config["server_label"]) == ("drive", "UniFi Drive")
+    assert config["manifest"].is_file()
+    assert "drive" not in live_smoke.SUPPORT_BUNDLE_SERVERS
+    names = {tool["name"] for tool in live_smoke.load_manifest("drive")["tools"]}
+    assert config["connect_probe"] in names
 
-    record = asyncio.run(runner.call("innerspace_get_project", {}, "readonly"))
+
+@pytest.mark.parametrize(
+    ("server", "tool"), [("innerspace", "innerspace_get_project"), ("drive", "drive_get_system_info")]
+)
+def test_a_console_exception_is_recorded_by_its_class_only(server, tool):
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner(server, SimpleNamespace(phase="readonly", tool=[], delay=0))
+    runner.server = SimpleNamespace(call_tool=AsyncMock(side_effect=RuntimeError("FAKE-name on 192.0.2.10")))
+
+    record = asyncio.run(runner.call(tool, {}, "readonly"))
 
     assert (record.status, record.error) == ("exception", "unexpected RuntimeError")
 
@@ -1331,7 +1346,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
         phase="safe", report_dir="out", delay=0.25, include_heavy_reads=False, interactive_risky=False, tool=[]
     )
     assert live_smoke.run_all_servers(args) == 0
-    assert len(commands) == 5
+    assert len(commands) == 6
     script = str(Path(live_smoke.__file__).resolve())
     for command, (server, package) in zip(
         commands,
@@ -1341,6 +1356,7 @@ def test_run_all_appends_sitemanager_and_keeps_console_commands(monkeypatch):
             ("access", "unifi-access-mcp"),
             ("sitemanager", "unifi-sitemanager-mcp"),
             ("innerspace", "unifi-innerspace-mcp"),
+            ("drive", "unifi-drive-mcp"),
         ],
     ):
         assert command == [
@@ -1880,3 +1896,88 @@ def test_innerspace_resources_record_a_skip_without_plans_and_survive_an_asset_f
     (record,) = runner.report.records
     assert (record.status, record.success) == ("exception", False)
     assert record.error == "plan asset read raised RuntimeError"
+
+
+def test_drive_id_is_discovered_from_the_shared_drive_list():
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember("drive_list_shared_drives", _ok({"drives": [{"id": "drive-1", "name": "x"}], "count": 1}))
+
+    assert runner.args_for_tool("drive_get_shared_drive", ["drive_id"]) == ({"drive_id": "drive-1"}, "")
+
+
+def _drive_setup(monkeypatch, *, connected, probe_result):
+    import live_smoke
+
+    connection_manager = SimpleNamespace(is_connected=connected, last_connection_error="UniFi Drive rejected it")
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append(tool)
+        return probe_result
+
+    runtime = SimpleNamespace(
+        server=SimpleNamespace(call_tool=call_tool), connection_manager=connection_manager, config=object()
+    )
+    modules, register_tools = _registration_modules("unifi_drive_mcp", runtime)
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+    monkeypatch.setattr(live_smoke.importlib, "import_module", modules.__getitem__)
+    runner = live_smoke.LiveSmokeRunner("drive", SimpleNamespace(phase="safe", tool=[], delay=0))
+    runner.unwrap_result = lambda raw: raw
+    return runner, register_tools, calls
+
+
+def test_drive_setup_registers_first_and_its_first_read_is_the_connection_check(monkeypatch):
+    runner, register_tools, calls = _drive_setup(monkeypatch, connected=True, probe_result=_ok({"version": "1"}))
+
+    asyncio.run(runner.setup())
+
+    kwargs = register_tools.await_args.kwargs
+    assert "support_bundle_handler" not in kwargs
+    assert (kwargs["prefix"], kwargs["server_label"]) == ("drive", "UniFi Drive")
+    assert calls == ["drive_get_system_info"]
+    assert runner.report.connected is True
+    assert [(r.tool, r.phase, r.status) for r in runner.report.records] == [("drive_get_system_info", "seed", "ok")]
+
+
+def test_drive_setup_aborts_when_the_first_read_cannot_log_in(monkeypatch):
+    failed = {"success": False, "error": "Failed to get system info: UniFi Drive rejected it"}
+    runner, _register_tools, calls = _drive_setup(monkeypatch, connected=False, probe_result=failed)
+
+    with pytest.raises(ConnectionError, match="UniFi Drive rejected it"):
+        asyncio.run(runner.setup())
+
+    assert calls == ["drive_get_system_info"]
+    assert runner.report.connected is False
+    assert [(r.tool, r.status) for r in runner.report.records] == [
+        ("drive_get_system_info", "failed"),
+        ("__setup__", "failed"),
+    ]
+
+
+def test_drive_safe_phase_calls_only_read_only_tools_and_reads_a_shared_drive_by_its_listed_id():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("drive", SimpleNamespace(phase="safe", tool=[], delay=0))
+    manifest = {tool["name"]: tool for tool in runner.manifest["tools"]}
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append((tool, args))
+        if tool == "drive_list_shared_drives":
+            return _ok({"drives": [{"id": "drive-1"}], "count": 1})
+        return _ok({})
+
+    runner.server = SimpleNamespace(call_tool=call_tool)
+    runner.unwrap_result = lambda raw: raw
+
+    asyncio.run(runner.run())
+
+    assert calls
+    assert [name for name, _args in calls if manifest[name]["annotations"].get("readOnlyHint") is not True] == []
+    assert ("drive_get_shared_drive", {"drive_id": "drive-1"}) in calls
+    domain_reads = {name for name, tool in manifest.items() if tool.get("permission_category")}
+    assert domain_reads <= {name for name, _args in calls}
+    assert not [r for r in runner.report.records if r.status in {"failed", "exception", "pending_approval"}]

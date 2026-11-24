@@ -8,6 +8,7 @@ release_provenance:
     - refs/tags/access/v*
     - refs/tags/sitemanager/v*
     - refs/tags/innerspace/v*
+    - refs/tags/drive/v*
     - refs/tags/core/v*
     - refs/tags/shared/v*
     - refs/tags/relay/v*
@@ -37,6 +38,8 @@ release_provenance:
       tag_pattern: refs/tags/sitemanager/v*
     - path_glob: apps/innerspace/
       tag_pattern: refs/tags/innerspace/v*
+    - path_glob: apps/drive/
+      tag_pattern: refs/tags/drive/v*
     - path_glob: apps/api/
       tag_pattern: refs/tags/api/v*
 cortex:

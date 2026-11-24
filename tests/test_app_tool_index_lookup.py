@@ -15,6 +15,7 @@ import pytest
         ("unifi_access_mcp", "access_list_doors"),
         ("unifi_sitemanager_mcp", "sitemanager_list_hosts"),
         ("unifi_innerspace_mcp", "innerspace_list_floor_plans"),
+        ("unifi_drive_mcp", "drive_list_disks"),
     ],
 )
 @pytest.mark.asyncio

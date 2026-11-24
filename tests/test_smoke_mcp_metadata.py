@@ -177,6 +177,7 @@ def test_selected_server_names_includes_access_in_default_offline_smoke() -> Non
         "access",
         "sitemanager",
         "innerspace",
+        "drive",
     ]
 
 
@@ -187,6 +188,7 @@ def test_selected_server_names_includes_access_with_current_env() -> None:
         "access",
         "sitemanager",
         "innerspace",
+        "drive",
     ]
 
 

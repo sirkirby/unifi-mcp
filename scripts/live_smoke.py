@@ -43,9 +43,10 @@ SERVER_PACKAGES = {
     "access": "unifi-access-mcp",
     "sitemanager": "unifi-sitemanager-mcp",
     "innerspace": "unifi-innerspace-mcp",
+    "drive": "unifi-drive-mcp",
 }
 
-# Servers that ship a support-bundle service. Site Manager and InnerSpace have none.
+# Servers that ship a support-bundle service. Site Manager, InnerSpace and Drive have none.
 SUPPORT_BUNDLE_SERVERS = ("network", "protect", "access")
 
 
@@ -112,6 +113,21 @@ SERVER_CONFIGS = {
         "prefix": "innerspace",
         "server_label": "UniFi InnerSpace",
         "close": "close",
+    },
+    "drive": {
+        "main": "unifi_drive_mcp.main",
+        "runtime": "unifi_drive_mcp.runtime",
+        "bootstrap": "unifi_drive_mcp.bootstrap",
+        "categories": "unifi_drive_mcp.categories",
+        "jobs": "unifi_drive_mcp.jobs",
+        "tool_index": "unifi_drive_mcp.tool_index",
+        "base_package": "unifi_drive_mcp.tools",
+        "manifest": REPO_ROOT / "apps/drive/src/unifi_drive_mcp/tools_manifest.json",
+        "prefix": "drive",
+        "server_label": "UniFi Drive",
+        "close": "close",
+        # No startup login: the first read logs in, so it is the connection check.
+        "connect_probe": "drive_get_system_info",
     },
 }
 
@@ -283,7 +299,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run live smoke checks against UniFi MCP tools.")
     parser.add_argument(
         "--server",
-        choices=["network", "protect", "access", "sitemanager", "innerspace", "all"],
+        choices=["network", "protect", "access", "sitemanager", "innerspace", "drive", "all"],
         required=False,
         help="Required for MCP-direct phases. Ignored for --phase api-actions / api-resources / api-streams.",
     )
@@ -599,21 +615,11 @@ class LiveSmokeRunner:
 
         self.server = runtime_mod.server
         self.connection_manager = runtime_mod.connection_manager
-        self.report.connected = await self.connection_manager.initialize()
-        if not self.report.connected:
-            detail = getattr(self.connection_manager, "last_connection_error", None)
-            suffix = f": {detail}" if detail else ""
-            error = "Live smoke could not connect or authenticate; aborting before tool execution" + suffix
-            self.report.records.append(
-                SmokeRecord(
-                    tool="__setup__",
-                    phase="setup",
-                    status="failed",
-                    success=False,
-                    error=error,
-                )
-            )
-            raise ConnectionError(error)
+        probe = self.config.get("connect_probe")
+        if not probe:
+            self.report.connected = await self.connection_manager.initialize()
+            if not self.report.connected:
+                self.abort_unconnected()
 
         kwargs = {
             "mode": bootstrap_mod.UNIFI_TOOL_REGISTRATION_MODE,
@@ -639,6 +645,18 @@ class LiveSmokeRunner:
         if self.server_key == "innerspace" and await main_mod.plan_image_resource_enabled():
             # Registered by the server's startup, not by the shared tool registration.
             importlib.import_module("unifi_innerspace_mcp.resources.plan_image").register_plan_image_resource()
+        if probe:
+            await self.call(probe, {}, "seed")
+            self.report.connected = bool(self.connection_manager.is_connected)
+            if not self.report.connected:
+                self.abort_unconnected()
+
+    def abort_unconnected(self) -> None:
+        detail = getattr(self.connection_manager, "last_connection_error", None)
+        suffix = f": {detail}" if detail else ""
+        error = "Live smoke could not connect or authenticate; aborting before tool execution" + suffix
+        self.setup_failed(error)
+        raise ConnectionError(error)
 
     def setup_failed(self, error: str) -> None:
         self.report.records.append(
@@ -690,8 +708,8 @@ class LiveSmokeRunner:
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.status = "exception"
             record.success = False
-            # Site Manager transport exceptions can carry request headers, InnerSpace ones console values.
-            by_class = self.server_key in ("sitemanager", "innerspace")
+            # Site Manager transport exceptions can carry request headers, InnerSpace and Drive ones console values.
+            by_class = self.server_key in ("sitemanager", "innerspace", "drive")
             record.error = f"unexpected {type(exc).__name__}" if by_class else str(exc)
         self.report.records.append(record)
         print(f"{self.server_key} {phase} {record.status}: {tool} ({record.duration_ms}ms)", flush=True)
@@ -1079,6 +1097,8 @@ class LiveSmokeRunner:
             return self.cache.client_ip()
         if param == "plan_id":
             return self.cache.id_from_tool("innerspace_list_floor_plans", "floor_plans", ("id",))
+        if param == "drive_id":
+            return self.cache.id_from_tool("drive_list_shared_drives", "drives", ("id",))
         if param == "camera_id":
             return self.cache.id_from(("cameras",), ("id", "_id"))
         if param == "face_id":
