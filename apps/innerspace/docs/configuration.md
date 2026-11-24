@@ -1,7 +1,5 @@
 # Configuration — InnerSpace Server
 
-The InnerSpace server is not yet released, so every command here runs from a source checkout (`uv run --package unifi-innerspace-mcp unifi-innerspace-mcp`). See the [README](../README.md#run-from-source).
-
 Configuration comes from the server's process environment. The server never loads a `.env` file from the working directory. To keep settings out of a client's config file, load a trusted env file in your launcher (for example Docker `env_file:`), or name a per-user settings file with an absolute `UNIFI_SETTINGS_FILE` path.
 
 ## The console login
@@ -96,7 +94,7 @@ HTTP binds only in the container's main process (PID 1). Started any other way w
 
 ### Docker Compose
 
-The `unifi-innerspace-mcp` service in `docker/docker-compose.yml` is in the opt-in `innerspace` profile, so it does not start with the default stack. The image is built from a checkout; none is published yet.
+The `unifi-innerspace-mcp` service in `docker/docker-compose.yml` is in the opt-in `innerspace` profile, so it does not start with the default stack. The Compose service builds the image from this checkout; the published image is `ghcr.io/sirkirby/unifi-innerspace-mcp`.
 
 ```bash
 export UNIFI_INNERSPACE_HOST=192.168.1.1
@@ -132,7 +130,7 @@ Logs carry the operation, a route template and the exception class, never a resp
 
 ## Tracing
 
-The MCP SDK records a span for every MCP message. Setting an OTLP endpoint exports them; from a source checkout, add the exporter with `uv sync --extra otel --package unifi-innerspace-mcp`.
+The MCP SDK records a span for every MCP message. Setting an OTLP endpoint exports them. The Docker image includes the exporter; a pip or uvx install needs the `otel` extra (`unifi-innerspace-mcp[otel]`), and a source checkout can add it with `uv sync --extra otel --package unifi-innerspace-mcp`.
 
 | Variable | Default | Purpose |
 |---|---|---|

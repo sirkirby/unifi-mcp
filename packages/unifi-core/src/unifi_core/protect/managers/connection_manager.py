@@ -19,7 +19,7 @@ from uiprotect import ProtectApiClient
 from uiprotect.data import WSSubscriptionMessage
 from uiprotect.exceptions import NotAuthorized, NvrError
 
-from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.auth import AuthenticationStatus, AuthMethod, api_key_variables
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
@@ -99,6 +99,14 @@ _SDK_REQUEST_METHODS = ("request", "_raise_for_status")
 
 # A blank login tells the console nothing, and some answer it with 403.
 _NO_CREDENTIALS = "no UniFi Protect credentials are configured; set a username and password, or an API key."
+
+
+def protect_api_key_remediation(env_prefix: str | None) -> str:
+    """Fixed text naming where a valid Protect API key goes."""
+    variables = api_key_variables(env_prefix)
+    if variables:
+        return f"Set {variables} to a valid Protect API key with public API access."
+    return "Add a valid Protect API key with public API access to this controller's configuration."
 
 
 def _hint_forbidden(error: BaseException) -> None:
@@ -678,9 +686,12 @@ class ProtectConnectionManager:
         """Raise an actionable error when a public Integration API call lacks an API key."""
         if self.authentication_status.configured(AuthMethod.API_KEY_ONLY):
             return
+        variables = api_key_variables(self.tls_env_prefix)
+        where = (
+            f"Set {variables} and restart the server." if variables else "Add one to this controller's configuration."
+        )
         raise ValueError(
-            f"Cannot {operation}: UniFi Protect public Integration API access requires an API key. "
-            "Set UNIFI_PROTECT_API_KEY or UNIFI_API_KEY and restart the server."
+            f"Cannot {operation}: UniFi Protect public Integration API access requires an API key. {where}"
         )
 
     async def validate_public_id_portability(

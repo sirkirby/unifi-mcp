@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 from uiprotect.exceptions import ClientError
 
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+from unifi_core.protect.managers.connection_manager import ProtectConnectionManager, protect_api_key_remediation
 from unifi_core.protect.models.chimes import to_ring_setting_update
 
 logger = logging.getLogger(__name__)
@@ -119,16 +119,15 @@ class ChimeManager:
         }
         return {key: value for key, value in data.items() if value is not None}
 
-    @staticmethod
-    def _raise_public_api_error(operation: str, chime_id: str, exc: Exception) -> None:
+    def _raise_public_api_error(self, operation: str, chime_id: str, exc: Exception) -> None:
         message = str(exc)
         message_lower = message.lower()
         if "404" in message or "not found" in message_lower:
             raise UniFiNotFoundError("chime", chime_id) from exc
         raise ValueError(
             f"Failed to {operation} for chime {chime_id}: {message}. "
-            "Verify the chime ID and camera ID with protect_list_chimes and ensure "
-            "UNIFI_PROTECT_API_KEY or UNIFI_API_KEY has Protect public API access."
+            "Verify the chime ID and camera ID with protect_list_chimes. "
+            f"{protect_api_key_remediation(getattr(self._cm, 'tls_env_prefix', None))}"
         ) from exc
 
     @classmethod

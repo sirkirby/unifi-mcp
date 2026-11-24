@@ -1,6 +1,6 @@
 # Tools — InnerSpace Server
 
-Nine read-only domain tools (9, without the six meta-tools) over a console's UniFi InnerSpace application. The server is not yet released; see the [README](../README.md#run-from-source) to run it from a checkout. Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`.
+Nine read-only domain tools (9, without the six meta-tools) over a console's UniFi InnerSpace application. To install the server, see the [README](../README.md#install). Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`.
 
 The examples use made-up ids and values. Responses leave out any single value the console did not send, so a real response may have fewer fields than shown.
 

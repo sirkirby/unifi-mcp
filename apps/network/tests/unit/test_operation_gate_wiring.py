@@ -9,12 +9,25 @@ connection wait around the raw decorator fails.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
+import json
 import logging
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 import unifi_network_mcp.main as main_mod
-from unifi_core.operation_gate import observing_operations, reset_gate_registry_for_tests
+from unifi_core.network.managers.device_manager import DeviceManager
+from unifi_core.operation_gate import (
+    GateKey,
+    GateSettings,
+    OperationGate,
+    gate_registry,
+    observing_operations,
+    reset_gate_registry_for_tests,
+)
 from unifi_core.policy_gate import PolicyGateChecker
 from unifi_mcp_shared.permissioned_tool import create_permissioned_tool
 from unifi_mcp_shared.tool_index import TOOL_REGISTRY
@@ -138,3 +151,72 @@ async def test_the_support_bundle_summarises_the_gate_without_naming_the_control
     # The whole bundle, not just the summary: no host, no tool label.
     assert "controller.test" not in text
     assert "secret_wlan" not in text
+
+
+class _FrozenClock:
+    """The whole hold budget is left whenever a request starts."""
+
+    def now(self) -> float:
+        return 0.0
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+
+class _LeapingClock:
+    """Each reading is far past the last: the budget is spent before the first request."""
+
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def now(self) -> float:
+        self.value += 1_000.0
+        return self.value
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize(
+    ("clock", "expected", "guidance"),
+    [
+        (_FrozenClock, None, "may or may not have been applied"),
+        (_LeapingClock, False, "was not sent"),
+    ],
+)
+async def test_a_reboot_cut_off_at_its_hold_budget_reports_its_outcome(wiring, monkeypatch, clock, expected, guidance):
+    """The real reboot tool body, manager and connection request, called through MCP dispatch."""
+    from unifi_network_mcp.tools import devices
+
+    gate = OperationGate(GateSettings(hold_budget_seconds=0.05), name="network", clock=clock())
+    gate_registry()._gates[GateKey.for_host("controller.test", 443, "network")] = gate
+    sent: list[str] = []
+
+    async def hang(api_request):
+        sent.append(api_request.method)
+        await asyncio.sleep(10)  # a controller that does not answer
+
+    # A manager on the real connection: the one the tool module captured at import
+    # may be another test's mock, depending on test order.
+    manager = DeviceManager(runtime.connection_manager)
+    monkeypatch.setattr(devices, "device_manager", manager)
+    monkeypatch.setattr(
+        runtime.connection_manager,
+        "controller",
+        SimpleNamespace(request=hang, connectivity=SimpleNamespace(is_unifi_os=True)),
+    )
+    monkeypatch.setattr(manager, "get_device_details", AsyncMock(return_value=object()))
+
+    main_mod.server.tool(name=PROBES[0], permission_category="devices", permission_action="update")(
+        inspect.unwrap(devices.reboot_device)
+    )
+    result = await main_mod.server.call_tool(PROBES[0], {"mac_address": "00:00:5e:00:53:01", "confirm": True})
+
+    payload = json.loads(result.content[0].text)
+    assert payload["success"] is False
+    assert payload["error"].startswith("Failed to reboot device 00:00:5e:00:53:01: The ")
+    assert guidance in payload["error"]
+    assert payload["mutation_applied"] is expected
+    assert result.structured_content["mutation_applied"] is expected
+    assert sent == ([] if expected is False else ["post"])
+    assert not gate.write_held

@@ -10,6 +10,7 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.site import Site  # Import Site model
 
 from unifi_core.network.managers.connection_manager import ConnectionManager, SettingsControllerRejection
+from unifi_core.network.models.ips_suppression import IpsSuppressions, ips_suppressions_from_controller
 from unifi_core.network.models.mdns import (
     MdnsSettings,
     mdns_from_controller,
@@ -24,6 +25,7 @@ from unifi_core.network.models.threat_management import (
     threat_management_to_controller_update,
 )
 from unifi_core.network.models.threat_posture import ThreatPosture, threat_posture_from_controller
+from unifi_core.operation_gate import write_request_bound
 from unifi_core.redaction import collect_secret_values, sanitize_exception
 from unifi_core.request_paths import object_id
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
@@ -209,11 +211,12 @@ class SystemManager:
             # Its own explicit limit, replacing the session's five-minute default.
             # No tool or action calls this yet. One that does must design its
             # operation-gate hold explicitly: inside a held write the gate's hold
-            # budget (and any bound already entered) still ends it earlier.
+            # budget still ends it earlier.
             restore_timeout = aiohttp.ClientTimeout(total=RESTORE_TIMEOUT_SECONDS)
-            async with self._connection.controller.session.post(
-                restore_url, data=form, timeout=restore_timeout
-            ) as response:
+            async with (
+                write_request_bound(),
+                self._connection.controller.session.post(restore_url, data=form, timeout=restore_timeout) as response,
+            ):
                 if response.status == 200:
                     logger.info("Backup restoration initiated successfully.")
                     self._connection._invalidate_cache()
@@ -409,6 +412,17 @@ class SystemManager:
         except Exception as exc:
             logger.error("Failed to read threat management settings: %s", type(exc).__name__)
             raise RuntimeError("Failed to read threat management settings") from None
+
+    async def list_ips_suppressions(self) -> IpsSuppressions:
+        """Read suppressions uncached, so an audit sees a change just made in the UI."""
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/get/setting/ips_suppression"))
+            if not isinstance(response, list) or len(response) != 1:
+                raise ValueError("Invalid settings singleton")
+            return ips_suppressions_from_controller(response[0])
+        except Exception as exc:
+            logger.error("Failed to read IPS suppressions: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read IPS suppressions; check controller compatibility") from None
 
     async def _fresh_threat_record(self, section: str) -> Dict[str, Any]:
         """Read a known singleton without trusting cached settings for a write."""

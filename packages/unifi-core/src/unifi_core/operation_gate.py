@@ -120,11 +120,13 @@ class WriteTicketCancelled(UniFiError):
 class WriteRequestTimeout(UniFiConnectionError, TimeoutError):
     """A controller request inside a held write ran past the write's hold budget.
 
-    ``request_sent`` is ``False`` when the budget was already spent and the
-    request was refused before it was sent: the change was certainly not
-    applied. Otherwise the request may already have reached the controller, so
-    the change may or may not have been applied; read the resource back before
-    retrying.
+    ``request_sent`` is ``False`` when the budget was already spent before
+    any request of the write was sent: the change was certainly not applied.
+    Otherwise a request may already have reached the controller, so the change
+    may or may not have been applied; read the resource back before retrying.
+
+    The first one raised inside a hold is also kept on its
+    :class:`WriteTicket` (``cut_off``), for a wrapper whose tool caught it.
     """
 
     def __init__(self, message: str, *, request_sent: bool = True) -> None:
@@ -311,15 +313,26 @@ def _holds_read(gate: OperationGate) -> bool:
     return any(isinstance(hold, _ReadHold) and hold.gate is gate and hold.active for hold in _holds.get())
 
 
+def _granted_writes() -> tuple[WriteTicket, ...]:
+    return tuple(hold for hold in _holds.get() if isinstance(hold, WriteTicket) and hold.active)
+
+
 def held_write_remaining_seconds() -> float | None:
     """Seconds left of the hold budget of the write(s) this operation holds, or ``None``."""
     remaining: float | None = None
-    for hold in _holds.get():
-        if isinstance(hold, WriteTicket) and hold.active and hold.granted_at is not None:
-            gate = hold.gate
-            left = hold.granted_at + gate.settings.hold_budget_seconds - gate.clock.now()
+    for ticket in _granted_writes():
+        if ticket.granted_at is not None:
+            gate = ticket.gate
+            left = ticket.granted_at + gate.settings.hold_budget_seconds - gate.clock.now()
             remaining = left if remaining is None else min(remaining, left)
     return remaining
+
+
+def _cut_off(tickets: tuple[WriteTicket, ...], error: WriteRequestTimeout) -> WriteRequestTimeout:
+    for ticket in tickets:
+        if ticket.cut_off is None:
+            ticket.cut_off = error
+    return error
 
 
 @asynccontextmanager
@@ -334,12 +347,27 @@ async def write_request_bound() -> AsyncIterator[None]:
     if remaining is None:
         yield
         return
+    tickets = _granted_writes()
     if remaining <= 0:
-        raise WriteRequestTimeout(
-            "The write's time budget is spent; the controller request was not sent. "
-            "Read the resource back before retrying the change.",
-            request_sent=False,
+        if any(ticket.request_sent for ticket in tickets):
+            # This request was not sent, but an earlier one of the write was.
+            raise _cut_off(
+                tickets,
+                WriteRequestTimeout(
+                    "The write's time budget ran out before it finished. "
+                    "The change may or may not have been applied; read the resource back before retrying."
+                ),
+            )
+        raise _cut_off(
+            tickets,
+            WriteRequestTimeout(
+                "The write's time budget is spent; the controller request was not sent. "
+                "Read the resource back before retrying the change.",
+                request_sent=False,
+            ),
         )
+    for ticket in tickets:
+        ticket.request_sent = True
     # The remaining budget is read on the gate's clock, the timeout runs on the
     # event loop's. Both are monotonic seconds with the default clock; a test
     # clock only decides how much budget is left.
@@ -349,9 +377,12 @@ async def write_request_bound() -> AsyncIterator[None]:
             yield
     except TimeoutError:
         if timeout.expired():
-            raise WriteRequestTimeout(
-                "The controller did not answer within the write's time budget. "
-                "The change may or may not have been applied; read the resource back before retrying."
+            raise _cut_off(
+                tickets,
+                WriteRequestTimeout(
+                    "The controller did not answer within the write's time budget. "
+                    "The change may or may not have been applied; read the resource back before retrying."
+                ),
             ) from None
         raise
 
@@ -372,6 +403,9 @@ class WriteTicket(_Hold):
 
     ``position`` is how many write operations are ahead of it, the holder
     included: ``1`` means next in line, ``0`` means granted or finished.
+    ``request_sent`` turns true once :func:`write_request_bound` lets a
+    request through inside the hold; ``cut_off`` keeps the first
+    :class:`WriteRequestTimeout` it raised there.
     """
 
     gate: OperationGate
@@ -380,6 +414,8 @@ class WriteTicket(_Hold):
     requested_at: float
     granted_at: float | None = None
     state: str = _WAITING
+    request_sent: bool = False
+    cut_off: WriteRequestTimeout | None = None
     _future: asyncio.Future[None] = field(repr=False, default=None)  # type: ignore[assignment]
 
     @property
