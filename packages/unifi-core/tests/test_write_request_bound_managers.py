@@ -1,7 +1,8 @@
 """Controller requests inside a held write are bounded by the write's hold budget.
 
-Network sends through aiounifi and Access through its proxy session, neither
-of which has a request timeout shorter than aiohttp's five-minute default. Inside
+Network sends through aiounifi, Access through its proxy session and InnerSpace
+through its console session; none of them has a request timeout as short as a
+write's hold budget. Inside
 a held write each request is cut off when the write's budget runs out, and the
 caller is told the change may or may not have been applied. Outside a write
 nothing changes.
@@ -19,8 +20,16 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import pytest
 from aiounifi.models.api import ApiRequest
+from innerspace_stub import HOST, PASSWORD, USERNAME, console  # noqa: F401  (console: a fixture, by name)
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.auth import UniFiAuth
+from unifi_core.innerspace.managers.connection_manager import (
+    INTERNAL_PROJECT_PATH,
+    SHAPE_CHANGE_PATH,
+    InnerSpaceConnectionManager,
+    InnerSpaceWriteOutcomeUnknown,
+    InnerSpaceWriteOutOfTime,
+)
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.firewall_manager import FirewallManager
 from unifi_core.network.managers.system_manager import SystemManager
@@ -320,3 +329,77 @@ async def test_an_access_sdk_door_write_inside_a_held_write_stops_at_the_budget(
             await cm.api_client.unlock_door("door-1")
     assert sent == ["GET", "PUT"]
     assert ticket.request_sent is True
+
+
+# InnerSpace: its session client bounds every request but the login and logout.
+
+_SHAPE_CHANGE = {"create": [], "update": [], "remove": [], "mode": "2D"}
+
+
+@pytest.fixture
+async def innerspace(console):  # noqa: F811
+    """An InnerSpace session client logged in to the loopback console stub."""
+    cm = InnerSpaceConnectionManager(HOST, USERNAME, PASSWORD, base_url=console.base_url)
+    assert await cm.initialize() is True
+    yield cm
+    await cm.close()
+
+
+async def test_an_innerspace_write_with_no_budget_left_is_not_sent(innerspace, console) -> None:  # noqa: F811
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        clock.value = 11
+        with pytest.raises(InnerSpaceWriteOutOfTime, match="nothing was changed"):
+            await innerspace.request("POST", SHAPE_CHANGE_PATH, operation="write", json=_SHAPE_CHANGE, replay=False)
+    assert console.writes() == []
+    assert ticket.request_sent is False
+    assert ticket.cut_off is not None and ticket.cut_off.request_sent is False
+
+
+async def test_an_innerspace_write_cut_off_after_sending_is_unknown(innerspace, console) -> None:  # noqa: F811
+    console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=1)
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        clock.value = 9.99
+        with pytest.raises(InnerSpaceWriteOutcomeUnknown, match="whether it was applied is unknown"):
+            await innerspace.request("POST", SHAPE_CHANGE_PATH, operation="write", json=_SHAPE_CHANGE, replay=False)
+    assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == 1
+    assert ticket.request_sent is True
+    assert ticket.cut_off is not None and ticket.cut_off.request_sent is True
+
+
+async def test_an_innerspace_read_inside_a_held_write_stops_at_the_budget(innerspace, console) -> None:  # noqa: F811
+    console.reply("GET", INTERNAL_PROJECT_PATH, {"data": {}}, delay=1)
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        clock.value = 9.99
+        with pytest.raises(WriteRequestTimeout, match="may or may not have been applied"):
+            await innerspace.request("GET", INTERNAL_PROJECT_PATH, operation="read")
+    assert ticket.request_sent is True
+
+
+async def test_an_innerspace_re_login_runs_outside_the_write_budget(innerspace, console) -> None:  # noqa: F811
+    """The budget runs out while the session is renewed: the login still goes out, the retry does not."""
+    console.expire_session()
+    gate, clock = _nearly_spent_gate()
+    renew = innerspace._relogin
+
+    async def relogin_after_the_budget(*args, **kwargs):
+        clock.value = 11
+        return await renew(*args, **kwargs)
+
+    innerspace._relogin = relogin_after_the_budget
+    async with gate.write():
+        clock.value = 5
+        with pytest.raises(WriteRequestTimeout, match="ran out before it finished"):
+            await innerspace.request("GET", INTERNAL_PROJECT_PATH, operation="read")
+    assert console.logins == 2
+    assert len(console.calls("GET", INTERNAL_PROJECT_PATH)) == 1
+
+
+async def test_an_innerspace_request_outside_a_write_is_not_bounded(innerspace, console) -> None:  # noqa: F811
+    console.reply("GET", INTERNAL_PROJECT_PATH, {"data": {"ok": True}}, delay=0.02)
+    gate, clock = _nearly_spent_gate()
+    async with gate.read():
+        clock.value = 9.999
+        assert await innerspace.request("GET", INTERNAL_PROJECT_PATH, operation="read") == {"data": {"ok": True}}

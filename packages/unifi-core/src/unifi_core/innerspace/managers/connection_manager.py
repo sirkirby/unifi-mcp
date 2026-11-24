@@ -20,11 +20,23 @@ Rules the rest of the package relies on:
   exception class.
 * A refused session (401, or 403 ``errors.api.access``, which the console
   returns for a missing or expired cookie and for an account without access)
-  is re-established once under a lock and the request retried once. A refusal
+  is re-established once under a lock and the request retried once, except for
+  a write sent with ``replay=False``: the session is re-established and
+  :class:`InnerSpaceWriteNotSent` raised, so a write reaches the console at
+  most once, and a write the console did not answer raises
+  :class:`InnerSpaceWriteOutcomeUnknown` (see ``_writes``). A refusal
   of the fresh session is a permission error, and for a short window after it
-  further refusals raise the same error without another login. A rejected
+  further refusals raise the same error without another login; for a write,
+  "fresh" means the session issued after the previous write was refused. A
+  write refused by UniFi OS itself (403 without an ``errors.*`` code) renews
+  the session without sending the write again, and the read-back decides. A rejected
   login drops the session and pauses automatic reconnects on an escalating
   cool-down, so repeated calls cannot lock the account out.
+* Inside a held write of the operation gate, every request except the login
+  and logout is bounded by what is left of the write's hold budget
+  (:func:`~unifi_core.operation_gate.write_request_bound`). A write the budget
+  stopped before it was sent raises :class:`InnerSpaceWriteOutOfTime`; one cut
+  off after it was sent is a write the console did not answer.
 * ``/api/system`` answers a missing or expired session with 200 and a public
   payload that has no application list, so on that route a 2xx without
   ``apps.controllers`` is a refused session too, and its CSRF token is never
@@ -62,6 +74,7 @@ from unifi_core.exceptions import (
     UniFiValidationError,
 )
 from unifi_core.innerspace.models.status import app_status_from_api
+from unifi_core.operation_gate import WriteRequestTimeout, write_request_bound
 from unifi_core.tls import (
     CertificateVerificationError,
     certificate_error_hint,
@@ -77,7 +90,14 @@ INTEGRATION_PREFIX = "/proxy/innerspace/integration/v1"
 LOGIN_PATH = "/api/auth/login"
 LOGOUT_PATH = "/api/auth/logout"
 SYSTEM_PATH = "/api/system"
-INTERNAL_PROJECT_PATH = "/proxy/innerspace/api/project"
+INTERNAL_PREFIX = "/proxy/innerspace/api"
+INTERNAL_PROJECT_PATH = f"{INTERNAL_PREFIX}/project"
+# Internal write routes; AGENTS.md lists them and bans any other.
+SHAPE_CHANGE_PATH = f"{INTERNAL_PREFIX}/shape/change"
+WALL_TYPE_PATH = f"{INTERNAL_PROJECT_PATH}/wall-type"
+ATTENUATION_OBJECT_TYPE_PATH = f"{INTERNAL_PROJECT_PATH}/attenuation-object-type"
+PLAN_PATH_PREFIX = f"{INTERNAL_PROJECT_PATH}/plan"
+PLAN_ORDER_PATH = f"{PLAN_PATH_PREFIX}/order"
 
 _REQUEST_TIMEOUT_SECONDS = 30.0
 _CONNECT_ATTEMPT_TIMEOUT_SECONDS = 15.0
@@ -104,20 +124,45 @@ _ERROR_CODE = re.compile(r"errors\.[A-Za-z.]{1,64}")
 # percent-encoded segments, no query, fragment, userinfo or backslash.
 _SAFE_PATH = re.compile(r"(?:/[A-Za-z0-9._~:-]+)+")
 
+# Which call may send a route: the session code (login, logout), ``request`` (JSON) or
+# ``request_bytes`` (the plan image).
+_SESSION, _JSON, _BYTES = "session", "json", "bytes"
+
+# Every route the session may reach, with the methods allowed on it and the call that may send
+# it; anything else is refused before sending. Literal routes are matched exactly. The order route
+# comes before the plan template, which would also match it.
 _LOG_ROUTES = tuple(
-    (re.compile(pattern), template)
-    for pattern, template in (
-        (re.escape(LOGIN_PATH), LOGIN_PATH),
-        (re.escape(LOGOUT_PATH), LOGOUT_PATH),
-        (re.escape(SYSTEM_PATH), SYSTEM_PATH),
-        (re.escape(INTERNAL_PROJECT_PATH), INTERNAL_PROJECT_PATH),
+    (re.compile(pattern), template, frozenset(methods), entry)
+    for pattern, template, methods, entry in (
         *(
-            (re.escape(f"{INTEGRATION_PREFIX}/{name}"), f"{INTEGRATION_PREFIX}/{name}")
-            for name in ("project", "floor_plans", "access_points", "switches", "inventory")
+            (re.escape(path), path, methods, entry)
+            for path, methods, entry in (
+                (LOGIN_PATH, {"POST"}, _SESSION),
+                (LOGOUT_PATH, {"POST"}, _SESSION),
+                (SYSTEM_PATH, {"GET"}, _JSON),
+                (INTERNAL_PROJECT_PATH, {"GET", "PATCH"}, _JSON),
+                (SHAPE_CHANGE_PATH, {"POST"}, _JSON),
+                (WALL_TYPE_PATH, {"POST"}, _JSON),
+                (ATTENUATION_OBJECT_TYPE_PATH, {"POST"}, _JSON),
+                (PLAN_ORDER_PATH, {"PATCH"}, _JSON),
+                *(
+                    (f"{INTEGRATION_PREFIX}/{name}", {"GET"}, _JSON)
+                    for name in ("project", "floor_plans", "access_points", "switches", "inventory")
+                ),
+            )
+        ),
+        # Never the reorder segment, in any case: that route takes a different body.
+        (
+            re.escape(f"{PLAN_PATH_PREFIX}/") + rf"(?!(?i:{re.escape(PLAN_ORDER_PATH.rpartition('/')[2])})$)[^/]+",
+            f"{PLAN_PATH_PREFIX}/{{plan_id}}",
+            {"PATCH"},
+            _JSON,
         ),
         (
             re.escape(f"{INTEGRATION_PREFIX}/assets/") + r"[^/]+/[^/]+",
             f"{INTEGRATION_PREFIX}/assets/{{folder}}/{{file}}",
+            {"GET"},
+            _BYTES,
         ),
     )
 )
@@ -149,6 +194,10 @@ _PERMISSION = (
     "the console refused the session for InnerSpace (expired session or an account without InnerSpace access). "
     "Reads need a UniFi OS account that can open the InnerSpace application, e.g. a Super Admin."
 )
+_ACCOUNT_CANNOT_WRITE = (
+    "the console account cannot make this change: the console refused the write on a session it had just issued"
+)
+_CANNOT_WRITE = f"{_ACCOUNT_CANNOT_WRITE}, so it was not sent again and nothing was changed"
 _NO_APP_LIST = (
     "the console account cannot read the application list: the console answered without it on a session it "
     "had just issued. Reads need a UniFi OS account that can open the InnerSpace application, e.g. a Super Admin."
@@ -158,13 +207,17 @@ _NO_APP_LIST = (
 _UNKNOWN_ROUTE = "/{unknown}"
 
 
+def _match_route(path: str) -> tuple[str, frozenset[str], str | None]:
+    route = path.partition("?")[0].partition("#")[0]
+    for pattern, template, methods, entry in _LOG_ROUTES:
+        if pattern.fullmatch(route):
+            return template, methods, entry
+    return _UNKNOWN_ROUTE, frozenset(), None
+
+
 def _log_route(path: str) -> str:
     """Return fixed route vocabulary only, including for unknown paths and queries."""
-    route = path.partition("?")[0].partition("#")[0]
-    for pattern, template in _LOG_ROUTES:
-        if pattern.fullmatch(route):
-            return template
-    return _UNKNOWN_ROUTE
+    return _match_route(path)[0]
 
 
 def _is_loopback(host: str) -> bool:
@@ -214,6 +267,22 @@ class InnerSpaceHttpError(UniFiOperationError):
         super().__init__(message)
         self.status = status
         self.code = code
+
+
+class InnerSpaceWriteNotSent(UniFiOperationError):
+    """The console refused the session before acting on a write; it was not sent again."""
+
+
+class InnerSpaceWriteOutOfTime(UniFiOperationError):
+    """The write's hold budget ran out before the write was sent; it was not sent."""
+
+
+class InnerSpaceWriteForbidden(UniFiPermissionError):
+    """UniFi OS refused a sent write on a session it had just issued; only a read can tell what changed."""
+
+
+class InnerSpaceWriteOutcomeUnknown(UniFiConnectionError):
+    """A write was sent and no answer came back (timeout or dropped connection); only a read can tell."""
 
 
 class _SessionRejectedError(UniFiAuthError):
@@ -323,6 +392,9 @@ class InnerSpaceConnectionManager:
         is shown to callers verbatim and never logged, so it must not carry a secret.
     """
 
+    # How a write's read-back waits between reads; ``readback_sleep=`` replaces it per manager.
+    readback_sleep: Callable[[float], Awaitable[Any]] = staticmethod(asyncio.sleep)
+
     def __init__(
         self,
         host: str,
@@ -335,6 +407,7 @@ class InnerSpaceConnectionManager:
         *,
         base_url: str | None = None,
         auth_failure_hint: str | None = None,
+        readback_sleep: Callable[[float], Awaitable[Any]] | None = None,
     ) -> None:
         host = host.strip() if isinstance(host, str) else host
         self.host = host
@@ -352,6 +425,8 @@ class InnerSpaceConnectionManager:
         self._session: aiohttp.ClientSession | None = None
         self._auth: _SessionAuth | None = None
         self._auth_lock = asyncio.Lock()
+        if readback_sleep is not None:
+            self.readback_sleep = readback_sleep
         self._attempt = ConnectAttempt()
 
         self._closed = False
@@ -366,6 +441,8 @@ class InnerSpaceConnectionManager:
         self._no_access_until = 0.0
         # Until then, a list-less /api/system reply raises the permission error without another login.
         self._app_list_refused_until = 0.0
+        # The session issued after a write was refused; a write refused on it too is a permission error.
+        self._write_refused_token: str | None = None
 
     # ------------------------------------------------------------------
     # Status
@@ -407,6 +484,16 @@ class InnerSpaceConnectionManager:
         if self._last_attempt_at is None:
             return True
         return self._clock() - self._last_attempt_at >= _RECONNECT_MIN_INTERVAL_SECONDS
+
+    @property
+    def reconnect_blocked(self) -> bool:
+        """Whether the console refused the last login and none has succeeded since.
+
+        It stays set when the cool-down runs out, so a caller that has proved the
+        login works again (the API's probe) can drop this cached manager instead of
+        waiting the cool-down out.
+        """
+        return self._reconnect_block_count > 0
 
     def _credentials_configured(self) -> bool:
         return self._origin is not None and bool(self._username and self._password)
@@ -566,12 +653,7 @@ class InnerSpaceConnectionManager:
         """End ``auth`` on the console; a failure is logged at ``level`` by class or status only."""
         try:
             reply = await self._send(
-                session,
-                "POST",
-                LOGOUT_PATH,
-                self._url(LOGOUT_PATH, "InnerSpace logout"),
-                operation="InnerSpace logout",
-                headers=auth.headers(),
+                session, "POST", LOGOUT_PATH, operation="InnerSpace logout", headers=auth.headers(), entry=_SESSION
             )
         except UniFiError as exc:
             logger.log(level, "[innerspace-cm] Logout failed: %s", type(exc).__name__)
@@ -596,17 +678,20 @@ class InnerSpaceConnectionManager:
             trust_env=False,
         )
 
-    def _url(self, path: str, operation: str) -> URL:
+    def _url(self, method: str, path: str, operation: str, entry: str) -> URL:
         """Join ``path`` to the console origin, refusing any path that could leave it or re-target it.
 
-        Only the routes in ``_LOG_ROUTES`` are sent: the console session can reach every
-        console API, so the client itself is the boundary that keeps it on InnerSpace.
+        Only the routes in ``_LOG_ROUTES`` are sent, with the methods listed for each and only from
+        the call (``entry``) that owns them: the console session can reach every console API, so the
+        client itself is the boundary that keeps it on InnerSpace.
         """
+        _template, methods, owner = _match_route(path) if isinstance(path, str) else ("", frozenset(), None)
         if self._origin is not None and (
             isinstance(path, str)
             and _SAFE_PATH.fullmatch(path)
             and not any(segment in (".", "..") for segment in path.split("/"))
-            and _log_route(path) != _UNKNOWN_ROUTE
+            and method in methods
+            and entry == owner
         ):
             url = self._origin.with_path(path, encoded=True)
             if url.origin() == self._origin:
@@ -618,19 +703,25 @@ class InnerSpaceConnectionManager:
         session: aiohttp.ClientSession,
         method: str,
         path: str,
-        url: URL,
         *,
         operation: str,
         headers: dict[str, str],
+        entry: str = _JSON,
+        params: Mapping[str, str] | None = None,
         json_body: Any = None,
         limit: int | None = None,
         binary: bool = False,
     ) -> _Reply:
         """Send one request, never following a redirect, and read the answer up to ``limit`` bytes.
 
-        A longer body sets ``oversize`` and the rest is not read. With ``binary`` a 2xx body is
-        returned as bytes instead of being parsed as JSON. ``limit`` defaults to the JSON ceiling.
+        The URL is built here from ``method``, ``path`` and ``entry`` (:meth:`_url`), so the method the
+        allowlist checked is the method sent. A longer body sets ``oversize`` and the rest is not read.
+        With ``binary`` a 2xx body is returned as bytes instead of being parsed as JSON. ``limit``
+        defaults to the JSON ceiling.
         """
+        url = self._url(method, path, operation, entry)
+        if params:
+            url = url.with_query(dict(params))
         limit = _JSON_CEILING_BYTES if limit is None else limit
         failure: UniFiConnectionError | None = None
         cause = ""
@@ -681,9 +772,9 @@ class InnerSpaceConnectionManager:
             session,
             "POST",
             LOGIN_PATH,
-            self._url(LOGIN_PATH, operation),
             operation=operation,
             headers={},
+            entry=_SESSION,
             json_body={"username": self._username, "password": self._password},
         )
         if reply.status == 200 and reply.token and reply.csrf:
@@ -756,13 +847,18 @@ class InnerSpaceConnectionManager:
         operation: str,
         params: Mapping[str, str] | None = None,
         json: Any = None,
+        replay: bool = True,
     ) -> Any:
         """Send one request with the session and return the decoded JSON body.
 
         A refused session is re-established once and the request retried once.
-        Every failure raises a typed error with fixed text naming ``operation``.
+        With ``replay=False`` (writes) the request is never sent twice: a refused
+        session is re-established and :class:`InnerSpaceWriteNotSent` raised, and
+        a timeout or connection failure after sending raises
+        :class:`InnerSpaceWriteOutcomeUnknown`. Every failure raises a typed error
+        with fixed text naming ``operation``.
         """
-        reply = await self._exchange(method, path, operation=operation, params=params, json=json)
+        reply = await self._exchange(method, path, operation=operation, params=params, json=json, replay=replay)
         return self._interpret(reply, operation)
 
     async def request_bytes(
@@ -802,13 +898,14 @@ class InnerSpaceConnectionManager:
         json: Any = None,
         limit: int | None = None,
         binary: bool = False,
+        replay: bool = True,
     ) -> _Reply:
-        """Send with the session; on a refused session log in once and send once more."""
+        """Send with the session; on a refused session log in once and send once more (reads only)."""
         if self._origin is None:
             raise self._unavailable(operation)
-        url = self._url(path, operation)
-        if params:
-            url = url.with_query(dict(params))
+        entry = _BYTES if binary else _JSON
+        # Refused here too, before the session checks, so a refused route never depends on them.
+        self._url(method, path, operation, entry)
         auth, session = self._auth, self._session
         if auth is None or session is None or self._closed:
             raise self._unavailable(operation)
@@ -816,26 +913,70 @@ class InnerSpaceConnectionManager:
             self._send,
             method=method,
             path=path,
-            url=url,
             operation=operation,
+            entry=entry,
+            params=params,
             json_body=json,
             limit=limit,
             binary=binary,
         )
-        reply = await send(session, headers=auth.headers())
+        sent = False
+
+        async def send_bounded(session: aiohttp.ClientSession, auth: _SessionAuth) -> _Reply:
+            # Bounded inside a held write by what is left of its hold budget; outside one, unbounded.
+            # The login and logout of the session code never pass through here.
+            nonlocal sent
+            async with write_request_bound():
+                sent = True
+                return await send(session, headers=auth.headers())
+
+        unanswered = out_of_time = False
+        try:
+            reply = await send_bounded(session, auth)
+        except CertificateVerificationError:
+            # The handshake failed, so nothing was sent.
+            raise
+        except WriteRequestTimeout:
+            # Fixed text from the gate; a read keeps it as it is, so its guidance reaches the caller.
+            if replay:
+                raise
+            out_of_time, unanswered = not sent, sent
+        except UniFiConnectionError:
+            if replay:
+                raise
+            unanswered = True
+        if out_of_time:
+            raise InnerSpaceWriteOutOfTime(
+                f"{operation}: the write's time budget ran out before it was sent, so nothing was changed"
+            )
+        if unanswered:
+            raise InnerSpaceWriteOutcomeUnknown(
+                f"{operation}: the UniFi OS console did not answer the write, so whether it was applied is unknown"
+            )
         if not _session_refused(reply, path):
+            if not replay:
+                await self._after_unrefused_write(reply, auth, operation)
             self._note_app_list(reply, path)
             return self._adopt_csrf(reply, auth)
+        if not replay and self._second_write_refusal(auth):
+            # A second refusal in a row: the account can read but not write. Stop instead of logging in again.
+            raise UniFiPermissionError(f"{operation}: {_CANNOT_WRITE}")
         if reply.status == 403 and self._clock() < self._no_access_until:
             raise UniFiPermissionError(f"{operation}: {_PERMISSION}")
         if path == SYSTEM_PATH and _without_app_list(reply) and self._clock() < self._app_list_refused_until:
             raise UniFiPermissionError(f"{operation}: {_NO_APP_LIST}")
 
         await self._relogin(auth, operation)
+        if not replay:
+            self._write_refused_token = self._auth.token if self._auth is not None else None
+            raise InnerSpaceWriteNotSent(
+                f"{operation}: the console refused the session before acting on the write; the session was "
+                "renewed and the write was not sent again, so nothing was changed"
+            )
         auth, session = self._auth, self._session
         if auth is None or session is None or self._closed:
             raise self._unavailable(operation)
-        reply = await send(session, headers=auth.headers())
+        reply = await send_bounded(session, auth)
         if reply.status == 401:
             await self._reject_session(auth, operation)
         if _session_refused(reply):
@@ -852,6 +993,34 @@ class InnerSpaceConnectionManager:
         """A 2xx ``/api/system`` reply that carries the list shows the account can read it: close the window."""
         if path == SYSTEM_PATH and 200 <= reply.status < 300 and _has_app_list(reply.payload):
             self._app_list_refused_until = 0.0
+
+    async def _after_unrefused_write(self, reply: _Reply, auth: _SessionAuth, operation: str) -> None:
+        """A write the session check let through. A 403 without an ``errors.*`` code is UniFi OS refusing it
+        (e.g. a stale CSRF token): the session is renewed now, for the read-back and the next call, and the
+        write is not sent again. A failed renewal drops the session; the read-back then fails. The same refusal
+        on the renewed session (or inside the no-access window) is a permission error, without another login."""
+        if reply.status != 403 or _error_code(reply.payload) is not None:
+            self._write_refused_token = None
+            return
+        if self._second_write_refusal(auth):
+            # The write reached UniFi OS, so this does not claim what changed: the read-back decides.
+            raise InnerSpaceWriteForbidden(f"{operation}: {_ACCOUNT_CANNOT_WRITE} (HTTP 403)")
+        try:
+            await self._relogin(auth, operation)
+        except UniFiError:
+            logger.info("[innerspace-cm] %s: session renewal after a refused write failed", operation)
+        self._write_refused_token = self._auth.token if self._auth is not None else None
+
+    def _second_write_refusal(self, auth: _SessionAuth) -> bool:
+        """Whether this write refusal follows one on the session just issued (or falls in the no-access window).
+
+        If so, the account can read but not write: the window opens and no further login is tried.
+        """
+        if self._clock() < self._no_access_until or auth.token == self._write_refused_token:
+            self._write_refused_token = None
+            self._no_access_until = self._clock() + _NO_ACCESS_WINDOW_SECONDS
+            return True
+        return False
 
     def _adopt_csrf(self, reply: _Reply, auth: _SessionAuth) -> _Reply:
         """Keep a CSRF token the console rotated on a successful reply to the current session.
