@@ -380,9 +380,6 @@ class InnerSpaceConnectionManager:
         Fixed text appended to the connection failure when no credentials are
         configured or the console rejected the login, and to no other failure. It
         is shown to callers verbatim and never logged, so it must not carry a secret.
-
-    ``write_lock`` serialises layout writes made through this manager, so it is
-    per process: it does not coordinate other processes or the browser editor.
     """
 
     # How a write's read-back waits between reads; ``readback_sleep=`` replaces it per manager.
@@ -418,7 +415,6 @@ class InnerSpaceConnectionManager:
         self._session: aiohttp.ClientSession | None = None
         self._auth: _SessionAuth | None = None
         self._auth_lock = asyncio.Lock()
-        self.write_lock = asyncio.Lock()
         if readback_sleep is not None:
             self.readback_sleep = readback_sleep
         self._attempt = ConnectAttempt()

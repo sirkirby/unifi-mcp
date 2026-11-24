@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from unifi_core.exceptions import UniFiPermissionError
-from unifi_core.innerspace.managers._writes import locked_write, send_write
+from unifi_core.innerspace.managers._writes import ensure_writable, send_write
 from unifi_core.innerspace.managers.connection_manager import SHAPE_CHANGE_PATH, SYSTEM_PATH
 from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
 
@@ -96,8 +96,8 @@ async def test_concurrent_reads_after_expiry_log_in_once(connected, console):
     assert all(status.running for status in results)
 
 
-async def test_a_locked_write_racing_the_relogin_is_sent_once_on_the_new_session(connected, console):
-    """A reader and a locked write both meet the public payload: one login between them, and the write lands."""
+async def test_a_write_racing_the_relogin_is_sent_once_on_the_new_session(connected, console):
+    """A reader and a write both meet the public payload: one login between them, and the write lands."""
     ready(console)
     console.reply("GET", SYSTEM_PATH, _system())
     console.expire_session()
@@ -108,11 +108,11 @@ async def test_a_locked_write_racing_the_relogin_is_sent_once_on_the_new_session
         async def read_back():
             return {WALL_1: stored_shape(console, WALL_1) is not None}
 
-        async with locked_write(connected, operation=OP):
-            body = {"create": [wall], "update": [], "remove": [], "mode": "2D"}
-            return await send_write(
-                connected, "POST", SHAPE_CHANGE_PATH, body, operation=OP, read_back=read_back, metadata={}
-            )
+        await ensure_writable(connected, operation=OP)
+        body = {"create": [wall], "update": [], "remove": [], "mode": "2D"}
+        return await send_write(
+            connected, "POST", SHAPE_CHANGE_PATH, body, operation=OP, read_back=read_back, metadata={}
+        )
 
     _status, result = await asyncio.gather(InnerSpaceSystemManager(connected).get_status(), write())
 

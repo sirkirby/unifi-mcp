@@ -1,13 +1,15 @@
 """The shared write layer for InnerSpace layout writes.
 
-Every ``apply_*`` method of a write manager runs inside :func:`locked_write`,
+Every ``apply_*`` method of a write manager runs :func:`ensure_writable`,
 builds its request from a fresh :func:`read_internal_project`, and sends it
 once with :func:`send_write`, which then reads back to decide the outcome:
 
-* :func:`locked_write` takes ``cm.write_lock`` (per process; previews never
-  take it) and runs :func:`ensure_writable`: ``/api/system`` read uncached,
-  refused unless InnerSpace is installed and running, then the floor plans
-  read for their geometry. Previews run the same check without the lock.
+* :func:`ensure_writable` reads ``/api/system`` uncached, refuses unless
+  InnerSpace is installed and running, then reads the floor plans for their
+  geometry. Previews run the same check.
+* Confirmed writes run one at a time through the operation gate, which the
+  servers hold around the whole ``apply_*`` call; this layer adds no lock of
+  its own.
 * The write goes out with ``replay=False``. A refused session is renewed and
   the write is not sent again: the result is "not applied" with no read-back.
   After any other outcome (an answer of any status, a timeout, a dropped
@@ -21,11 +23,11 @@ once with :func:`send_write`, which then reads back to decide the outcome:
   lost answer finds its objects already there and sends nothing. The console's
   duplicate-id 500, which changes nothing, stays the backstop.
 
-Remaining race: the lock serialises writes in this process only. A second
-server process or the browser editor writing to the same project between the
-fresh read and the write is overwritten silently: an update sends each object
-whole as it was read, and a plan or project setting sends the value it sets,
-so the other change is lost and neither side reports it.
+Remaining race: the operation gate serialises writes in this process only. A
+second server process or the browser editor writing to the same project
+between the fresh read and the write is overwritten silently: an update sends
+each object whole as it was read, and a plan or project setting sends the
+value it sets, so the other change is lost and neither side reports it.
 """
 
 from __future__ import annotations
@@ -33,8 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterable, Mapping
+from typing import Any, Awaitable, Callable, Iterable, Mapping
 
 from unifi_core.exceptions import (
     UniFiError,
@@ -104,7 +105,7 @@ def plan_path(plan_id: str) -> str:
 async def ensure_writable(cm: InnerSpaceConnectionManager, *, operation: str) -> list[dict[str, Any]]:
     """Refuse unless InnerSpace is installed and running; returns the floor-plan rows (each plan's geometry).
 
-    ``/api/system`` is read uncached. Previews run this check as well; only ``apply_*`` takes the write lock.
+    ``/api/system`` is read uncached. Previews and ``apply_*`` run the same check.
     """
     status = app_status_from_api(await cm.request("GET", SYSTEM_PATH, operation=operation))
     if not status.installed:
@@ -112,13 +113,6 @@ async def ensure_writable(cm: InnerSpaceConnectionManager, *, operation: str) ->
     if not status.running:
         raise InnerSpaceUnavailableError(f"{operation}: InnerSpace is not running on this console")
     return await read_floor_plan_rows(cm, operation=operation)
-
-
-@asynccontextmanager
-async def locked_write(cm: InnerSpaceConnectionManager, *, operation: str) -> AsyncIterator[list[dict[str, Any]]]:
-    """Hold the write lock and check the console; yields the floor-plan rows."""
-    async with cm.write_lock:
-        yield await ensure_writable(cm, operation=operation)
 
 
 async def read_internal_project(cm: InnerSpaceConnectionManager, *, operation: str) -> dict[str, Any]:

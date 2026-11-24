@@ -1,4 +1,4 @@
-"""The shared InnerSpace write layer: app checks, write lock, no replay, read-back outcome, ids."""
+"""The shared InnerSpace write layer: app checks, the operation gate, no replay, read-back outcome, ids."""
 
 import asyncio
 import logging
@@ -9,7 +9,7 @@ import pytest
 from unifi_core.exceptions import UniFiPermissionError
 from unifi_core.innerspace.managers import connection_manager as cm_module
 from unifi_core.innerspace.managers._writes import (
-    locked_write,
+    ensure_writable,
     plan_path,
     read_internal_project,
     send_write,
@@ -28,6 +28,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceWriteNotSent,
     InnerSpaceWriteOutcomeUnknown,
 )
+from unifi_core.operation_gate import GateSettings, OperationGate
 
 from tests.innerspace.helpers import PLAN_A, PLAN_B, floor_plan_rows, internal_state, new_wall, stored_shape
 
@@ -57,12 +58,30 @@ async def _create(cm, walls):
 
 
 async def _apply(cm, walls):
-    async with locked_write(cm, operation=OP):
-        return await _create(cm, walls)
+    await ensure_writable(cm, operation=OP)
+    return await _create(cm, walls)
 
 
 def _since(console, start):
     return [(r.method, r.path) for r in console.requests[start:]]
+
+
+class _Clock:
+    """The gate's clock, set by hand: it decides how much of a write's hold budget is left."""
+
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def now(self) -> float:
+        return self.value
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+
+def _gate(hold_budget_seconds: float = 10) -> tuple[OperationGate, _Clock]:
+    clock = _Clock()
+    return OperationGate(GateSettings(hold_budget_seconds=hold_budget_seconds), name="innerspace", clock=clock), clock
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +397,6 @@ async def test_a_write_is_refused_when_innerspace_is_not_installed_or_not_runnin
 
     assert _since(console, start) == [("GET", SYSTEM_PATH)]
     assert console.writes() == []
-    assert not connected.write_lock.locked()
 
 
 @pytest.mark.parametrize("version", ["1.5.0", None], ids=["other-version", "no-version"])
@@ -419,33 +437,32 @@ async def test_version_is_read_uncached_on_every_write(connected, console):
 
 
 # ---------------------------------------------------------------------------
-# Write lock
+# Operation gate: writes take turns through it; the write layer takes no lock of its own
 # ---------------------------------------------------------------------------
 
 
-async def test_second_write_waits_for_the_lock_and_previews_do_not(connected, console):
+async def test_a_second_write_waits_for_the_gate_and_previews_do_not(connected, console):
+    """The write layer takes no lock of its own: the gate orders writes, and a read runs beside a held write."""
     console.load_project(internal_state())
     console.script_write(floor_plans=floor_plan_rows())
     console.script_write(floor_plans=floor_plan_rows())
     arrived, release = asyncio.Event(), asyncio.Event()
     console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, gate=(arrived, release))
+    gate, _clock = _gate(hold_budget_seconds=60)
 
-    first = asyncio.create_task(_apply(connected, [new_wall(WALL_1)]))
+    async def gated(walls):
+        async with gate.write():
+            return await _apply(connected, walls)
+
+    first = asyncio.create_task(gated([new_wall(WALL_1)]))
     await arrived.wait()
-    second_waits = asyncio.Event()
+    second = asyncio.create_task(gated([new_wall(WALL_2, x=50.0)]))
+    while gate.queue_depth == 0:
+        await asyncio.sleep(0)
 
-    async def second_write():
-        second_waits.set()
-        return await _apply(connected, [new_wall(WALL_2, x=50.0)])
-
-    second = asyncio.create_task(second_write())
-    # The task runs from the set() into the lock without yielding to the loop, so it is waiting there now.
-    await second_waits.wait()
-
-    assert connected.write_lock.locked()
     assert len(console.calls("GET", SYSTEM_PATH)) == 1
-    # A preview reads while the write holds the lock.
-    preview = await asyncio.wait_for(read_internal_project(connected, operation="preview"), 5)
+    async with gate.read():
+        preview = await asyncio.wait_for(read_internal_project(connected, operation="preview"), 5)
     assert preview["shapes"]
 
     release.set()
@@ -457,21 +474,26 @@ async def test_second_write_waits_for_the_lock_and_previews_do_not(connected, co
     assert second_system > first_post
 
 
-async def test_cancelled_write_releases_the_lock(connected, console):
+async def test_a_cancelled_write_gives_the_gate_back(connected, console):
     console.load_project(internal_state())
     console.script_write(floor_plans=floor_plan_rows())
     console.script_write(floor_plans=floor_plan_rows())
     arrived = asyncio.Event()
     console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, gate=(arrived, asyncio.Event()))
+    gate, _clock = _gate(hold_budget_seconds=60)
 
-    first = asyncio.create_task(_apply(connected, [new_wall(WALL_1)]))
+    async def gated(walls):
+        async with gate.write():
+            return await _apply(connected, walls)
+
+    first = asyncio.create_task(gated([new_wall(WALL_1)]))
     await arrived.wait()
     first.cancel()
     with pytest.raises(asyncio.CancelledError):
         await first
 
-    assert not connected.write_lock.locked()
-    assert (await asyncio.wait_for(_apply(connected, [new_wall(WALL_2, x=50.0)]), 5)).success
+    assert not gate.write_held
+    assert (await asyncio.wait_for(gated([new_wall(WALL_2, x=50.0)]), 5)).success
 
 
 # ---------------------------------------------------------------------------

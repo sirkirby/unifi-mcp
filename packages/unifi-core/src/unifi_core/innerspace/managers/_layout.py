@@ -2,11 +2,12 @@
 
 Each operation is one ``build`` function from a fresh :class:`Snapshot` to a
 :class:`WritePlan`. :func:`preview_write` runs it on a plain read and returns
-the preview; :func:`apply_write` runs it again under the write lock on a fresh
-read, so a shape that is gone, changed type or moved to another plan since the
-preview is refused before anything is sent (other fields are taken from that
-fresh read), then makes the ids, sends the one request and lets the read-back
-decide. A plan without a request is a no-op: nothing is sent.
+the preview; :func:`apply_write` runs it again on a fresh read, inside the
+operation gate's held write, so a shape that is gone, changed type or moved to
+another plan since the preview is refused before anything is sent (other
+fields are taken from that fresh read), then makes the ids, sends the one
+request and lets the read-back decide. A plan without a request is a no-op:
+nothing is sent.
 
 Previews carry no ids for new objects; those are made in :func:`apply_write`.
 Read-backs compare positions in plan units within :data:`POSITION_TOLERANCE`.
@@ -28,7 +29,6 @@ from unifi_core.innerspace.managers._reads import read_floor_plan_rows
 from unifi_core.innerspace.managers._writes import (
     InnerSpaceWriteRefusedError,
     ensure_writable,
-    locked_write,
     read_internal_project,
     send_write,
     write_ids,
@@ -188,7 +188,7 @@ async def preview_write(
     tool: str | None = None,
     args: BaseModel | None = None,
 ) -> dict[str, Any]:
-    """Read only, without the write lock, and describe what ``apply`` would send now (never the new ids).
+    """Read only, and describe what ``apply`` would send now (never the new ids).
 
     The app checks of a write run first, so a preview is refused wherever ``apply`` would be.
 
@@ -221,46 +221,49 @@ async def apply_write(
     args: BaseModel,
     build: Callable[[Snapshot], WritePlan],
 ) -> WriteVerificationResult:
-    """Under the write lock: fresh read, the same checks as the preview, one request, read-back.
+    """A fresh read, the same checks as the preview, one request, read-back.
+
+    Servers run it inside the operation gate's held write, which serialises
+    confirmed writes; it takes no lock of its own.
 
     New ids depend only on the call, so before sending a create the fresh read is
     checked for them: all present with the requested content is a no-op ("already
     applied"), some present is refused, none present is sent.
     """
-    async with locked_write(cm, operation=operation) as rows:
-        snapshot = Snapshot(await read_internal_project(cm, operation=operation), rows)
-        plan = build(snapshot)
-        metadata: dict[str, Any] = {"effects": plan.effects}
-        if plan.request is None:
-            if plan.noop is not None:
-                metadata["noop"] = plan.noop
-            return noop_write(operation=operation, metadata={**metadata, "warnings": plan.warnings})
-        request = plan.request(write_ids(tool, args.model_dump(mode="json"), plan.new_ids))
-        if _touched_ids(request.body) & set(request.created_ids):
-            raise InnerSpaceWriteRefusedError(f"{operation}: {_CREATE_AND_CHANGE}")
-        metadata["created_ids"] = request.created_ids
-        existing = _created_state(request, snapshot)
-        if existing is None:
-            raise InnerSpaceWriteRefusedError(f"{operation}: {_PARTLY_PRESENT}")
-        if existing:
-            metadata.update(noop="already_applied", warnings=list(plan.warnings))
-            return noop_write(operation=operation, metadata=metadata)
+    rows = await ensure_writable(cm, operation=operation)
+    snapshot = Snapshot(await read_internal_project(cm, operation=operation), rows)
+    plan = build(snapshot)
+    metadata: dict[str, Any] = {"effects": plan.effects}
+    if plan.request is None:
+        if plan.noop is not None:
+            metadata["noop"] = plan.noop
+        return noop_write(operation=operation, metadata={**metadata, "warnings": plan.warnings})
+    request = plan.request(write_ids(tool, args.model_dump(mode="json"), plan.new_ids))
+    if _touched_ids(request.body) & set(request.created_ids):
+        raise InnerSpaceWriteRefusedError(f"{operation}: {_CREATE_AND_CHANGE}")
+    metadata["created_ids"] = request.created_ids
+    existing = _created_state(request, snapshot)
+    if existing is None:
+        raise InnerSpaceWriteRefusedError(f"{operation}: {_PARTLY_PRESENT}")
+    if existing:
+        metadata.update(noop="already_applied", warnings=list(plan.warnings))
+        return noop_write(operation=operation, metadata=metadata)
 
-        async def read_back() -> Mapping[str, bool | None]:
-            data = await read_internal_project(cm, operation=operation)
-            rows = await read_floor_plan_rows(cm, operation=operation) if request.read_rows else ()
-            return request.expect(Snapshot(data, rows))
+    async def read_back() -> Mapping[str, bool | None]:
+        data = await read_internal_project(cm, operation=operation)
+        rows = await read_floor_plan_rows(cm, operation=operation) if request.read_rows else ()
+        return request.expect(Snapshot(data, rows))
 
-        return await send_write(
-            cm,
-            request.method,
-            request.path,
-            request.body,
-            operation=operation,
-            read_back=read_back,
-            metadata=metadata,
-            warnings=plan.warnings,
-        )
+    return await send_write(
+        cm,
+        request.method,
+        request.path,
+        request.body,
+        operation=operation,
+        read_back=read_back,
+        metadata=metadata,
+        warnings=plan.warnings,
+    )
 
 
 # ---------------------------------------------------------------------------

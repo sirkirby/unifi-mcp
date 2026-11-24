@@ -45,7 +45,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `permission.py` | Input JSON Schema inference for tool functions (validation keywords from type annotations) |
 | `formatting.py` | Standard tool response formatting |
 | `config.py` | Logging setup and YAML config loading |
-| `innerspace/` | InnerSpace client, managers and models; reads and layout writes under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py`, the shared write layer (app check, write lock, no replay, read-back) is `innerspace/managers/_writes.py`, and plan-frame conversion for writes is `innerspace/frames.py` |
+| `innerspace/` | InnerSpace client, managers and models; reads and layout writes under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py`, the shared write layer (app check, no replay, read-back) is `innerspace/managers/_writes.py`, and plan-frame conversion for writes is `innerspace/frames.py` |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/api`.
 

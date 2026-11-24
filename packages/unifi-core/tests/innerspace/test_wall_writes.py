@@ -572,4 +572,3 @@ async def test_preview_refuses_what_apply_refuses_with_the_same_text(connected, 
 
     assert str(previewed.value).replace("preview ", "") == str(applied.value)
     assert console.writes() == []
-    assert not connected.write_lock.locked()
