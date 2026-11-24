@@ -23,6 +23,10 @@ Rules the rest of the package relies on:
   :class:`DriveWriteNotSent`; one cut off after it was sent raises
   :class:`~unifi_core.operation_gate.WriteRequestTimeout`, whose outcome is
   unknown.
+* A change request that was sent and then timed out or lost its connection
+  raises :class:`DriveWriteOutcomeUnknown`: only a read can tell whether it
+  was applied. A failed certificate check means nothing was sent and keeps
+  its own error.
 """
 
 from __future__ import annotations
@@ -75,6 +79,10 @@ _FORBIDDEN_HINT = (
 
 class DriveWriteNotSent(UniFiOperationError):
     """A change was stopped before its request was sent, so nothing on the NAS changed."""
+
+
+class DriveWriteOutcomeUnknown(UniFiConnectionError):
+    """A change was sent and no answer came back (timeout or dropped connection); only a read can tell."""
 
 
 _NOT_SENT = "the write's time budget ran out before the change was sent, so nothing was changed"
@@ -339,6 +347,16 @@ class DriveConnectionManager:
             # The gate's text speaks for the whole write, whose earlier reads went
             # out; this change request did not.
             raise DriveWriteNotSent(f"UniFi Drive {method} {path}: {_NOT_SENT}") from None
+        except CertificateVerificationError:
+            # The handshake failed, so nothing was sent.
+            raise
+        except UniFiConnectionError as exc:
+            if method == "GET":
+                raise
+            raise DriveWriteOutcomeUnknown(
+                f"{exc} UniFi Drive did not answer the change, so whether it was applied is unknown; "
+                "read it back before retrying."
+            ) from None
 
     async def _send(
         self,

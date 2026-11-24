@@ -3,6 +3,11 @@
 import asyncio
 
 import pytest
+from unifi_core.drive.managers.connection_manager import (
+    DriveConnectionManager,
+    DriveWriteNotSent,
+    DriveWriteOutcomeUnknown,
+)
 from unifi_core.drive.managers.file_service_manager import FileServiceManager
 from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.drive.managers.storage_manager import StorageManager
@@ -21,6 +26,7 @@ from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, UniFi
 from unifi_core.operation_gate import GateSettings, OperationGate
 
 from tests.drive import fixtures as fx
+from tests.drive.conftest import HOST, PASSWORD, USERNAME
 
 V1 = "/proxy/drive/api/v1/services"
 NFS_ADVANCED = f"{V1}/nfs/advanced-settings"
@@ -532,6 +538,41 @@ async def test_concurrent_adds_through_the_operation_gate_both_land(files, conso
         "192.0.2.101",
         "192.0.2.102",
     ]
+
+
+@pytest.fixture
+async def impatient_files(console):
+    """File services on a client whose own request timeout is far shorter than the console's slow replies."""
+    connection = DriveConnectionManager(HOST, USERNAME, PASSWORD, base_url=console.base_url, timeout_seconds=0.2)
+    yield FileServiceManager(connection, SharedDriveManager(connection))
+    await connection.close()
+
+
+def _add_client():
+    return NfsConnectionInput(client="192.0.2.101", shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID)])
+
+
+async def test_an_unanswered_hostname_check_means_nothing_was_changed(impatient_files, console):
+    console.reply("GET", DRIVES, fx.drives(), always=True)
+    console.reply("GET", f"{V1}/nfs/settings", fx.service(True), always=True)
+    console.reply("GET", NFS_ADVANCED, _existing(), always=True)
+    console.reply("POST", TEST_HOSTNAMES, {"err": None, "type": "single", "data": {"hostnames": []}}, delay=1)
+
+    with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
+        await impatient_files.add_nfs_connection(_add_client())
+
+    assert console.calls("PUT", NFS_ADVANCED) == []
+
+
+async def test_an_unanswered_nfs_put_has_an_unknown_outcome(impatient_files, console):
+    _script_add_lookups(console)
+    console.reply("GET", NFS_ADVANCED, _existing(), always=True)
+    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, delay=1)
+
+    with pytest.raises(DriveWriteOutcomeUnknown, match="whether it was applied is unknown"):
+        await impatient_files.add_nfs_connection(_add_client())
+
+    assert len(console.calls("PUT", NFS_ADVANCED)) == 1
 
 
 async def test_plan_from_a_list_that_changed_is_not_written(files, console):

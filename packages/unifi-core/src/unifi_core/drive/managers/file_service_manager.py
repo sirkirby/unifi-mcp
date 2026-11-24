@@ -18,7 +18,9 @@ an edit made in the Drive web UI, or by another process, before that re-read.
 
 A confirmed method whose write's hold budget runs out before the ``PUT`` is
 sent raises :class:`~unifi_core.drive.managers.connection_manager.DriveWriteNotSent`:
-only reads (and Drive's hostname check, which saves nothing) went out.
+only reads (and Drive's hostname check, which saves nothing) went out. A
+``PUT`` that was sent and never answered raises
+:class:`~unifi_core.drive.managers.connection_manager.DriveWriteOutcomeUnknown`.
 
 Known risk: Drive keeps no version on this list, so nothing closes the gap
 between that re-read and the ``PUT``. The operation gate covers one server
@@ -39,7 +41,12 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from unifi_core.drive.managers.connection_manager import DriveConnectionManager, DriveWriteNotSent, drive_path
+from unifi_core.drive.managers.connection_manager import (
+    DriveConnectionManager,
+    DriveWriteNotSent,
+    DriveWriteOutcomeUnknown,
+    drive_path,
+)
 from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.drive.models._coerce import as_dict, as_list, text
 from unifi_core.drive.models.services import (
@@ -132,12 +139,20 @@ def _grant_label(grant: Any) -> str:
 
 @asynccontextmanager
 async def _before_the_change(what: str) -> AsyncIterator[None]:
-    """Requests made before a change is sent: a hold budget that runs out here means nothing was changed."""
+    """Requests made before a change is sent: a hold budget that runs out here means nothing was changed.
+
+    Drive's hostname check is a ``POST`` that saves nothing, so its unanswered
+    request is not a change of unknown outcome either.
+    """
     try:
         yield
     except WriteRequestTimeout:
         raise DriveWriteNotSent(
             f"{what}: the write's time budget ran out before the change was sent, so nothing was changed"
+        ) from None
+    except DriveWriteOutcomeUnknown:
+        raise DriveWriteNotSent(
+            f"{what}: UniFi Drive did not answer a check made before the change, so nothing was changed"
         ) from None
 
 
