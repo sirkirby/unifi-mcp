@@ -28,6 +28,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceWriteNotSent,
     InnerSpaceWriteOutcomeUnknown,
 )
+from unifi_core.innerspace.managers.wall_manager import InnerSpaceWallManager
 from unifi_core.operation_gate import GateSettings, OperationGate
 
 from tests.innerspace.helpers import PLAN_A, PLAN_B, floor_plan_rows, internal_state, new_wall, stored_shape
@@ -445,7 +446,7 @@ async def test_version_is_read_uncached_on_every_write(connected, console):
 
 
 # ---------------------------------------------------------------------------
-# Operation gate: writes take turns through it; the write layer takes no lock of its own
+# Operation gate: writes take turns through it, and its hold budget bounds every request
 # ---------------------------------------------------------------------------
 
 
@@ -502,6 +503,71 @@ async def test_a_cancelled_write_gives_the_gate_back(connected, console):
 
     assert not gate.write_held
     assert (await asyncio.wait_for(gated([new_wall(WALL_2, x=50.0)]), 5)).success
+
+
+FRAME_WALL = {"x1": 1.0, "y1": 1.0, "x2": 3.0, "y2": 1.0, "variant": "drywall"}
+
+
+async def test_a_write_whose_hold_budget_is_spent_is_not_sent(connected, console):
+    """Past the hold budget nothing goes out, not even the reads, and the write reports that nothing changed."""
+    console.load_project(internal_state())
+    console.script_write(floor_plans=floor_plan_rows())
+    gate, clock = _gate()
+    start = len(console.requests)
+
+    async with gate.write() as ticket:
+        clock.value = 50.0
+        result = await InnerSpaceWallManager(connected).apply_create_walls(PLAN_A, [FRAME_WALL], unit="metric")
+
+    assert (result.success, result.mutation_applied) == (False, False)
+    assert "time budget ran out before the change was sent" in result.error
+    assert _since(console, start) == []
+    assert console.writes() == []
+    assert ticket.request_sent is False
+    assert ticket.cut_off is not None and ticket.cut_off.request_sent is False
+
+
+async def test_a_write_whose_budget_runs_out_before_the_post_reports_it_not_sent(connected, console):
+    """The reads went out, then the budget ran out: the write itself was never sent, so nothing changed."""
+    console.load_project(internal_state())
+    console.script_write(floor_plans=floor_plan_rows())
+    gate, clock = _gate()
+    real_request = connected.request
+
+    async def request(method, path, **kwargs):
+        if method == "POST":
+            clock.value = 11.0
+        return await real_request(method, path, **kwargs)
+
+    connected.request = request
+    async with gate.write() as ticket:
+        result = await InnerSpaceWallManager(connected).apply_create_walls(PLAN_A, [FRAME_WALL], unit="metric")
+
+    assert (result.success, result.mutation_applied) == (False, False)
+    assert "time budget ran out before the change was sent" in result.error
+    assert result.metadata["created_ids"]
+    assert console.writes() == []
+    # The reads were sent, so the gate's own record cannot tell; the write layer can.
+    assert ticket.request_sent is True
+
+
+async def test_a_write_cut_off_after_it_was_sent_is_unknown(connected, console):
+    """The POST went out and the budget ran out before the answer: unknown, with the new ids kept."""
+    console.load_project(internal_state())
+    console.script_write(floor_plans=floor_plan_rows())
+    console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=2.0)
+    gate, clock = _gate()
+
+    async with gate.write() as ticket:
+        clock.value = 9.8
+        result = await InnerSpaceWallManager(connected).apply_create_walls(PLAN_A, [FRAME_WALL], unit="metric")
+
+    assert (result.success, result.mutation_applied) == (False, None)
+    assert "Read before retrying" in result.error
+    assert result.metadata["created_ids"]
+    assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == 1
+    assert ticket.request_sent is True
+    assert ticket.cut_off is not None and ticket.cut_off.request_sent is True
 
 
 # ---------------------------------------------------------------------------

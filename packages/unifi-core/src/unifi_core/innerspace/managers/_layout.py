@@ -29,6 +29,7 @@ from unifi_core.innerspace.managers._reads import read_floor_plan_rows
 from unifi_core.innerspace.managers._writes import (
     InnerSpaceWriteRefusedError,
     ensure_writable,
+    out_of_time_write,
     read_internal_project,
     send_write,
     write_ids,
@@ -37,6 +38,7 @@ from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnecti
 from unifi_core.innerspace.models._coerce import as_dict, number, text
 from unifi_core.innerspace.models.floor_plans import PlanGeometry, plan_geometry_from_api
 from unifi_core.innerspace.units import Unit, parse_unit
+from unifi_core.operation_gate import WriteRequestTimeout
 from unifi_core.write_verification import WriteVerificationResult, noop_write
 
 # Plan units (image pixels) a read-back position may differ from the one sent and still count as in place.
@@ -224,14 +226,22 @@ async def apply_write(
     """A fresh read, the same checks as the preview, one request, read-back.
 
     Servers run it inside the operation gate's held write, which serialises
-    confirmed writes; it takes no lock of its own.
+    confirmed writes; it takes no lock of its own. A hold budget that runs out
+    while it reads, before anything is sent, is "not applied".
 
     New ids depend only on the call, so before sending a create the fresh read is
     checked for them: all present with the requested content is a no-op ("already
     applied"), some present is refused, none present is sent.
     """
-    rows = await ensure_writable(cm, operation=operation)
-    snapshot = Snapshot(await read_internal_project(cm, operation=operation), rows)
+    snapshot: Snapshot | None = None
+    try:
+        rows = await ensure_writable(cm, operation=operation)
+        snapshot = Snapshot(await read_internal_project(cm, operation=operation), rows)
+    except WriteRequestTimeout:
+        # Only reads went out: nothing was written.
+        pass
+    if snapshot is None:
+        return out_of_time_write(operation)
     plan = build(snapshot)
     metadata: dict[str, Any] = {"effects": plan.effects}
     if plan.request is None:

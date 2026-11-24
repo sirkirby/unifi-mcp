@@ -32,6 +32,11 @@ Rules the rest of the package relies on:
   the session without sending the write again, and the read-back decides. A rejected
   login drops the session and pauses automatic reconnects on an escalating
   cool-down, so repeated calls cannot lock the account out.
+* Inside a held write of the operation gate, every request except the login
+  and logout is bounded by what is left of the write's hold budget
+  (:func:`~unifi_core.operation_gate.write_request_bound`). A write the budget
+  stopped before it was sent raises :class:`InnerSpaceWriteOutOfTime`; one cut
+  off after it was sent is a write the console did not answer.
 * ``/api/system`` answers a missing or expired session with 200 and a public
   payload that has no application list, so on that route a 2xx without
   ``apps.controllers`` is a refused session too, and its CSRF token is never
@@ -69,6 +74,7 @@ from unifi_core.exceptions import (
     UniFiValidationError,
 )
 from unifi_core.innerspace.models.status import app_status_from_api
+from unifi_core.operation_gate import WriteRequestTimeout, write_request_bound
 from unifi_core.tls import (
     CertificateVerificationError,
     certificate_error_hint,
@@ -265,6 +271,10 @@ class InnerSpaceHttpError(UniFiOperationError):
 
 class InnerSpaceWriteNotSent(UniFiOperationError):
     """The console refused the session before acting on a write; it was not sent again."""
+
+
+class InnerSpaceWriteOutOfTime(UniFiOperationError):
+    """The write's hold budget ran out before the write was sent; it was not sent."""
 
 
 class InnerSpaceWriteForbidden(UniFiPermissionError):
@@ -910,16 +920,35 @@ class InnerSpaceConnectionManager:
             limit=limit,
             binary=binary,
         )
-        unanswered = False
+        sent = False
+
+        async def send_bounded(session: aiohttp.ClientSession, auth: _SessionAuth) -> _Reply:
+            # Bounded inside a held write by what is left of its hold budget; outside one, unbounded.
+            # The login and logout of the session code never pass through here.
+            nonlocal sent
+            async with write_request_bound():
+                sent = True
+                return await send(session, headers=auth.headers())
+
+        unanswered = out_of_time = False
         try:
-            reply = await send(session, headers=auth.headers())
+            reply = await send_bounded(session, auth)
         except CertificateVerificationError:
             # The handshake failed, so nothing was sent.
             raise
+        except WriteRequestTimeout:
+            # Fixed text from the gate; a read keeps it as it is, so its guidance reaches the caller.
+            if replay:
+                raise
+            out_of_time, unanswered = not sent, sent
         except UniFiConnectionError:
             if replay:
                 raise
             unanswered = True
+        if out_of_time:
+            raise InnerSpaceWriteOutOfTime(
+                f"{operation}: the write's time budget ran out before it was sent, so nothing was changed"
+            )
         if unanswered:
             raise InnerSpaceWriteOutcomeUnknown(
                 f"{operation}: the UniFi OS console did not answer the write, so whether it was applied is unknown"
@@ -947,7 +976,7 @@ class InnerSpaceConnectionManager:
         auth, session = self._auth, self._session
         if auth is None or session is None or self._closed:
             raise self._unavailable(operation)
-        reply = await send(session, headers=auth.headers())
+        reply = await send_bounded(session, auth)
         if reply.status == 401:
             await self._reject_session(auth, operation)
         if _session_refused(reply):

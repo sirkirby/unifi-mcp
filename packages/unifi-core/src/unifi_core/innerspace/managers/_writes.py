@@ -9,7 +9,10 @@ once with :func:`send_write`, which then reads back to decide the outcome:
   geometry. Previews run the same check.
 * Confirmed writes run one at a time through the operation gate, which the
   servers hold around the whole ``apply_*`` call; this layer adds no lock of
-  its own.
+  its own. Inside the held write every request is bounded by what is left of
+  its hold budget: a write the budget stopped before it was sent is "not
+  applied", and one cut off after it was sent is a write the console did not
+  answer.
 * The write goes out with ``replay=False``. A refused session is renewed and
   the write is not sent again: the result is "not applied" with no read-back.
   After any other outcome (an answer of any status, a timeout, a dropped
@@ -55,6 +58,7 @@ from unifi_core.innerspace.managers.connection_manager import (
     InnerSpaceWriteForbidden,
     InnerSpaceWriteNotSent,
     InnerSpaceWriteOutcomeUnknown,
+    InnerSpaceWriteOutOfTime,
     _log_route,
 )
 from unifi_core.innerspace.models.project import _data
@@ -130,6 +134,17 @@ def write_ids(tool: str, args: Mapping[str, Any], count: int) -> list[str]:
     return [str(uuid.uuid5(WRITE_ID_NAMESPACE, f"{seed}#{index}")) for index in range(count)]
 
 
+def out_of_time_write(operation: str, metadata: Mapping[str, Any] | None = None) -> WriteVerificationResult:
+    """The write's hold budget ran out before the change was sent: nothing was changed."""
+    return failed_write(
+        f"{operation}: the write's time budget ran out before the change was sent, so nothing was changed. "
+        "Read before retrying.",
+        operation=operation,
+        mutation_applied=False,
+        metadata=dict(metadata or {}),
+    )
+
+
 def _answer(error: UniFiError | None) -> str:
     """What the console said, in fixed words: a status and an ``errors.*`` code at most."""
     if error is None:
@@ -199,6 +214,9 @@ async def send_write(
     error: UniFiError | None = None
     try:
         await cm.request(method, path, operation=operation, json=body, replay=False)
+    except InnerSpaceWriteOutOfTime:
+        logger.info("[innerspace-writes] %s: %s %s not sent (time budget spent)", operation, method, route)
+        return out_of_time_write(operation, meta)
     except InnerSpaceWriteNotSent:
         logger.info("[innerspace-writes] %s: %s %s not sent (session refused)", operation, method, route)
         return failed_write(
