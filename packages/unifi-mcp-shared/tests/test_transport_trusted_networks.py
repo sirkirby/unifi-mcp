@@ -1,5 +1,8 @@
 """Bearer-token exemption for trusted networks (UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS).
 
+``UNIFI_<PREFIX>_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` overrides the shared variable for
+one server; empty there means no exemption on that server.
+
 A reverse proxy or tunnel that authenticates callers itself (Cloudflare Access,
 an ingress, a relay sidecar) cannot always add the server's static token. Its
 requests skip the token when their TCP peer address is in a trusted network;
@@ -11,7 +14,7 @@ import ipaddress
 import logging
 import socket
 from contextlib import suppress
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2 as httpx
 import pytest
@@ -27,11 +30,14 @@ from unifi_mcp_shared.transport import (
 
 TOKEN = "t" * 40
 LOGGER = logging.getLogger("test-trusted-networks")
+PREFIX = "TESTSRV"
+SERVER_ENV = f"UNIFI_{PREFIX}_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
 
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     monkeypatch.delenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, raising=False)
+    monkeypatch.delenv(SERVER_ENV, raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +122,68 @@ def test_ipv4_mapped_network_refuses_startup_with_the_ipv4_form(monkeypatch, cap
 
     assert excinfo.value.code == 2
     assert f"write it as {ipv4_form}" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Per-server override
+# ---------------------------------------------------------------------------
+
+
+def test_server_level_value_wins_over_the_shared_one(monkeypatch):
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "192.0.2.0/24")
+    monkeypatch.setenv(SERVER_ENV, "203.0.113.5")
+
+    assert resolve_http_auth_trusted_networks(logger=LOGGER, env_prefix=PREFIX) == (
+        ipaddress.ip_network("203.0.113.5/32"),
+    )
+
+
+def test_shared_value_applies_when_the_server_level_one_is_unset(monkeypatch):
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "192.0.2.0/24")
+    monkeypatch.setenv("UNIFI_OTHERSRV_MCP_HTTP_AUTH_TRUSTED_NETWORKS", "")
+
+    assert resolve_http_auth_trusted_networks(logger=LOGGER, env_prefix=PREFIX) == (
+        ipaddress.ip_network("192.0.2.0/24"),
+    )
+
+
+def test_without_a_prefix_the_server_level_value_is_not_read(monkeypatch):
+    monkeypatch.setenv(SERVER_ENV, "203.0.113.5")
+
+    assert resolve_http_auth_trusted_networks(logger=LOGGER) == ()
+
+
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_server_level_value_turns_the_exemption_off(monkeypatch, caplog, value):
+    # Unlike the token, empty is not "unset": it narrows access, so it fails closed.
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "192.0.2.0/24")
+    monkeypatch.setenv(SERVER_ENV, value)
+
+    with caplog.at_level(logging.INFO, logger=LOGGER.name):
+        assert resolve_http_auth_trusted_networks(logger=LOGGER, env_prefix=PREFIX) == ()
+    assert f"{SERVER_ENV} is empty" in caplog.text
+
+
+@pytest.mark.parametrize("value", ["nonsense", "0.0.0.0/0", "0.0.0.0/1,128.0.0.0/1", "::ffff:192.0.2.0/120"])
+def test_bad_server_level_value_refuses_startup_naming_it(monkeypatch, caplog, value):
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "192.0.2.0/24")
+    monkeypatch.setenv(SERVER_ENV, value)
+
+    with pytest.raises(SystemExit) as excinfo:
+        resolve_http_auth_trusted_networks(logger=LOGGER, env_prefix=PREFIX)
+
+    assert excinfo.value.code == 2
+    assert SERVER_ENV in caplog.text
+    assert f"{HTTP_AUTH_TRUSTED_NETWORKS_ENV} entr" not in caplog.text
+
+
+def test_valid_server_level_value_shadows_a_bad_shared_one(monkeypatch):
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "nonsense")
+    monkeypatch.setenv(SERVER_ENV, "203.0.113.5")
+
+    assert resolve_http_auth_trusted_networks(logger=LOGGER, env_prefix=PREFIX) == (
+        ipaddress.ip_network("203.0.113.5/32"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +332,86 @@ async def test_trusted_networks_without_a_token_warn_and_change_nothing(monkeypa
     assert "has no effect" in caplog.text
     plain.assert_called_once()
     authenticated.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("shared", "server_level", "proxy_headers_off", "exempted"),
+    [
+        ("192.0.2.0/24", None, True, f"192.0.2.0/24 ({HTTP_AUTH_TRUSTED_NETWORKS_ENV})"),
+        (None, "203.0.113.5", True, f"203.0.113.5/32 ({SERVER_ENV})"),
+        ("192.0.2.0/24", "203.0.113.5", True, f"203.0.113.5/32 ({SERVER_ENV})"),
+        ("192.0.2.0/24", "", False, None),
+    ],
+)
+async def test_uvicorn_and_startup_log_follow_the_effective_value(
+    monkeypatch, caplog, shared, server_level, proxy_headers_off, exempted
+):
+    if shared is not None:
+        monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, shared)
+    if server_level is not None:
+        monkeypatch.setenv(SERVER_ENV, server_level)
+    server = UniFiMCPServer("trusted-effective-test")
+    uvicorn_server = MagicMock()
+    uvicorn_server.serve = AsyncMock()
+
+    with (
+        patch("unifi_mcp_shared.transport.os.getpid", return_value=1),
+        patch("uvicorn.Config") as config,
+        patch("uvicorn.Server", return_value=uvicorn_server),
+    ):
+        await run_transports(
+            server=server,
+            http_enabled=True,
+            host="127.0.0.1",
+            port=_free_port(),
+            http_transport="streamable-http",
+            logger=LOGGER,
+            auth_token=TOKEN,
+            env_prefix=PREFIX,
+        )
+
+    assert (config.call_args.kwargs.get("proxy_headers") is False) is proxy_headers_off
+    if exempted:
+        assert f"except from {exempted}." in caplog.text
+    else:
+        assert "except from" not in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("shared", "server_level", "warned_var"),
+    [
+        (None, "203.0.113.5", SERVER_ENV),
+        ("192.0.2.0/24", None, HTTP_AUTH_TRUSTED_NETWORKS_ENV),
+        ("192.0.2.0/24", "", None),
+    ],
+)
+async def test_no_token_warning_follows_the_effective_value(monkeypatch, caplog, shared, server_level, warned_var):
+    if shared is not None:
+        monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, shared)
+    if server_level is not None:
+        monkeypatch.setenv(SERVER_ENV, server_level)
+    server = UniFiMCPServer("trusted-no-token-effective-test")
+
+    with (
+        patch("unifi_mcp_shared.transport.os.getpid", return_value=1),
+        patch.object(server, "run_streamable_http_async", new=AsyncMock()),
+    ):
+        await run_transports(
+            server=server,
+            http_enabled=True,
+            host="127.0.0.1",
+            port=_free_port(),
+            http_transport="streamable-http",
+            logger=LOGGER,
+            env_prefix=PREFIX,
+        )
+
+    if warned_var:
+        assert f"{warned_var} is set, but no HTTP bearer token" in caplog.text
+    else:
+        assert "has no effect" not in caplog.text
 
 
 # ---------------------------------------------------------------------------

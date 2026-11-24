@@ -95,7 +95,7 @@ Stdio is the default. To serve HTTP:
 | `UNIFI_MCP_PORT` | `3003` | Port |
 | `UNIFI_MCP_HTTP_TRANSPORT` | `streamable-http` | `streamable-http` or `sse` |
 | `UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN` | none | Bearer token every request must carry (falls back to `UNIFI_MCP_HTTP_AUTH_TOKEN`) |
-| `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` | none | IP addresses or CIDR networks whose requests skip the bearer token: the pinned address of an authenticating proxy, never a whole container network. Docker Compose does not pass it to this service. See [Trusted networks](../../network/docs/transports.md#trusted-networks) |
+| `UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TRUSTED_NETWORKS` | none | IP addresses or CIDR networks whose requests skip the bearer token: the pinned address of an authenticating proxy, never a whole container network. Falls back to `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`; empty turns the exemption off. Docker Compose passes only this server-level spelling. See [Trusted networks](../../network/docs/transports.md#trusted-networks) |
 | `UNIFI_MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host headers the server accepts, comma-separated (for a reverse proxy) |
 | `UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION` | `true` | Check the Host header against `UNIFI_MCP_ALLOWED_HOSTS` |
 | `UNIFI_MCP_HTTP_FORCE` | `false` | Serve HTTP from a process that is not PID 1 (local development only) |

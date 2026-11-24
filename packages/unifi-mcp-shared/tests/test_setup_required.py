@@ -89,3 +89,5 @@ async def test_setup_mode_keeps_config_auth_token(monkeypatch, http_enabled, exp
         logger=logging.getLogger("test"),
     )
     assert transport.await_args.kwargs["auth_token"] == expected
+    # Selects the UNIFI_PROTECT_ spelling of the trusted networks, like the token's.
+    assert transport.await_args.kwargs["env_prefix"] == "PROTECT"

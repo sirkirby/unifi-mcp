@@ -76,6 +76,9 @@ services:
       # service, so set one before exposing account-wide inventory.
       - UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN
       - UNIFI_MCP_HTTP_AUTH_TOKEN
+      # The proxy address that skips the token; only this server-level
+      # spelling, so the shared list never reaches account-wide inventory.
+      - UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TRUSTED_NETWORKS
       - UNIFI_MCP_HTTP_ENABLED=true
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0
@@ -117,6 +120,9 @@ services:
       # the shell.
       - UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN
       - UNIFI_MCP_HTTP_AUTH_TOKEN
+      # The proxy address that skips the token; only this server-level
+      # spelling, so the shared list never reaches the floor plans.
+      - UNIFI_INNERSPACE_MCP_HTTP_AUTH_TRUSTED_NETWORKS
       - UNIFI_MCP_HTTP_ENABLED=true
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0

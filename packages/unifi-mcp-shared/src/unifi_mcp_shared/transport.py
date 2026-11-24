@@ -10,9 +10,10 @@ so that a failed HTTP transport does not kill the stdio connection.
 
 HTTP can optionally require a static bearer token
 (``UNIFI_MCP_HTTP_AUTH_TOKEN``); see :func:`resolve_http_auth_token`.
-Requests from networks listed in ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS``
-(an authenticating reverse proxy or tunnel in front of the server) skip that
-token; see :func:`resolve_http_auth_trusted_networks`.
+Requests from networks listed in ``UNIFI_<PREFIX>_MCP_HTTP_AUTH_TRUSTED_NETWORKS``
+or ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` (an authenticating reverse proxy or
+tunnel in front of the server) skip that token; see
+:func:`resolve_http_auth_trusted_networks`.
 """
 
 from __future__ import annotations
@@ -45,7 +46,8 @@ MIN_HTTP_AUTH_TOKEN_LENGTH = 32
 
 # Comma-separated IP addresses or CIDR networks whose requests skip the bearer
 # token, because a reverse proxy or tunnel there authenticates callers itself.
-# Matched against the TCP peer address; read from the environment only.
+# Matched against the TCP peer address; read from the environment only, as
+# UNIFI_<PREFIX>_MCP_HTTP_AUTH_TRUSTED_NETWORKS and then this shared spelling.
 HTTP_AUTH_TRUSTED_NETWORKS_ENV = "UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
@@ -155,13 +157,36 @@ def resolve_http_auth_token(*, env_prefix: str, logger: logging.Logger, configur
     return token
 
 
-def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNetwork, ...]:
-    """Parse ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` into networks.
+def _trusted_networks_setting(env_prefix: str | None) -> tuple[str, str | None]:
+    """The variable that sets this server's trusted networks, and its raw value.
 
-    Each comma-separated entry is an IP address or a CIDR network (host bits
-    are ignored, so ``192.0.2.7/24`` means ``192.0.2.0/24``). Unset or blank
-    means no network is trusted. Startup is refused, because this is an access
-    control and a typo must not silently widen or drop it, when:
+    ``UNIFI_<PREFIX>_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` wins whenever it is
+    present, even empty: an empty server-level value means no network skips
+    the token on this server, whatever the shared
+    ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` says. This differs from the token
+    and the credentials, where empty counts as unset; here the empty value
+    narrows access, so honouring it fails closed. Without ``env_prefix`` only
+    the shared variable is read.
+    """
+    if env_prefix:
+        server_var = f"UNIFI_{env_prefix}_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
+        if server_var in os.environ:
+            return server_var, os.environ[server_var]
+    return HTTP_AUTH_TRUSTED_NETWORKS_ENV, os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV)
+
+
+def resolve_http_auth_trusted_networks(
+    *, logger: logging.Logger, env_prefix: str | None = None
+) -> tuple[IPNetwork, ...]:
+    """Parse this server's trusted networks into networks.
+
+    The value comes from :func:`_trusted_networks_setting`: the
+    server-level variable when present, else the shared one. Each
+    comma-separated entry is an IP address or a CIDR network (host bits are
+    ignored, so ``192.0.2.7/24`` means ``192.0.2.0/24``). Unset or blank means
+    no network is trusted. Startup is refused, naming the variable that was
+    read, because this is an access control and a typo must not silently widen
+    or drop it, when:
 
     - an entry does not parse;
     - an entry is an IPv4-mapped IPv6 network (``::ffff:a.b.c.d``), which could
@@ -169,8 +194,10 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
     - the entries trust every IPv4 or every IPv6 address, alone (``/0``) or
       together (``0.0.0.0/1`` plus ``128.0.0.0/1``), which turns the token off.
     """
-    raw = os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV)
+    var, raw = _trusted_networks_setting(env_prefix)
     if raw is None or not raw.strip():
+        if var != HTTP_AUTH_TRUSTED_NETWORKS_ENV and (os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV) or "").strip():
+            logger.info("%s is empty, so this server does not use %s.", var, HTTP_AUTH_TRUSTED_NETWORKS_ENV)
         return ()
     networks: list[IPNetwork] = []
     for entry in (part.strip() for part in raw.split(",")):
@@ -181,7 +208,7 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
         except ValueError:
             logger.error(
                 "[credentials] %s entry %r is not an IP address or CIDR network. Refusing to start until it is fixed.",
-                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                var,
                 entry,
             )
             raise SystemExit(2) from None
@@ -189,7 +216,7 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
             logger.error(
                 "[credentials] %s entry %r trusts every address, which turns the bearer token off. "
                 "Unset the token instead, or list the proxy's own address. Refusing to start until it is fixed.",
-                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                var,
                 entry,
             )
             raise SystemExit(2)
@@ -198,7 +225,7 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
             logger.error(
                 "[credentials] %s entry %r is an IPv4-mapped IPv6 network; write it as %s. "
                 "Refusing to start until it is fixed.",
-                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                var,
                 entry,
                 ipaddress.ip_network(f"{mapped}/{network.prefixlen - 96}"),
             )
@@ -211,7 +238,7 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
             logger.error(
                 "[credentials] %s entries together trust every IPv%d address, which turns the bearer token off. "
                 "Unset the token instead, or list the proxy's own address. Refusing to start until it is fixed.",
-                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                var,
                 version,
             )
             raise SystemExit(2)
@@ -349,6 +376,7 @@ async def run_transports(
     http_transport: str,
     logger: logging.Logger,
     auth_token: str | None = None,
+    env_prefix: str | None = None,
 ) -> None:
     """Run stdio and optionally HTTP, with stdio as the primary.
 
@@ -363,8 +391,10 @@ async def run_transports(
 
     When ``auth_token`` is set (see :func:`resolve_http_auth_token`), every HTTP
     request must carry it as ``Authorization: Bearer <token>``, except requests
-    from ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` (see
-    :func:`resolve_http_auth_trusted_networks`); stdio is unaffected.
+    from this server's trusted networks (see
+    :func:`resolve_http_auth_trusted_networks`; ``env_prefix`` selects the
+    server-level ``UNIFI_<PREFIX>_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` spelling, and
+    without it only the shared variable is read); stdio is unaffected.
 
     The main process of a container (PID 1) has no stdio client and runs HTTP
     alone. ``UNIFI_MCP_STDIO_ENABLED=false`` takes the same HTTP-only path for
@@ -385,12 +415,13 @@ async def run_transports(
     # Resolved before any transport starts, so an invalid value refuses startup
     # instead of being caught as an HTTP failure below.
     trusted_networks: tuple[IPNetwork, ...] = ()
+    trusted_var, trusted_raw = _trusted_networks_setting(env_prefix)
     if http_enabled and auth_token:
-        trusted_networks = resolve_http_auth_trusted_networks(logger=logger)
-    elif http_enabled and (os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV) or "").strip():
+        trusted_networks = resolve_http_auth_trusted_networks(logger=logger, env_prefix=env_prefix)
+    elif http_enabled and (trusted_raw or "").strip():
         logger.warning(
             "%s is set, but no HTTP bearer token is configured, so it has no effect: HTTP is unauthenticated.",
-            HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+            trusted_var,
         )
 
     async def run_stdio() -> None:
@@ -422,9 +453,10 @@ async def run_transports(
                     # WARNING, not INFO: an exemption from authentication must stay
                     # visible when the log level is raised to WARNING.
                     logger.warning(
-                        "%s requires a bearer token, except from %s.",
+                        "%s requires a bearer token, except from %s (%s).",
                         transport_label,
                         ", ".join(str(network) for network in trusted_networks),
+                        trusted_var,
                     )
                 else:
                     logger.info("%s requires a bearer token.", transport_label)

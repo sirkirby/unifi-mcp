@@ -166,7 +166,8 @@ export UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS=192.0.2.10   # the proxy container's
 - The check uses the TCP peer address. Uvicorn's `X-Forwarded-For` handling is turned off when trusted networks are set, so a header cannot claim a trusted source. Host/Origin checks still apply.
 - Entries are comma-separated IP addresses or CIDR networks, IPv4 or IPv6. Startup is refused for an entry that does not parse, for an IPv4-mapped entry (`::ffff:…`; write the IPv4 form), and for entries that together trust every IPv4 or every IPv6 address.
 - Without a token it has no effect, and the server logs a warning. With one, startup logs the exempted addresses at WARNING.
-- It applies to all five servers. Docker Compose passes it from `.env` to Network, Protect and Access only; the Site Manager and InnerSpace services receive only the variables listed for them, so they keep requiring the token.
+- `UNIFI_<SERVER>_MCP_HTTP_AUTH_TRUSTED_NETWORKS` (`NETWORK`, `PROTECT`, `ACCESS`, `SITEMANAGER`, `INNERSPACE`) replaces the shared list for one server. Set it empty to turn the exemption off on that server while the others keep the shared list; unlike the token, empty here does not fall back. Errors and the startup log name the variable that was read.
+- Docker Compose passes both spellings from `.env` to Network, Protect and Access. The Site Manager and InnerSpace services receive only their own `UNIFI_SITEMANAGER_…` or `UNIFI_INNERSPACE_…` spelling from the shell, never the shared one.
 
 ## Reverse Proxy
 

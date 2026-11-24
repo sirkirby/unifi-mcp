@@ -116,7 +116,7 @@ HTTP is disabled by default. The stdio transport is recommended for most use cas
 | `UNIFI_MCP_HTTP_FORCE` | `false` | Force HTTP in non-container environments |
 | `UNIFI_MCP_STDIO_ENABLED` | `true` | Set `false` to serve HTTP alone from a process that is not PID 1 (an init-managed container or a service manager); needs `UNIFI_MCP_HTTP_ENABLED=true` and `UNIFI_MCP_HTTP_FORCE=true` |
 | `UNIFI_MCP_HTTP_AUTH_TOKEN` | unset | Require `Authorization: Bearer <token>` on every HTTP request; at least 32 printable ASCII characters. `UNIFI_NETWORK_MCP_HTTP_AUTH_TOKEN` overrides it for this server, and both accept the `_FILE` and `_COMMAND` spellings. See [HTTP bearer token](transports.md#http-bearer-token) |
-| `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` | unset | IP addresses or CIDR networks whose requests skip the bearer token: the pinned address of an authenticating proxy in front of the server, never a whole container network. Docker Compose passes it from `.env`. See [Trusted networks](transports.md#trusted-networks) |
+| `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` | unset | IP addresses or CIDR networks whose requests skip the bearer token: the pinned address of an authenticating proxy in front of the server, never a whole container network. `UNIFI_NETWORK_MCP_HTTP_AUTH_TRUSTED_NETWORKS` replaces it for this server, and empty there turns the exemption off. Docker Compose passes it from `.env`. See [Trusted networks](transports.md#trusted-networks) |
 
 ## Security
 
