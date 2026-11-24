@@ -113,6 +113,59 @@ class TrafficFlowManager:
         body["skip_count"] = False
         return body
 
+    async def _get_flow_filter_data(self) -> Dict[str, Any]:
+        """Fetch /traffic-flows/filter-data, cached with the flows TTL.
+
+        The response lists the host objects that source_host/destination_host
+        filter elements must carry; Network 11 rejects plain strings there.
+        """
+        cache_key = f"traffic_flow_filter_data_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key, timeout=_FLOWS_CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        api_request = ApiRequestV2(method="get", path="/traffic-flows/filter-data")
+        response = await self._connection.request(api_request)
+
+        if isinstance(response, list):
+            response = response[0] if response else {}
+        if not isinstance(response, dict):
+            response = {}
+
+        self._connection._update_cache(cache_key, response, timeout=_FLOWS_CACHE_TTL)
+        return response
+
+    async def _resolve_source_hosts(self, names: list[str]) -> list[Dict[str, Any]]:
+        """Resolve source host/client names to the controller's host objects."""
+        filter_data = await self._get_flow_filter_data()
+        source = filter_data.get("source")
+        if not isinstance(source, dict):
+            source = (filter_data.get("data") or {}).get("source") or {}
+        hosts = source.get("hosts") or []
+
+        resolved: list[Dict[str, Any]] = []
+        seen: set = set()
+        for name in names:
+            folded = name.casefold()
+            matches = [
+                host
+                for host in hosts
+                if isinstance(host, dict)
+                and folded
+                in {
+                    str(host.get("client_name") or "").casefold(),
+                    str(host.get("host_name") or "").casefold(),
+                }
+            ]
+            if not matches:
+                raise ValueError("source name filter matched no host in traffic-flow filter data")
+            for host in matches:
+                key = host.get("id") or id(host)
+                if key not in seen:
+                    seen.add(key)
+                    resolved.append(host)
+        return resolved
+
     async def get_traffic_flows(self, query: TrafficFlowQuery) -> Dict[str, Any]:
         """POST the query and return the full pagination envelope.
 
@@ -120,6 +173,8 @@ class TrafficFlowManager:
         Errors propagate to the caller; the tool layer logs and maps them.
         """
         body = self._build_body(query)
+        if query.source_host:
+            body["source_host"] = await self._resolve_source_hosts(query.source_host)
         cache_key = "traffic_flows_" + json.dumps(body, sort_keys=True) + f"_{self._connection.site}"
         cached = self._connection.get_cached(cache_key, timeout=_FLOWS_CACHE_TTL)
         if cached is not None:

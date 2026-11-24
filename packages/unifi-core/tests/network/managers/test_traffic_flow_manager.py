@@ -462,3 +462,77 @@ async def test_result_reports_a_capped_query_as_truncated(envelope, truncated):
     result = await mgr.get_traffic_flows(q)
 
     assert result["truncated"] is truncated
+
+
+# E. source_host object resolution (issue #1116)
+# ---------------------------------------------------------------------------
+
+_HOST_OBJECT = {
+    "id": "64f0a1b2c3d4e5f60718293a",
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "client_name": "Lab-Laptop",
+    "host_name": "lab-laptop.local",
+    "client_oui": "Apple, Inc.",
+    "client_fingerprint": "macOS",
+}
+_FILTER_DATA_RESPONSE = {"source": {"hosts": [_HOST_OBJECT]}}
+
+
+def _make_connection_with_filter_data(flow_response=None, filter_data=None):
+    """Connection whose request() answers /traffic-flows/filter-data and POSTs separately."""
+    conn = _make_connection()
+    flow = _EMPTY_RESPONSE if flow_response is None else flow_response
+    filter_payload = _FILTER_DATA_RESPONSE if filter_data is None else filter_data
+
+    async def request(api_request):
+        if api_request.method == "get" and api_request.path == "/traffic-flows/filter-data":
+            return [filter_payload]
+        return flow
+
+    conn.request = AsyncMock(side_effect=request)
+    return conn
+
+
+@pytest.mark.asyncio
+async def test_source_name_filter_posts_host_objects():
+    """Network 11 rejects plain strings in source_host: the POST body must carry
+    the host objects listed by /traffic-flows/filter-data."""
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [_HOST_OBJECT]
+
+
+@pytest.mark.asyncio
+async def test_source_name_matching_is_case_insensitive_and_covers_host_name():
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["LAB-LAPTOP.LOCAL"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [_HOST_OBJECT]
+
+
+@pytest.mark.asyncio
+async def test_source_name_with_no_matching_host_raises():
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    with pytest.raises(ValueError, match="source"):
+        await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["No-Such-Host"]))
+
+    assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_no_source_name_skips_filter_data():
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2))
+
+    assert [call.args[0].method for call in conn.request.await_args_list] == ["post"]
