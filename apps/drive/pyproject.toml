@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     # The drive icon family, drive_ tool titles and isolated_keys require Shared 0.6.43.
-    "unifi-mcp-shared>=0.6.43,<0.7",
+    # The operation gate, batch cancel and reporting a write cut off at its hold budget require Shared 0.6.49.
+    "unifi-mcp-shared>=0.6.49,<0.7",
     # The UniFi Drive managers and models (unifi_core.drive) require Core 0.4.98.
-    "unifi-core>=0.4.98,<0.5",
+    # The operation gate and recording a write's hold-budget cut-off on its ticket require Core 0.4.107.
+    "unifi-core>=0.4.107,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
