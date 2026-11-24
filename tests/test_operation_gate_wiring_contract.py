@@ -20,6 +20,7 @@ APPS = {
     "network": ("unifi_network_mcp", True),
     "protect": ("unifi_protect_mcp", True),
     "access": ("unifi_access_mcp", False),
+    "drive": ("unifi_drive_mcp", False),
     "innerspace": ("unifi_innerspace_mcp", False),
     "sitemanager": ("unifi_sitemanager_mcp", False),
 }
@@ -35,6 +36,10 @@ def _permissioned_tool_call(app: str, package: str) -> ast.Call:
     ]
     assert len(calls) == 1, f"{app}: expected one permissioned_tool factory call, found {len(calls)}"
     return calls[0]
+
+
+def test_every_mcp_app_is_listed():
+    assert set(APPS) == {main.parents[2].name for main in ROOT.glob("apps/*/src/unifi_*_mcp/main.py")}
 
 
 @pytest.mark.parametrize("app", sorted(APPS))

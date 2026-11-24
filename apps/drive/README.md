@@ -71,6 +71,18 @@ Without a host the server still starts. It answers the client in setup mode, off
 
 HTTP transport, tool registration modes and diagnostics use the same `UNIFI_MCP_*` settings as the other servers; the Drive server's default HTTP port is 3004.
 
+### NAS operation gate
+
+Every tool call takes a read slot at this server's operation gate for the NAS before it reaches the NAS. Reads run side by side up to a cap. The guarantee is per server process: two servers, or two copies of one, pointed at the same NAS do not coordinate. Unlike the connection settings, these fall back to the shared `UNIFI_*` value, because they tune this process rather than name a console.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `UNIFI_DRIVE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
+| `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a call waits for a read slot before it is refused as busy (1 to 3600). |
+| `UNIFI_DRIVE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | Checked at startup (10 to 3600). It has no effect yet: this server has no write tools. |
+
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, and nothing is sent to the NAS.
+
 ## Tools
 
 | Tool | What it returns |

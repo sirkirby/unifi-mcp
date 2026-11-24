@@ -10,7 +10,7 @@ from unifi_drive_mcp.bootstrap import (
 )  # ensures logging/env setup early
 from unifi_drive_mcp.categories import DRIVE_CATEGORY_MAP, TOOL_MODULE_MAP, policy_gates, setup_lazy_loading
 from unifi_drive_mcp.jobs import get_job_status, start_async_tool
-from unifi_drive_mcp.runtime import config, connection_manager, server
+from unifi_drive_mcp.runtime import config, connection_manager, get_operation_gate, server
 from unifi_drive_mcp.tool_index import register_tool, tool_index_handler
 from unifi_drive_mcp.utils.diagnostics import diagnostics_enabled, wrap_tool
 from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
@@ -27,6 +27,9 @@ setup_permissioned_tool(
     diagnostics_enabled_fn=diagnostics_enabled,
     wrap_tool_fn=wrap_tool,
     logger=logger,
+    # Reads capped per NAS; writes, when they come, one at a time in request order.
+    # No connection_decorator: there is no connection wait, the first tool call logs in from inside the gate.
+    gate_provider=get_operation_gate,
 )
 
 
