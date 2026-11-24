@@ -63,9 +63,12 @@ def test_compose_sitemanager_is_opt_in_loopback_and_outside_the_relay():
         "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
         "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN",
         "UNIFI_MCP_HTTP_AUTH_TOKEN",
+        # Only the server-level trusted networks: the shared list never reaches it.
+        "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TRUSTED_NETWORKS",
     }
     # Passed through bare, so an unset token stays unset instead of empty.
     assert "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_SITEMANAGER_MCP_HTTP_AUTH_TRUSTED_NETWORKS" in service["environment"]
     assert "UNIFI_MCP_HTTP_AUTH_TOKEN" in service["environment"]
     assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
     assert "UNIFI_MCP_PORT=3003" in service["environment"]
@@ -107,9 +110,12 @@ def test_compose_innerspace_is_opt_in_loopback_and_outside_the_relay():
         "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
         "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN",
         "UNIFI_MCP_HTTP_AUTH_TOKEN",
+        # Only the server-level trusted networks: the shared list never reaches it.
+        "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TRUSTED_NETWORKS",
     }
     # Passed through bare, so an unset token stays unset instead of empty.
     assert "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TRUSTED_NETWORKS" in service["environment"]
     assert "UNIFI_MCP_HTTP_AUTH_TOKEN" in service["environment"]
     assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
     assert "UNIFI_MCP_PORT=3005" in service["environment"]

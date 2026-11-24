@@ -166,4 +166,5 @@ async def serve_setup_required(
         )
         if http_enabled
         else None,
+        env_prefix=env_prefix,
     )

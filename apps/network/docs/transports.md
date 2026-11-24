@@ -125,7 +125,7 @@ Uses `/sse` (event stream) + `/messages/` (JSON-RPC) endpoints.
 
 ## HTTP Deployment Security
 
-These instructions apply to Network, Protect, and Access (ports 3000, 3001, and 3002), and to Site Manager (port 3003). Docker Compose starts Site Manager only with the opt-in `sitemanager` profile, and the Cloud Relay does not reach it unless you add it to `UNIFI_RELAY_SERVERS`, after which any relay token for that location can read the whole account. Its HTTP endpoint exposes the inventory of every console on the UI account, so keep it on loopback and set a bearer token. MCP HTTP has no caller authentication unless you set the optional [bearer token](#http-bearer-token). Without it, every process that reaches the backend can invoke enabled tools with the server's controller privileges. Host/Origin validation and `confirm=True` do not authenticate callers or verify human approval.
+These instructions apply to Network, Protect, and Access (ports 3000, 3001, and 3002), to Site Manager (port 3003), and to InnerSpace (port 3005). Docker Compose starts Site Manager only with the opt-in `sitemanager` profile, and the Cloud Relay does not reach it unless you add it to `UNIFI_RELAY_SERVERS`, after which any relay token for that location can read the whole account. Its HTTP endpoint exposes the inventory of every console on the UI account, so keep it on loopback and set a bearer token. MCP HTTP has no caller authentication unless you set the optional [bearer token](#http-bearer-token). Without it, every process that reaches the backend can invoke enabled tools with the server's controller privileges. Host/Origin validation and `confirm=True` do not authenticate callers or verify human approval.
 
 Package defaults disable HTTP and bind to `127.0.0.1` when enabled. For an existing standalone container deployment, explicitly set `UNIFI_MCP_HTTP_ENABLED=true` and `UNIFI_MCP_HOST=0.0.0.0` inside the container, and publish only on host loopback as above. Recreate existing Compose services to apply the new loopback port mappings. Compose's relay still reaches the servers by service name on the trusted container network.
 
@@ -149,7 +149,25 @@ export UNIFI_MCP_HTTP_AUTH_TOKEN="$(openssl rand -hex 32)"
 
 The token is one static secret with no scopes or expiry. It authenticates the caller; it does not encrypt the connection, so carry it only over TLS or loopback. The intended shape is a TLS tunnel or reverse proxy (Cloudflare Tunnel, Tailscale, an ingress) forwarding to a backend that still binds loopback or a private container network. It does not replace the Host/Origin allowlist, policy gates, or `confirm=True`.
 
-The Cloud Relay sidecar does not send a token to the local servers yet, so leave it unset on servers the relay reaches.
+The Cloud Relay sidecar does not send a token to the local servers yet, so leave it unset on servers the relay reaches, or give the relay container a pinned address and list that address in [trusted networks](#trusted-networks).
+
+### Trusted networks
+
+A reverse proxy or tunnel that authenticates callers itself (Cloudflare Access, an authenticating ingress, the Cloud Relay sidecar) often cannot add the server's static token, and may send its own `Authorization` header. `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` lists the addresses such a proxy connects from; their requests skip the token, and every other caller still needs it.
+
+```bash
+export UNIFI_MCP_HTTP_AUTH_TOKEN="$(openssl rand -hex 32)"
+export UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS=192.0.2.10   # the proxy container's pinned address
+```
+
+- List the proxy's own address (`/32` or `/128`), pinned so it cannot change, for example with Compose `ipv4_address` on a network with a fixed subnet. Never list a whole container network: every peer on it skips the token.
+- A Docker network's gateway address (`172.17.0.1` on Docker's default bridge) carries host traffic to published ports. Trusting a range that includes it lets every process on the host skip the token.
+- A proxy on the same host that connects over loopback (`127.0.0.1`, `::1`) cannot be told apart from any other local process. Listing loopback trusts them all.
+- The check uses the TCP peer address. Uvicorn's `X-Forwarded-For` handling is turned off when trusted networks are set, so a header cannot claim a trusted source. Host/Origin checks still apply.
+- Entries are comma-separated IP addresses or CIDR networks, IPv4 or IPv6. Startup is refused for an entry that does not parse, for an IPv4-mapped entry (`::ffff:…`; write the IPv4 form), and for entries that together trust every IPv4 or every IPv6 address.
+- Without a token it has no effect, and the server logs a warning. With one, startup logs the exempted addresses at WARNING.
+- `UNIFI_<SERVER>_MCP_HTTP_AUTH_TRUSTED_NETWORKS` (`NETWORK`, `PROTECT`, `ACCESS`, `SITEMANAGER`, `INNERSPACE`) replaces the shared list for one server. Set it empty to turn the exemption off on that server while the others keep the shared list; unlike the token, empty here does not fall back. Errors and the startup log name the variable that was read.
+- Docker Compose passes both spellings from `.env` to Network, Protect and Access. The Site Manager and InnerSpace services receive only their own `UNIFI_SITEMANAGER_…` or `UNIFI_INNERSPACE_…` spelling from the shell, never the shared one.
 
 ## Reverse Proxy
 
