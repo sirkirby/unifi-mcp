@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from unifi_core.drive.managers.connection_manager import DriveWriteNotSent
+from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, DriveWriteOutcomeUnknown
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
 from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
@@ -165,6 +165,17 @@ async def test_a_change_stopped_before_it_was_sent_reports_nothing_applied(files
 
     assert result["success"] is False and result["mutation_applied"] is False
     assert "nothing was changed" in result["error"]
+
+
+async def test_a_change_sent_and_never_answered_reports_an_unknown_outcome(files):
+    files.add_nfs_connection.side_effect = DriveWriteOutcomeUnknown(
+        "UniFi Drive did not answer the change, so whether it was applied is unknown"
+    )
+
+    result = await nfs.drive_add_nfs_connection(CLIENT, [{"id": DRIVE_ID}], confirm=True)
+
+    assert result["success"] is False and result["mutation_applied"] is None
+    assert "whether it was applied is unknown" in result["error"]
 
 
 async def test_an_nfs_change_stopped_before_it_was_sent_reports_nothing_applied(files):

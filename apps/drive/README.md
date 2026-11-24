@@ -82,7 +82,7 @@ Every tool call takes a read slot at this server's operation gate for the NAS be
 | `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
 | `UNIFI_DRIVE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
 
-A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write; nothing is sent to the NAS. A confirmed write whose budget runs out before its change is sent also returns `mutation_applied: false`; one cut off after the change was sent returns `mutation_applied: null`, and the NAS should be read back before retrying.
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write; nothing is sent to the NAS. A confirmed write whose budget runs out before its change is sent also returns `mutation_applied: false`; one cut off after the change was sent, or never answered, returns `mutation_applied: null`, and the NAS should be read back before retrying.
 
 ## Tools
 
