@@ -205,6 +205,19 @@ _SYSTEM = {
             }
         ]
     },
+    "apps": {
+        "controllers": [
+            {
+                "name": "drive",
+                "type": "controller",
+                "version": "4.4.31",
+                "versionRaw": "4.4.31",
+                "updateAvailable": "4.5.7",
+                "state": "active",
+                "isRunning": True,
+            }
+        ]
+    },
 }
 
 

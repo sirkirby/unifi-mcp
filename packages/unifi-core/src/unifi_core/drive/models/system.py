@@ -2,6 +2,8 @@
 
 ``/api/system`` returns far more than this: the console's geographic location,
 public IP, owner account and cloud identifiers. Only the fields below are kept.
+``firmware_version`` is UniFi OS; the Drive application reports its own version
+in ``apps.controllers[]``, as the entry named ``drive``.
 """
 
 from __future__ import annotations
@@ -27,6 +29,10 @@ class DriveSystemInfo(BaseModel):
     firmware_update_available: str | None = Field(
         default=None, description="Firmware version available as an update, if any"
     )
+    drive_version: str | None = Field(default=None, description="UniFi Drive application version")
+    drive_update_available: str | None = Field(
+        default=None, description="UniFi Drive application version available as an update, if any"
+    )
     device_state: str | None = Field(default=None, description="Console state, such as setup or updateAvailable")
     is_setup: bool | None = Field(default=None, description="Whether initial setup is complete")
     uptime_seconds: float | None = Field(default=None, description="Seconds since the console started")
@@ -47,11 +53,21 @@ def _own_device(system: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _drive_app(system: dict[str, Any]) -> dict[str, Any]:
+    """The Drive application's entry in ``apps.controllers``, which carries its version."""
+    for controller in as_list(as_dict(system.get("apps")).get("controllers")):
+        entry = as_dict(controller)
+        if entry.get("name") == "drive":
+            return entry
+    return {}
+
+
 def system_info_from_api(raw: Any) -> DriveSystemInfo:
     """Build :class:`DriveSystemInfo` from a ``GET /api/system`` body."""
     system = as_dict(raw)
     hardware = as_dict(system.get("hardware"))
     device = _own_device(system)
+    drive = _drive_app(system)
     cpu = as_dict(system.get("cpu"))
     memory = as_dict(system.get("memory"))
     update = text(device.get("updateAvailable")) or text(as_dict(device.get("updateAvailable")).get("version"))
@@ -65,6 +81,8 @@ def system_info_from_api(raw: Any) -> DriveSystemInfo:
         mac=text(system.get("mac")),
         firmware_version=text(hardware.get("firmwareVersion")) or text(device.get("firmware")),
         firmware_update_available=update,
+        drive_version=text(drive.get("version")) or text(drive.get("versionRaw")),
+        drive_update_available=text(drive.get("updateAvailable")),
         device_state=text(system.get("deviceState")),
         is_setup=flag(system.get("isSetup")),
         uptime_seconds=number(system.get("uptime")),

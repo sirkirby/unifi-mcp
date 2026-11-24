@@ -49,6 +49,7 @@ async def test_system_info_keeps_only_listed_fields(connection, console):
 
     assert info["shortname"] == "UNASPRO8" and info["firmware_version"] == "5.0.12"
     assert info["firmware_update_available"] == "5.0.17+3f9b9ea"
+    assert (info["drive_version"], info["drive_update_available"]) == ("4.4.31", "4.5.7")
     assert info["memory_total_kb"] == 16639296
     dumped = str(info)
     assert "198.51.100.1" not in dumped and "synthetic location" not in dumped and "synthetic-owner" not in dumped
@@ -95,6 +96,24 @@ async def test_get_shared_drive_refuses_a_path_like_id(connection, console):
     with pytest.raises(UniFiValidationError):
         await SharedDriveManager(connection).get_shared_drive("../storage")
     assert console.requests == []
+
+
+async def test_get_shared_drive_with_a_non_uuid_id_is_not_found_without_a_request(connection, console):
+    # Drive answers 500, not 404, for an id that isn't a UUID.
+    with pytest.raises(UniFiNotFoundError, match="not-a-drive"):
+        await SharedDriveManager(connection).get_shared_drive("not-a-drive")
+    assert console.requests == []
+
+
+async def test_system_info_without_a_drive_app_entry_leaves_its_version_unset(connection, console):
+    system = fx.system()
+    del system["apps"]
+    console.reply("GET", "/api/system", system)
+
+    info = await DriveSystemManager(connection).get_system_info()
+
+    assert info.drive_version is None and info.drive_update_available is None
+    assert info.firmware_version == "5.0.12"
 
 
 async def test_get_shared_drive_not_found(connection, console):
