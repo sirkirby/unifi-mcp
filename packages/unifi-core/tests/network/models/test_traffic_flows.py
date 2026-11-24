@@ -46,7 +46,8 @@ def test_serializer_maps_core_and_traffic_data():
     assert flow.bytes_tx == 2310
     assert flow.flow_start_time == 1779742800000
     assert flow.time == 1779742801200
-    assert "region" not in flow.destination.model_dump()
+    # This recorded record has no region; the manager's dump must not invent one.
+    assert "region" not in flow.destination.model_dump(exclude_none=True)
 
 
 def test_query_accepts_port_filters_and_rejects_out_of_range():
@@ -200,3 +201,53 @@ def test_statistics_skips_null_region_subentry():
 
     stats = traffic_flow_statistics_from_controller({"allowed_count_by_region_by_risk": {"US": {"low": 5}, "DE": None}})
     assert stats.allowed_count_by_region_by_risk == {"US": {"low": 5}}
+
+
+def test_endpoints_carry_the_region():
+    flow = traffic_flow_from_controller({"source": {"region": "DE"}, "destination": {"region": "US"}})
+    assert (flow.source.region, flow.destination.region) == ("DE", "US")
+    blank = traffic_flow_from_controller({"source": {"region": ""}, "destination": {"region": 7}})
+    assert (blank.source.region, blank.destination.region) == (None, None)
+
+
+def test_destination_region_filter_matches_the_controllers_uppercase_codes():
+    # A lowercase code returns 200 with zero flows.
+    query = TrafficFlowQuery(time_from=1, time_to=2, destination_region=["us", "De"])
+    assert query.destination_region == ["US", "DE"]
+
+
+def test_filters_that_match_nothing_by_spelling_are_normalized():
+    query = TrafficFlowQuery(
+        time_from=1, time_to=2, destination_region=[" nl "], destination_domain=[" WWW.Example.Test "], service=[" DNS"]
+    )
+    assert query.destination_region == ["NL"]
+    assert query.destination_domain == ["www.example.test"]
+    assert query.service == ["DNS"]
+
+
+_LIST_FILTERS = [name for name, field in TrafficFlowQuery.model_fields.items() if "list[" in str(field.annotation)]
+
+
+@pytest.mark.parametrize("name", _LIST_FILTERS)
+def test_an_empty_filter_is_refused_not_dropped(name):
+    with pytest.raises(ValidationError):
+        TrafficFlowQuery(time_from=1, time_to=2, **{name: []})
+
+
+@pytest.mark.parametrize("name", [name for name in _LIST_FILTERS if not name.endswith("_port")])
+@pytest.mark.parametrize("value", ["", "  "])
+def test_a_blank_filter_value_is_refused(name, value):
+    with pytest.raises(ValidationError):
+        TrafficFlowQuery(time_from=1, time_to=2, **{name: [value]})
+
+
+@pytest.mark.parametrize(
+    "policies,domains,expected",
+    [
+        (["x", None, {"type": "FIREWALL"}], ["a.test", None, 7], ([{"type": "FIREWALL"}], ["a.test"])),
+        ({"a": 1}, "a.test", ([], [])),
+    ],
+)
+def test_malformed_entries_do_not_fail_the_page(policies, domains, expected):
+    flow = traffic_flow_from_controller({"policies": policies, "destination": {"domains": domains}})
+    assert (flow.policies, flow.destination.domains) == expected

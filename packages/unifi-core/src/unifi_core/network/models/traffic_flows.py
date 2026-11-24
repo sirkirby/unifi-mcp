@@ -48,6 +48,38 @@ class TrafficFlowQuery(BaseModel):
     destination_port: Optional[list[Port]] = Field(default=None, description="Filter by destination port")
     destination_region: Optional[list[str]] = Field(default=None, description="Filter by destination region")
 
+    @field_validator(
+        "risk",
+        "action",
+        "direction",
+        "protocol",
+        "service",
+        "source_mac",
+        "source_ip",
+        "source_host",
+        "source_network_id",
+        "source_port",
+        "destination_domain",
+        "destination_ip",
+        "destination_port",
+        "destination_region",
+    )
+    @classmethod
+    def _refuse_empty_filter(cls, v: Optional[list[Any]]) -> Optional[list[Any]]:
+        """An empty list would be sent as no filter, and a blank value matches nothing."""
+        if v is None:
+            return None
+        values = [item.strip() if isinstance(item, str) else item for item in v]
+        if not values or "" in values:
+            raise ValueError("filter needs at least one value and no blank values; omit it for no filter")
+        return values
+
+    @field_validator("destination_domain")
+    @classmethod
+    def _normalize_destination_domain(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        """Lowercase the filter: an uppercase domain also returns 200 with zero flows."""
+        return None if v is None else [domain.lower() for domain in v]
+
     @field_validator("source_mac")
     @classmethod
     def _normalize_source_mac(cls, v: Optional[list[str]]) -> Optional[list[str]]:
@@ -59,6 +91,12 @@ class TrafficFlowQuery(BaseModel):
         if v is None:
             return None
         return [normalize_mac(m) or m for m in v]
+
+    @field_validator("destination_region")
+    @classmethod
+    def _normalize_destination_region(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        """Uppercase the filter: a lowercase region code also returns 200 with zero flows."""
+        return None if v is None else [code.upper() for code in v]
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -84,6 +122,11 @@ class TrafficFlowEndpoint(BaseModel):
     )
     zone_name: Optional[str] = Field(
         default=None, description="Firewall zone name", json_schema_extra={"mutable": False}
+    )
+    region: Optional[str] = Field(
+        default=None,
+        description="Region (uppercase country code) the controller records for the address",
+        json_schema_extra={"mutable": False},
     )
     domains: list[str] = Field(
         default_factory=list, description="Resolved domains (destination)", json_schema_extra={"mutable": False}
@@ -139,8 +182,14 @@ def _port(value: Any) -> Optional[int]:
     return value
 
 
+def _items(value: Any, kind: type) -> list[Any]:
+    # Likewise a malformed list entry drops that entry rather than failing the page.
+    return [item for item in value if isinstance(item, kind)] if isinstance(value, list) else []
+
+
 def _endpoint_from_controller(raw: Any) -> TrafficFlowEndpoint:
     name = _get(raw, "client_name") or _get(raw, "host_name")
+    region = _get(raw, "region")
     return TrafficFlowEndpoint(
         name=name or None,
         mac=_get(raw, "mac") or None,
@@ -148,7 +197,8 @@ def _endpoint_from_controller(raw: Any) -> TrafficFlowEndpoint:
         port=_port(_get(raw, "port")),
         network_name=_get(raw, "network_name") or None,
         zone_name=_get(raw, "zone_name") or None,
-        domains=list(_get(raw, "domains", []) or []),
+        region=region if isinstance(region, str) and region else None,
+        domains=_items(_get(raw, "domains"), str),
     )
 
 
@@ -172,7 +222,7 @@ def traffic_flow_from_controller(obj: Any) -> TrafficFlow:
         bytes_tx=_get(td, "bytes_tx"),
         source=_endpoint_from_controller(_get(obj, "source", {}) or {}),
         destination=_endpoint_from_controller(_get(obj, "destination", {}) or {}),
-        policies=list(_get(obj, "policies", []) or []),
+        policies=_items(_get(obj, "policies"), dict),
     )
 
 
