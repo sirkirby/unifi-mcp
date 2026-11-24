@@ -359,7 +359,7 @@ def test_tracked_plugin_edits_require_bump(repo: Path, stage: bool) -> None:
         versions.check(repo, "base")
 
 
-@pytest.mark.parametrize("product", ["network", "protect", "access", "sitemanager", "innerspace"])
+@pytest.mark.parametrize("product", ["network", "protect", "access", "sitemanager", "innerspace", "drive"])
 def test_update_pin_keeps_each_product_and_other_arguments(tmp_path: Path, product: str) -> None:
     bundle = tmp_path / f"unifi-{product}"
     for filename in versions.MANIFESTS:
@@ -474,27 +474,29 @@ def test_sitemanager_present_but_malformed_bundle_is_not_skipped(repo: Path) -> 
         versions.sync(repo, "sitemanager/v0.1.0")
 
 
-def test_innerspace_tag_triggers_consolidated_writeback() -> None:
+@pytest.mark.parametrize("product", ["innerspace", "drive"])
+def test_bundleless_tag_triggers_consolidated_writeback(product: str) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/bump-plugin-versions.yml").read_text())
     triggers = workflow.get("on", workflow.get(True))  # PyYAML's YAML 1.1 boolean spelling.
-    assert "innerspace/v*.*.*" in triggers["push"]["tags"]
+    assert f"{product}/v*.*.*" in triggers["push"]["tags"]
 
 
-def test_innerspace_tag_syncs_server_without_a_bundle(repo: Path) -> None:
+@pytest.mark.parametrize("product", ["innerspace", "drive"])
+def test_bundleless_tag_syncs_server_without_a_bundle(repo: Path, product: str) -> None:
     script = repo / "scripts/generate_server_manifest.py"
     script.parent.mkdir()
     script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
     before_network = versions.plugin_state(repo / "plugins/unifi-network")
     before_changelog = (repo / versions.CHANGELOG).read_text()
-    versions.sync(repo, "innerspace/v0.1.0")
-    server = json.loads((repo / "apps/innerspace/server.json").read_text())
+    versions.sync(repo, f"{product}/v0.1.0")
+    server = json.loads((repo / f"apps/{product}/server.json").read_text())
     assert server["version"] == "0.1.0"
     assert server["packages"][0]["version"] == "0.1.0"
-    assert not (repo / "plugins/unifi-innerspace").exists()
+    assert not (repo / f"plugins/unifi-{product}").exists()
     assert versions.plugin_state(repo / "plugins/unifi-network") == before_network
     assert (repo / versions.CHANGELOG).read_text() == before_changelog
     before = versions.git(repo, "diff")
-    versions.sync(repo, "innerspace/v0.1.0")
+    versions.sync(repo, f"{product}/v0.1.0")
     assert versions.git(repo, "diff") == before
 
 

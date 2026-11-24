@@ -21,14 +21,14 @@ SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
 )
-PACKAGE_PIN = re.compile(r"(unifi-(network|protect|access|sitemanager|innerspace)-mcp)==(.+)")
+PACKAGE_PIN = re.compile(r"(unifi-(network|protect|access|sitemanager|innerspace|drive)-mcp)==(.+)")
 MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
 # Claude Code's servers are inline in its manifest; Codex and OpenClaw run this file's.
 CODEX_MCP = ".mcp.codex.json"
 MARKETPLACES = (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json")
-PRODUCTS = ("network", "protect", "access", "sitemanager", "innerspace")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "innerspace", "drive")
 # Servers that release before, or without, a plugin bundle; their server.json still follows the tag.
-BUNDLELESS_PRODUCTS = frozenset({"sitemanager", "innerspace"})
+BUNDLELESS_PRODUCTS = frozenset({"sitemanager", "innerspace", "drive"})
 CHANGELOG = "CHANGELOG.md"
 CHANGELOG_MARKER = "<!-- New entries go below this line, newest first; the release writeback inserts here. -->"
 REPO_URL = "https://github.com/sirkirby/unifi-mcp"

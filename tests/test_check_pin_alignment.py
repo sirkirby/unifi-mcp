@@ -638,11 +638,13 @@ def test_api_floor_contract_requires_every_inventory_input(monkeypatch, model):
         exec(_module()._API_CATALOG_FLOOR_CONTRACT, {})
 
 
-def test_innerspace_is_a_floor_checked_downstream_package() -> None:
+@pytest.mark.parametrize("product", ["innerspace", "drive"])
+def test_new_server_is_a_floor_checked_downstream_package(product: str) -> None:
     module = _module()
-    assert module.SECURITY_FLOORS["unifi-innerspace-mcp"] == module.MCP_SECURITY_FLOORS
-    assert module.FLOOR_ONLY_CORE_EXTRAS["unifi-innerspace-mcp"] == ""
-    downstream = {item.dist_name: item for item in module.DOWNSTREAM_PACKAGES}["unifi-innerspace-mcp"]
-    assert downstream.src == module.REPO / "apps/innerspace"
-    assert downstream.smoke_import == "unifi_innerspace_mcp.main"
-    assert downstream.root_module == "unifi_innerspace_mcp"
+    dist = f"unifi-{product}-mcp"
+    assert module.SECURITY_FLOORS[dist] == module.MCP_SECURITY_FLOORS
+    assert module.FLOOR_ONLY_CORE_EXTRAS[dist] == ""
+    downstream = {item.dist_name: item for item in module.DOWNSTREAM_PACKAGES}[dist]
+    assert downstream.src == module.REPO / f"apps/{product}"
+    assert downstream.smoke_import == f"unifi_{product}_mcp.main"
+    assert downstream.root_module == f"unifi_{product}_mcp"
