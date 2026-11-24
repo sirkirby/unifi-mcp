@@ -25,6 +25,8 @@ _smoke = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _smoke
 _spec.loader.exec_module(_smoke)
 
+# InnerSpace is not listed: it has no incident evidence tool. Its own tests check that lazy mode lists
+# exactly its read-only tools directly and reaches its writes only through innerspace_execute.
 SERVERS = {
     "network": ("unifi-network-mcp", "unifi", "unifi_get_incident_evidence"),
     "protect": ("unifi-protect-mcp", "protect", "protect_get_incident_evidence"),

@@ -86,6 +86,44 @@ Positions are in the plan's own coordinate frame, measured from the plan's top-l
 
 The plan image resources refuse an image above 8,000,000 bytes, and one that is not an image of the type the plan's address promises, with fixed text. Each resource serves one type: a JPEG plan read through `innerspace://plans/{plan_id}/image` is refused with text naming `innerspace://plans/{plan_id}/image.jpg`, and the other way round. Use the `resource_uri` that `innerspace_get_plan_asset` returns. Over `unifi-api-server` no image is served at all.
 
+## Writes
+
+### "InnerSpace is not installed" or "not running"
+
+Every write and its preview read the app list first and stop here, before anything is sent. Check the app with `innerspace_get_status` and start it in UniFi OS.
+
+### "an object created by an identical earlier call was changed"
+
+Ids for new objects follow from the arguments. An earlier identical call created them, and since then one has changed, or some are gone while others remain, so the call is refused rather than sent. Change an argument, or remove the existing object first. If all of them are gone, the call is not refused: it creates them again under the same ids.
+
+### "is disabled by policy" or "is in read-only mode"
+
+A `UNIFI_POLICY_INNERSPACE_*` gate set to `false`, or `UNIFI_INNERSPACE_READ_ONLY` (or `UNIFI_READ_ONLY`), blocks the tool, its preview included. The message names the variable to change. See [permissions.md](permissions.md).
+
+### "item N is not a wall on this plan now"
+
+Between the preview and the confirm the object was removed, moved to another plan or changed type, for example in the browser editor. Nothing was sent. Read the plan again and repeat the call with current ids.
+
+### Frame coordinates are refused
+
+The plan's image is shifted or scaled, the plan has no usable scale or image size, or the position is outside the image. Pass `coordinates: "plan_units"` with the console's own values, or change only fields without positions.
+
+### `success: false` with `mutation_applied: false`
+
+The console refused the write (an HTTP 4xx, or UniFi OS refusing it again on a fresh session) and the read-back shows no change; nothing was applied. The `error` says what the console answered. The same call can be sent again once the cause is fixed.
+
+### `success: false` with `mutation_applied: null`
+
+The answer was lost, the console's answer was not a refusal (a 5xx, 429 or an unreadable answer) and the read-back did not show every change after a few re-reads, or the read-back shows only part of the change; an edit made at the same time, from another server process or the InnerSpace app, can cause this. Whether the change is on the console is unknown. Read the plan (`innerspace_list_walls`, or `innerspace_get_project` with `include_shapes`) before retrying. A repeated create whose first call did land is reported as already applied and sends nothing.
+
+### "the console refused the session, so the change was not sent"
+
+The session had expired. The server logged in again but did not resend the write, so nothing changed. Send the same call again.
+
+### "the console account cannot make this change"
+
+The console refused the write again on the session it had just issued: the account can read InnerSpace but not change it. Nothing was sent again and nothing changed. Use an account that can edit InnerSpace, such as a Super Admin.
+
 ## Network and TLS
 
 ### Certificate errors
@@ -106,7 +144,7 @@ One request waits up to 30 seconds, and a login attempt 15. Check that the conso
 ### A tool is not in the client's tool list
 
 1. If only `innerspace_setup_status` is listed, no host is set (see above).
-2. In `meta_only` mode the nine tools are not listed; reach them through `innerspace_execute`, or switch to the default `lazy` mode.
+2. In `meta_only` mode no domain tool is listed; reach them through `innerspace_execute`, or switch to the default `lazy` mode. In `lazy` mode the write tools are not listed directly: reach them through `innerspace_execute`, or list them with `innerspace_load_tools`.
 3. In `eager` mode, `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` may be filtering them out.
 4. Some clients cache the tool list. Start a new session after changing the registration mode.
 
@@ -114,7 +152,7 @@ One request waits up to 30 seconds, and a login attempt 15. Check that the conso
 
 ### The client asks for approval for `innerspace_execute`, or refuses it
 
-`innerspace_execute` and `innerspace_batch` are not marked read-only, because a dispatcher cannot promise what it will run. Call the tool by name instead; all nine domain tools are listed directly in the default lazy mode and are marked read-only. See [permissions.md](permissions.md#meta-tools-and-read-only-clients).
+`innerspace_execute` and `innerspace_batch` are not marked read-only, because a dispatcher cannot promise what it will run. To read, call the tool by name instead; the nine read tools are listed directly in the default lazy mode and are marked read-only. The write tools are reached through the dispatcher, so approving it is the approval for the write. See [permissions.md](permissions.md#meta-tools-and-read-only-clients).
 
 ## Docker
 

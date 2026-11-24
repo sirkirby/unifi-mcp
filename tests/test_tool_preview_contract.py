@@ -19,7 +19,15 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 TOOL_MODULES = sorted(ROOT.glob("apps/*/src/*/tools/*.py"))
 PREVIEW_HELPERS = frozenset(
-    ("preview_response", "create_preview", "update_preview", "delete_preview", "toggle_preview")
+    (
+        "preview_response",
+        "create_preview",
+        "update_preview",
+        "delete_preview",
+        "toggle_preview",
+        # InnerSpace's response helper, which sets requires_confirmation on a core preview.
+        "write_preview",
+    )
 )
 
 # Tools whose every path returns a failure, so they have no preview to tokenise.
@@ -98,7 +106,7 @@ TOOLS = _confirm_tools()
 
 def test_scan_finds_confirm_tools_on_every_server():
     servers = {path.relative_to(ROOT).parts[1] for path, _ in TOOLS.values()}
-    assert servers == {"network", "protect", "access", "drive"}
+    assert servers == {"network", "protect", "access", "innerspace", "drive"}
     assert NO_PREVIEW_TOOLS <= TOOLS.keys()
 
 

@@ -84,7 +84,8 @@ There is no plugin for it yet; add it to your MCP client's config with the same
 command and variables. The container image is
 `ghcr.io/sirkirby/unifi-innerspace-mcp:latest`.
 
-It has nine read-only domain tools. Stdio is the default; HTTP is opt-in and
+It has nine read tools and 15 write tools for walls, attenuation objects and plan
+settings, which preview first and apply on `confirm=true`. Stdio is the default; HTTP is opt-in and
 listens on port 3005. See the [InnerSpace README](apps/innerspace/README.md).
 
 ## Drive (UniFi NAS)

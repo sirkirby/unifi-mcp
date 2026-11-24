@@ -313,11 +313,13 @@ A probe without a connection answers `503` with `"ok": false` and
 
 ## InnerSpace console product
 
-The API server serves the nine reads of the [InnerSpace MCP server](../innerspace/)
-for a controller that declares the `innerspace` product. It is a read-only
-console product: it reads the console's InnerSpace application through a
-console login session, through the same `unifi-core` managers as the MCP
-server. It needs `unifi-api-server` 0.34.2 or later.
+The API server serves the nine reads and the 15 write actions of the
+[InnerSpace MCP server](../innerspace/) for a controller that
+declares the `innerspace` product. It reaches the console's InnerSpace
+application through a console login session, through the same `unifi-core`
+managers as the MCP server. The writes need the next API release; until then,
+run the API from a source checkout
+([Quickstart A](#a-local-clone-developing-or-testing-changes)).
 
 ### Register the controller
 
@@ -354,7 +356,7 @@ query parameter, and call the same manager methods:
 |---|---|
 | REST | `GET /v1/sites/{site_id}/innerspace/status`, `GET /v1/sites/{site_id}/innerspace/project`, `GET /v1/sites/{site_id}/innerspace/floor-plans`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/walls`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/devices`, `GET /v1/sites/{site_id}/innerspace/floor-plans/{plan_id}/asset`, `GET /v1/sites/{site_id}/innerspace/access-points`, `GET /v1/sites/{site_id}/innerspace/switches`, `GET /v1/sites/{site_id}/innerspace/inventory` |
 | GraphQL | The `innerspace` namespace: `status`, `project`, `floorPlans`, `walls`, `placedDevices`, `accessPoints`, `switches`, `inventory`, `planAsset` |
-| Actions | `POST /v1/actions/{tool_name}` for the nine `innerspace_*` read tools |
+| Actions | `POST /v1/actions/{tool_name}` for the nine `innerspace_*` read tools (writes: see [Writing InnerSpace](#writing-innerspace)) |
 
 The path `site_id` is the controller site of the other console products and is
 **ignored** for InnerSpace. The InnerSpace site filter is the query parameter
@@ -376,6 +378,60 @@ curl -s http://localhost:8080/v1/graphql \
 curl -s -X POST http://localhost:8080/v1/actions/innerspace_list_walls \
   -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
   -d '{"controller": "<id>", "args": {"plan_id": "<plan_id>", "limit": 100}}'
+```
+
+### Writing InnerSpace
+
+The 15 write tools are catalog actions only: `POST /v1/actions/{tool_name}`
+with the `write` scope. There is no REST write route and no GraphQL mutation.
+
+| Category | Actions |
+|---|---|
+| `walls` | `innerspace_create_walls`, `innerspace_update_walls`, `innerspace_remove_walls` |
+| `wall_types` | `innerspace_create_wall_type`, `innerspace_update_wall_type` |
+| `attenuation` | `innerspace_create_attenuation_objects`, `innerspace_update_attenuation_objects`, `innerspace_remove_attenuation_objects`, `innerspace_create_attenuation_object_type`, `innerspace_update_attenuation_object_type` |
+| `floor_plans` | `innerspace_rename_floor_plan`, `innerspace_set_floor_attenuation`, `innerspace_reorder_floor_plans`, `innerspace_set_plan_scale` |
+| `project` | `innerspace_set_project_unit` |
+
+The arguments are the MCP tool's, without `confirm` (see the
+[InnerSpace tools](../innerspace/docs/tools.md)); an unknown argument is refused. Field names match the reads (`x1`, `y1`,
+`x2`, `y2`, `variant`, `wall_type_id`, ...). Every write that takes lengths
+needs `unit`. A batch takes at most 100 creates or updates, or 50 removes.
+
+- `confirm: false` returns a preview of the request only: nothing is read from
+  or sent to the console. The MCP tool's preview, which reads the plan and shows
+  current values and effects, is not available here.
+- `confirm: true` calls the core `apply_*` method: it reads the project fresh,
+  refuses a shape that is gone, changed type or moved to another plan since,
+  sends one write and reads it back. The
+  response is the core result: `success`, `mutation_applied`, `operation`,
+  `created_ids`, `effects`, `warnings`, `missing`, and `noop` when nothing was
+  sent: `already_applied` (an earlier identical create already landed) or
+  `none_found` (none of the ids a remove names is in the project). `success` is `false` whenever the
+  write was not applied (`mutation_applied: false` after a send) or its outcome
+  is unknown (`mutation_applied: null`; read before retrying). A call that
+  changes nothing answers `success: true, mutation_applied: false`.
+- A write is refused before anything is sent when InnerSpace is not installed
+  or not running on the console.
+- One write runs at a time per controller connection of the API server. The
+  InnerSpace MCP server, the browser editor and other processes are not locked
+  out, which is why a confirm reads again. A field the call does not name keeps
+  the value read at the confirm, so an edit made in the InnerSpace app at the
+  same moment can be overwritten.
+- `UNIFI_READ_ONLY` or `UNIFI_INNERSPACE_READ_ONLY`, and the policy gates
+  `UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>` (and their server-wide and
+  global forms), refuse previews and confirmed calls with HTTP `403` and a
+  `denied` audit row. Removals and `innerspace_set_plan_scale` are `DELETE`
+  actions. See [permissions](../../docs/permissions.md).
+- Failures keep the action endpoint's generic contract: HTTP `200`,
+  `success: false`, fixed text, the error class audited.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/actions/innerspace_create_walls \
+  -H "Authorization: Bearer $WRITE_KEY" -H "Content-Type: application/json" \
+  -d '{"controller": "<id>", "site": "default", "confirm": true,
+       "args": {"plan_id": "<plan_id>", "unit": "metric",
+                "walls": [{"x1": 1, "y1": 1, "x2": 3, "y2": 1, "variant": "drywall"}]}}'
 ```
 
 ### Plan images are not served
@@ -409,10 +465,13 @@ InnerSpace not being installed is a `502`, never a `404`. Over the action
 endpoint, a failure keeps the repository's generic contract: HTTP `200` with
 `success: false`, fixed text, and the error class audited as `error_kind`.
 
-### What read exposes, and redaction
+### What read and write expose, and redaction
 
 Every key with the `read` scope can read the project's floor plans, wall
-positions and device placements for any registered InnerSpace controller.
+positions and device placements for any registered InnerSpace controller, and
+every key with the `write` scope can change the layout (walls, wall types,
+attenuation objects and their types, plan title, floor attenuation, order and
+scale, and the project unit) of any registered InnerSpace controller.
 Response redaction hides secret-looking fields by name and is on by default;
 MAC addresses, serial numbers and plan geometry are not redacted.
 

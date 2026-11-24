@@ -162,10 +162,11 @@ Use the release-pipeline skill for the package map and key-only smoke target.
 The fifth MCP app is `apps/innerspace` (`unifi-innerspace-mcp`, tag namespace
 `innerspace/v*`, hatch-vcs `--match innerspace/v*`). It has no plugin bundle yet, so there
 is no plugin reference to regenerate. Like Site Manager, it states its domain tools only:
-the published count is `len(module_map)` (nine: `innerspace_get_status`,
+the published count is `len(module_map)` (24: nine reads, `innerspace_get_status`,
 `innerspace_get_project`, `innerspace_list_floor_plans`, `innerspace_list_walls`,
 `innerspace_list_placed_devices`, `innerspace_list_access_points`,
-`innerspace_list_switches`, `innerspace_list_inventory`, `innerspace_get_plan_asset`),
+`innerspace_list_switches`, `innerspace_list_inventory`, `innerspace_get_plan_asset`, and
+15 layout writes),
 without the six shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
 convention, and `tests/docs/test_site_content.py` checks the count in the root README,
 `docs/ARCHITECTURE.md` and `apps/innerspace/docs/tools.md`. A change to a tool signature

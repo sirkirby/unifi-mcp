@@ -169,7 +169,7 @@ COUNT_SURFACES = {
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
     ],
-    # InnerSpace does the same: nine domain tools, without the meta-tools.
+    # InnerSpace does the same: its domain tools (reads and writes), without the meta-tools.
     "innerspace": [
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
@@ -1312,7 +1312,7 @@ class ContentReconciliationTests(unittest.TestCase):
             Path("docs/ARCHITECTURE.md"): ("apps/innerspace", "unifi_core.innerspace"),
             Path("docs/tool-index.md"): ("`innerspace_`", "InnerSpace differences"),
             Path("docs/tls-verification.md"): ("InnerSpace", "UNIFI_INNERSPACE_SSL_FINGERPRINT"),
-            Path("docs/permissions.md"): ("InnerSpace", "nine domain tools"),
+            Path("docs/permissions.md"): ("InnerSpace", "UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>"),
             Path("docs/cross-product.md"): ("InnerSpace", "own family"),
             Path("docs/support-bundles.md"): ("InnerSpace", "no support-bundle"),
             Path("apps/api/README.md"): ("## InnerSpace console product", "innerspace_site_id"),
@@ -1323,10 +1323,10 @@ class ContentReconciliationTests(unittest.TestCase):
                 with self.subTest(path=path, phrase=phrase):
                     self.assertIn(phrase, content)
 
-    def test_innerspace_docs_scope_the_read_only_guarantee_to_the_domain_tools(self):
+    def test_innerspace_docs_scope_the_read_only_annotation_to_the_read_tools(self):
         shared = Path("docs/permissions.md").read_text(encoding="utf-8")
         shared_section = (
-            shared.split("### InnerSpace: nothing to gate", 1)[1].split("\n### ", 1)[0].split("\n---", 1)[0]
+            shared.split("### InnerSpace: reads and gated writes", 1)[1].split("\n### ", 1)[0].split("\n---", 1)[0]
         )
         pages = {
             Path("apps/innerspace/README.md"): Path("apps/innerspace/README.md").read_text(encoding="utf-8"),
@@ -1338,8 +1338,10 @@ class ContentReconciliationTests(unittest.TestCase):
         for path, text in pages.items():
             content = " ".join(text.split())
             with self.subTest(path=path):
-                self.assertRegex(content, r"(?i)nine (?:domain )?tools")
+                self.assertRegex(content, r"(?i)nine read")
+                self.assertRegex(content, r"15 writes?\b|15 write tools")
                 self.assertNotRegex(content, r"(?i)every tool[^.]*\bread-only|all (?:the )?tools[^.]*\bread-only")
+                self.assertNotRegex(content, r"(?i)\bno write tools?\b|registers no write")
 
     def test_innerspace_docs_state_what_is_and_is_not_redacted_or_served(self):
         tools = " ".join(Path("apps/innerspace/docs/tools.md").read_text(encoding="utf-8").split())
@@ -1354,6 +1356,15 @@ class ContentReconciliationTests(unittest.TestCase):
         self.assertIn(
             "never returns image bytes", " ".join(Path("apps/api/README.md").read_text(encoding="utf-8").split())
         )
+
+    def test_innerspace_not_applied_is_documented_as_a_refusal(self):
+        """``mutation_applied: false`` needs the console to refuse the write; anything uncertain is unknown."""
+        tools = " ".join(Path("apps/innerspace/docs/tools.md").read_text(encoding="utf-8").split())
+        row = next(line for line in tools.split("| `false` | `false` |")[1:2])
+        self.assertIn("refused", row.split("|")[0])
+        trouble = Path("apps/innerspace/docs/troubleshooting.md").read_text(encoding="utf-8")
+        section = trouble.split("### `success: false` with `mutation_applied: false`", 1)[1].split("###", 1)[0]
+        self.assertIn("refused", section)
 
     def test_api_readme_documents_every_innerspace_route(self):
         spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))

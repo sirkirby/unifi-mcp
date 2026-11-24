@@ -155,7 +155,7 @@ InnerSpace is a separate UniFi OS application under `/proxy/innerspace/` with it
 
 ### InnerSpace writes
 
-Layout writes go through the shared write layer in `unifi_core/innerspace/managers/_writes.py`: a `preview_*` method that only reads, and an `apply_*` method that re-reads, writes and verifies by reading back.
+Layout writes go through the shared write layer in `unifi_core/innerspace/managers/_writes.py`: a `preview_*` method that only reads, and an `apply_*` method that re-reads, writes and verifies by reading back. MCP tools and API actions both run `apply_*`; the MCP preview runs `preview_*`, and the API preview is request-only.
 
 - `preview_*` and `apply_*` refuse unless `/api/system` (read uncached) reports InnerSpace installed and running.
 - Confirmed `apply_*` calls run one at a time through the operation gate (see Controller Concurrency); the write layer adds no lock of its own. The gate is per process and does not coordinate other processes or the browser editor: re-read before writing, refuse a shape that changed type or plan or is gone, and state the remaining race in the tool's docstring.

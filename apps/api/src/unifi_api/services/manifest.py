@@ -144,11 +144,9 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             permission_action != "read" or read_only_hint is not True or auth_method != "api_key_only"
         ):
             raise CatalogLoadError(f"actions[{index}] must be a read-only API-key Site Manager operation")
-        # The InnerSpace server is read-only and session-only; anything else is refused, not dispatched.
-        if product == "innerspace" and (
-            permission_action != "read" or read_only_hint is not True or auth_method != "local_only"
-        ):
-            raise CatalogLoadError(f"actions[{index}] must be a read-only session InnerSpace operation")
+        # InnerSpace is reached only through a console login session; any other auth is refused, not dispatched.
+        if product == "innerspace" and auth_method != "local_only":
+            raise CatalogLoadError(f"actions[{index}] must be a session InnerSpace operation")
         manager_method = _require_string(action, "manager_method", index)
         input_schema = action.get("input_schema")
         if not isinstance(input_schema, dict):

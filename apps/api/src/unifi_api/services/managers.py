@@ -189,16 +189,26 @@ def _build_access_managers() -> dict[str, Callable[..., Any]]:
 
 
 def _build_innerspace_managers() -> dict[str, Callable[..., Any]]:
+    from unifi_core.innerspace.managers.attenuation_manager import InnerSpaceAttenuationManager
     from unifi_core.innerspace.managers.floor_plan_manager import InnerSpaceFloorPlanManager
     from unifi_core.innerspace.managers.inventory_manager import InnerSpaceInventoryManager
     from unifi_core.innerspace.managers.project_manager import InnerSpaceProjectManager
+    from unifi_core.innerspace.managers.project_settings_manager import InnerSpaceProjectSettingsManager
     from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
+    from unifi_core.innerspace.managers.wall_manager import InnerSpaceWallManager
+    from unifi_core.innerspace.managers.wall_type_manager import InnerSpaceWallTypeManager
 
+    # Every manager of one controller shares its connection manager, and with it
+    # the per-process write lock that serializes InnerSpace writes.
     return {
+        "attenuation_manager": lambda cm: InnerSpaceAttenuationManager(cm),
         "floor_plan_manager": lambda cm: InnerSpaceFloorPlanManager(cm),
         "inventory_manager": lambda cm: InnerSpaceInventoryManager(cm),
         "project_manager": lambda cm: InnerSpaceProjectManager(cm),
+        "project_settings_manager": lambda cm: InnerSpaceProjectSettingsManager(cm),
         "system_manager": lambda cm: InnerSpaceSystemManager(cm),
+        "wall_manager": lambda cm: InnerSpaceWallManager(cm),
+        "wall_type_manager": lambda cm: InnerSpaceWallTypeManager(cm),
     }
 
 

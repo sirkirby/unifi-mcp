@@ -26,12 +26,12 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Protect](apps/protect/) | Stable | 68 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 38 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 | [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
-| [InnerSpace](apps/innerspace/) | Beta | 9 | [`unifi-innerspace-mcp`](https://pypi.org/project/unifi-innerspace-mcp/) |
+| [InnerSpace](apps/innerspace/) | Beta | 24 | [`unifi-innerspace-mcp`](https://pypi.org/project/unifi-innerspace-mcp/) |
 | [Drive](apps/drive/) | Beta | 11 | [`unifi-drive-mcp`](https://pypi.org/project/unifi-drive-mcp/) |
 
 Network, Protect, Access, InnerSpace and Drive each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
-InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
+InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and edits walls, attenuation objects and plan settings with confirmation. It has 24 domain tools (nine reads, 15 writes), counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
 
 Drive reads and manages UniFi Drive, the storage application on a UniFi NAS (UNAS). The NAS is its own console, so Drive logs in to the NAS itself with a local account and never uses the gateway's `UNIFI_HOST` or login. It has 11 domain tools, counted the same way: seven reads (system, storage pools, disks, shared drives, file services, NFS clients) and four preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. None of them can erase a disk or delete a pool or shared drive. See [Drive](#drive).
 
@@ -55,7 +55,7 @@ The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
 | What you are building | Use | Why |
 |-----------------------|-----|-----|
 | An AI assistant or another existing MCP client | [Network](apps/network/), [Protect](apps/protect/), or [Access](apps/access/) MCP server | Standard MCP discovery, tool calls, permissions, and confirmation flows |
-| Floor plans, walls and placed devices from a console's InnerSpace application | [InnerSpace](apps/innerspace/) MCP server | Read-only reads through a console login session; no API key path |
+| Floor plans, walls and placed devices from a console's InnerSpace application | [InnerSpace](apps/innerspace/) MCP server | Reads, and confirmed layout writes, through a console login session; no API key path |
 | Storage pools, disk health, shared drives and file services on a UniFi NAS | [Drive](apps/drive/) MCP server | Reads plus preview-first file service and NFS client changes, through a local login on the NAS |
 | An account-wide view of every console, site and device on a UI account | [Site Manager](apps/sitemanager/) MCP server | Read-only inventory, WAN health and SD-WAN status from Ubiquiti's cloud with one Site Manager API key |
 | A custom application, automation service, code-execution runtime, or MCP adapter | [`unifi-api-server`](apps/api/) | Your code controls call sequencing, data joins, resource limits, and approval flow |
@@ -90,7 +90,7 @@ The API server also serves the nine Site Manager reads once an administrator
 adds one account-level cloud connection. Every API key with the `read` scope
 can then read the whole cloud account; see
 [Site Manager cloud connection](apps/api/README.md#site-manager-cloud-connection).
-It serves the nine InnerSpace reads for a controller that declares the `innerspace` product with a username and password, and never returns plan image bytes; see [InnerSpace console product](apps/api/README.md#innerspace-console-product).
+It serves the nine InnerSpace reads and the 15 InnerSpace write actions for a controller that declares the `innerspace` product with a username and password, and never returns plan image bytes; see [InnerSpace console product](apps/api/README.md#innerspace-console-product).
 
 See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
 
@@ -434,7 +434,7 @@ Credentials follow the host. The shared username, password and API key (rows mar
 
 **Drive has no shared fallback for its console.** A UNAS is its own console, so the Drive server takes its host, port, username and password from `UNIFI_DRIVE_*` only (the password also as `_FILE` or `_COMMAND`), and pins a certificate only from `UNIFI_DRIVE_SSL_FINGERPRINT`. It has no API key setting. See [Drive configuration](apps/drive/docs/configuration.md).
 
-**Controller operation gate:** The Network, Protect and Access servers run confirmed writes to their controller one at a time, in the order they arrive (direct calls, `*_execute` and `*_batch` alike), and cap concurrent reads. The Drive server does the same for its NAS. The InnerSpace server caps its reads the same way. `UNIFI_WRITE_HOLD_SECONDS` (default 120), `UNIFI_CALL_WAIT_SECONDS` (25) and `UNIFI_READ_CONCURRENCY` (8) tune it, with per-server overrides such as `UNIFI_NETWORK_READ_CONCURRENCY`. A call refused as busy sends nothing to the controller and says so. The guarantee is per server process. See each server's configuration page.
+**Controller operation gate:** The Network, Protect, Access and InnerSpace servers run confirmed writes to their controller one at a time, in the order they arrive (direct calls, `*_execute` and `*_batch` alike), and cap concurrent reads. The Drive server does the same for its NAS. `UNIFI_WRITE_HOLD_SECONDS` (default 120), `UNIFI_CALL_WAIT_SECONDS` (25) and `UNIFI_READ_CONCURRENCY` (8) tune it, with per-server overrides such as `UNIFI_NETWORK_READ_CONCURRENCY`. A call refused as busy sends nothing to the controller and says so. The guarantee is per server process. See each server's configuration page.
 
 **Tracing:** Set `OTEL_EXPORTER_OTLP_ENDPOINT` to export the MCP SDK's spans over OTLP, one per MCP message, continuing a trace context passed in the request's `_meta`. The Docker images include the exporter; pip and uvx installs need the `otel` extra (for example `unifi-network-mcp[otel]`). Off by default.
 
@@ -475,7 +475,7 @@ apps/
   protect/          # UniFi Protect MCP server (stable, 68 tools)
   access/           # UniFi Access MCP server (stable, 38 tools)
   sitemanager/      # UniFi Site Manager MCP server (beta, cloud, read-only, 9 tools)
-  innerspace/       # UniFi InnerSpace MCP server (beta, console login, read-only, 9 tools)
+  innerspace/       # UniFi InnerSpace MCP server (beta, console login, 24 tools: 9 reads, 15 writes)
   drive/            # UniFi Drive MCP server (beta, NAS login, 11 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI

@@ -4,7 +4,7 @@ Configuration comes from the server's process environment. The server never load
 
 ## The console login
 
-InnerSpace is read through a console login session. There is no API key setting: a console's local `UNIFI_API_KEY` is never read for this server and never sent to InnerSpace.
+InnerSpace is read and written through a console login session. There is no API key setting: a console's local `UNIFI_API_KEY` is never read for this server and never sent to InnerSpace.
 
 | Variable | Use |
 |---|---|
@@ -31,23 +31,27 @@ Without a host the server starts in setup mode: it answers the client, offers on
 | `UNIFI_INNERSPACE_MCP_CONTENT_MODE` | `adaptive` | MCP response content mode (falls back to `UNIFI_MCP_CONTENT_MODE`) |
 | `UNIFI_TOOL_REGISTRATION_MODE` | `lazy` | `lazy`, `eager` or `meta_only` |
 | `UNIFI_ENABLED_CATEGORIES` | all | Eager mode only: see [Tool categories](#tool-categories) |
+| `UNIFI_INNERSPACE_READ_ONLY` | `false` | Refuse every write, previews included (falls back to `UNIFI_READ_ONLY`) |
+| `UNIFI_INNERSPACE_TOOL_PERMISSION_MODE` | `confirm` | `bypass` applies writes without a preview (falls back to `UNIFI_TOOL_PERMISSION_MODE`) |
+| `UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN` | `false` | `true` makes `confirm=true` carry the token of a preview of the same arguments (falls back to `UNIFI_REQUIRE_PREVIEW_TOKEN`) |
+| `UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>` | allowed | `false` turns off one kind of write; see [permissions](permissions.md) |
 | `UNIFI_ENABLED_TOOLS` | all | Eager mode only: specific tool names |
 | `UNIFI_MCP_LOG_LEVEL` | `INFO` | Log level (logs go to stderr) |
 | `UNIFI_SETTINGS_FILE` | none | Per-user settings file of `KEY=value` lines, applied before configuration is read |
 
-Settings are read once at startup. Restart the server, or start a new client session, after changing any of them. There are no event or websocket settings and no policy settings: this server has no event stream and no write tools.
+Settings are read once at startup. Restart the server, or start a new client session, after changing any of them. There are no event or websocket settings: this server has no event stream. A `UNIFI_POLICY_INNERSPACE_*` name that matches no gate is reported in the log at startup.
 
 ## Console operation gate
 
-Every tool call, and every read of a plan image resource, takes a read slot at this server's operation gate for the console before it reaches the console. Reads run side by side up to a cap. The guarantee is per server process: two servers, or two copies of one, pointed at the same console do not coordinate.
+Every tool call takes its turn at this server's operation gate for the console before it reaches the console. Confirmed writes (the write tools called with `confirm=true`) run one at a time, in the order they arrive, whether they come from direct tool calls, `innerspace_execute` or `innerspace_batch`. Reads, previews and plan image resource reads run side by side, up to a cap, and never wait behind writes. The guarantee is per server process: two servers, or two copies of one, pointed at the same console do not coordinate.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `UNIFI_INNERSPACE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | How long one write may hold its turn (10 to 3600). Once it has held longer, calls queued behind it are refused as busy, with nothing sent. |
+| `UNIFI_INNERSPACE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
 | `UNIFI_INNERSPACE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
-| `UNIFI_INNERSPACE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a call waits for a read slot before it is refused as busy (1 to 3600). |
-| `UNIFI_INNERSPACE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | Checked at startup (10 to 3600). It has no effect yet: this server has no write tools. |
 
-A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, and nothing is sent to the console.
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write, and nothing is sent to the console. `innerspace_batch_cancel` withdraws batch jobs that are still queued.
 
 ## TLS
 
@@ -99,7 +103,7 @@ The `unifi-innerspace-mcp` service in `docker/docker-compose.yml` is in the opt-
 
 ```bash
 export UNIFI_INNERSPACE_HOST=192.168.1.1
-export UNIFI_INNERSPACE_USERNAME=innerspace-reader
+export UNIFI_INNERSPACE_USERNAME=innerspace-agent
 export UNIFI_INNERSPACE_PASSWORD="$(cat "$HOME/.config/unifi-mcp/innerspace-password")"
 export UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN="$(cat "$HOME/.config/unifi-mcp/innerspace-http-token")"
 docker compose -f docker/docker-compose.yml --profile innerspace up --build unifi-innerspace-mcp
@@ -148,9 +152,14 @@ For `UNIFI_ENABLED_CATEGORIES` in eager mode, and the `category` filter of `inne
 | Category | Tools |
 |---|---|
 | `status` | `innerspace_get_status` |
-| `project` | `innerspace_get_project`, `innerspace_list_walls` |
-| `floor_plans` | `innerspace_list_floor_plans`, `innerspace_get_plan_asset` |
+| `project` | `innerspace_get_project`, `innerspace_list_walls`, `innerspace_set_project_unit` |
+| `floor_plans` | `innerspace_list_floor_plans`, `innerspace_get_plan_asset`, `innerspace_rename_floor_plan`, `innerspace_set_floor_attenuation`, `innerspace_reorder_floor_plans`, `innerspace_set_plan_scale` |
 | `devices` | `innerspace_list_placed_devices`, `innerspace_list_access_points`, `innerspace_list_switches`, `innerspace_list_inventory` |
+| `walls` | `innerspace_create_walls`, `innerspace_update_walls`, `innerspace_remove_walls` |
+| `wall_types` | `innerspace_create_wall_type`, `innerspace_update_wall_type` |
+| `attenuation` | `innerspace_create_attenuation_objects`, `innerspace_update_attenuation_objects`, `innerspace_remove_attenuation_objects`, `innerspace_create_attenuation_object_type`, `innerspace_update_attenuation_object_type` |
+
+The same names, upper-cased, form the policy gates: `UNIFI_POLICY_INNERSPACE_WALL_TYPES_UPDATE=false`.
 
 ```bash
 UNIFI_TOOL_REGISTRATION_MODE=eager UNIFI_ENABLED_CATEGORIES=status,floor_plans
@@ -160,11 +169,11 @@ UNIFI_TOOL_REGISTRATION_MODE=eager UNIFI_ENABLED_CATEGORIES=status,floor_plans
 
 | Mode | What the client sees |
 |---|---|
-| `lazy` (default) | The meta-tools and all nine domain tools |
-| `eager` | The meta-tools except `innerspace_load_tools`, and all nine tools (or the enabled subset) |
+| `lazy` (default) | The meta-tools and the nine read tools; reach the writes through `innerspace_execute` or `innerspace_load_tools` |
+| `eager` | The meta-tools except `innerspace_load_tools`, and all 24 tools (or the enabled subset) |
 | `meta_only` | The meta-tools only; reach tools through `innerspace_execute` |
 
-Lazy mode lists every domain tool directly because `innerspace_execute` is not marked read-only, and a client that permits only read-only tools would otherwise reach nothing. See [MCP discovery and meta-tools](../../../docs/tool-index.md).
+Lazy mode lists the read tools directly because `innerspace_execute` is not marked read-only, and a client that permits only read-only tools would otherwise reach nothing. The writes stay behind the dispatcher, where a client asks before running them. See [MCP discovery and meta-tools](../../../docs/tool-index.md).
 
 ## YAML config
 

@@ -3,7 +3,7 @@
 InnerSpace has no connection-wait wrapper: its managers connect on demand from
 inside the tool, which is inside the gate. A probe tool registered through the
 app's own ``server.tool`` and called through MCP dispatch sees one read slot
-taken. The server has no write tools yet, so only reads are probed here.
+taken for a read or a preview, and the write turn held for a confirmed write.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from unifi_innerspace_mcp import runtime
 from unifi_mcp_shared.tool_index import TOOL_REGISTRY
 
 PROBE = "innerspace_gate_wiring_probe_read"
+WRITE_PROBE = "innerspace_gate_wiring_probe_write"
+PROBES = (PROBE, WRITE_PROBE)
 
 
 @pytest.fixture
@@ -24,9 +26,10 @@ def wiring(monkeypatch):
     monkeypatch.setattr(runtime.connection_manager, "port", 443)
     reset_gate_registry_for_tests()
     yield
-    if main_mod.server._tool_manager.get_tool(PROBE) is not None:
-        main_mod.server.remove_tool(PROBE)
-    TOOL_REGISTRY.pop(PROBE, None)
+    for name in PROBES:
+        if main_mod.server._tool_manager.get_tool(name) is not None:
+            main_mod.server.remove_tool(name)
+        TOOL_REGISTRY.pop(name, None)
     reset_gate_registry_for_tests()
 
 
@@ -80,3 +83,18 @@ async def test_no_host_means_no_gate_but_the_call_is_still_admitted(wiring, monk
         await main_mod.server.call_tool(PROBE, {})
     assert admitted == ["admitted"]
     assert seen == [None]
+
+
+async def test_a_confirmed_write_holds_the_write_turn_and_a_preview_takes_a_read_slot(wiring):
+    seen: list = []
+
+    @main_mod.server.tool(name=WRITE_PROBE, permission_category="walls", permission_action="create")
+    async def probe_write(confirm: bool = False) -> dict:
+        gate = runtime.get_operation_gate()
+        seen.append((confirm, gate.holds_write(), gate.snapshot()["reads_in_use"]))
+        return {"success": True, "data": {}}
+
+    await main_mod.server.call_tool(WRITE_PROBE, {"confirm": True})
+    await main_mod.server.call_tool(WRITE_PROBE, {"confirm": False})
+
+    assert seen == [(True, True, 0), (False, False, 1)]

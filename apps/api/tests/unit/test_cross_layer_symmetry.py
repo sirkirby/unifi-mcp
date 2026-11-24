@@ -125,3 +125,23 @@ def test_cross_layer_symmetry(server: str, domain: str, pydantic_name: str) -> N
 
     errors = compare_pair(pydantic_cls, mutable_fields, strawberry_cls)
     assert not errors, f"\nCross-layer drift in {server}/{domain}:\n  - " + "\n  - ".join(errors)
+
+
+# InnerSpace write models live in one module, ``unifi_core.innerspace.models.writes``,
+# and their read types carry an ``InnerSpace`` prefix, so the pairs are named in full.
+# Attenuation objects have no typed read (the project read returns shapes as JSON),
+# so only walls and wall types pair with a Strawberry type.
+INNERSPACE_PAIRS: list[tuple[str, str, str]] = [
+    # (write model, read type module, read type)
+    ("WallUpdate", "project", "InnerSpaceWall"),
+    ("WallTypeUpdate", "project", "InnerSpaceWallType"),
+]
+
+
+@pytest.mark.parametrize("pydantic_name,domain,strawberry_name", INNERSPACE_PAIRS)
+def test_innerspace_write_fields_match_the_reads(pydantic_name: str, domain: str, strawberry_name: str) -> None:
+    pydantic_cls = getattr(importlib.import_module("unifi_core.innerspace.models.writes"), pydantic_name)
+    strawberry_cls = getattr(importlib.import_module(f"unifi_api.graphql.types.innerspace.{domain}"), strawberry_name)
+
+    errors = compare_pair(pydantic_cls, pydantic_cls.MUTABLE_FIELDS, strawberry_cls)
+    assert not errors, f"\nCross-layer drift in innerspace/{domain}:\n  - " + "\n  - ".join(errors)

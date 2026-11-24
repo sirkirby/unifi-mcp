@@ -411,7 +411,7 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 314
+    assert len(payload["actions"]) == 329
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_get_incident_evidence",
@@ -634,3 +634,15 @@ def test_all_nine_cloud_methods_are_generated():
         "sitemanager_get_sdwan_config": ("sdwan_manager", "get_config"),
         "sitemanager_get_sdwan_config_status": ("sdwan_manager", "get_config_status"),
     }
+
+
+def test_every_innerspace_catalog_category_is_a_policy_gate_category():
+    """The API applies UNIFI_POLICY_INNERSPACE_* gates to catalog categories as they are, so each must be a key
+    of the MCP server's category map, or a gate the server honours would not reach the API action."""
+    from unifi_innerspace_mcp.categories import INNERSPACE_CATEGORY_MAP
+
+    catalog = json.loads((REPO_ROOT / "apps/api/src/unifi_api/action_catalog.json").read_text())
+    categories = {entry["category"] for entry in catalog["actions"] if entry["product"] == "innerspace"}
+
+    assert categories
+    assert categories <= set(INNERSPACE_CATEGORY_MAP)

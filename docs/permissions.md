@@ -19,15 +19,15 @@ The Site Manager server is read-only. Its nine domain tools only read, are annot
 
 Its dispatch meta-tools carry conservative annotations, because a dispatcher's hint must hold for any tool it could run: `sitemanager_tool_index` and `sitemanager_batch_status` are read-only, while `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_cancel` and `sitemanager_load_tools` are not. A client that approves only read-only tools can still call the nine tools directly, which is why the default `lazy` mode lists all nine. See [Site Manager permissions](../apps/sitemanager/docs/permissions.md).
 
-### InnerSpace: nothing to gate
+### InnerSpace: reads and gated writes
 
-The InnerSpace server is read-only in the same way. Its nine domain tools only read and are annotated `readOnlyHint: true`; they need no permission mode, confirmation, preview token or policy gate, and this version has no `UNIFI_POLICY_*` actions for InnerSpace. The guarantee covers the nine domain tools. Its meta-tools are dispatchers and are not counted as read-only tools: `innerspace_tool_index` and `innerspace_batch_status` are read-only, while `innerspace_execute`, `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools` are not. What limits it is the console account whose login the server uses, which must be able to open InnerSpace. See [InnerSpace permissions](../apps/innerspace/docs/permissions.md).
+The InnerSpace server has 24 domain tools. Its nine read tools only read and are annotated `readOnlyHint: true`. Its 15 write tools change the layout (walls, wall types, attenuation objects and their types, floor plan settings, the project unit). Their policy gates are `UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>` with categories `WALLS`, `WALL_TYPES`, `ATTENUATION`, `FLOOR_PLANS` and `PROJECT`; removals and the plan scale replacement are `DELETE` actions. Its meta-tools are dispatchers and are not counted as read-only tools: `innerspace_tool_index` and `innerspace_batch_status` are read-only, while `innerspace_execute`, `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools` are not. The console account whose login the server uses limits both reads and writes. See [InnerSpace permissions](../apps/innerspace/docs/permissions.md).
 
 ### Drive: four writes, gated like the console servers
 
 The Drive server's seven reads need no confirmation. Its four writes follow the rest of this page: they preview with `confirm=false`, apply with `confirm=true`, honor `UNIFI_DRIVE_TOOL_PERMISSION_MODE` (falling back to `UNIFI_TOOL_PERMISSION_MODE`), and can be switched off with policy gates in the `file_services` and `nfs_connections` categories, for example `UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE=false`. None of them changes stored data: they turn SMB, NFS or Time Machine on or off and change which hosts may mount shared drives over NFS. See [Drive permissions](../apps/drive/docs/permissions.md).
 
-The rest of this page applies to the Network, Protect, Access and Drive servers and, where stated, the API server.
+The rest of this page applies to the Network, Protect, Access, InnerSpace and Drive servers and, where stated, the API server.
 
 ---
 
@@ -93,7 +93,7 @@ A token is single use and expires after `UNIFI_PREVIEW_TOKEN_TTL_SECONDS`. Any p
 | `UNIFI_<SERVER>_REQUIRE_PREVIEW_TOKEN` | Per-server, wins over global | `UNIFI_NETWORK_REQUIRE_PREVIEW_TOKEN=true` |
 | `UNIFI_PREVIEW_TOKEN_TTL_SECONDS` | All servers | `300` (default), clamped to 10 to 3600 |
 
-The mode applies to tool calls on the Network, Protect and Access MCP servers, including calls made through `unifi_execute` and `unifi_batch`. The API server's action endpoint has its own confirm flow and does not check tokens. The setting is read at startup. An unrecognized value counts as `true`. `bypass` mode executes mutations without a preview, so it requires no token; the server logs a warning at startup when both are set.
+The mode applies to tool calls on the Network, Protect, Access and InnerSpace MCP servers, including calls made through `unifi_execute` and `unifi_batch`. The API server's action endpoint has its own confirm flow and does not check tokens. The setting is read at startup. An unrecognized value counts as `true`. `bypass` mode executes mutations without a preview, so it requires no token; the server logs a warning at startup when both are set.
 
 What a token proves is narrow: the server produced a preview for exactly this request. It does not prove a human read it, because an agent can call the preview and then execute with its token. It guarantees that a preview always exists for a client to show, and that the executed request is the one that was previewed. Human approval still belongs to the MCP client.
 
@@ -140,6 +140,8 @@ UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true
 
 The most specific variable wins, so the category-level override takes effect.
 
+The API server (`POST /v1/actions/{tool}`) applies these gates to the InnerSpace write actions only, previews included: a denied action answers HTTP 403 with the same text and writes a `denied` audit row. For the Network, Protect and Access actions the API server applies read-only mode, not the policy gates.
+
 The Claude Code plugins expose only the server-level gates
 (`UNIFI_POLICY_<SERVER>_<ACTION>`) as plugin options, so per-category overrides
 are not available there. Allow the action server-wide with confirmation mode
@@ -152,7 +154,7 @@ level.
 
 Read-only mode denies every action that is not a read, whatever the policy gates say. No `UNIFI_POLICY_*` variable re-enables an action while it is on. It is off by default.
 
-It covers the Network, Protect and Access MCP servers and the API server (`POST /v1/actions/{tool}`). Every tool stays listed; calls to non-read tools return an error naming read-only mode. The API server refuses mutation previews (`confirm=false`) as well as confirmed calls with HTTP 403 and writes a `denied` audit row; read actions are unaffected.
+It covers the Network, Protect, Access and InnerSpace MCP servers and the API server (`POST /v1/actions/{tool}`). Every tool stays listed; calls to non-read tools return an error naming read-only mode. The API server refuses mutation previews (`confirm=false`) as well as confirmed calls with HTTP 403 and writes a `denied` audit row; read actions are unaffected.
 
 **Error example:**
 ```
@@ -162,7 +164,7 @@ Update is disabled for networks: the network server is in read-only mode, which 
 | Variable | Scope | Values |
 |----------|-------|--------|
 | `UNIFI_READ_ONLY` | Global (all servers) | `true`/`false` |
-| `UNIFI_<SERVER>_READ_ONLY` | Per-server (`NETWORK`, `PROTECT`, `ACCESS`); overrides global | `true`/`false` |
+| `UNIFI_<SERVER>_READ_ONLY` | Per-server (`NETWORK`, `PROTECT`, `ACCESS`, `INNERSPACE`); overrides global | `true`/`false` |
 
 The API server resolves the per-server variable from the action's product, so `UNIFI_PROTECT_READ_ONLY=true` also blocks `protect_*` mutations on the API.
 

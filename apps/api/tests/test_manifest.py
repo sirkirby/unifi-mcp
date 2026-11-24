@@ -65,7 +65,7 @@ def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 314
+    assert len(registry) == 329
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")
@@ -185,7 +185,7 @@ def test_account_connection_kind_cannot_default_to_controller(monkeypatch):
         ManifestRegistry.load()
 
 
-INNERSPACE_TOOLS = {
+INNERSPACE_READS = {
     "innerspace_get_plan_asset",
     "innerspace_get_project",
     "innerspace_get_status",
@@ -196,36 +196,69 @@ INNERSPACE_TOOLS = {
     "innerspace_list_switches",
     "innerspace_list_walls",
 }
+# tool -> (permission_action, read_only_hint)
+INNERSPACE_WRITES = {
+    "innerspace_create_walls": ("create", False),
+    "innerspace_update_walls": ("update", False),
+    "innerspace_remove_walls": ("delete", False),
+    "innerspace_create_wall_type": ("create", False),
+    "innerspace_update_wall_type": ("update", False),
+    "innerspace_create_attenuation_objects": ("create", False),
+    "innerspace_update_attenuation_objects": ("update", False),
+    "innerspace_remove_attenuation_objects": ("delete", False),
+    "innerspace_create_attenuation_object_type": ("create", False),
+    "innerspace_update_attenuation_object_type": ("update", False),
+    "innerspace_rename_floor_plan": ("update", False),
+    "innerspace_set_floor_attenuation": ("update", False),
+    "innerspace_reorder_floor_plans": ("update", False),
+    "innerspace_set_plan_scale": ("delete", False),
+    "innerspace_set_project_unit": ("update", False),
+}
 
 
-def test_innerspace_catalog_entries_are_session_reads() -> None:
+def test_innerspace_catalog_entries_are_session_actions() -> None:
     registry = ManifestRegistry.load()
-    entries = [registry.resolve(name) for name in registry.all_tools() if name.startswith("innerspace_")]
+    entries = {name: registry.resolve(name) for name in registry.all_tools() if name.startswith("innerspace_")}
+    expected = {**{name: ("read", True) for name in INNERSPACE_READS}, **INNERSPACE_WRITES}
 
-    assert {entry.name for entry in entries} == INNERSPACE_TOOLS
-    for entry in entries:
+    assert len(entries) == 9 + 15
+    assert {name: (entry.permission_action, entry.read_only_hint) for name, entry in entries.items()} == expected
+    for entry in entries.values():
         assert entry.product == "innerspace"
         assert entry.connection_kind == "controller"
-        assert (entry.permission_action, entry.read_only_hint, entry.auth_method) == ("read", True, "local_only")
+        assert entry.auth_method == "local_only"
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
-        dict(permission_action="update", read_only_hint=False),
-        dict(auth_method="either"),
-        dict(auth_method="api_key_only"),
-    ],
-)
-def test_innerspace_catalog_refuses_anything_but_session_reads(monkeypatch, changes) -> None:
-    action = _action(
+@pytest.mark.parametrize("action,read_only_hint", [("read", True), ("create", False), ("delete", False)])
+@pytest.mark.parametrize("auth_method", ["either", "api_key_only", "both"])
+def test_innerspace_catalog_refuses_anything_but_session_actions(
+    monkeypatch, action, read_only_hint, auth_method
+) -> None:
+    entry = _action(
         name="innerspace_get_status",
         product="innerspace",
         manager_attr="system_manager",
         manager_method="get_status",
-        **changes,
+        permission_action=action,
+        read_only_hint=read_only_hint,
+        auth_method=auth_method,
     )
-    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(action))
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(entry))
 
-    with pytest.raises(CatalogLoadError, match="read-only session InnerSpace operation"):
+    with pytest.raises(CatalogLoadError, match="session InnerSpace operation"):
         ManifestRegistry.load()
+
+
+@pytest.mark.parametrize("action,read_only_hint", [("read", True), ("update", False), ("delete", False)])
+def test_innerspace_catalog_accepts_session_reads_and_writes(monkeypatch, action, read_only_hint) -> None:
+    entry = _action(
+        name="innerspace_get_status",
+        product="innerspace",
+        manager_attr="system_manager",
+        manager_method="get_status",
+        permission_action=action,
+        read_only_hint=read_only_hint,
+    )
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(entry))
+
+    assert ManifestRegistry.load().resolve("innerspace_get_status").permission_action == action

@@ -48,3 +48,18 @@ def test_nine_cloud_tools_are_covered_only_by_read_types():
         with pytest.raises(SerializerRegistryError, match=missing):
             discover_serializers(set(ManifestRegistry.load().all_tools()), type_registry=incomplete)
     _reset_registry_for_tests()
+
+
+def test_innerspace_writes_have_serializers_and_reads_have_types():
+    _reset_registry_for_tests()
+    manifest = ManifestRegistry.load()
+    type_registry = build_type_registry()
+    serializers = discover_serializers(set(manifest.all_tools()), type_registry=type_registry)
+    innerspace = {name for name in manifest.all_tools() if name.startswith("innerspace_")}
+    writes = {name for name in innerspace if manifest.resolve(name).permission_action != "read"}
+
+    assert len(writes) == 15
+    assert writes <= set(serializers.all_tools())
+    assert (innerspace - writes) <= set(type_registry.all_tools())
+    assert (innerspace - writes).isdisjoint(set(serializers.all_tools()))
+    _reset_registry_for_tests()

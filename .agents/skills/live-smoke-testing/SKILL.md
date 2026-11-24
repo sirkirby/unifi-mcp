@@ -184,8 +184,9 @@ uv run python scripts/live_smoke.py --server all --phase safe
 # Site Manager (cloud, key-only) — see Procedure B2
 uv run --all-packages python scripts/live_smoke.py --server sitemanager --phase readonly
 
-# InnerSpace (console login, read-only) — see Procedure B3
+# InnerSpace (console login) — see Procedure B3
 uv run --all-packages python scripts/live_smoke.py --server innerspace --phase readonly
+uv run --all-packages python scripts/live_smoke.py --server innerspace --phase lifecycle
 
 # Drive (NAS login, read-only) — see Procedure B4
 uv run --all-packages python scripts/live_smoke.py --server drive --phase readonly
@@ -238,7 +239,7 @@ host, no hardware prerequisite and no support-bundle tool.
 
 ## Procedure B3: InnerSpace Target (`--server innerspace`)
 
-InnerSpace is read through a console login session. It is a registered harness target
+InnerSpace is read and written through a console login session. It is a registered harness target
 (`--server innerspace`) with no support-bundle tool; `SUPPORT_BUNDLE_SERVERS` stays network,
 protect and access.
 
@@ -246,20 +247,64 @@ protect and access.
   UniFi OS account that can open it. Credentials are `UNIFI_INNERSPACE_HOST`,
   `UNIFI_INNERSPACE_USERNAME` and `UNIFI_INNERSPACE_PASSWORD` (or the `_FILE` / `_COMMAND`
   forms). Never `UNIFI_API_KEY`: a console's local key is not used for InnerSpace.
-- **What runs:** the nine domain tools are all read-only. `innerspace_get_status` runs first;
-  when it reports InnerSpace not installed or not running, the other eight reads are recorded
-  as skipped with that reason. The reads that need `plan_id` (`innerspace_list_walls`,
+- **What runs:** nine read tools and 15 write tools. `innerspace_get_status` runs first;
+  when it reports InnerSpace not installed or not running, every other tool is recorded as
+  skipped with that reason. The reads that need `plan_id` (`innerspace_list_walls`,
   `innerspace_list_placed_devices`, `innerspace_get_plan_asset`) take the first id from the
   `innerspace_list_floor_plans` result of the seed phase, and are skipped only when that list
   is empty or failed. Never feed them Network, Protect, Access or Site Manager IDs.
-- **Phases:** `readonly` and `safe` run the reads; `preview`, `lifecycle` and `approved` have
-  nothing to run. `--phase support --server innerspace` is unsupported, as for Site Manager.
+- **Write lifecycles:** `lifecycle` and `safe` change only objects the run creates: the wall
+  lifecycle below and the attenuation-object lifecycle. `approved` runs those, then one lifecycle
+  per other write kind, each of which changes objects the run did not create, under `approved:*`
+  phase labels as Network's approved-only lifecycles do. Each previews first, confirms, reads
+  back fresh, and restores in a
+  `finally` whenever its change was sent, then reads back again. A failed restore is a failed
+  check, and its entry stays in `created_resources` with no match in `cleaned_resources`: that
+  difference is what to put back by hand. Values read from the console appear in recorded
+  arguments as `<read from the console>`, and plan titles never appear. Wall types: the create
+  is previewed and never confirmed, since no tool removes a wall type; the first wall type that
+  does not override a built-in material has its attenuation changed by 1 dB and restored
+  (skipped when there is none). Floor plans: the first plan's title gets the suffix ` smoke`
+  and is renamed back; the first two plans of one site swap places in the plan order and the
+  order is restored (skipped when no site has two plans; the restore numbers the plans 1, 2, 3
+  ... in their original order, so when the stored values were not 1, 2, 3 ... the entry stays in
+  `created_resources` marked `left_changed`); the first plan's floor attenuation is set to 25 dB
+  (30 when it
+  is already 25) and restored, read through a preview because no read tool returns it.
+  Attenuation: on the wall lifecycle's plan, one `shelf_small` square at (0.1, 0.2)-(0.4, 0.5) m
+  in the frame is created, listed through `innerspace_get_project` with `include_shapes`,
+  changed to `server_rack` (read back by a fresh preview of the same update, which must have
+  nothing left to change) and removed, also after a failed step or a create with an unknown
+  outcome that names one id; attenuation-object types are
+  handled as wall types are. Project unit and plan scale run last, because the replace is
+  destructive and devices on the plan shift on the image until the restore. A metric project is
+  set to imperial, the scale line of the wall lifecycle's plan is replaced by (0, 0)-(100, 0) in
+  plan units at 10 ft, and the plan must read back 10 plan units per foot (the
+  `approved:verify-imperial-scale` check, the live proof that an imperial project's scale goes
+  out in metres with positions in plan units); then the original line and length from the
+  replace's preview go back, then the original unit, and both are read back. The restored
+  scale matches within 0.1 %, since the preview shows the length to 4 decimals.
+- **Phases:** `readonly` and `safe` run the reads. `preview` records each write as skipped,
+  because no write argument is discovered, or as pending approval for the removals and
+  `innerspace_set_plan_scale`. `lifecycle` (and `safe`) runs one wall lifecycle on the first
+  plan whose map is not shifted or scaled: a create preview, then a create of one short wall at
+  (0.1, 0.1)-(0.6, 0.1) m in the frame, a read-back, a variant-only update to `glass`, a
+  read-back, and a remove with a final read-back. The remove runs whenever the create may have
+  landed (an unknown outcome that names one id included), also after a failed step. It needs
+  InnerSpace installed and running; otherwise the create is
+  refused and nothing else runs. `approved` runs the same and then the lifecycles that change the
+  project's own objects, the unit and scale lifecycle last.
+  `--phase support --server innerspace` is unsupported, as for Site Manager.
 - **Evidence:** a run against a console shows what the console accepted at that version; unit
   tests cannot. Say which kind of evidence you have, and record the controller and InnerSpace
   versions. Plan geometry, floor plans and device positions describe a building: keep reports
   out of the repository.
 - **Negative control:** with the InnerSpace application stopped, a read must fail with the fixed
-  "not running" text (HTTP 502 over the API), never as a missing resource.
+  "not running" text (HTTP 502 over the API), never as a missing resource. For the writes,
+  `UNIFI_INNERSPACE_READ_ONLY=true` must refuse the create preview with the read-only text and
+  leave the plan unchanged.
+- **Login rate limit:** the console allows about 14 logins an hour. One harness run reuses one
+  session; do not loop runs.
 
 ## Procedure B4: Drive Target (`--server drive`)
 

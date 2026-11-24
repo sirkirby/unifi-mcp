@@ -39,6 +39,12 @@ RUN_PREFIX = "codex-smoke"
 DRIVE_PREVIEW_TOOLS = frozenset({"drive_set_file_service", "drive_add_nfs_connection", "drive_update_nfs_connection"})
 # A documentation address (TEST-NET-1): no real host can mount with it.
 DRIVE_SMOKE_NFS_CLIENT = "192.0.2.123"
+# Shown in a recorded call's arguments in place of a value read from the console.
+CONSOLE_VALUE = "<read from the console>"
+# Added to a floor plan's title by the InnerSpace rename lifecycle, then taken off again.
+INNERSPACE_RENAME_SUFFIX = " smoke"
+# A floor attenuation the InnerSpace lifecycle sets, and the one it uses when the floor already has it.
+INNERSPACE_FLOOR_DB = (25.0, 30.0)
 
 
 SERVER_PACKAGES = {
@@ -682,10 +688,13 @@ class LiveSmokeRunner:
         if close_fn:
             await close_fn()
 
-    async def call(self, tool: str, args: dict[str, Any], phase: str) -> SmokeRecord:
+    async def call(
+        self, tool: str, args: dict[str, Any], phase: str, *, report_args: dict[str, Any] | None = None
+    ) -> SmokeRecord:
+        """Call one tool and record it; ``report_args`` stand in for ``args`` that carry console values."""
         assert self.server is not None
         started = time.perf_counter()
-        record = SmokeRecord(tool=tool, phase=phase, status="error", args=args)
+        record = SmokeRecord(tool=tool, phase=phase, status="error", args=args if report_args is None else report_args)
         try:
             raw = await self.server.call_tool(tool, args)
             sizes = measure_tool_result_sizes(raw)
@@ -1035,6 +1044,10 @@ class LiveSmokeRunner:
             await self.lifecycle_network_gateway_settings()
         elif self.server_key == "access":
             await self.lifecycle_access_visitor()
+        elif self.server_key == "innerspace":
+            # Only objects this run creates; changes to the project's own objects run in approved.
+            await self.lifecycle_innerspace_wall()
+            await self.lifecycle_innerspace_attenuation_objects()
         elif self.server_key == "protect":
             await self.lifecycle_protect_alarm_rule()
             self.skip(
@@ -1061,6 +1074,14 @@ class LiveSmokeRunner:
             await self.approved_access_physical()
         elif self.server_key == "drive":
             await self.lifecycle_drive_nfs_connection()
+        elif self.server_key == "innerspace":
+            await self.run_lifecycles()
+            await self.lifecycle_innerspace_wall_types()
+            await self.lifecycle_innerspace_rename_plan()
+            await self.lifecycle_innerspace_reorder_plans()
+            await self.lifecycle_innerspace_floor_attenuation()
+            await self.lifecycle_innerspace_attenuation_object_types()
+            await self.lifecycle_innerspace_unit_and_scale()
 
     def skip(self, tool: str, phase: str, reason: str) -> None:
         self.report.records.append(SmokeRecord(tool=tool, phase=phase, status="skipped", error=reason))
@@ -2529,6 +2550,709 @@ class LiveSmokeRunner:
             )
             if cancelled:
                 self.report.cleaned_resources.append({"type": "visitor", "id": visitor_id, "name": args["name"]})
+
+    def innerspace_scratch_plan(self) -> str | None:
+        """A plan whose map sits unshifted and unscaled, so frame coordinates are accepted on it."""
+        for plan in self.cache.items_from_tool("innerspace_list_floor_plans", "floor_plans"):
+            plain = plan.get("image_scale") in (None, 1, 1.0) and plan.get("image_offset") in (None, [0, 0], (0, 0))
+            if plan.get("id") and plain and (plan.get("width_px") or 0) > 0 and (plan.get("height_px") or 0) > 0:
+                return str(plan["id"])
+        return None
+
+    def innerspace_wall(self, plan_id: str, wall_id: str) -> dict[str, Any] | None:
+        walls = (self.cache.by_tool.get("innerspace_list_walls") or {}).get("data", {}).get("walls") or []
+        matches = [wall for wall in walls if wall.get("id") == wall_id and wall.get("plan_id") in (None, plan_id)]
+        return matches[0] if matches else None
+
+    def innerspace_created_ids(self, create_tool: str) -> list[Any]:
+        """The ids the last call of ``create_tool`` named."""
+        return (self.cache.by_tool.get(create_tool) or {}).get("created_ids") or []
+
+    def innerspace_orphan_possible(self, create: SmokeRecord, create_tool: str, remove_tool: str, noun: str) -> bool:
+        """A create that was sent, whose outcome is unknown and that named no id, may have left ``noun`` with
+        nothing to remove it by: a failure for a person to check, not a skip.
+
+        Sent means the result carries an outcome (``mutation_applied``) or the call itself failed in transit;
+        a tool failure raised before sending (busy gate, app stopped) has no outcome and left nothing.
+        """
+        sent = "mutation_applied" in create.summary or create.status == "exception"
+        if not sent or create.summary.get("mutation_applied") is not None or self.innerspace_created_ids(create_tool):
+            return False
+        self.record_check(
+            remove_tool,
+            "lifecycle",
+            False,
+            f"the create's outcome is unknown and it named no id: {noun} may be left on the plan; check it",
+        )
+        return True
+
+    def innerspace_no_single_id(self, create: SmokeRecord, created: list[Any], remove_tool: str, noun: str) -> None:
+        """A create that names no single id: a failure when it reported applied (something landed with no one id
+        to remove it by), otherwise a skip (nothing landed that a remove could find)."""
+        if create.summary.get("mutation_applied") is True:
+            self.record_check(
+                remove_tool,
+                "lifecycle",
+                False,
+                f"the create reported applied but named {len(created)} ids: {noun} may be left on the plan; check it",
+            )
+        else:
+            self.skip(remove_tool, "lifecycle", f"{noun} create named no single id")
+
+    async def lifecycle_innerspace_wall(self) -> None:
+        """Create, update and remove one short wall in a scratch region near a plan's top-left corner.
+
+        Frame coordinates in metres, on a plan whose map is not shifted or scaled. The wall is removed again
+        whenever its create named its id, whatever outcome it reported, also after a failed step.
+        """
+        plan_id = self.innerspace_scratch_plan()
+        if plan_id is None:
+            self.skip("innerspace_create_walls", "lifecycle", "no floor plan with an unshifted, unscaled map")
+            return
+        wall = {"x1": 0.1, "y1": 0.1, "x2": 0.6, "y2": 0.1, "variant": "drywall"}
+        create_args = {"plan_id": plan_id, "walls": [wall], "unit": "metric"}
+        preview = await self.call(
+            "innerspace_create_walls", {**create_args, "confirm": False}, "lifecycle:preview-create"
+        )
+        self.record_check(
+            "innerspace_create_walls",
+            "lifecycle:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "create preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        create = await self.call("innerspace_create_walls", {**create_args, "confirm": True}, "lifecycle:create")
+        if self.innerspace_orphan_possible(create, "innerspace_create_walls", "innerspace_remove_walls", "a wall"):
+            return
+        created = self.innerspace_created_ids("innerspace_create_walls")
+        if len(created) != 1:
+            # Any single id the create named is removed below, even after "not applied": that rests on a read-back.
+            self.innerspace_no_single_id(create, created, "innerspace_remove_walls", "a wall")
+            return
+        wall_id = str(created[0])
+        self.report.created_resources.append({"type": "innerspace_wall", "id": wall_id, "plan_id": plan_id})
+        try:
+            if create.success is not True:
+                return  # Unknown outcome: only the remove below runs.
+            await self.call("innerspace_list_walls", {"plan_id": plan_id, "unit": "metric"}, "lifecycle:list")
+            stored = self.innerspace_wall(plan_id, wall_id)
+            self.record_check(
+                "innerspace_list_walls",
+                "lifecycle:verify-create",
+                stored is not None
+                and stored.get("variant") == "drywall"
+                and all(abs((stored.get(key) or 0) - wall[key]) < 0.01 for key in ("x1", "y1", "x2", "y2")),
+                "the created wall reads back at its frame position and material",
+            )
+            update = await self.call(
+                "innerspace_update_walls",
+                {"plan_id": plan_id, "walls": [{"id": wall_id, "variant": "glass"}], "unit": "metric", "confirm": True},
+                "lifecycle:update",
+            )
+            await self.call("innerspace_list_walls", {"plan_id": plan_id, "unit": "metric"}, "lifecycle:list")
+            stored = self.innerspace_wall(plan_id, wall_id)
+            self.record_check(
+                "innerspace_update_walls",
+                "lifecycle:verify-update",
+                update.success is True
+                and update.summary.get("mutation_applied") is True
+                and stored is not None
+                and stored.get("variant") == "glass",
+                "a variant-only update reads back and keeps the end points",
+            )
+        finally:
+            remove = await self.call(
+                "innerspace_remove_walls",
+                {"plan_id": plan_id, "wall_ids": [wall_id], "confirm": True},
+                "lifecycle:remove",
+            )
+            listed = await self.call(
+                "innerspace_list_walls", {"plan_id": plan_id, "unit": "metric"}, "lifecycle:verify-cleanup"
+            )
+            # A list cut short at its limit can miss the wall, so only a complete list proves it gone.
+            complete = self.innerspace_data("innerspace_list_walls").get("truncated") is False
+            gone = (
+                remove.success is True
+                and listed.success is True
+                and complete
+                and self.innerspace_wall(plan_id, wall_id) is None
+            )
+            self.record_check("innerspace_remove_walls", "lifecycle:verify-cleanup", gone, "the wall is gone")
+            if gone:
+                self.report.cleaned_resources.append({"type": "innerspace_wall", "id": wall_id, "plan_id": plan_id})
+
+    def innerspace_data(self, tool: str) -> dict[str, Any]:
+        """The ``data`` of the tool's last result, or an empty dict."""
+        data = (self.cache.by_tool.get(tool) or {}).get("data")
+        return data if isinstance(data, dict) else {}
+
+    def innerspace_type_attenuation(self, collection: str, key: str, type_id: str) -> float | None:
+        """A type's attenuation in the last project read, or None."""
+        for item in self.innerspace_data("innerspace_get_project").get(collection) or []:
+            if isinstance(item, dict) and item.get("id") == type_id:
+                value = item.get(key)
+                return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        return None
+
+    def innerspace_user_type(self, collection: str, key: str) -> tuple[str, float] | None:
+        """The first type in the last project read that does not override a built-in material."""
+        for item in self.innerspace_data("innerspace_get_project").get(collection) or []:
+            if not isinstance(item, dict) or not item.get("id") or item.get("isDeleted") is True:
+                continue
+            if item.get("overrides_variant") is not None or item.get("overridesVariant") is not None:
+                continue
+            value = self.innerspace_type_attenuation(collection, key, item["id"])
+            if value is not None:
+                return str(item["id"]), value
+        return None
+
+    async def innerspace_preview_create_only(self, tool: str, args: dict[str, Any], noun: str) -> None:
+        """Preview a create that is never confirmed: no tool removes what it would make."""
+        preview = await self.call(tool, {**args, "confirm": False}, "approved:preview-create")
+        self.record_check(
+            tool,
+            "approved:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "create preview sends nothing and asks for confirmation",
+        )
+        self.skip(tool, "approved", f"not confirmed: no tool removes a {noun}, so a created one would stay")
+
+    async def innerspace_change_type(
+        self, tool: str, id_arg: str, type_id: str, original: float, read: tuple[str, str], kind: str
+    ) -> None:
+        """Change a type's attenuation by 1 dB, read it back, and put it back whenever the change was sent."""
+        changed = original + 1 if original + 1 <= 99 else original - 1
+        hidden = {id_arg: type_id, "attenuation_db": CONSOLE_VALUE}
+        preview = await self.call(
+            tool,
+            {id_arg: type_id, "attenuation_db": changed, "confirm": False},
+            "approved:preview-update",
+            report_args={**hidden, "confirm": False},
+        )
+        self.record_check(
+            tool,
+            "approved:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "update preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        changed_entry = {"type": kind, "id": type_id, "changed": "attenuation_db"}
+        self.report.created_resources.append(changed_entry)
+        try:
+            update = await self.call(
+                tool,
+                {id_arg: type_id, "attenuation_db": changed, "confirm": True},
+                "approved:update",
+                report_args={**hidden, "confirm": True},
+            )
+            await self.call("innerspace_get_project", {}, "approved:get")
+            stored = self.innerspace_type_attenuation(*read, type_id)
+            self.record_check(
+                tool,
+                "approved:verify-update",
+                update.success is True and stored is not None and abs(stored - changed) < 1e-6,
+                "the changed attenuation reads back",
+            )
+        finally:
+            restore = await self.call(
+                tool,
+                {id_arg: type_id, "attenuation_db": original, "confirm": True},
+                "approved:restore",
+                report_args={**hidden, "confirm": True},
+            )
+            reread = await self.call("innerspace_get_project", {}, "approved:verify-restore")
+            stored = self.innerspace_type_attenuation(*read, type_id)
+            restored = (
+                restore.success is True
+                and reread.success is True
+                and stored is not None
+                and abs(stored - original) < 1e-6
+            )
+            self.record_check(tool, "approved:verify-restore", restored, "the type's attenuation is restored")
+            if restored:
+                self.report.cleaned_resources.append(changed_entry)
+
+    async def lifecycle_innerspace_wall_types(self) -> None:
+        """Preview a wall type create; change a user-defined wall type's attenuation and restore it.
+
+        No tool removes a wall type, so the create is previewed and never confirmed. The update takes a
+        type that does not override a built-in material.
+        """
+        await self.innerspace_preview_create_only(
+            "innerspace_create_wall_type",
+            {"name": f"{RUN_PREFIX}-wall-type", "attenuation_db": 10, "color": "#808080"},
+            "wall type",
+        )
+        await self.call("innerspace_get_project", {}, "approved:get")
+        found = self.innerspace_user_type("wall_types", "attenuation_db")
+        if found is None:
+            self.skip("innerspace_update_wall_type", "approved", "no user-defined wall type to change")
+            return
+        await self.innerspace_change_type(
+            "innerspace_update_wall_type",
+            "wall_type_id",
+            *found,
+            read=("wall_types", "attenuation_db"),
+            kind="innerspace_wall_type",
+        )
+
+    def innerspace_plans(self) -> list[dict[str, Any]]:
+        """The plans of the last project read, in the project's plan order."""
+        plans = self.innerspace_data("innerspace_get_project").get("plans") or []
+        return [plan for plan in plans if isinstance(plan, dict) and plan.get("id")]
+
+    def innerspace_plan_title(self, plan_id: str) -> Any:
+        return next((plan.get("title") for plan in self.innerspace_plans() if plan["id"] == plan_id), None)
+
+    async def lifecycle_innerspace_rename_plan(self) -> None:
+        """Rename one floor plan to its title plus a fixed suffix and back, reading the title back each time.
+
+        The title is the user's: the report carries the plan id and whether the title came back, never a title.
+        """
+        tool = "innerspace_rename_floor_plan"
+        await self.call("innerspace_get_project", {}, "approved:get")
+        plan = next(
+            (
+                plan
+                for plan in self.innerspace_plans()
+                if isinstance(plan.get("title"), str)
+                and 1 <= len(plan["title"]) <= 32
+                and plan["title"].strip() == plan["title"]
+            ),
+            None,
+        )
+        if plan is None:
+            self.skip(tool, "approved", "no floor plan with a title the rename tool accepts back")
+            return
+        plan_id, original = str(plan["id"]), plan["title"]
+        renamed = original[: 32 - len(INNERSPACE_RENAME_SUFFIX)].rstrip() + INNERSPACE_RENAME_SUFFIX
+        hidden = {"plan_id": plan_id, "title": CONSOLE_VALUE}
+        preview = await self.call(
+            tool,
+            {"plan_id": plan_id, "title": renamed, "confirm": False},
+            "approved:preview-update",
+            report_args={**hidden, "confirm": False},
+        )
+        self.record_check(
+            tool,
+            "approved:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "rename preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        changed_entry = {"type": "innerspace_floor_plan_title", "id": plan_id}
+        self.report.created_resources.append(changed_entry)
+        try:
+            rename = await self.call(
+                tool,
+                {"plan_id": plan_id, "title": renamed, "confirm": True},
+                "approved:update",
+                report_args={**hidden, "confirm": True},
+            )
+            await self.call("innerspace_get_project", {}, "approved:get")
+            self.record_check(
+                tool,
+                "approved:verify-update",
+                rename.success is True and self.innerspace_plan_title(plan_id) == renamed,
+                "the new title reads back",
+            )
+        finally:
+            back = await self.call(
+                tool,
+                {"plan_id": plan_id, "title": original, "confirm": True},
+                "approved:restore",
+                report_args={**hidden, "confirm": True},
+            )
+            reread = await self.call("innerspace_get_project", {}, "approved:verify-restore")
+            restored = (
+                back.success is True and reread.success is True and self.innerspace_plan_title(plan_id) == original
+            )
+            self.record_check(tool, "approved:verify-restore", restored, "the original title is restored")
+            if restored:
+                self.report.cleaned_resources.append(changed_entry)
+
+    async def lifecycle_innerspace_reorder_plans(self) -> None:
+        """Swap the first two plans of one site in the plan order, read it back, and restore the order.
+
+        The tool numbers the plans 1, 2, 3 ... in the order it is given, so the restore brings back the order
+        of the plans, not necessarily the stored order values. When the values differ from the originals
+        afterwards, the entry stays in ``created_resources`` marked ``left_changed`` instead of being cleaned.
+        """
+        tool = "innerspace_reorder_floor_plans"
+        await self.call("innerspace_get_project", {}, "approved:get")
+        plans = self.innerspace_plans()
+        by_site: dict[Any, list[int]] = {}
+        for index, plan in enumerate(plans):
+            by_site.setdefault(plan.get("site_id"), []).append(index)
+        pair = next((indices[:2] for indices in by_site.values() if len(indices) >= 2), None)
+        if pair is None or any(
+            isinstance(plan.get("ordering"), bool) or not isinstance(plan.get("ordering"), (int, float))
+            for plan in plans
+        ):
+            self.skip(tool, "approved", "fewer than two floor plans on one site, or a plan without an order value")
+            return
+        original = [str(plan["id"]) for plan in plans]
+        original_values = {str(plan["id"]): plan["ordering"] for plan in plans}
+        swapped = list(original)
+        first, second = pair
+        swapped[first], swapped[second] = swapped[second], swapped[first]
+        preview = await self.call(tool, {"plan_ids": swapped, "confirm": False}, "approved:preview-update")
+        self.record_check(
+            tool,
+            "approved:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "reorder preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        changed_entry = {"type": "innerspace_plan_order", "ids": [original[first], original[second]]}
+        self.report.created_resources.append(changed_entry)
+        try:
+            reorder = await self.call(tool, {"plan_ids": swapped, "confirm": True}, "approved:update")
+            await self.call("innerspace_get_project", {}, "approved:get")
+            self.record_check(
+                tool,
+                "approved:verify-update",
+                reorder.success is True and [plan["id"] for plan in self.innerspace_plans()] == swapped,
+                "the swapped order reads back",
+            )
+        finally:
+            back = await self.call(tool, {"plan_ids": original, "confirm": True}, "approved:restore")
+            reread = await self.call("innerspace_get_project", {}, "approved:verify-restore")
+            restored = (
+                back.success is True
+                and reread.success is True
+                and [plan["id"] for plan in self.innerspace_plans()] == original
+            )
+            self.record_check(tool, "approved:verify-restore", restored, "the original plan order is restored")
+            values = {str(plan["id"]): plan.get("ordering") for plan in self.innerspace_plans()}
+            if restored and values == original_values:
+                self.report.cleaned_resources.append(changed_entry)
+            elif restored:
+                changed_entry["left_changed"] = "ordering values renumbered from 1"
+
+    async def innerspace_read_floor_attenuation(self, plan_id: str, phase: str) -> tuple[bool, Any]:
+        """A fresh read of a floor's attenuation: no read tool returns it, so a preview does, sending nothing."""
+        tool = "innerspace_set_floor_attenuation"
+        record = await self.call(tool, {"plan_id": plan_id, "attenuation_db": None, "confirm": False}, phase)
+        preview = (self.cache.by_tool.get(tool) or {}).get("preview")
+        current = preview.get("current") if isinstance(preview, dict) else None
+        if record.success is not True or not isinstance(current, dict) or "attenuation_db" not in current:
+            return False, None
+        return True, current["attenuation_db"]
+
+    async def lifecycle_innerspace_floor_attenuation(self) -> None:
+        """Set one floor's attenuation to another valid value (1 to 99 dB), read it back, and restore it."""
+        tool = "innerspace_set_floor_attenuation"
+        plan_id = self.cache.id_from_tool("innerspace_list_floor_plans", "floor_plans", ("id",))
+        if not plan_id:
+            self.skip(tool, "approved", "no floor plan")
+            return
+        known, original = await self.innerspace_read_floor_attenuation(plan_id, "approved:get")
+        if not known:
+            self.record_check(tool, "approved:get", False, "a preview shows the floor's current attenuation")
+            return
+        changed = INNERSPACE_FLOOR_DB[0] if original != INNERSPACE_FLOOR_DB[0] else INNERSPACE_FLOOR_DB[1]
+        preview = await self.call(
+            tool, {"plan_id": plan_id, "attenuation_db": changed, "confirm": False}, "approved:preview-update"
+        )
+        self.record_check(
+            tool,
+            "approved:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "floor attenuation preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        changed_entry = {"type": "innerspace_floor_attenuation", "id": plan_id}
+        self.report.created_resources.append(changed_entry)
+        try:
+            update = await self.call(
+                tool, {"plan_id": plan_id, "attenuation_db": changed, "confirm": True}, "approved:update"
+            )
+            known, stored = await self.innerspace_read_floor_attenuation(plan_id, "approved:get")
+            self.record_check(
+                tool,
+                "approved:verify-update",
+                update.success is True and known and stored == changed,
+                "the new floor attenuation reads back",
+            )
+        finally:
+            back = await self.call(
+                tool,
+                {"plan_id": plan_id, "attenuation_db": original, "confirm": True},
+                "approved:restore",
+                report_args={"plan_id": plan_id, "attenuation_db": CONSOLE_VALUE, "confirm": True},
+            )
+            known, stored = await self.innerspace_read_floor_attenuation(plan_id, "approved:verify-restore")
+            restored = back.success is True and known and stored == original
+            self.record_check(tool, "approved:verify-restore", restored, "the original floor attenuation is restored")
+            if restored:
+                self.report.cleaned_resources.append(changed_entry)
+
+    def innerspace_shape_listed(self, shape_id: str) -> bool:
+        shapes = self.innerspace_data("innerspace_get_project").get("shapes") or []
+        return any(isinstance(shape, dict) and shape.get("id") == shape_id for shape in shapes)
+
+    async def lifecycle_innerspace_attenuation_objects(self) -> None:
+        """Create, update and remove one small attenuation object below the wall lifecycle's scratch wall.
+
+        Frame coordinates in metres on the wall lifecycle's plan. No read tool returns an object's kind, so
+        the update is read back with a fresh preview of the same update, which must have nothing to change.
+        The object is removed whenever its create named its id, whatever outcome it reported, also after a
+        failed step.
+        """
+        create_tool, update_tool, remove_tool = (
+            "innerspace_create_attenuation_objects",
+            "innerspace_update_attenuation_objects",
+            "innerspace_remove_attenuation_objects",
+        )
+        plan_id = self.innerspace_scratch_plan()
+        if plan_id is None:
+            self.skip(create_tool, "lifecycle", "no floor plan with an unshifted, unscaled map")
+            return
+        corners = [(0.1, 0.2), (0.4, 0.2), (0.4, 0.5), (0.1, 0.5), (0.1, 0.2)]
+        square = {"points": [{"x": x, "y": y} for x, y in corners], "variant": "shelf_small"}
+        create_args = {"plan_id": plan_id, "objects": [square], "unit": "metric"}
+        preview = await self.call(create_tool, {**create_args, "confirm": False}, "lifecycle:preview-create")
+        self.record_check(
+            create_tool,
+            "lifecycle:verify-preview",
+            preview.success is True and preview.summary.get("requires_confirmation") is True,
+            "create preview sends nothing and asks for confirmation",
+        )
+        if preview.success is not True:
+            return
+        create = await self.call(create_tool, {**create_args, "confirm": True}, "lifecycle:create")
+        if self.innerspace_orphan_possible(create, create_tool, remove_tool, "an attenuation object"):
+            return
+        created = self.innerspace_created_ids(create_tool)
+        if len(created) != 1:
+            # Any single id the create named is removed below, even after "not applied": that rests on a read-back.
+            self.innerspace_no_single_id(create, created, remove_tool, "an attenuation object")
+            return
+        object_id = str(created[0])
+        entry = {"type": "innerspace_attenuation_object", "id": object_id, "plan_id": plan_id}
+        self.report.created_resources.append(entry)
+        try:
+            if create.success is not True:
+                return  # Unknown outcome: only the remove below runs.
+            listed = await self.call("innerspace_get_project", {"include_shapes": True}, "lifecycle:list")
+            self.record_check(
+                create_tool,
+                "lifecycle:verify-create",
+                listed.success is True and self.innerspace_shape_listed(object_id),
+                "the created object is listed on the project",
+            )
+            update_args = {
+                "plan_id": plan_id,
+                "objects": [{"id": object_id, "variant": "server_rack"}],
+                "unit": "metric",
+            }
+            preview = await self.call(update_tool, {**update_args, "confirm": False}, "lifecycle:preview-update")
+            self.record_check(
+                update_tool,
+                "lifecycle:verify-preview",
+                preview.success is True and preview.summary.get("requires_confirmation") is True,
+                "update preview sends nothing and asks for confirmation",
+            )
+            update = await self.call(update_tool, {**update_args, "confirm": True}, "lifecycle:update")
+            reread = await self.call(update_tool, {**update_args, "confirm": False}, "lifecycle:get")
+            settled = ((self.cache.by_tool.get(update_tool) or {}).get("preview") or {}).get("no_op") is True
+            self.record_check(
+                update_tool,
+                "lifecycle:verify-update",
+                update.success is True and reread.success is True and settled,
+                "a fresh preview of the same update has nothing left to change",
+            )
+        finally:
+            remove = await self.call(
+                remove_tool, {"plan_id": plan_id, "object_ids": [object_id], "confirm": True}, "lifecycle:remove"
+            )
+            listed = await self.call("innerspace_get_project", {"include_shapes": True}, "lifecycle:verify-cleanup")
+            complete = self.innerspace_data("innerspace_get_project").get("truncated") is not True
+            gone = (
+                remove.success is True
+                and listed.success is True
+                and complete
+                and not self.innerspace_shape_listed(object_id)
+            )
+            self.record_check(remove_tool, "lifecycle:verify-cleanup", gone, "the attenuation object is gone")
+            if gone:
+                self.report.cleaned_resources.append(entry)
+
+    async def lifecycle_innerspace_attenuation_object_types(self) -> None:
+        """Preview an attenuation-object type create; change a user-defined type's attenuation and restore it.
+
+        No tool removes an attenuation-object type, so the create is previewed and never confirmed. The update
+        takes a type that does not override a built-in kind.
+        """
+        await self.innerspace_preview_create_only(
+            "innerspace_create_attenuation_object_type",
+            {"name": f"{RUN_PREFIX}-object-type", "attenuation_db": 10, "color": "#808080"},
+            "attenuation-object type",
+        )
+        await self.call("innerspace_get_project", {}, "approved:get")
+        found = self.innerspace_user_type("attenuation_object_types", "attenuation")
+        if found is None:
+            self.skip(
+                "innerspace_update_attenuation_object_type", "approved", "no user-defined attenuation-object type"
+            )
+            return
+        await self.innerspace_change_type(
+            "innerspace_update_attenuation_object_type",
+            "attenuation_object_type_id",
+            *found,
+            read=("attenuation_object_types", "attenuation"),
+            kind="innerspace_attenuation_object_type",
+        )
+
+    def innerspace_plan_scale(self, plan_id: str) -> float | None:
+        """The plan's plan units per project unit in the last floor plan list, or None."""
+        for plan in self.cache.items_from_tool("innerspace_list_floor_plans", "floor_plans"):
+            if plan.get("id") == plan_id:
+                value = plan.get("scale_per_unit")
+                return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        return None
+
+    def innerspace_scale_restore(self, plan_id: str) -> dict[str, Any] | None:
+        """The plan's current scale line from the last scale preview, as arguments that set it again."""
+        preview = (self.cache.by_tool.get("innerspace_set_plan_scale") or {}).get("preview")
+        current = preview.get("current") if isinstance(preview, dict) else None
+        line = current.get("line") if isinstance(current, dict) else None
+        if not isinstance(line, dict):
+            return None
+        values = {key: line.get(key) for key in ("x1", "y1", "x2", "y2")} | {"length": current.get("length")}
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values.values()):
+            return None
+        if values["length"] <= 0:
+            return None
+        return {"plan_id": plan_id, **values, "unit": "imperial", "coordinates": "plan_units"}
+
+    async def lifecycle_innerspace_unit_and_scale(self) -> None:
+        """Replace the scratch plan's scale line on an imperial project, then restore the scale and the unit.
+
+        A metric project is set to imperial first. The new line runs 100 plan units, (0, 0)-(100, 0), and is
+        10 ft long, so the plan reads back 10 plan units per foot only when the scale goes out in metres with
+        the positions in plan units, whatever the project unit. The original line (plan units) and its exact
+        length (feet) come from the replace's own preview. The scale and then the unit are restored
+        whenever their change was sent, and both are read back. Approved phase only: the replace is
+        destructive, and devices on the plan shift on the image until the scale is restored.
+        """
+        unit_tool, scale_tool = "innerspace_set_project_unit", "innerspace_set_plan_scale"
+        plan_id = self.innerspace_scratch_plan()
+        if plan_id is None:
+            self.skip(scale_tool, "approved", "no floor plan with an unshifted, unscaled map")
+            return
+        project = await self.call("innerspace_get_project", {}, "approved:get")
+        plans = await self.call("innerspace_list_floor_plans", {}, "approved:get")
+        original_unit = self.innerspace_data("innerspace_get_project").get("unit")
+        original_scale = self.innerspace_plan_scale(plan_id)
+        if (
+            project.success is not True
+            or plans.success is not True
+            or original_unit not in ("metric", "imperial")
+            or original_scale is None
+        ):
+            self.skip(scale_tool, "approved", "could not read the project unit and the plan's scale")
+            return
+        switch = original_unit == "metric"
+        unit_entry = {"type": "innerspace_project_unit", "changed": "unit"}
+        scale_entry = {"type": "innerspace_plan_scale", "plan_id": plan_id}
+        if switch:
+            preview = await self.call(unit_tool, {"unit": "imperial", "confirm": False}, "approved:preview-update")
+            self.record_check(
+                unit_tool,
+                "approved:verify-preview",
+                preview.success is True and preview.summary.get("requires_confirmation") is True,
+                "unit preview sends nothing and asks for confirmation",
+            )
+            if preview.success is not True:
+                return
+            self.report.created_resources.append(unit_entry)
+        scale_restore: SmokeRecord | None = None
+        try:
+            if switch:
+                update = await self.call(unit_tool, {"unit": "imperial", "confirm": True}, "approved:update")
+                reread = await self.call("innerspace_get_project", {}, "approved:get")
+                imperial = (
+                    update.success is True
+                    and reread.success is True
+                    and self.innerspace_data("innerspace_get_project").get("unit") == "imperial"
+                )
+                self.record_check(unit_tool, "approved:verify-update", imperial, "the project reads back imperial")
+                if not imperial:
+                    return
+            line = {"plan_id": plan_id, "x1": 0.0, "y1": 0.0, "x2": 100.0, "y2": 0.0, "length": 10.0}
+            line |= {"unit": "imperial", "coordinates": "plan_units"}
+            preview = await self.call(scale_tool, {**line, "confirm": False}, "approved:preview-update")
+            restore = self.innerspace_scale_restore(plan_id)
+            self.record_check(
+                scale_tool,
+                "approved:verify-preview",
+                preview.success is True
+                and preview.summary.get("requires_confirmation") is True
+                and restore is not None,
+                "scale preview sends nothing, asks for confirmation and shows the current line and length",
+            )
+            if preview.success is not True or restore is None:
+                return
+            self.report.created_resources.append(scale_entry)
+            try:
+                replace = await self.call(scale_tool, {**line, "confirm": True}, "approved:update")
+                reread = await self.call("innerspace_list_floor_plans", {}, "approved:get")
+                stored = self.innerspace_plan_scale(plan_id)
+                self.record_check(
+                    scale_tool,
+                    "approved:verify-imperial-scale",
+                    replace.success is True
+                    and reread.success is True
+                    and stored is not None
+                    and abs(stored - 10) < 1e-3,
+                    "on an imperial project, 100 plan units over 10 ft read back as 10 plan units per foot",
+                )
+            finally:
+                hidden = {key: CONSOLE_VALUE for key in ("x1", "y1", "x2", "y2", "length")}
+                scale_restore = await self.call(
+                    scale_tool,
+                    {**restore, "confirm": True},
+                    "approved:restore",
+                    report_args={**restore, **hidden, "confirm": True},
+                )
+        finally:
+            unit_restore = None
+            if switch:
+                unit_restore = await self.call(unit_tool, {"unit": original_unit, "confirm": True}, "approved:restore")
+            project = await self.call("innerspace_get_project", {}, "approved:verify-restore")
+            plans = await self.call("innerspace_list_floor_plans", {}, "approved:verify-restore")
+            unit_back = (
+                project.success is True and self.innerspace_data("innerspace_get_project").get("unit") == original_unit
+            )
+            if unit_restore is not None:
+                restored = unit_restore.success is True and unit_back
+                self.record_check(
+                    unit_tool, "approved:verify-restore", restored, "the original project unit is restored"
+                )
+                if restored:
+                    self.report.cleaned_resources.append(unit_entry)
+            if scale_restore is not None:
+                stored = self.innerspace_plan_scale(plan_id)
+                restored = (
+                    scale_restore.success is True
+                    and plans.success is True
+                    and unit_back
+                    and stored is not None
+                    # The restore sends the stored length exactly; only float noise may remain.
+                    and abs(stored - original_scale) <= 1e-6 * abs(original_scale)
+                )
+                self.record_check(
+                    scale_tool, "approved:verify-restore", restored, "the original plan scale is restored exactly"
+                )
+                if restored:
+                    self.report.cleaned_resources.append(scale_entry)
 
 
 def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:

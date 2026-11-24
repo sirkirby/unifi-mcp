@@ -26,7 +26,7 @@ async def get_tools(request: Request) -> dict:
     items = []
     for tool_name in manifest.all_tools():
         entry = manifest.resolve(tool_name)
-        if entry.product in _PROJECTION_REGISTRATIONS:
+        if tool_name in _PROJECTION_REGISTRATIONS.get(entry.product, {}):
             projection, kind = request.app.state.type_registry.lookup_tool(tool_name)
             render_hint = projection.render_hint(kind)
         else:

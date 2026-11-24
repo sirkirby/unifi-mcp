@@ -17,6 +17,7 @@ from unifi_innerspace_mcp.categories import (
     INNERSPACE_CATEGORY_MAP,
     LAZY_DIRECT_TOOLS,
     TOOL_MODULE_MAP,
+    policy_gates,
     setup_lazy_loading,
 )
 from unifi_innerspace_mcp.jobs import get_job_status, start_async_tool
@@ -76,6 +77,7 @@ async def plan_image_resource_enabled() -> bool:
 
 async def main_async():
     """Main asynchronous function to setup and run the server."""
+    from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
     from unifi_mcp_shared.setup_required import controller_host_configured, serve_setup_required
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
@@ -85,6 +87,8 @@ async def main_async():
     install_asyncio_exception_handler(logger)
     apply_log_level(config, "unifi-innerspace-mcp")
     configure_tracing("unifi-innerspace-mcp", logger=logger)
+    check_deprecated_env_vars("innerspace", logger)
+    check_unknown_policy_env_vars("innerspace", logger, policy_gates(), INNERSPACE_CATEGORY_MAP)
     if not controller_host_configured(config):
         # Answer initialize and explain setup instead of exiting; register no
         # controller tools and open no controller connection.

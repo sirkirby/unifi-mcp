@@ -100,10 +100,14 @@ async def test_closed_product_set_names_innerspace(tmp_path):
 def test_builder_keys_match_runtime_attributes():
     assert managers_module._PRODUCT_BUILDERS["innerspace"] is _build_innerspace_managers
     assert set(_build_innerspace_managers()) == {
+        "attenuation_manager",
         "floor_plan_manager",
         "inventory_manager",
         "project_manager",
+        "project_settings_manager",
         "system_manager",
+        "wall_manager",
+        "wall_type_manager",
     }
 
 
