@@ -282,8 +282,12 @@ async def test_a_read_back_with_no_changes_in_it_is_unknown(connected, console):
 
 
 async def _settled(connected, console, reads, *, status=None, body=b"{}", drop=False, held_remaining=None):
-    """send_write with a scripted read-back sequence and a recorded, instant sleep on the manager."""
-    from unittest.mock import patch
+    """send_write with a scripted read-back sequence and a recorded, instant sleep on the manager.
+
+    With ``held_remaining`` it runs inside a held write of a real operation gate with that much of
+    its hold budget left.
+    """
+    from contextlib import AsyncExitStack
 
     from unifi_core.write_verification import READBACK_SETTLE_DELAYS_SECONDS
 
@@ -301,7 +305,11 @@ async def _settled(connected, console, reads, *, status=None, body=b"{}", drop=F
         slept.append(seconds)
 
     connected.readback_sleep = sleep
-    with patch("unifi_core.write_verification.held_write_remaining_seconds", return_value=held_remaining):
+    async with AsyncExitStack() as stack:
+        if held_remaining is not None:
+            gate, clock = _gate()
+            await stack.enter_async_context(gate.write())
+            clock.value = gate.settings.hold_budget_seconds - held_remaining
         result = await send_write(
             connected, "POST", SHAPE_CHANGE_PATH, {"create": [], "mode": "2D"}, operation=OP, read_back=read_back
         )
