@@ -49,6 +49,7 @@ MIN_HTTP_AUTH_TOKEN_LENGTH = 32
 HTTP_AUTH_TRUSTED_NETWORKS_ENV = "UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+_IPV4_MAPPED = ipaddress.IPv6Network("::ffff:0:0/96")
 _AUTH_REALM = "unifi-mcp"
 
 
@@ -158,11 +159,15 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
     """Parse ``UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS`` into networks.
 
     Each comma-separated entry is an IP address or a CIDR network (host bits
-    are ignored, so ``172.30.33.2/23`` means ``172.30.32.0/23``). Unset or
-    blank means no network is trusted. An entry that does not parse, or a
-    network with prefix length 0 (which would trust every address and turn the
-    token off), refuses startup: this is an access control, so a typo must not
-    silently widen or drop it.
+    are ignored, so ``192.0.2.7/24`` means ``192.0.2.0/24``). Unset or blank
+    means no network is trusted. Startup is refused, because this is an access
+    control and a typo must not silently widen or drop it, when:
+
+    - an entry does not parse;
+    - an entry is an IPv4-mapped IPv6 network (``::ffff:a.b.c.d``), which could
+      never match because mapped peers are compared in their IPv4 form;
+    - the entries trust every IPv4 or every IPv6 address, alone (``/0``) or
+      together (``0.0.0.0/1`` plus ``128.0.0.0/1``), which turns the token off.
     """
     raw = os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV)
     if raw is None or not raw.strip():
@@ -183,13 +188,33 @@ def resolve_http_auth_trusted_networks(*, logger: logging.Logger) -> tuple[IPNet
         if network.prefixlen == 0:
             logger.error(
                 "[credentials] %s entry %r trusts every address, which turns the bearer token off. "
-                "Unset the token instead, or list the proxy's own network. Refusing to start until it is fixed.",
+                "Unset the token instead, or list the proxy's own address. Refusing to start until it is fixed.",
                 HTTP_AUTH_TRUSTED_NETWORKS_ENV,
                 entry,
             )
             raise SystemExit(2)
+        if isinstance(network, ipaddress.IPv6Network) and network.subnet_of(_IPV4_MAPPED):
+            mapped = network.network_address.ipv4_mapped
+            logger.error(
+                "[credentials] %s entry %r is an IPv4-mapped IPv6 network; write it as %s. "
+                "Refusing to start until it is fixed.",
+                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                entry,
+                ipaddress.ip_network(f"{mapped}/{network.prefixlen - 96}"),
+            )
+            raise SystemExit(2)
         if network not in networks:
             networks.append(network)
+    for version in (4, 6):
+        same_version = [network for network in networks if network.version == version]
+        if any(merged.prefixlen == 0 for merged in ipaddress.collapse_addresses(same_version)):
+            logger.error(
+                "[credentials] %s entries together trust every IPv%d address, which turns the bearer token off. "
+                "Unset the token instead, or list the proxy's own address. Refusing to start until it is fixed.",
+                HTTP_AUTH_TRUSTED_NETWORKS_ENV,
+                version,
+            )
+            raise SystemExit(2)
     return tuple(networks)
 
 
@@ -394,7 +419,9 @@ async def run_transports(
 
             if auth_token:
                 if trusted_networks:
-                    logger.info(
+                    # WARNING, not INFO: an exemption from authentication must stay
+                    # visible when the log level is raised to WARNING.
+                    logger.warning(
                         "%s requires a bearer token, except from %s.",
                         transport_label,
                         ", ".join(str(network) for network in trusted_networks),

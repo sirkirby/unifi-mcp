@@ -47,18 +47,18 @@ def test_unset_or_blank_trusts_nothing(monkeypatch, value):
 
 
 def test_parses_addresses_networks_and_ipv6(monkeypatch):
-    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, " 172.30.33.2/23, 10.0.0.5 ,fd00::/8, 172.30.32.0/23 ")
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, " 192.0.2.10/24, 203.0.113.5 ,2001:db8::/32, 192.0.2.0/24 ")
 
     assert resolve_http_auth_trusted_networks(logger=LOGGER) == (
-        ipaddress.ip_network("172.30.32.0/23"),
-        ipaddress.ip_network("10.0.0.5/32"),
-        ipaddress.ip_network("fd00::/8"),
+        ipaddress.ip_network("192.0.2.0/24"),
+        ipaddress.ip_network("203.0.113.5/32"),
+        ipaddress.ip_network("2001:db8::/32"),
     )
 
 
-@pytest.mark.parametrize("entry", ["not-an-ip", "300.1.1.1", "10.0.0.0/33", "example.com"])
+@pytest.mark.parametrize("entry", ["not-an-ip", "300.1.1.1", "192.0.2.0/33", "example.com"])
 def test_invalid_entry_refuses_startup(monkeypatch, caplog, entry):
-    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, f"172.30.32.0/23,{entry}")
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, f"192.0.2.0/24,{entry}")
 
     with pytest.raises(SystemExit) as excinfo:
         resolve_http_auth_trusted_networks(logger=LOGGER)
@@ -78,6 +78,46 @@ def test_network_trusting_everything_refuses_startup(monkeypatch, caplog, entry)
     assert "trusts every address" in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("value", "version"),
+    [
+        ("0.0.0.0/1,128.0.0.0/1", 4),
+        ("192.0.2.10,0.0.0.0/2,64.0.0.0/2,128.0.0.0/1", 4),
+        ("::/1,8000::/1", 6),
+    ],
+)
+def test_networks_that_together_trust_everything_refuse_startup(monkeypatch, caplog, value, version):
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, value)
+
+    with pytest.raises(SystemExit) as excinfo:
+        resolve_http_auth_trusted_networks(logger=LOGGER)
+
+    assert excinfo.value.code == 2
+    assert f"together trust every IPv{version} address" in caplog.text
+
+
+def test_half_of_each_address_family_is_allowed(monkeypatch):
+    # Broad, but neither family is wholly trusted; only full coverage is refused.
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "0.0.0.0/1,::/1")
+
+    assert len(resolve_http_auth_trusted_networks(logger=LOGGER)) == 2
+
+
+@pytest.mark.parametrize(
+    ("entry", "ipv4_form"),
+    [("::ffff:192.0.2.0/120", "192.0.2.0/24"), ("::ffff:192.0.2.10", "192.0.2.10/32")],
+)
+def test_ipv4_mapped_network_refuses_startup_with_the_ipv4_form(monkeypatch, caplog, entry, ipv4_form):
+    # Mapped peers are compared in IPv4 form, so a mapped network could never match.
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, entry)
+
+    with pytest.raises(SystemExit) as excinfo:
+        resolve_http_auth_trusted_networks(logger=LOGGER)
+
+    assert excinfo.value.code == 2
+    assert f"write it as {ipv4_form}" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
@@ -94,17 +134,17 @@ def _client(peer, networks, calls):
     return httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1")
 
 
-PROXY_NET = (ipaddress.ip_network("172.30.32.0/23"),)
+PROXY_NET = (ipaddress.ip_network("192.0.2.10/32"),)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("peer", "headers"),
     [
-        (("172.30.33.2", 40000), {}),
+        (("192.0.2.10", 40000), {}),
         # The proxy's own Authorization header (its OAuth token) is not the server's token.
-        (("172.30.33.2", 40000), {"Authorization": "Bearer proxy-issued-oauth-token"}),
-        (("::ffff:172.30.33.2", 40000), {}),
+        (("192.0.2.10", 40000), {"Authorization": "Bearer proxy-issued-oauth-token"}),
+        (("::ffff:192.0.2.10", 40000), {}),
     ],
 )
 async def test_trusted_peer_passes_without_the_token(peer, headers):
@@ -117,7 +157,7 @@ async def test_trusted_peer_passes_without_the_token(peer, headers):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("peer", [("192.168.1.41", 50000), ("172.30.34.1", 50000), ("fe80::1", 50000)])
+@pytest.mark.parametrize("peer", [("198.51.100.41", 50000), ("192.0.2.11", 50000), ("fe80::1", 50000)])
 async def test_untrusted_peer_still_needs_the_token(peer):
     calls: list[str] = []
     async with _client(peer, PROXY_NET, calls) as client:
@@ -130,9 +170,22 @@ async def test_untrusted_peer_still_needs_the_token(peer):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("networks", "status"),
+    [((ipaddress.ip_network("fe80::/64"),), 200), (PROXY_NET, 401)],
+)
+async def test_link_local_peer_with_a_zone_id_matches_only_its_ipv6_network(networks, status):
+    calls: list[str] = []
+    async with _client(("fe80::1%eth0", 40000), networks, calls) as client:
+        response = await client.post("/mcp")
+
+    assert response.status_code == status
+
+
+@pytest.mark.asyncio
 async def test_without_trusted_networks_every_peer_needs_the_token():
     calls: list[str] = []
-    async with _client(("172.30.33.2", 40000), (), calls) as client:
+    async with _client(("192.0.2.10", 40000), (), calls) as client:
         response = await client.post("/mcp")
 
     assert response.status_code == 401
@@ -188,7 +241,7 @@ async def test_invalid_value_refuses_startup_before_any_transport(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_trusted_networks_without_a_token_warn_and_change_nothing(monkeypatch, caplog):
-    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "172.30.32.0/23")
+    monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, "192.0.2.10/32")
     server = UniFiMCPServer("trusted-no-token-test")
 
     async def fake_serve(**_kwargs):
@@ -224,11 +277,11 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
-async def _serve(monkeypatch, trusted: str):
+async def _serve(monkeypatch, trusted: str, transport_security: TransportSecuritySettings | None = None):
     monkeypatch.setenv(HTTP_AUTH_TRUSTED_NETWORKS_ENV, trusted)
     server = UniFiMCPServer(
         "trusted-real-test",
-        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        transport_security=transport_security or TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     port = _free_port()
     real_uvicorn_server = uvicorn.Server
@@ -292,7 +345,7 @@ MCP_HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": 
 
 
 @pytest.mark.asyncio
-async def test_real_server_lets_a_trusted_peer_in_without_the_token(monkeypatch):
+async def test_real_server_lets_a_trusted_peer_in_without_the_token(monkeypatch, caplog):
     url, stop = await _serve(monkeypatch, "127.0.0.1/32")
     try:
         async with httpx.AsyncClient() as raw:
@@ -301,15 +354,40 @@ async def test_real_server_lets_a_trusted_peer_in_without_the_token(monkeypatch)
     finally:
         await stop()
 
+    # The exemption is announced at WARNING, so it shows even at a WARNING log level.
+    exemption = [record for record in caplog.records if "except from 127.0.0.1/32" in record.getMessage()]
+    assert [record.levelno for record in exemption] == [logging.WARNING]
+
+
+@pytest.mark.asyncio
+async def test_real_server_still_checks_host_and_origin_for_a_trusted_peer(monkeypatch):
+    # Skipping the token must not skip the DNS-rebinding Host/Origin allowlist.
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=["127.0.0.1:*"],
+        allowed_origins=["http://127.0.0.1:*"],
+    )
+    url, stop = await _serve(monkeypatch, "127.0.0.1/32", transport_security=security)
+    try:
+        async with httpx.AsyncClient() as raw:
+            allowed = await raw.post(url, json=INIT, headers=MCP_HEADERS)
+            bad_host = await raw.post(url, json=INIT, headers={**MCP_HEADERS, "Host": "attacker.example"})
+            bad_origin = await raw.post(url, json=INIT, headers={**MCP_HEADERS, "Origin": "http://attacker.example"})
+        assert allowed.status_code == 200
+        assert bad_host.status_code == 421
+        assert bad_origin.status_code == 403
+    finally:
+        await stop()
+
 
 @pytest.mark.asyncio
 async def test_real_server_ignores_a_forwarded_for_header_claiming_a_trusted_source(monkeypatch):
     # The peer is 127.0.0.1 (uvicorn's default forwarded_allow_ips), and the header
     # claims a trusted address. Only the TCP peer counts, so the token is required.
-    url, stop = await _serve(monkeypatch, "10.0.0.0/8")
+    url, stop = await _serve(monkeypatch, "203.0.113.0/24")
     try:
         async with httpx.AsyncClient() as raw:
-            spoofed = await raw.post(url, json=INIT, headers={**MCP_HEADERS, "X-Forwarded-For": "10.1.2.3"})
+            spoofed = await raw.post(url, json=INIT, headers={**MCP_HEADERS, "X-Forwarded-For": "203.0.113.7"})
             with_token = await raw.post(url, json=INIT, headers={**MCP_HEADERS, "Authorization": f"Bearer {TOKEN}"})
         assert spoofed.status_code == 401
         assert with_token.status_code == 200
