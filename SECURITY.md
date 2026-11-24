@@ -8,7 +8,7 @@
 | unifi-protect-mcp | Latest release (beta) |
 | unifi-access-mcp | Latest release (beta) |
 | unifi-sitemanager-mcp | Latest release (beta) |
-| unifi-innerspace-mcp | Not yet released; run from source at your own risk |
+| unifi-innerspace-mcp | Latest release (beta) |
 | unifi-mcp-relay | Latest release (beta) |
 | unifi-mcp-worker | Latest release (beta) |
 
@@ -70,7 +70,7 @@ The Site Manager server (`apps/sitemanager/`) is not local-first. It has a diffe
 
 ### InnerSpace Console Session
 
-The InnerSpace server (`apps/innerspace/`, not yet released) is local-first, but it has its own credential rule:
+The InnerSpace server (`apps/innerspace/`) is local-first, but it has its own credential rule:
 
 - It reads InnerSpace on a console with a login session (username and password), never an API key. A console's local `UNIFI_API_KEY` is never read or sent to InnerSpace, and an InnerSpace controller on `unifi-api-server` is refused without a username and password; a stored API token is never passed to its connection.
 - The destination is the console you name. Redirects are never followed and proxy environment variables are ignored, so the session cookie cannot be sent elsewhere. Certificate checks follow the same fingerprint and verification settings as the console servers.

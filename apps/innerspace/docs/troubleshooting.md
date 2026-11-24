@@ -1,6 +1,6 @@
 # Troubleshooting — InnerSpace Server
 
-The InnerSpace server is not yet released, so it runs from a source checkout and there is no package or image to reinstall. This server has no support-bundle tool. To report a problem, see [Reporting a problem](#reporting-a-problem).
+This server has no support-bundle tool. To report a problem, see [Reporting a problem](#reporting-a-problem).
 
 ## Setup and startup
 
@@ -118,7 +118,7 @@ One request waits up to 30 seconds, and a login attempt 15. Check that the conso
 
 ## Docker
 
-The image is built from a checkout; there is no published image. The service is in the opt-in `innerspace` profile, so the default stack does not start it, and it is not in the relay's default server list.
+The published image is `ghcr.io/sirkirby/unifi-innerspace-mcp`. The Compose service builds the image from a checkout; see [configuration.md](configuration.md#docker-compose). The service is in the opt-in `innerspace` profile, so the default stack does not start it, and it is not in the relay's default server list.
 
 ```bash
 docker compose -f docker/docker-compose.yml --profile innerspace up --build unifi-innerspace-mcp

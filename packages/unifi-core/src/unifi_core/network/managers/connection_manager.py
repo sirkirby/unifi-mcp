@@ -22,7 +22,7 @@ from aiounifi.interfaces.api_handlers import APIHandler, ItemEvent
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
-from unifi_core.auth import AuthenticationStatus, UniFiAuth
+from unifi_core.auth import AuthenticationStatus, UniFiAuth, api_key_variables, session_credentials_remediation
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.connection_failure import ControllerAuthFailed, ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiAuthError
@@ -1112,9 +1112,9 @@ class ConnectionManager:
             raise UniFiAuthError("API-key inventory requests cannot leave the configured controller.")
         if request.method != "GET" or not self._key_read_allowed(request.url.path):
             raise UniFiAuthError(
-                "This operation requires Network session authentication. "
-                "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD; "
-                "API-key legacy access supports verified GET reads only."
+                "This operation requires Network session authentication; "
+                "API-key legacy access supports verified GET reads only. "
+                f"{session_credentials_remediation(self.tls_env_prefix)}"
             )
         return await handler(request)
 
@@ -1237,7 +1237,9 @@ class ConnectionManager:
     async def request_integration(self, path: str, params: dict | None = None) -> dict:
         """Bounded public inventory GET; never reuse cookies or forward redirects."""
         if not self.unifi_auth.has_api_key:
-            raise UniFiAuthError("Network Integration API requires UNIFI_NETWORK_API_KEY or UNIFI_API_KEY.")
+            variables = api_key_variables(self.tls_env_prefix)
+            where = f"Set {variables}." if variables else "Add one to this controller's configuration."
+            raise UniFiAuthError(f"Network Integration API requires an API key. {where}")
         if not path.startswith("/v1/") or "?" in path or not is_safe_request_path(path):
             raise ValueError("Invalid Network Integration API path")
         prefix = self._integration_prefix if self._integration_prefix is not None else "/proxy/network"
@@ -1514,8 +1516,8 @@ class ConnectionManager:
         if self.integration_inventory_only:
             raise UniFiAuthError(
                 "This operation requires Network session authentication on this controller. "
-                "API-key-only access is limited to public inventory; configure "
-                "UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD for legacy operations."
+                "API-key-only access is limited to public inventory. "
+                f"{session_credentials_remediation(self.tls_env_prefix)}"
             )
 
         if not self._initialized or not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
@@ -1592,9 +1594,9 @@ class ConnectionManager:
     async def _reauthenticate(self, expected_generation: int, *, rate_limit_login: bool = False) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""
         if self._key_mode:
-            self._last_connection_error = (
-                "API-key request rejected; verify UNIFI_NETWORK_API_KEY and controller permissions."
-            )
+            variables = api_key_variables(self.tls_env_prefix)
+            where = variables or "the API key in this controller's configuration"
+            self._last_connection_error = f"API-key request rejected; verify {where} and controller permissions."
             return False
         if self._reconnect_block_active():
             return False

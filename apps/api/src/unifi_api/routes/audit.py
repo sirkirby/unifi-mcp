@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -13,7 +12,7 @@ from sqlalchemy import select
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.db.models import AuditLog
-from unifi_api.services.audit import add_audit_subscriber
+from unifi_api.services.audit import add_audit_subscriber, parse_ts_bound
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
@@ -64,12 +63,12 @@ async def list_audit(
         stmt = stmt.where(AuditLog.outcome == outcome)
     if since is not None:
         try:
-            stmt = stmt.where(AuditLog.ts >= datetime.fromisoformat(since))
+            stmt = stmt.where(AuditLog.ts >= parse_ts_bound(since))
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid 'since' timestamp")
     if until is not None:
         try:
-            stmt = stmt.where(AuditLog.ts <= datetime.fromisoformat(until))
+            stmt = stmt.where(AuditLog.ts <= parse_ts_bound(until))
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid 'until' timestamp")
     if q is not None:

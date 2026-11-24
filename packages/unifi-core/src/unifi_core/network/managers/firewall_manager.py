@@ -12,7 +12,7 @@ from aiounifi.models.firewall_policy import FirewallPolicy
 from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
-from unifi_core.auth import UniFiAuth
+from unifi_core.auth import UniFiAuth, api_key_variables, session_credentials_remediation
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError, http_status
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
@@ -32,6 +32,7 @@ from unifi_core.network.models.firewall import (
     validate_policy_selectors,
     validate_zone_targeting,
 )
+from unifi_core.operation_gate import write_request_bound
 from unifi_core.request_paths import check_request_path, object_id
 from unifi_core.tls import CertificateVerificationError, certificate_failure, is_certificate_error
 
@@ -224,15 +225,19 @@ class FirewallManager:
 
         cert_failure: CertificateVerificationError | None = None
         try:
-            async with session.request(
-                method.upper(),
-                url,
-                params=params,
-                json=data,
-                ssl=self._connection.ssl,
-                timeout=timeout,
-                allow_redirects=False,
-            ) as resp:
+            # Inside a held write, bounded by what is left of its hold budget.
+            async with (
+                write_request_bound(),
+                session.request(
+                    method.upper(),
+                    url,
+                    params=params,
+                    json=data,
+                    ssl=self._connection.ssl,
+                    timeout=timeout,
+                    allow_redirects=False,
+                ) as resp,
+            ):
                 try:
                     body = await resp.json(content_type=None)
                 except Exception:
@@ -266,10 +271,11 @@ class FirewallManager:
     def _require_integration_api_key(self, operation: str) -> None:
         """Fail before controller I/O when an Integration API mutation lacks auth."""
         if self._auth is None or not self._auth.has_api_key:
+            variables = api_key_variables(getattr(self._connection, "tls_env_prefix", None))
+            where = f"set {variables}" if variables else "add it to this controller's configuration"
             raise RuntimeError(
                 f"{operation} requires a UniFi API key. "
-                "Create a Network API token in UniFi Control Plane -> Integrations "
-                "and set UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP."
+                f"Create a Network API token in UniFi Control Plane -> Integrations and {where}."
             )
 
     async def _get_integration_site_id(self) -> str:
@@ -1469,17 +1475,17 @@ class FirewallManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
         if not self._connection.authentication_status.session_available:
+            remediation = session_credentials_remediation(getattr(self._connection, "tls_env_prefix", None))
             raise UniFiAuthError(
                 "Firewall zone mutations require Network session authentication and an API key. "
-                "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD before retrying. "
-                "No zone mutation was attempted."
+                f"{remediation} No zone mutation was attempted."
             )
 
     async def create_firewall_zone(self, name: str) -> Dict[str, Any]:
         """Create a firewall zone via the integration API.
 
         The V2 ``POST /firewall/zone`` silently no-ops, so writes use the
-        integration API (requires ``UNIFI_API_KEY``). Returns the zone in the
+        integration API (requires an API key). Returns the zone in the
         V2 read shape so the caller receives the 24-hex ``_id`` that
         ``firewall_zone_id`` expects.
         """

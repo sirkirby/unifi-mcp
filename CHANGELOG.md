@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-22 — unifi-network 1.14.4
+
+- Pins `unifi-network-mcp` [0.50.2](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.2).
+
+
 ## 2026-11-21 — unifi-network 1.14.3
 
 - `unifi-network`: the firewall manager skill says a policy's `description` can now be changed (an empty string clears it), and that `unifi_update_firewall_policy` refuses unknown top-level fields by name instead of dropping them, as the pinned server does.

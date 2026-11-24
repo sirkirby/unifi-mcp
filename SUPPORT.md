@@ -24,7 +24,7 @@ Please check these resources first:
 - [README.md](README.md) for installation and quick-start guidance
 - [Support bundle guide](docs/support-bundles.md) for privacy-bounded Network, Protect, and Access troubleshooting evidence
 - [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md) for the cloud account server, which has no support bundle
-- [InnerSpace troubleshooting](apps/innerspace/docs/troubleshooting.md) for the not yet released InnerSpace server, which has no support bundle
+- [InnerSpace troubleshooting](apps/innerspace/docs/troubleshooting.md) for the InnerSpace floor plan server, which has no support bundle
 - [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and test commands
 - [SECURITY.md](SECURITY.md) for the security model and vulnerability reporting
 - Existing [issues](https://github.com/sirkirby/unifi-mcp/issues) and

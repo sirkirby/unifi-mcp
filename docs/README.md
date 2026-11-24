@@ -13,7 +13,7 @@ Complete documentation for the UniFi MCP ecosystem.
 - **[Plugin Acceptance Procedure](plugin-acceptance.md)** - How real-client evidence for the support matrix is produced
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
 - **[Site Manager Server](../apps/sitemanager/)** - Read-only, account-wide view from Ubiquiti's cloud API; its own [configuration](../apps/sitemanager/docs/configuration.md), [tools](../apps/sitemanager/docs/tools.md) and [troubleshooting](../apps/sitemanager/docs/troubleshooting.md)
-- **[InnerSpace Server](../apps/innerspace/)** - Not yet released. Read-only floor plans, walls and device placements from a console's InnerSpace application, through a console login; its own [configuration](../apps/innerspace/docs/configuration.md), [tools](../apps/innerspace/docs/tools.md) and [troubleshooting](../apps/innerspace/docs/troubleshooting.md)
+- **[InnerSpace Server](../apps/innerspace/)** - Read-only floor plans, walls and device placements from a console's InnerSpace application, through a console login; its own [configuration](../apps/innerspace/docs/configuration.md), [tools](../apps/innerspace/docs/tools.md) and [troubleshooting](../apps/innerspace/docs/troubleshooting.md)
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
 - **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
@@ -147,7 +147,7 @@ UNIFI_SITEMANAGER_API_KEY_FILE=/absolute/path/to/sitemanager-api-key  # or UNIFI
 
 See [Site Manager configuration](../apps/sitemanager/docs/configuration.md).
 
-The InnerSpace server (not yet released) reads InnerSpace with a console login, so it takes the host, username and password but no API key, and never reads `UNIFI_API_KEY`:
+The InnerSpace server reads InnerSpace with a console login, so it takes the host, username and password but no API key, and never reads `UNIFI_API_KEY`:
 
 ```bash
 UNIFI_INNERSPACE_HOST=192.168.1.1

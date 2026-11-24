@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +23,7 @@ from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.db.models import AuditLog
 from unifi_api.routes.admin._common import render
-from unifi_api.services.audit import add_audit_subscriber
+from unifi_api.services.audit import add_audit_subscriber, parse_ts_bound
 from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
 router = APIRouter()
@@ -70,12 +69,12 @@ def _build_filtered_query(
         stmt = stmt.where(AuditLog.outcome == outcome)
     if since:
         try:
-            stmt = stmt.where(AuditLog.ts >= datetime.fromisoformat(since))
+            stmt = stmt.where(AuditLog.ts >= parse_ts_bound(since))
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid 'since' timestamp")
     if until:
         try:
-            stmt = stmt.where(AuditLog.ts <= datetime.fromisoformat(until))
+            stmt = stmt.where(AuditLog.ts <= parse_ts_bound(until))
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid 'until' timestamp")
     if q:

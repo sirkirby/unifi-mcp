@@ -10,6 +10,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 [![PyPI - Protect](https://img.shields.io/pypi/v/unifi-protect-mcp)](https://pypi.org/project/unifi-protect-mcp/)
 [![PyPI - Access](https://img.shields.io/pypi/v/unifi-access-mcp)](https://pypi.org/project/unifi-access-mcp/)
 [![PyPI - Site Manager](https://img.shields.io/pypi/v/unifi-sitemanager-mcp)](https://pypi.org/project/unifi-sitemanager-mcp/)
+[![PyPI - InnerSpace](https://img.shields.io/pypi/v/unifi-innerspace-mcp)](https://pypi.org/project/unifi-innerspace-mcp/)
 [![PyPI - Relay](https://img.shields.io/pypi/v/unifi-mcp-relay)](https://pypi.org/project/unifi-mcp-relay/)
 [![PyPI - API Server](https://img.shields.io/pypi/v/unifi-api-server)](https://pypi.org/project/unifi-api-server/)
 [![npm - Worker](https://img.shields.io/npm/v/unifi-mcp-worker)](https://www.npmjs.com/package/unifi-mcp-worker)
@@ -24,11 +25,11 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Protect](apps/protect/) | Stable | 68 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 38 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 | [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
-| [InnerSpace](apps/innerspace/) | Not yet released | 9 | `unifi-innerspace-mcp` (run [from source](#innerspace-from-source)) |
+| [InnerSpace](apps/innerspace/) | Beta | 9 | [`unifi-innerspace-mcp`](https://pypi.org/project/unifi-innerspace-mcp/) |
 
 Network, Protect, Access and InnerSpace each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
-InnerSpace is not yet released. It reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. There is no released package, image or plugin for it yet; [run it from a checkout](#innerspace-from-source).
+InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and has nine read-only domain tools, counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
 
 ## Plugins
 
@@ -49,7 +50,7 @@ The [Agent Skills](#agent-skills) table lists every skill each plugin ships.
 | What you are building | Use | Why |
 |-----------------------|-----|-----|
 | An AI assistant or another existing MCP client | [Network](apps/network/), [Protect](apps/protect/), or [Access](apps/access/) MCP server | Standard MCP discovery, tool calls, permissions, and confirmation flows |
-| Floor plans, walls and placed devices from a console's InnerSpace application | [InnerSpace](apps/innerspace/) MCP server (not yet released; [from source](#innerspace-from-source)) | Read-only reads through a console login session; no API key path |
+| Floor plans, walls and placed devices from a console's InnerSpace application | [InnerSpace](apps/innerspace/) MCP server | Read-only reads through a console login session; no API key path |
 | An account-wide view of every console, site and device on a UI account | [Site Manager](apps/sitemanager/) MCP server | Read-only inventory, WAN health and SD-WAN status from Ubiquiti's cloud with one Site Manager API key |
 | A custom application, automation service, code-execution runtime, or MCP adapter | [`unifi-api-server`](apps/api/) | Your code controls call sequencing, data joins, resource limits, and approval flow |
 | Remote access for an MCP client | [Cloud Relay](packages/unifi-mcp-relay/) | Authenticated remote MCP routing without exposing the local servers directly |
@@ -93,7 +94,7 @@ UniFi MCP is a collection of [Model Context Protocol](https://modelcontextprotoc
 
 Those three servers are local-first: they talk directly to your console, and nothing leaves your network unless you add the optional Cloud Relay. The Site Manager server is the exception. Every request it makes goes to Ubiquiti's cloud at `https://api.ui.com`, even when your MCP client runs it locally over stdio. The destination is fixed, and its key reads every console on the account. The Cloud Relay does not include it unless you add it to `UNIFI_RELAY_SERVERS`; a relay token for that location could then read the whole account. See [Site Manager](apps/sitemanager/) and the [privacy policy](PRIVACY.md#site-manager-cloud-requests).
 
-The InnerSpace server, not yet released, is local-first like the console servers: it talks only to the console you name, with a console login. The Cloud Relay does not include it unless you add it to `UNIFI_RELAY_SERVERS`, and floor plans describe a building, so weigh that before you do.
+The InnerSpace server is local-first like the console servers: it talks only to the console you name, with a console login. The Cloud Relay does not include it unless you add it to `UNIFI_RELAY_SERVERS`, and floor plans describe a building, so weigh that before you do.
 
 ## MCP HTTP Access
 
@@ -232,6 +233,7 @@ uvx unifi-network-mcp@latest
 uvx unifi-protect-mcp@latest
 uvx unifi-access-mcp@latest
 uvx unifi-sitemanager-mcp@latest
+uvx unifi-innerspace-mcp@latest
 ```
 
 For Claude Desktop, add to your `claude_desktop_config.json`:
@@ -293,21 +295,27 @@ Give the Site Manager server only its own key, in a file only you can read. It t
 
 It uses stdio by default; HTTP is opt-in on port 3003. See the [Site Manager README](apps/sitemanager/README.md).
 
-### InnerSpace from source
+### InnerSpace
 
-The InnerSpace server is not yet released: there is no PyPI package, container image or plugin. Run it from a checkout with [uv](https://docs.astral.sh/uv/). It reads InnerSpace through a console login, takes no API key, and never reads `UNIFI_API_KEY`:
+The InnerSpace server has no plugin yet; add it to your MCP client directly. It reads InnerSpace through a console login, takes no API key, and never reads `UNIFI_API_KEY`. Keep the password in a file only you can read:
 
-```bash
-git clone https://github.com/sirkirby/unifi-mcp.git
-cd unifi-mcp
-uv sync
-export UNIFI_INNERSPACE_HOST=192.168.1.1
-export UNIFI_INNERSPACE_USERNAME=innerspace-reader
-export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
-uv run --package unifi-innerspace-mcp unifi-innerspace-mcp
+```jsonc
+{
+  "mcpServers": {
+    "unifi-innerspace": {
+      "command": "uvx",
+      "args": ["unifi-innerspace-mcp@latest"],
+      "env": {
+        "UNIFI_INNERSPACE_HOST": "192.168.1.1",
+        "UNIFI_INNERSPACE_USERNAME": "innerspace-reader",
+        "UNIFI_INNERSPACE_PASSWORD_FILE": "/Users/you/.config/unifi-mcp/innerspace-password"
+      }
+    }
+  }
+}
 ```
 
-It uses stdio by default; HTTP is opt-in on port 3005. See the [InnerSpace README](apps/innerspace/README.md).
+It uses stdio by default; HTTP is opt-in on port 3005. The image is `ghcr.io/sirkirby/unifi-innerspace-mcp`. See the [InnerSpace README](apps/innerspace/README.md).
 
 ## Usage Examples
 
@@ -332,7 +340,7 @@ Once connected, just ask your AI agent in natural language:
 > "List every console on my UniFi account with its OS version and whether it is connected"
 > "Which sites had WAN downtime or high latency in the last 24 hours?"
 
-**InnerSpace** (not yet released)
+**InnerSpace**
 > "Which floor plans does my InnerSpace project have, and how many access points are placed on each?"
 > "List the devices I have adopted but not yet placed on a floor plan"
 
@@ -426,7 +434,7 @@ apps/
   protect/          # UniFi Protect MCP server (stable, 68 tools)
   access/           # UniFi Access MCP server (stable, 38 tools)
   sitemanager/      # UniFi Site Manager MCP server (beta, cloud, read-only, 9 tools)
-  innerspace/       # UniFi InnerSpace MCP server (console login, read-only, 9 tools; not yet released)
+  innerspace/       # UniFi InnerSpace MCP server (beta, console login, read-only, 9 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/
