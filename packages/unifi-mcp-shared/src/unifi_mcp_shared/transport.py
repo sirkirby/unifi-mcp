@@ -170,6 +170,7 @@ def _trusted_networks_setting(env_prefix: str | None) -> tuple[str, str | None]:
     """
     if env_prefix:
         server_var = f"UNIFI_{env_prefix}_MCP_HTTP_AUTH_TRUSTED_NETWORKS"
+        # Present-but-empty wins (no exemption here), unlike resolve_env's empty-means-unset: it fails closed.
         if server_var in os.environ:
             return server_var, os.environ[server_var]
     return HTTP_AUTH_TRUSTED_NETWORKS_ENV, os.environ.get(HTTP_AUTH_TRUSTED_NETWORKS_ENV)
