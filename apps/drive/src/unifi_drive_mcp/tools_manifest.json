@@ -1,5 +1,5 @@
 {
-  "count": 12,
+  "count": 13,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_get_file_services": "unifi_drive_mcp.tools.file_services",
@@ -20,7 +20,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Execute multiple UniFi Drive tools in parallel through the indirect execution wrapper. Returns job IDs; use drive_batch_status to check progress.",
+      "description": "Run several UniFi Drive tools as background jobs through the indirect execution wrapper. Writes execute one at a time in submission order; reads run concurrently, up to a cap. Queued jobs can be cancelled. Arguments are fixed at submission, and a batch does not stop on failure. Returns job IDs; use drive_batch_status to check progress and drive_batch_cancel to cancel queued jobs.",
       "name": "drive_batch",
       "schema": {
         "input": {
@@ -89,10 +89,103 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Cancel queued UniFi Drive batch jobs. Jobs already running or finished are reported, not cancelled.",
+      "name": "drive_batch_cancel",
+      "schema": {
+        "input": {
+          "properties": {
+            "jobId": {
+              "description": "Single job ID to cancel",
+              "type": "string"
+            },
+            "jobIds": {
+              "description": "Multiple job IDs to cancel at once",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "cancelled": {
+              "description": "True when the job was withdrawn before it ran",
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Outcome per job (when using jobIds parameter)",
+              "items": {
+                "properties": {
+                  "cancelled": {
+                    "description": "True when the job was withdrawn before it ran",
+                    "type": "boolean"
+                  },
+                  "jobId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Why the job was not cancelled",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Status after the call",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "done",
+                      "error",
+                      "cancelled",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "description": "Why the job was not cancelled",
+              "type": "string"
+            },
+            "status": {
+              "description": "Status after the call",
+              "enum": [
+                "queued",
+                "running",
+                "done",
+                "error",
+                "cancelled",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "title": "UniFi Drive Batch Cancel"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Check status of UniFi Drive batch operations. Returns status, result (if done), or error (if failed).",
+      "description": "Check status of UniFi Drive batch operations. Returns status (with the queue position while queued), result (if done), or error (if failed).",
       "name": "drive_batch_status",
       "schema": {
         "input": {
@@ -121,15 +214,24 @@
               "description": "Status of multiple jobs (when using jobIds parameter)",
               "type": "array"
             },
+            "position": {
+              "description": "While queued: write operations ahead of this job (1 = next; 0 = starting). Null while it waits for an earlier job in its batch.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "result": {
               "description": "Job result (present when status is 'done')"
             },
             "status": {
-              "description": "Current job status",
+              "description": "Current job status. 'queued' waits for an earlier job or its write turn; 'cancelled' never ran.",
               "enum": [
+                "queued",
                 "running",
                 "done",
                 "error",
+                "cancelled",
                 "unknown"
               ],
               "type": "string"

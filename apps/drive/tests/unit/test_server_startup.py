@@ -23,7 +23,7 @@ DOMAIN_TOOLS = {
     "drive_get_file_services",
     "drive_list_nfs_connections",
 }
-META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status"}
+META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status", "drive_batch_cancel"}
 
 
 def test_no_host_serves_setup_mode(tmp_path):
