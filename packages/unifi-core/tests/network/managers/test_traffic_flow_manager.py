@@ -440,9 +440,13 @@ def _envelope(total, or_more=False, has_next=False):
     ("envelope", "truncated"),
     [
         (_envelope(4999), False),
-        # Network 11 stops at 5,000 rows, reports the count as 5,000 (or a few over) and leaves or_more false
+        # Network 11.0.104 stops at 5,000 rows, reports the count as 5,000 (or a few over) and leaves or_more false
         (_envelope(5000), True),
         (_envelope(5016), True),
+        (_envelope(5099), True),
+        # newer firmware serves every row of a window above 5,000, so a count past the cap is complete
+        (_envelope(5100), False),
+        (_envelope(5953), False),
         # or_more: the count is only a lower bound, so the pages cannot be shown complete
         (_envelope(10000, or_more=True, has_next=True), True),
         (_envelope(12, or_more=True), True),
