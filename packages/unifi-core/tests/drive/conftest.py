@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -43,8 +44,10 @@ class StubConsole:
         status: int = 200,
         headers: dict[str, str] | None = None,
         always: bool = False,
+        delay: float = 0.0,
     ) -> None:
-        entry = (status, payload, headers or {})
+        """Script a reply; ``delay`` holds it back that many seconds after the request arrives."""
+        entry = (status, payload, headers or {}, delay)
         if always:
             self._sticky[(method, path)] = entry
         else:
@@ -64,10 +67,11 @@ class StubConsole:
         path = request.raw_path.split("?")[0]
         self.requests.append(Recorded(request.method, path, dict(request.headers), body))
         key = (request.method, path)
+        delay = 0.0
         if self._scripts[key]:
-            status, payload, headers = self._scripts[key].popleft()
+            status, payload, headers, delay = self._scripts[key].popleft()
         elif key in self._sticky:
-            status, payload, headers = self._sticky[key]
+            status, payload, headers, delay = self._sticky[key]
         elif key == ("POST", "/api/auth/login"):
             status, payload, headers = (
                 200,
@@ -78,6 +82,8 @@ class StubConsole:
             status, payload, headers = 200, {}, {}
         else:
             return web.json_response({"err": {"msg": "unscripted"}}, status=599)
+        if delay:
+            await asyncio.sleep(delay)
         if payload is None:
             return web.Response(status=status, headers=headers)
         return web.json_response(payload, status=status, headers=headers)

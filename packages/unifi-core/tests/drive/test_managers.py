@@ -18,6 +18,7 @@ from unifi_core.drive.models.services import (
     nfs_connection_from_api,
 )
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, UniFiValidationError
+from unifi_core.operation_gate import GateSettings, OperationGate
 
 from tests.drive import fixtures as fx
 
@@ -154,6 +155,29 @@ async def test_apply_toggle_writes_and_verifies(files, console):
 
     (put,) = console.writes
     assert put.body == {"enable": False}
+
+
+async def test_confirmed_toggle_plans_from_fresh_state_and_writes(files, console):
+    _script_services(console)
+    # The plan reads SMB as on; the read-back after the PUT reads it as off.
+    console.reply("GET", f"{V1}/smb/settings", fx.service(True))
+    console.reply("PUT", f"{V1}/smb/settings", fx.service(False))
+    console.reply("GET", f"{V1}/smb/settings", fx.service(False))
+
+    change, after = await files.set_file_service("smb", False)
+
+    assert change.enabled_before is True and after is False
+    (put,) = console.writes
+    assert put.body == {"enable": False}
+
+
+async def test_confirmed_toggle_already_in_state_sends_nothing(files, console):
+    _script_services(console)
+
+    change, after = await files.set_file_service("smb", True)
+
+    assert change.changes_anything is False and after is True
+    assert console.writes == []
 
 
 async def test_apply_toggle_reports_a_change_that_did_not_stick(files, console):
@@ -475,7 +499,7 @@ async def test_removed_client_still_listed_is_reported(files, console):
         await files.remove_nfs_connection(fx.CLIENT)
 
 
-async def test_concurrent_adds_both_land(files, console):
+async def test_concurrent_adds_through_the_operation_gate_both_land(files, console):
     _script_add_lookups(console)
     first = fx.nfs_connection("192.0.2.101", (fx.DRIVE_ID, "Shared_Drive", "rw"))
     second = fx.nfs_connection("192.0.2.102", (fx.DRIVE_ID, "Shared_Drive", "rw"))
@@ -483,20 +507,21 @@ async def test_concurrent_adds_both_land(files, console):
     with_first["data"]["connections"].append(first)
     with_both = _existing()
     with_both["data"]["connections"].extend([first, second])
-    # The lock makes the two writes run one after the other, so the replies are in order:
+    # The operation gate runs the two writes one after the other, so the replies are in order:
     # plan, re-read and read back for the first add, then the same for the second.
     for body in (_existing(), _existing(), with_first, with_first, with_first, with_both):
         console.reply("GET", NFS_ADVANCED, body)
     console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, always=True)
 
-    results = await asyncio.gather(
-        files.add_nfs_connection(
-            NfsConnectionInput(client="192.0.2.101", shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID)])
-        ),
-        files.add_nfs_connection(
-            NfsConnectionInput(client="192.0.2.102", shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID)])
-        ),
-    )
+    gate = OperationGate(GateSettings(), name="drive-test")
+
+    async def add(client: str):
+        async with gate.write():
+            return await files.add_nfs_connection(
+                NfsConnectionInput(client=client, shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID)])
+            )
+
+    results = await asyncio.gather(add("192.0.2.101"), add("192.0.2.102"))
 
     assert [saved.client for _, saved in results] == ["192.0.2.101", "192.0.2.102"]
     first_put, second_put = console.calls("PUT", NFS_ADVANCED)

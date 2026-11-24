@@ -16,6 +16,13 @@ Rules the rest of the package relies on:
 * Error text never contains the console's address, the credentials or a
   transport exception's text: messages are built from fixed text, the method,
   the request path, the HTTP status and a length-capped upstream message.
+* Inside a held write of the operation gate, every request except the login
+  and logout is bounded by what is left of the write's hold budget
+  (:func:`~unifi_core.operation_gate.write_request_bound`). A change request
+  (any method but ``GET``) the budget stopped before it was sent raises
+  :class:`DriveWriteNotSent`; one cut off after it was sent raises
+  :class:`~unifi_core.operation_gate.WriteRequestTimeout`, whose outcome is
+  unknown.
 """
 
 from __future__ import annotations
@@ -37,6 +44,7 @@ from unifi_core.exceptions import (
     UniFiRateLimitError,
     UniFiValidationError,
 )
+from unifi_core.operation_gate import WriteRequestTimeout, write_request_bound
 from unifi_core.redaction import strip_url_origins
 from unifi_core.request_paths import is_safe_request_path
 from unifi_core.tls import CertificateVerificationError, certificate_safe_middleware, ssl_setting
@@ -63,6 +71,13 @@ _FORBIDDEN_HINT = (
     "The account lacks permission for this operation; reads need a UniFi OS account with access to "
     "UniFi Drive, and changes to file services need an administrator of UniFi Drive."
 )
+
+
+class DriveWriteNotSent(UniFiOperationError):
+    """A change was stopped before its request was sent, so nothing on the NAS changed."""
+
+
+_NOT_SENT = "the write's time budget ran out before the change was sent, so nothing was changed"
 
 
 class DriveConnectionManager:
@@ -189,14 +204,16 @@ class DriveConnectionManager:
         url = self._url(path)
         await self._ensure_logged_in()
         token_before = self._csrf_token
-        status, headers, payload = await self._send(method, path, url, json_body)
+        status, headers, payload = await self._send_bounded(method, path, url, json_body)
         if status == 401:
+            # The console refused the session without acting on the request; the
+            # login runs outside the write's budget, the second send inside it.
             async with self._lock:
                 if self._csrf_token == token_before:
                     logger.info("[drive-cm] Session expired; logging in again.")
                     self._logged_in = False
                     await self._login()
-            status, headers, payload = await self._send(method, path, url, json_body)
+            status, headers, payload = await self._send_bounded(method, path, url, json_body)
             if status == 401:
                 self._logged_in = False
                 raise UniFiAuthError(
@@ -308,6 +325,20 @@ class DriveConnectionManager:
         if url.origin() != URL(self._base_url).origin():
             raise UniFiValidationError("UniFi Drive request path must be root-relative")
         return url
+
+    async def _send_bounded(self, method: str, path: str, url: URL, json_body: Any) -> tuple[int, Any, Any]:
+        """``_send`` bounded inside a held write by what is left of its hold budget; outside one, unbounded."""
+        sent = False
+        try:
+            async with write_request_bound():
+                sent = True
+                return await self._send(method, path, url, json_body)
+        except WriteRequestTimeout:
+            if sent or method == "GET":
+                raise
+            # The gate's text speaks for the whole write, whose earlier reads went
+            # out; this change request did not.
+            raise DriveWriteNotSent(f"UniFi Drive {method} {path}: {_NOT_SENT}") from None
 
     async def _send(
         self,
