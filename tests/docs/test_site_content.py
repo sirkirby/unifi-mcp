@@ -37,6 +37,12 @@ MCP_SERVER_LINKS = {
     "unifi-sitemanager-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager",
 }
 
+# The InnerSpace server is on the homepage once released, but the download-stats
+# snapshot and the site's package lists (app.js) do not cover it yet.
+INNERSPACE_SERVER_LINKS = {
+    "unifi-innerspace-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/innerspace",
+}
+
 JSON_LD_PRODUCT_LINKS = MCP_SERVER_LINKS | PRODUCT_LINKS
 
 MANIFESTS = {
@@ -64,7 +70,7 @@ SITEMANAGER_RELEASE_ONLY_TEXT = (
 
 # Whether unifi-innerspace-mcp has a first release. Until it does, no page may
 # present an install command, badge or marketplace link for it as working.
-INNERSPACE_RELEASED = False
+INNERSPACE_RELEASED = True
 
 # Install surfaces that only work once the InnerSpace package is published.
 INNERSPACE_RELEASE_ONLY_TEXT = (
@@ -498,10 +504,11 @@ class PublicPageMetadataTests(unittest.TestCase):
         )
         has_part = source_nodes[0].get("hasPart")
         self.assertIsInstance(has_part, list)
-        self.assertEqual(len(has_part), len(JSON_LD_PRODUCT_LINKS))
+        expected = JSON_LD_PRODUCT_LINKS | (INNERSPACE_SERVER_LINKS if INNERSPACE_RELEASED else {})
+        self.assertEqual(len(has_part), len(expected))
         self.assertTrue(all(isinstance(part, dict) for part in has_part))
         product_links = {part.get("name"): part.get("url") for part in has_part}
-        self.assertEqual(product_links, JSON_LD_PRODUCT_LINKS)
+        self.assertEqual(product_links, expected)
 
 
 class PublicPageAccessibilityContractTests(unittest.TestCase):
@@ -845,7 +852,11 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
         )
 
     def test_footers_link_every_published_mcp_server(self):
-        servers = ["Network", "Protect", "Access"] + (["Site Manager"] if SITEMANAGER_RELEASED else [])
+        servers = (
+            ["Network", "Protect", "Access"]
+            + (["Site Manager"] if SITEMANAGER_RELEASED else [])
+            + (["InnerSpace"] if INNERSPACE_RELEASED else [])
+        )
         for path in (Path("docs/index.html"), Path("docs/404.html"), Path("docs/sponsor/index.html")):
             html = path.read_text(encoding="utf-8")
             footer = html.split("<h2>MCP servers</h2>", 1)[1].split("</div>", 1)[0]
@@ -1049,13 +1060,21 @@ class ContentReconciliationTests(unittest.TestCase):
             for attributes in parser.attributes_for("div")
             if "server-row" in attributes.get("class", "").split()
         ]
-        self.assertEqual([row["data-product"] for row in rows], ["network", "protect", "access", "sitemanager"])
-        self.assertIn("sitemanager", rows[-1]["class"].split())
-        self.assertEqual(rows[-1]["data-release"], "released" if SITEMANAGER_RELEASED else "unreleased")
+        expected = ["network", "protect", "access", "sitemanager"] + (["innerspace"] if INNERSPACE_RELEASED else [])
+        self.assertEqual([row["data-product"] for row in rows], expected)
+        by_product = {row["data-product"]: row for row in rows}
+        self.assertIn("sitemanager", by_product["sitemanager"]["class"].split())
+        self.assertEqual(
+            by_product["sitemanager"]["data-release"], "released" if SITEMANAGER_RELEASED else "unreleased"
+        )
 
         css = Path("docs/styles.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"(?m)^  --sitemanager: #7C5CFF;$")
         self.assertIn(".server-row.sitemanager::before { background: var(--sitemanager); }", css)
+        if INNERSPACE_RELEASED:
+            self.assertIn("innerspace", by_product["innerspace"]["class"].split())
+            self.assertEqual(by_product["innerspace"]["data-release"], "released")
+            self.assertIn(".server-row.innerspace::before { background: var(--innerspace); }", css)
         mobile = css.split("@media (max-width: 760px) {", 1)[1].split("\n}", 1)[0]
         self.assertIn(".server-row { grid-template-columns: 1fr; gap: 12px; }", mobile)
 
@@ -1210,6 +1229,36 @@ class ContentReconciliationTests(unittest.TestCase):
             content = " ".join(path.read_text(encoding="utf-8").split())
             with self.subTest(path=path):
                 self.assertRegex(content, r"(?i)innerspace[^.|]*(?:not (?:yet )?(?:published|released)|unreleased)")
+
+    def test_released_innerspace_install_surfaces_are_present(self):
+        if not INNERSPACE_RELEASED:
+            self.skipTest("unifi-innerspace-mcp is not released")
+        expected = {
+            Path("README.md"): ("img.shields.io/pypi/v/unifi-innerspace-mcp", "uvx unifi-innerspace-mcp@latest"),
+            Path("QUICKSTART.md"): ("uvx unifi-innerspace-mcp@latest",),
+            Path("SECURITY.md"): ("| unifi-innerspace-mcp | Latest release (beta) |",),
+            Path("apps/innerspace/README.md"): (
+                "pypi.org/project/unifi-innerspace-mcp",
+                "pip install unifi-innerspace-mcp",
+                "docker pull ghcr.io/sirkirby/unifi-innerspace-mcp",
+            ),
+            Path("docs/index.html"): (
+                'uvx <span class="value">unifi-innerspace-mcp@latest</span>',
+                'pipx install <span class="value">unifi-innerspace-mcp</span>',
+                '<a href="https://pypi.org/project/unifi-innerspace-mcp/">InnerSpace</a>',
+            ),
+        }
+        for path, phrases in expected.items():
+            content = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+        for path in SERVER_SURFACES + INNERSPACE_APP_PAGES:
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            with self.subTest(path=path):
+                self.assertNotRegex(content, r"(?i)innerspace[^.|]*not (?:yet )?(?:published|released)")
+                # No plugin bundle exists yet; drop this check when one ships.
+                self.assertNotIn("unifi-innerspace@unifi-plugins", content)
 
     def test_innerspace_is_listed_where_the_products_are_enumerated(self):
         surfaces = {

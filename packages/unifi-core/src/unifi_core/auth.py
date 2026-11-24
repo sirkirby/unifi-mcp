@@ -13,6 +13,25 @@ from unifi_core.exceptions import UniFiAuthError
 logger = logging.getLogger(__name__)
 
 
+def api_key_variables(env_prefix: str | None) -> str | None:
+    """The server environment variables that carry an API key, or None.
+
+    Named only for a caller that reads them (an MCP server passes its prefix);
+    the API server keeps the key on the controller record. The shared key
+    applies only on the console ``UNIFI_HOST`` names.
+    """
+    if isinstance(env_prefix, str) and env_prefix:
+        return f"UNIFI_{env_prefix}_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)"
+    return None
+
+
+def session_credentials_remediation(env_prefix: str | None) -> str:
+    """Fixed text naming where session credentials go; see :func:`api_key_variables`."""
+    if isinstance(env_prefix, str) and env_prefix:
+        return f"Configure UNIFI_{env_prefix}_USERNAME and UNIFI_{env_prefix}_PASSWORD."
+    return "Add a username and password to this controller's configuration."
+
+
 class AuthMethod(enum.Enum):
     LOCAL_ONLY = "local_only"
     API_KEY_ONLY = "api_key_only"
@@ -87,7 +106,7 @@ class UniFiAuth:
         per-request ``middlewares=`` override drops the key rather than leaking it.
         """
         if not self.has_api_key:
-            raise UniFiAuthError("API key authentication not configured. Set UNIFI_API_KEY environment variable.")
+            raise UniFiAuthError("API key authentication not configured for this controller.")
         target = URL(controller_url)
         if not target.absolute or target.scheme not in {"http", "https"}:
             raise UniFiAuthError("API key sessions require an absolute http(s) controller URL.")
@@ -105,7 +124,7 @@ class UniFiAuth:
 
     async def get_local_session(self) -> aiohttp.ClientSession:
         if not self.has_local:
-            raise UniFiAuthError("Local authentication not configured. Set UNIFI_USERNAME and UNIFI_PASSWORD.")
+            raise UniFiAuthError("Local authentication not configured for this controller.")
         return await self._local_provider.get_session()
 
     async def get_session(self, method: AuthMethod, controller_url: str | None = None) -> aiohttp.ClientSession:

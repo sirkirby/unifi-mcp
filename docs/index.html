@@ -50,6 +50,7 @@
           {"@type": "SoftwareApplication", "name": "unifi-protect-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect"},
           {"@type": "SoftwareApplication", "name": "unifi-access-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/access"},
           {"@type": "SoftwareApplication", "name": "unifi-sitemanager-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager"},
+          {"@type": "SoftwareApplication", "name": "unifi-innerspace-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/innerspace"},
           {"@type": "SoftwareApplication", "name": "unifi-api-server", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api"},
           {"@type": "SoftwareApplication", "name": "unifi-mcp-relay", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay"},
           {"@type": "SoftwareApplication", "name": "unifi-mcp-worker", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker"}
@@ -96,7 +97,7 @@
           <a class="button secondary" href="#products">Explore the products</a>
         </div>
         <div class="proof-row" aria-label="Project overview">
-          <div><strong>300+ MCP tools</strong><span>Across Network, Protect, Access, and Site Manager.</span></div>
+          <div><strong>300+ MCP tools</strong><span>Across Network, Protect, Access, Site Manager, and InnerSpace.</span></div>
           <div><strong>REST + GraphQL</strong><span>A standalone API for apps and automation.</span></div>
           <div><strong>Local first</strong><span>Optional Cloud Relay for remote MCP access.</span></div>
         </div>
@@ -116,7 +117,7 @@
             <p class="product-number">01</p>
             <div>
               <h3>MCP for agents</h3>
-              <p>Independent servers share a consistent discovery, confirmation, and policy model. Network, Protect, and Access talk to your console; Site Manager reads your whole UI account from Ubiquiti's cloud. Run one or combine them.</p>
+              <p>Independent servers share a consistent discovery, confirmation, and policy model. Network, Protect, Access, and InnerSpace talk to your console; Site Manager reads your whole UI account from Ubiquiti's cloud. Run one or combine them.</p>
             </div>
           </div>
           <div class="server-list">
@@ -135,6 +136,10 @@
             <div class="server-row sitemanager" data-product="sitemanager" data-tool-count="9" data-release="released">
               <div><h4>Site Manager <span>Beta</span></h4><p>Read-only, account-wide hosts, sites, devices, ISP metrics, and SD-WAN status. Requests go to Ubiquiti's cloud at api.ui.com with one account key.</p></div>
               <div class="server-meta"><strong>9 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager">unifi-sitemanager-mcp</a></div>
+            </div>
+            <div class="server-row innerspace" data-product="innerspace" data-tool-count="9" data-release="released">
+              <div><h4>InnerSpace <span>Beta</span></h4><p>Read-only floor plans, walls, and device placements from the console's InnerSpace application, through a console login.</p></div>
+              <div class="server-meta"><strong>9 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/innerspace">unifi-innerspace-mcp</a></div>
             </div>
           </div>
         </article>
@@ -277,7 +282,10 @@ uvx <span class="value">unifi-access-mcp@latest</span>
 <span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span>
 
 <span class="comment"># Site Manager reads the cloud account; give it only UNIFI_SITEMANAGER_API_KEY_FILE</span>
-uvx <span class="value">unifi-sitemanager-mcp@latest</span></code></pre>
+uvx <span class="value">unifi-sitemanager-mcp@latest</span>
+
+<span class="comment"># InnerSpace reads floor plans with a console login; no API key</span>
+uvx <span class="value">unifi-innerspace-mcp@latest</span></code></pre>
           </div>
           <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" class="install-panel" data-install-panel="docker" hidden>
             <button type="button" class="copy-button" data-copy>Copy</button>
@@ -311,6 +319,7 @@ pipx install <span class="value">unifi-network-mcp</span>
 pipx install <span class="value">unifi-protect-mcp</span>
 pipx install <span class="value">unifi-access-mcp</span>
 pipx install <span class="value">unifi-sitemanager-mcp</span>
+pipx install <span class="value">unifi-innerspace-mcp</span>
 
 <span class="comment"># Then point your MCP client at the binary on PATH</span>
 <span class="command">unifi-network-mcp</span></code></pre>
@@ -348,7 +357,7 @@ pipx install <span class="value">unifi-sitemanager-mcp</span>
         </a>
         <p>Open-source interfaces for agents and applications working with UniFi infrastructure.</p>
       </div>
-      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li><li><a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a></li></ul></div>
+      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li><li><a href="https://pypi.org/project/unifi-sitemanager-mcp/">Site Manager</a></li><li><a href="https://pypi.org/project/unifi-innerspace-mcp/">InnerSpace</a></li></ul></div>
       <div><h2>Applications</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API server</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay">Relay sidecar</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker">Worker gateway</a></li></ul></div>
       <div><h2>Project</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/docs">Documentation</a></li><li><a href="https://github.com/sirkirby/unifi-mcp">GitHub</a></li><li><a href="sponsor/">Sponsor</a></li><li><a href="privacy.html">Privacy</a></li><li><a href="llms.txt">llms.txt</a></li></ul></div>
     </div>

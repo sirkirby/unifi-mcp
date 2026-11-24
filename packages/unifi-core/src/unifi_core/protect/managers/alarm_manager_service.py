@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 from uiprotect.exceptions import BadRequest, NotAuthorized, NvrError, PublicOnlyModeError
 
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+from unifi_core.protect.managers.connection_manager import ProtectConnectionManager, protect_api_key_remediation
 from unifi_core.protect.models._actions import require_alarm_webhook_id
 from unifi_core.protect.models.alarm_rules import alarm_catalog_from_manifest, alarm_rule_from_controller
 
@@ -225,9 +225,8 @@ class AlarmManagerService:
         try:
             await self._cm.client.send_alarm_webhook_public(trigger_id)
         except NotAuthorized:
-            raise ValueError(
-                "The controller rejected the Protect API key. Check UNIFI_PROTECT_API_KEY or UNIFI_API_KEY."
-            ) from None
+            remediation = protect_api_key_remediation(getattr(self._cm, "tls_env_prefix", None))
+            raise ValueError(f"The controller rejected the Protect API key. {remediation}") from None
         except BadRequest as exc:
             raise ValueError(
                 f"The controller refused to fire alarm webhook {trigger_id}: "

@@ -241,7 +241,8 @@ async def test_statistics_missing_api_key_reports_remediation():
         "total_count": 1,
         "reason": "network_api_key_required",
         "remediation": (
-            "Set UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY) to a valid Network API key so the DPI catalogue "
+            "Set UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console) to a valid Network API key "
+            "so the DPI catalogue "
             "can be read; application/category IDs and byte counts are complete without it."
         ),
     }

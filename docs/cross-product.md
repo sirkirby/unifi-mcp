@@ -16,7 +16,7 @@ The Site Manager server reads a whole UI account from Ubiquiti's cloud API, not 
 
 ### InnerSpace is its own family
 
-The InnerSpace server (not yet released) reads the floor plans, walls and device placements of the InnerSpace application on a console. It is a console product like Network, Protect and Access, but it is not part of the cross-product features on this page:
+The InnerSpace server reads the floor plans, walls and device placements of the InnerSpace application on a console. It is a console product like Network, Protect and Access, but it is not part of the cross-product features on this page:
 
 - Its plan, site, device and wall IDs belong to the InnerSpace tool family, which is its own family. Do not pass them to Network, Protect, Access or Site Manager tools, and do not join or translate them to those servers' IDs. There is no bridging tool. Match by a value both sides report, such as a device MAC address, only when the user confirms the match.
 - Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the Network and Protect servers only. The InnerSpace server has no incident evidence tool and no events.

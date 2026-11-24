@@ -577,6 +577,7 @@ class TestSensorManagerUpdateSettings:
         from unifi_core.protect.managers.sensor_manager import SensorManager
 
         cm = MagicMock()
+        cm.tls_env_prefix = "PROTECT"
         cm.require_public_api_key = MagicMock()
         cm.client.update_sensor_public = AsyncMock(side_effect=BadRequest("invalid public API payload"))
         mgr = SensorManager(cm)

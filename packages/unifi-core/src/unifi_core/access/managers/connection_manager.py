@@ -32,7 +32,7 @@ from typing import Any, Awaitable, Callable, Dict, TypeVar
 
 import aiohttp
 
-from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.auth import AuthenticationStatus, AuthMethod, api_key_variables
 from unifi_core.connect_attempt import ConnectAttempt
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError, UniFiRateLimitError
 from unifi_core.operation_gate import write_request_bound
@@ -100,6 +100,17 @@ _API_TOKEN_FORBIDDEN_HINT = (
 _SDK_REQUEST_METHODS = ("_request", "get_thumbnail")
 
 
+def _write_bounded(method: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+    """``method`` bounded, inside a held write, by what is left of its hold budget."""
+
+    @functools.wraps(method)
+    async def bounded(*args: Any, **kwargs: Any) -> Any:
+        async with write_request_bound():
+            return await method(*args, **kwargs)
+
+    return bounded
+
+
 def _hint_forbidden_api_token(error: BaseException) -> None:
     try:
         from unifi_access_api import ApiForbiddenError
@@ -107,6 +118,14 @@ def _hint_forbidden_api_token(error: BaseException) -> None:
         return
     if isinstance(error, ApiForbiddenError):
         append_exception_hint(error, _API_TOKEN_FORBIDDEN_HINT)
+
+
+def access_api_token_remediation(env_prefix: str | None) -> str:
+    """Fixed text naming where a valid Access API token goes."""
+    variables = api_key_variables(env_prefix)
+    if variables:
+        return f"Set {variables} to a valid UniFi Access API token."
+    return "Add a valid UniFi Access API token to this controller's configuration."
 
 
 class AccessUnavailableError(UniFiConnectionError):
@@ -603,6 +622,8 @@ class AccessConnectionManager:
             strip_origins_from_methods(
                 self._api_client, _SDK_REQUEST_METHODS, self._hosts(), on_error=_hint_forbidden_api_token
             )
+            # Every SDK call, door writes included, sends through ``_request``.
+            self._api_client._request = _write_bounded(self._api_client._request)
             await self._api_client.authenticate()
             self._api_client_available = True
             self._api_support_attempt = connection_attempt_succeeded()
@@ -704,9 +725,7 @@ class AccessConnectionManager:
         ``Authorization: Bearer``. This differs from Network's public
         Integration API, which uses ``X-API-Key``.
         """
-        remediation = (
-            "Create a UniFi Access API token and set UNIFI_ACCESS_API_KEY (or UNIFI_API_KEY) for the Access MCP server."
-        )
+        remediation = access_api_token_remediation(self.tls_env_prefix)
         if not self._api_key:
             raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {remediation}")
         if self._api_certificate_failure:
@@ -726,15 +745,18 @@ class AccessConnectionManager:
             "Authorization": f"Bearer {self._api_key}",
         }
         try:
-            async with self._api_session.request(
-                method,
-                url,
-                headers=headers,
-                json=json,
-                params=params,
-                ssl=self._api_ssl_context,
-                timeout=aiohttp.ClientTimeout(total=_DEVELOPER_REQUEST_TIMEOUT_SECONDS),
-            ) as resp:
+            async with (
+                write_request_bound(),
+                self._api_session.request(
+                    method,
+                    url,
+                    headers=headers,
+                    json=json,
+                    params=params,
+                    ssl=self._api_ssl_context,
+                    timeout=aiohttp.ClientTimeout(total=_DEVELOPER_REQUEST_TIMEOUT_SECONDS),
+                ) as resp,
+            ):
                 try:
                     payload = await resp.json(content_type=None)
                 except (ValueError, aiohttp.ContentTypeError) as exc:

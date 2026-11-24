@@ -219,6 +219,6 @@ class TestDpiManager:
 
         text = str(excinfo.value)
         assert "Network API key" in text and "Settings → Control Plane → Integrations" in text
-        assert ("UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY)" in text) is names_variables
+        assert ("UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)" in text) is names_variables
         assert "UNIFI_" in text if names_variables else "controller's configuration" in text
         assert "192.0.2.1" not in text

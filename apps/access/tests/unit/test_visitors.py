@@ -52,7 +52,7 @@ class TestListVisitors:
 
     @pytest.mark.asyncio
     async def test_list_visitors_requires_api_key_without_proxy_fallback(self):
-        cm = AccessConnectionManager("192.0.2.1", "admin", "secret")
+        cm = AccessConnectionManager("192.0.2.1", "admin", "secret", tls_env_prefix="ACCESS")
         cm._proxy_available = True
         cm._proxy_session = MagicMock()
         cm._initialized = True
