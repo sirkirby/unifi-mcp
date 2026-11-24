@@ -8,11 +8,11 @@ dependencies = [
     # Isolated API-key lookup, API-key setup guidance and the sitemanager
     # icon family require Shared 0.6.40.
     # Reading tool modules as UTF-8 regardless of the system locale requires Shared 0.6.41.
-    "unifi-mcp-shared>=0.6.46,<0.7",
+    "unifi-mcp-shared>=0.6.50,<0.7",
     # Key scrubbing in errors and the validated read inputs require Core 0.4.90.
     # Keeping Literal choices (enum/const) in inferred tool input schemas requires Core 0.4.99.
     # The shared operation gate it runs on requires Core 0.4.103.
-    "unifi-core>=0.4.103,<0.5",
+    "unifi-core>=0.4.107,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

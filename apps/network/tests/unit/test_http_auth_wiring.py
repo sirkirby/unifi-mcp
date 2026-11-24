@@ -33,3 +33,4 @@ async def test_http_auth_token_reaches_transport(monkeypatch, http_enabled, expe
     )
     await main.main_async()
     assert transport.await_args.kwargs["auth_token"] == expected
+    assert transport.await_args.kwargs["env_prefix"] == "NETWORK"

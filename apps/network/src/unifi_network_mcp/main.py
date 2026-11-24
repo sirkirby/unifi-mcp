@@ -220,6 +220,7 @@ async def main_async():
             port=port,
             http_transport=http_transport,
             logger=logger,
+            env_prefix="NETWORK",
             auth_token=resolve_http_auth_token(
                 env_prefix="NETWORK", logger=logger, configured=config.server.get("http", {}).get("auth_token")
             )

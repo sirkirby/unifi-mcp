@@ -9,10 +9,10 @@ dependencies = [
     # rule (credentials follow the host): this server falls back to the shared login.
     # Naming ignored shared credentials in the login error requires Shared 0.6.45.
     # The InnerSpace icon family and tool prefix require Shared 0.6.47.
-    "unifi-mcp-shared>=0.6.47,<0.7",
+    "unifi-mcp-shared>=0.6.50,<0.7",
     # The InnerSpace managers, and an empty InnerSpace host treated as not configured
     # (setup mode without a placeholder host), require Core 0.4.105.
-    "unifi-core>=0.4.105,<0.5",
+    "unifi-core>=0.4.107,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
