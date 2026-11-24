@@ -10,6 +10,7 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.site import Site  # Import Site model
 
 from unifi_core.network.managers.connection_manager import ConnectionManager, SettingsControllerRejection
+from unifi_core.network.models.ips_suppression import IpsSuppressions, ips_suppressions_from_controller
 from unifi_core.network.models.mdns import (
     MdnsSettings,
     mdns_from_controller,
@@ -411,6 +412,17 @@ class SystemManager:
         except Exception as exc:
             logger.error("Failed to read threat management settings: %s", type(exc).__name__)
             raise RuntimeError("Failed to read threat management settings") from None
+
+    async def list_ips_suppressions(self) -> IpsSuppressions:
+        """Read suppressions uncached, so an audit sees a change just made in the UI."""
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/get/setting/ips_suppression"))
+            if not isinstance(response, list) or len(response) != 1:
+                raise ValueError("Invalid settings singleton")
+            return ips_suppressions_from_controller(response[0])
+        except Exception as exc:
+            logger.error("Failed to read IPS suppressions: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read IPS suppressions; check controller compatibility") from None
 
     async def _fresh_threat_record(self, section: str) -> Dict[str, Any]:
         """Read a known singleton without trusting cached settings for a write."""
