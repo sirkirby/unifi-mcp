@@ -161,6 +161,7 @@ For `UNIFI_ENABLED_CATEGORIES` in eager mode, and the `category` filter of `driv
 | `logs` | `drive_list_logs` |
 | `performance` | `drive_get_network_throughput`, `drive_get_fan_profile`, `drive_get_disk_stats` |
 | `snapshots` | `drive_get_snapshot_overview`, `drive_list_snapshots` |
+| `users` | `drive_list_users`, `drive_list_groups` |
 
 ```bash
 UNIFI_TOOL_REGISTRATION_MODE=eager UNIFI_ENABLED_CATEGORIES=system,storage
@@ -173,7 +174,7 @@ These are the tool module names. The policy gate categories are different: `file
 | Mode | What the client sees |
 |---|---|
 | `lazy` (default) | The meta-tools; domain tools are reached through `drive_execute` or loaded with `drive_load_tools` |
-| `eager` | The meta-tools except `drive_load_tools`, and all 20 tools (or the enabled subset) |
+| `eager` | The meta-tools except `drive_load_tools`, and all 22 tools (or the enabled subset) |
 | `meta_only` | The meta-tools only; reach tools through `drive_execute` |
 
 See [MCP discovery and meta-tools](../../../docs/tool-index.md).

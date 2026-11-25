@@ -175,7 +175,7 @@ COUNT_SURFACES = {
         Path("docs/ARCHITECTURE.md"),
         Path("apps/innerspace/docs/tools.md"),
     ],
-    # Drive counts its domain tools the same way: 20, without the meta-tools.
+    # Drive counts its domain tools the same way: 22, without the meta-tools.
     "drive": [
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),

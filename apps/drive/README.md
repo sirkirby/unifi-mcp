@@ -130,6 +130,8 @@ Read-only:
 | `drive_get_disk_stats` | Each disk's temperature, read/write throughput and bad sectors over the last hours or days |
 | `drive_get_snapshot_overview` | Each shared and personal drive's snapshot limit and count, locked and pending-deletion counts, space held, last and next snapshot, pause state and reason, and schedule |
 | `drive_list_snapshots` | One shared drive's snapshots, by the drive's name: id, name, creation time, locked |
+| `drive_list_users` | Users with username, full name, email, status, access level (owner, admin or user), console roles and last login |
+| `drive_list_groups` | UniFi OS user groups that shared drive access can be granted to |
 
 Write (preview first; `confirm=true` applies):
 
@@ -181,7 +183,7 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 - [Configuration](docs/configuration.md): the NAS login, TLS, settings, operation gate, HTTP, Docker Compose, registration modes
 - [Permissions](docs/permissions.md): previews, permission mode, policy gates, read-only mode, redaction
-- [Tool catalog](docs/tools.md): the 20 tools, parameters, NFS behavior and write previews
+- [Tool catalog](docs/tools.md): the 22 tools, parameters, NFS behavior and write previews
 - [Troubleshooting](docs/troubleshooting.md): setup mode, login and access errors, file services and NFS, TLS, Docker
 - [MCP discovery and meta-tools](../../docs/tool-index.md): `tools/list`, `drive_tool_index` and `drive_execute`
 
