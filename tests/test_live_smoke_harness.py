@@ -2281,15 +2281,33 @@ def test_a_cleanup_remove_that_fails_is_recorded_failed_and_not_cleaned() -> Non
     assert runner.report.created_resources and runner.report.cleaned_resources == []
 
 
-def test_innerspace_wall_lifecycle_needs_a_plan_that_takes_frame_coordinates() -> None:
-    shifted = {**PLAN_ROW, "image_offset": [10, 0]}
-    runner, calls, _walls = _innerspace_wall_runner(plans=(shifted,))
+@pytest.mark.parametrize(
+    "plan",
+    [
+        pytest.param({**PLAN_ROW, "image_offset": [10, 0]}, id="shifted"),
+        pytest.param({**PLAN_ROW, "image_scale": 2.0}, id="scaled"),
+        # Since the reads report a map whose y scale differs from x as no scale, None is never plain.
+        pytest.param({**PLAN_ROW, "image_scale": None}, id="no-uniform-scale"),
+        pytest.param({**PLAN_ROW, "image_offset": None}, id="no-offset"),
+        pytest.param({**PLAN_ROW, "image_scale": True}, id="boolean-scale"),
+    ],
+)
+def test_innerspace_wall_lifecycle_needs_a_plan_that_takes_frame_coordinates(plan) -> None:
+    runner, calls, _walls = _innerspace_wall_runner(plans=(plan,))
 
     asyncio.run(runner.lifecycle_innerspace_wall())
 
     assert calls == []
     (record,) = runner.report.records
     assert (record.tool, record.status) == ("innerspace_create_walls", "skipped")
+
+
+def test_innerspace_scratch_plan_passes_over_a_map_without_a_uniform_scale() -> None:
+    uneven = {**PLAN_ROW, "id": "plan-uneven", "image_scale": None}
+    plain = {**PLAN_ROW, "id": "plan-plain", "image_scale": 1, "image_offset": (0, 0)}
+    runner, _calls, _walls = _innerspace_wall_runner(plans=(uneven, plain))
+
+    assert runner.innerspace_scratch_plan() == "plan-plain"
 
 
 class FakeInnerSpace:
@@ -2576,8 +2594,12 @@ def _plan_order(console):
     return [plan["id"] for plan in console.ordered()]
 
 
+# The stored order values 1 to N in plan order: the only values the restore brings back exactly.
+NUMBERED_PLANS = tuple({**plan, "ordering": index} for index, plan in enumerate(INNERSPACE_PLANS, start=1))
+
+
 def test_innerspace_reorder_lifecycle_swaps_two_plans_of_one_site_and_restores_the_order() -> None:
-    console = FakeInnerSpace()
+    console = FakeInnerSpace(plans=NUMBERED_PLANS)
     runner = _innerspace_lifecycle_runner(console)
 
     asyncio.run(runner.lifecycle_innerspace_reorder_plans())
@@ -2586,28 +2608,25 @@ def test_innerspace_reorder_lifecycle_swaps_two_plans_of_one_site_and_restores_t
     swapped, original = ["plan-b", "plan-x", "plan-a"], ["plan-a", "plan-x", "plan-b"]
     assert orders == [swapped, swapped, original]
     assert _plan_order(console) == original
+    assert [plan["ordering"] for plan in console.ordered()] == [1, 2, 3]
     assert _statuses(runner, "failed") == []
-    # The order is back, but the stored values 10, 20, 30 are now 1, 2, 3: left changed, not cleaned.
-    (entry,) = runner.report.created_resources
-    assert entry["left_changed"] == "ordering values renumbered from 1"
-    assert runner.report.cleaned_resources == []
-
-
-def test_innerspace_reorder_lifecycle_is_cleaned_when_the_order_values_come_back() -> None:
-    plans = tuple({**plan, "ordering": index} for index, plan in enumerate(INNERSPACE_PLANS, start=1))
-    console = FakeInnerSpace(plans=plans)
-    runner = _innerspace_lifecycle_runner(console)
-
-    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
-
-    assert _plan_order(console) == ["plan-a", "plan-x", "plan-b"]
     assert runner.report.created_resources == runner.report.cleaned_resources != []
     assert "left_changed" not in runner.report.created_resources[0]
 
 
-def test_innerspace_reorder_only_previews_when_stored_orders_are_tied() -> None:
-    """The restore renumbers the plans 1, 2, 3 ...: on tied order values it would leave the console changed."""
-    plans = tuple({**plan, "ordering": 0} for plan in INNERSPACE_PLANS)
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param((0, 0, 0), id="tied"),
+        pytest.param((10, 20, 30), id="spaced"),
+        pytest.param((0, 1, 2), id="from-zero"),
+        pytest.param((1, 3, 4), id="gap"),
+    ],
+)
+def test_innerspace_reorder_only_previews_unless_stored_orders_are_1_to_n(values) -> None:
+    """The restore renumbers the plans 1, 2, 3 ...: on any other stored values it would leave the console changed,
+    and a closed gap would stack two floors as neighbours for coverage."""
+    plans = tuple({**plan, "ordering": value} for plan, value in zip(INNERSPACE_PLANS, values))
     console = FakeInnerSpace(plans=plans)
     runner = _innerspace_lifecycle_runner(console)
 
@@ -2615,19 +2634,20 @@ def test_innerspace_reorder_only_previews_when_stored_orders_are_tied() -> None:
 
     confirms = [a for tool, a in console.calls if tool == "innerspace_reorder_floor_plans" and a.get("confirm")]
     assert confirms == []
-    assert [plan["ordering"] for plan in console.ordered()] == [0, 0, 0]
+    assert [plan["ordering"] for plan in console.ordered()] == list(values)
     assert ("innerspace_reorder_floor_plans", "approved:verify-preview") in _statuses(runner, "ok")
     assert ("innerspace_reorder_floor_plans", "approved") in _statuses(runner, "skipped")
     assert runner.report.created_resources == []
 
 
 def test_innerspace_reorder_lifecycle_restores_after_a_reorder_with_an_unknown_outcome() -> None:
-    console = FakeInnerSpace(land_and_fail={"innerspace_reorder_floor_plans"})
+    console = FakeInnerSpace(plans=NUMBERED_PLANS, land_and_fail={"innerspace_reorder_floor_plans"})
     runner = _innerspace_lifecycle_runner(console)
 
     asyncio.run(runner.lifecycle_innerspace_reorder_plans())
 
     assert _plan_order(console) == ["plan-a", "plan-x", "plan-b"]
+    assert [plan["ordering"] for plan in console.ordered()] == [1, 2, 3]
     assert ("innerspace_reorder_floor_plans", "approved:verify-update") in _statuses(runner, "failed")
     assert ("innerspace_reorder_floor_plans", "approved:verify-restore") in _statuses(runner, "ok")
 

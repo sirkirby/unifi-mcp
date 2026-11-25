@@ -267,9 +267,9 @@ protect and access.
   (skipped when there is none). Floor plans: the first plan's title gets the suffix ` smoke`
   and is renamed back; the first two plans of one site swap places in the plan order and the
   order is restored (skipped when no site has two plans; the restore numbers the plans 1, 2, 3
-  ... in their original order, so when the stored values were not 1, 2, 3 ... the entry stays in
-  `created_resources` marked `left_changed`; when two plans share an order value the swap is
-  only previewed, since the restore could not bring the tie back); the first plan's floor
+  ... in their original order, so the swap is confirmed only when the stored values already are
+  1 to N in plan order and is otherwise only previewed, since a tie, a gap or another start would
+  come back renumbered and neighbouring values stack floors for coverage); the first plan's floor
   attenuation is set to 25 dB (30 when it
   is already 25) and restored, read through a preview because no read tool returns it.
   Attenuation: on the wall lifecycle's plan, one `shelf_small` square at (0.1, 0.2)-(0.4, 0.5) m
@@ -288,7 +288,8 @@ protect and access.
 - **Phases:** `readonly` and `safe` run the reads. `preview` records each write as skipped,
   because no write argument is discovered, or as pending approval for the removals and
   `innerspace_set_plan_scale`. `lifecycle` (and `safe`) runs one wall lifecycle on the first
-  plan whose map is not shifted or scaled: a create preview, then a create of one short wall at
+  plan whose map reads back an image scale of exactly 1 and an offset of (0, 0) (a scale of null,
+  which is also how a map with a y scale unlike its x reads, does not count): a create preview, then a create of one short wall at
   (0.1, 0.1)-(0.6, 0.1) m in the frame, a read-back, a variant-only update to `glass`, a
   read-back, and a remove with a final read-back. The remove runs whenever the create may have
   landed (an unknown outcome that names one id included), also after a failed step. It needs
