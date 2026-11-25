@@ -226,6 +226,8 @@ does not discover contributor-only skills from the repository root:
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-network
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-protect
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-access
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-sitemanager
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-drive
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-intelligence
 ```
 
