@@ -135,6 +135,11 @@ function canSeeLocation(scope: AgentScope, locationId: string): boolean {
   return scope.locations === null || scope.locations.includes(locationId);
 }
 
+/** Whether the caller supplied __location at all; absent is the only way to name no target */
+function hasLocation(args: object): boolean {
+  return Object.prototype.hasOwnProperty.call(args, "__location");
+}
+
 function locationDenied(locationId: string): Record<string, unknown> {
   return { success: false, error: `Location not available to this agent token: ${locationId}` };
 }
@@ -965,8 +970,10 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       return META_TOOLS;
     }
 
-    // eager mode: return all deduplicated tools the caller can reach
-    return this.getAggregatedTools(scope);
+    // eager mode: the worker's own meta-tools, then every deduplicated tool
+    // the caller can reach. The catalog holds no tool with a worker-owned
+    // name, so each meta-tool is listed once, with the worker's schema.
+    return [...META_TOOLS, ...this.getAggregatedTools(scope)];
   }
 
   async handleToolCall(
@@ -1014,10 +1021,11 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       return { success: false, error: "Missing required argument: tool" };
     }
 
-    const toolArgs = (args.arguments as Record<string, unknown>) || {};
-    const location = args.__location as string | undefined;
-    if (location) {
-      toolArgs.__location = location;
+    const toolArgs = { ...((args.arguments as Record<string, unknown>) || {}) };
+    // A supplied __location is passed on as given, even empty, so routing can
+    // refuse an invalid target rather than route as if none was named.
+    if (hasLocation(args)) {
+      toolArgs.__location = args.__location;
     }
 
     return this.routeToolCall(toolName, toolArgs, scope);
@@ -1032,7 +1040,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     const settled = await Promise.allSettled(
       calls.map((call) => {
         const callArgs = { ...(call.arguments || {}) };
-        if (call.__location) {
+        if (hasLocation(call)) {
           callArgs.__location = call.__location;
         }
         return this.routeToolCall(call.tool, callArgs, scope);
@@ -1099,14 +1107,16 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
     // An explicit __location is held to the scope on every path, so a token
     // that sees one location cannot name another and have the call land here.
-    const targetLocation = args.__location as string | undefined;
-    if (targetLocation && !canSeeLocation(scope, targetLocation)) {
+    const targetSupplied = hasLocation(args);
+    const targetLocation = args.__location;
+    if (targetSupplied && typeof targetLocation === "string" && !canSeeLocation(scope, targetLocation)) {
       return locationDenied(targetLocation);
     }
     // Every path, a single location included, routes only to a location id
-    // that holds the tool, so a mistyped or unknown location never runs the
-    // call somewhere the caller did not name.
-    if (targetLocation && !locations.includes(targetLocation)) {
+    // that holds the tool. A supplied __location that is empty, null or not a
+    // string is refused too, so it never runs the call somewhere the caller
+    // did not name. Only an absent __location means no target.
+    if (targetSupplied && (typeof targetLocation !== "string" || !locations.includes(targetLocation))) {
       return {
         success: false,
         error:
@@ -1144,14 +1154,14 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     }
 
     // Write tool: requires explicit __location
-    if (!targetLocation) {
+    if (!targetSupplied) {
       return {
         success: false,
         error: `Multi-location write operation requires __location argument. Available locations: ${JSON.stringify(this.locationChoices(locations))}`,
       };
     }
 
-    return this.sendToolCall(targetLocation, toolName, cleanArgs);
+    return this.sendToolCall(targetLocation as string, toolName, cleanArgs);
   }
 
   private async sendToolCall(
