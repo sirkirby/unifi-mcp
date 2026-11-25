@@ -172,7 +172,7 @@ These are the tool module names. The policy gate categories are different: `file
 | Mode | What the client sees |
 |---|---|
 | `lazy` (default) | The meta-tools; domain tools are reached through `drive_execute` or loaded with `drive_load_tools` |
-| `eager` | The meta-tools except `drive_load_tools`, and all 18 tools (or the enabled subset) |
+| `eager` | The meta-tools except `drive_load_tools`, and all 20 tools (or the enabled subset) |
 | `meta_only` | The meta-tools only; reach tools through `drive_execute` |
 
 See [MCP discovery and meta-tools](../../../docs/tool-index.md).

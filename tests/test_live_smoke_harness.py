@@ -1969,7 +1969,15 @@ _DRIVE_NFS = {"client": "192.0.2.76", "async_writes": False, "shared_drives": [{
 def _drive_reads(tool):
     if tool == "drive_list_shared_drives":
         # A personal drive first: NFS can export only the shared one.
-        return _ok({"drives": [{"id": "home-1", "type": "personal"}, {"id": "drive-1", "type": "shared"}], "count": 2})
+        return _ok(
+            {
+                "drives": [
+                    {"id": "home-1", "name": "home", "type": "personal"},
+                    {"id": "drive-1", "name": "Shared_Drive", "type": "shared"},
+                ],
+                "count": 2,
+            }
+        )
     if tool == "drive_get_file_services":
         return _ok({"smb_enabled": True, "nfs_enabled": True, "time_machine_enabled": False})
     if tool == "drive_list_nfs_connections":
@@ -2008,6 +2016,8 @@ def test_drive_safe_phase_reads_everything_and_only_previews_writes():
     ]
     # Reads take the first listed drive; NFS previews take the first shared one.
     assert ("drive_get_shared_drive", {"drive_id": "home-1"}) in calls
+    # Snapshots are listed by a shared drive's name.
+    assert ("drive_list_snapshots", {"shared_drive_name": "Shared_Drive"}) in calls
     domain_reads = {
         name for name, tool in manifest.items() if tool.get("permission_category") and name not in dict(writes)
     }

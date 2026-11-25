@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 18 domain tools: fourteen reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 20 domain tools: sixteen reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -46,6 +46,25 @@ No parameters. Each drive has `id`, `name`, `status`, `storage_pool_id`, `quota_
 | `drive_id` | Shared drive ID from `drive_list_shared_drives` |
 
 Drive's single-drive endpoint does not return the protection flags or member count.
+
+## Snapshots
+
+Both tools only read. No tool takes, locks, restores or deletes a snapshot.
+
+### `drive_get_snapshot_overview`
+
+No parameters. Reads `GET /proxy/drive/api/v1/systems/snapshot` and returns `shared_drives` and `personal_drives`. Each entry has `drive_type`, `shared_drive_id`, `shared_drive_name` and `shared_drive_status` for a shared drive or `user_id` for a personal drive's owner, then `configured` (whether snapshot settings were ever saved), `snapshot_limit`, `snapshot_count`, `locked_count`, `pending_deletion_count`, `coverage_bytes`, `last_snapshot_time`, `next_snapshot_time`, `paused`, `pause_reason` (such as `ErrSnapshotStorageLow`), `restoring`, `encryption_status` and `schedule`. The schedule has `enabled`, `frequency` (`daily`, `weekly` or `monthly`), `weekdays` (0 is Sunday) for a weekly schedule, `monthdays` (1 to 28, or `L` for the last day) for a monthly one, `interval_minutes`, `start_time` and `end_time` (`H:MM`, the NAS's local time). A drive whose snapshots were never set up is listed with `configured: false` and a limit of 0. Owner names are left out.
+
+### `drive_list_snapshots`
+
+| Parameter | Description |
+|-----------|-------------|
+| `shared_drive_name` | The shared drive's name, not its id, from `drive_list_shared_drives` or `drive_get_snapshot_overview` |
+
+Reads `GET /proxy/drive/api/v1/snapshots/shared/<name>`. Each snapshot has `id`, `name` (left out when Drive has none), `created_at` and `locked`. A drive with no snapshots returns an empty list.
+
+- Drive allows letters, digits, `_` and single dots in a shared drive name, and that is all this tool accepts. Any other name is refused before a request is sent.
+- Drive answers a name no shared drive has with 403. The tool then checks the shared drive list and reports the drive as not found; a 403 for a listed drive stays a permission error.
 
 ## File services
 

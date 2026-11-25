@@ -33,6 +33,8 @@ DOMAIN_TOOLS = {
     "drive_get_network_throughput",
     "drive_get_fan_profile",
     "drive_get_disk_stats",
+    "drive_get_snapshot_overview",
+    "drive_list_snapshots",
 }
 META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status", "drive_batch_cancel"}
 
