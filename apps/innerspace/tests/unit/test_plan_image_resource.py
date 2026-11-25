@@ -6,7 +6,7 @@ import asyncio
 import base64
 import logging
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from mcp.server.mcpserver.exceptions import ResourceError
@@ -53,20 +53,20 @@ JPEG_METADATA = {"filename": "f.jpg", "content_type": "image/jpeg", "width_px": 
 
 async def test_the_jpeg_resource_returns_a_jpeg_plan_with_its_type(monkeypatch):
     asset = {**JPEG_METADATA, "image_base64": base64.b64encode(JPEG).decode()}
-    method = _serve(monkeypatch, side_effect=[JPEG_METADATA, asset])
+    method = _serve(monkeypatch, return_value=asset)
 
     content = await _read(plan_image_uri(PLAN, "image/jpeg"))
 
     assert (content.content, content.mime_type) == (JPEG, "image/jpeg")
-    assert method.await_args_list == [call(PLAN), call(PLAN, include_image=True)]
+    method.assert_awaited_once_with(PLAN, include_image=True, image_type="image/jpeg")
 
 
 async def test_each_resource_refuses_the_other_type_and_names_the_right_one(monkeypatch):
-    method = _serve(monkeypatch, return_value=JPEG_METADATA)
+    png_method = _serve(monkeypatch, return_value=JPEG_METADATA)
     with pytest.raises(ResourceError) as png_read:
         await _read(plan_image_uri(PLAN))
 
-    _serve(monkeypatch, return_value=METADATA)
+    jpeg_method = _serve(monkeypatch, return_value=METADATA)
     with pytest.raises(ResourceError) as jpeg_read:
         await _read(plan_image_uri(PLAN, "image/jpeg"))
 
@@ -76,17 +76,18 @@ async def test_each_resource_refuses_the_other_type_and_names_the_right_one(monk
     assert str(jpeg_read.value) == (
         "Failed to read InnerSpace plan image: the image is a PNG; read innerspace://plans/{plan_id}/image"
     )
-    method.assert_awaited_once_with(PLAN)
+    png_method.assert_awaited_once_with(PLAN, include_image=True, image_type="image/png")
+    jpeg_method.assert_awaited_once_with(PLAN, include_image=True, image_type="image/jpeg")
 
 
 async def test_resource_returns_the_image_bytes_with_the_png_type(monkeypatch):
     asset = {**METADATA, "image_base64": base64.b64encode(PNG).decode()}
-    method = _serve(monkeypatch, side_effect=[METADATA, asset])
+    method = _serve(monkeypatch, return_value=asset)
 
     content = await _read(plan_image_uri(PLAN))
 
     assert (content.content, content.mime_type) == (PNG, "image/png")
-    assert method.await_args_list == [call(PLAN), call(PLAN, include_image=True)]
+    method.assert_awaited_once_with(PLAN, include_image=True, image_type="image/png")
 
 
 async def test_unknown_plan_is_a_fixed_error(monkeypatch, caplog):
@@ -178,15 +179,15 @@ async def test_the_console_fetch_holds_a_read_slot_at_the_gate(monkeypatch, gate
     """MCP resources are not tool calls, so this read takes its own slot."""
     slots = []
 
-    async def get_plan_asset(plan_id, include_image=False):
+    async def get_plan_asset(plan_id, **_):
         slots.append(gate.snapshot()["reads_in_use"])
-        return {**METADATA, "image_base64": base64.b64encode(PNG).decode()} if include_image else METADATA
+        return {**METADATA, "image_base64": base64.b64encode(PNG).decode()}
 
     monkeypatch.setattr(resource_module, "floor_plan_manager", SimpleNamespace(get_plan_asset=get_plan_asset))
 
     await _read(plan_image_uri(PLAN))
 
-    assert slots == [1, 1]
+    assert slots == [1]
     assert gate.snapshot()["reads_in_use"] == 0
 
 
@@ -217,7 +218,7 @@ async def test_a_busy_gate_refuses_the_read_before_the_console_is_reached(monkey
 async def test_no_gate_in_setup_mode_still_reads(monkeypatch):
     monkeypatch.setattr(resource_module, "get_operation_gate", lambda: None)
     asset = {**METADATA, "image_base64": base64.b64encode(PNG).decode()}
-    _serve(monkeypatch, side_effect=[METADATA, asset])
+    _serve(monkeypatch, return_value=asset)
 
     content = await _read(plan_image_uri(PLAN))
 
@@ -234,7 +235,7 @@ async def test_a_failed_fetch_gives_its_read_slot_back(monkeypatch, gate):
 
 
 async def test_an_undecodable_image_is_a_fixed_error(monkeypatch):
-    _serve(monkeypatch, side_effect=[METADATA, {**METADATA, "image_base64": "not base64!"}])
+    _serve(monkeypatch, return_value={**METADATA, "image_base64": "not base64!"})
 
     with pytest.raises(ResourceError) as raised:
         await _read(plan_image_uri(PLAN))

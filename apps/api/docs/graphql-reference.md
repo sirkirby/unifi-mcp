@@ -1981,7 +1981,9 @@ type InnerSpaceFloorPlan {
   """Asset file name taken from the image URL"""
   imageFilename: String
 
-  """The plan map's horizontal image scale, if sent"""
+  """
+  The plan map's image scale, or null when not sent or when its y scale differs from x
+  """
   imageScale: Float
 
   """The plan map's image offset (x, y)"""
@@ -2091,7 +2093,9 @@ type InnerSpacePlanAsset {
   """Plan units per metre, or per foot when imperial"""
   scalePerUnit: Float
 
-  """The plan map's horizontal image scale, if sent"""
+  """
+  The plan map's image scale, or null when not sent or when its y scale differs from x
+  """
   imageScale: Float
 
   """The plan map's image offset (x, y)"""
@@ -2123,7 +2127,9 @@ type InnerSpacePlanSummary {
   """True when the plan has no usable scale"""
   scaleMissing: Boolean!
 
-  """The plan map's horizontal image scale, if sent"""
+  """
+  The plan map's image scale, or null when not sent or when its y scale differs from x
+  """
   imageScale: Float
 
   """The plan map's image offset (x, y)"""

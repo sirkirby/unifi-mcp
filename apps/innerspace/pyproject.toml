@@ -13,6 +13,7 @@ dependencies = [
     # The InnerSpace managers, and an empty InnerSpace host treated as not configured
     # (setup mode without a placeholder host), require Core 0.4.105.
     # The InnerSpace write managers require Core 0.4.108.
+    # One-pass plan image reads (get_plan_asset image_type) require Core 0.4.110.
     "unifi-core>=0.4.110,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

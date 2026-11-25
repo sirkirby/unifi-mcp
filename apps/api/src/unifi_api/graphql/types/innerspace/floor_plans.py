@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import strawberry
 
-from unifi_api.graphql.types.innerspace._base import DESCRIPTION, Projection
+from unifi_api.graphql.types.innerspace._base import DESCRIPTION, IMAGE_SCALE, Projection
 
 
 @strawberry.type(description=DESCRIPTION)
@@ -19,7 +19,7 @@ class InnerSpaceFloorPlan(Projection):
     origin_y: float | None = strawberry.field(description="Plan origin y as the console sent it")
     site_id: str | None = strawberry.field(description="InnerSpace site id")
     image_filename: str | None = strawberry.field(description="Asset file name taken from the image URL")
-    image_scale: float | None = strawberry.field(description="The plan map's horizontal image scale, if sent")
+    image_scale: float | None = strawberry.field(description=IMAGE_SCALE)
     image_offset: list[float] | None = strawberry.field(description="The plan map's image offset (x, y)")
     unit: str = strawberry.field(description="Length unit of the result: metric or imperial")
 
@@ -39,7 +39,7 @@ class InnerSpacePlanAsset(Projection):
     width_px: float | None = strawberry.field(description="Image width in pixels")
     height_px: float | None = strawberry.field(description="Image height in pixels")
     scale_per_unit: float | None = strawberry.field(description="Plan units per metre, or per foot when imperial")
-    image_scale: float | None = strawberry.field(description="The plan map's horizontal image scale, if sent")
+    image_scale: float | None = strawberry.field(description=IMAGE_SCALE)
     image_offset: list[float] | None = strawberry.field(description="The plan map's image offset (x, y)")
     unit: str = strawberry.field(description="Length unit of the result: metric or imperial")
 
