@@ -21,16 +21,6 @@ class ToolInfo:
     input_schema: dict | None = None
     annotations: dict | None = None
     server_origin: str | None = None
-    # The server's tool index category (its module), so the worker's index can
-    # filter by category exactly as the server does. Sent only when known.
-    category: str | None = None
-
-
-def _tool_payload(tool: ToolInfo) -> dict:
-    payload = asdict(tool)
-    if payload["category"] is None:
-        del payload["category"]
-    return payload
 
 
 # --- Outbound messages (relay -> worker) ---
@@ -51,7 +41,7 @@ class RegisterMessage:
             "protocol_version": PROTOCOL_VERSION,
             "token": self.token,
             "location_name": self.location_name,
-            "tools": [_tool_payload(t) for t in self.tools],
+            "tools": [asdict(t) for t in self.tools],
             "capabilities": self.capabilities,
         }
         return json.dumps(data)
@@ -84,7 +74,7 @@ class CatalogUpdateMessage:
     def to_json(self) -> str:
         data = {
             "type": "catalog_update",
-            "tools": [_tool_payload(t) for t in self.tools],
+            "tools": [asdict(t) for t in self.tools],
             "capabilities": self.capabilities,
         }
         return json.dumps(data)
