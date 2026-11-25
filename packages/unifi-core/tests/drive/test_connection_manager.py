@@ -1,5 +1,6 @@
 """The UniFi Drive session client: login, CSRF handling, re-login and error text."""
 
+import aiohttp
 import pytest
 from unifi_core.drive.managers import connection_manager as cm
 from unifi_core.drive.managers.connection_manager import DriveConnectionManager, DriveWriteOutcomeUnknown
@@ -11,6 +12,7 @@ from unifi_core.exceptions import (
     UniFiPermissionError,
     UniFiValidationError,
 )
+from unifi_core.tls import CertificateVerificationError
 
 from tests.drive.conftest import CSRF, HOST, PASSWORD, USERNAME
 from tests.drive.fixtures import service
@@ -231,3 +233,22 @@ async def test_a_change_whose_login_fails_is_not_of_unknown_outcome():
 
     assert not isinstance(raised.value, DriveWriteOutcomeUnknown)
     await manager.close()
+
+
+async def test_a_certificate_failure_names_only_the_drive_pin():
+    """The shared fingerprint pins the gateway, so Drive's remediation never suggests it."""
+    manager = DriveConnectionManager(HOST, USERNAME, PASSWORD, tls_env_prefix="DRIVE")
+    session = manager._get_session()
+    try:
+        (middleware,) = session._middlewares
+
+        async def handler(request):
+            raise aiohttp.ServerFingerprintMismatch(b"a" * 32, b"b" * 32, HOST, 443)
+
+        with pytest.raises(CertificateVerificationError) as caught:
+            await middleware(None, handler)
+    finally:
+        await session.close()
+    message = str(caught.value)
+    assert "UNIFI_DRIVE_SSL_FINGERPRINT" in message
+    assert "UNIFI_SSL_FINGERPRINT" not in message

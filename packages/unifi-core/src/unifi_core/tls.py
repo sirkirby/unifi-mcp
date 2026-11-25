@@ -90,7 +90,19 @@ def tls_mode(setting: SslSetting) -> str:
     return "verified" if setting else "disabled"
 
 
-def warn_if_unverified(logger: logging.Logger, setting: SslSetting, *, product: str, env_prefix: str) -> None:
+def pin_variables(env_prefix: str, *, shared_pin: bool = True) -> str:
+    """Name the settings that pin a server's certificate, for operator-facing text.
+
+    ``shared_pin=False`` is for a server that ignores ``UNIFI_SSL_FINGERPRINT``
+    because its controller is a different console from the one that pins.
+    """
+    own = f"UNIFI_{env_prefix}_SSL_FINGERPRINT"
+    return f"UNIFI_SSL_FINGERPRINT or {own}" if shared_pin else own
+
+
+def warn_if_unverified(
+    logger: logging.Logger, setting: SslSetting, *, product: str, env_prefix: str, shared_pin: bool = True
+) -> None:
     """Log one startup warning when certificate checks are disabled.
 
     Args:
@@ -98,19 +110,26 @@ def warn_if_unverified(logger: logging.Logger, setting: SslSetting, *, product: 
         setting: The value from :func:`ssl_setting`.
         product: Display name, e.g. ``"Network"``.
         env_prefix: Server-specific env prefix, e.g. ``"NETWORK"``.
+        shared_pin: Whether the server also reads ``UNIFI_SSL_FINGERPRINT``.
     """
     if setting is not False:
         return
     logger.warning(
         "TLS verification is off for the UniFi %s connection, so the controller's identity is not checked. "
-        "To check it, set UNIFI_SSL_FINGERPRINT or UNIFI_%s_SSL_FINGERPRINT to its certificate's SHA-256 fingerprint.",
+        "To check it, set %s to its certificate's SHA-256 fingerprint.",
         product,
-        env_prefix,
+        pin_variables(env_prefix, shared_pin=shared_pin),
     )
 
 
 def server_ssl_setting(
-    logger: logging.Logger, verify_ssl: bool, fingerprint: str | None, *, product: str, env_prefix: str
+    logger: logging.Logger,
+    verify_ssl: bool,
+    fingerprint: str | None,
+    *,
+    product: str,
+    env_prefix: str,
+    shared_pin: bool = True,
 ) -> SslSetting:
     """Resolve an MCP server's TLS settings at startup.
 
@@ -118,15 +137,18 @@ def server_ssl_setting(
     rather than starting with a check the operator did not get. Only for a server
     reading the ``UNIFI_*`` variables: a library consumer calls :func:`ssl_setting`.
 
+    ``shared_pin=False`` names only the server's own fingerprint setting, for a
+    server that does not read ``UNIFI_SSL_FINGERPRINT``.
+
     Raises:
         SystemExit: The fingerprint is malformed. The log line never echoes it.
     """
     try:
         setting = ssl_setting(verify_ssl, fingerprint)
     except ValueError as error:
-        logger.critical("Invalid UNIFI_SSL_FINGERPRINT or UNIFI_%s_SSL_FINGERPRINT: %s", env_prefix, error)
+        logger.critical("Invalid %s: %s", pin_variables(env_prefix, shared_pin=shared_pin), error)
         raise SystemExit(2) from None
-    warn_if_unverified(logger, setting, product=product, env_prefix=env_prefix)
+    warn_if_unverified(logger, setting, product=product, env_prefix=env_prefix, shared_pin=shared_pin)
     return setting
 
 

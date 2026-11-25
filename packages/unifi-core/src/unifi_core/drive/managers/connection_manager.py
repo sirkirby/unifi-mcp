@@ -107,7 +107,8 @@ class DriveConnectionManager:
     tls_env_prefix:
         Server-specific prefix that a certificate error's remediation names,
         e.g. ``"DRIVE"``. Leave unset for a consumer that does not read the
-        ``UNIFI_*`` variables.
+        ``UNIFI_*`` variables. The remediation names only that prefix's
+        fingerprint setting: the shared one pins the gateway, not the NAS.
     base_url:
         Overrides the ``https://host:port`` origin. For tests.
     """
@@ -257,6 +258,9 @@ class DriveConnectionManager:
         await session.close()
         self._csrf_token = ""
 
+    def _pin_variable(self) -> str | None:
+        return f"UNIFI_{self.tls_env_prefix}_SSL_FINGERPRINT" if self.tls_env_prefix else None
+
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
@@ -264,7 +268,9 @@ class DriveConnectionManager:
                 cookie_jar=aiohttp.CookieJar(unsafe=True),
                 timeout=self._timeout,
                 trust_env=False,
-                middlewares=(certificate_safe_middleware(env_prefix=self.tls_env_prefix),),
+                middlewares=(
+                    certificate_safe_middleware(env_prefix=self.tls_env_prefix, pin_variable=self._pin_variable()),
+                ),
             )
         return self._session
 
