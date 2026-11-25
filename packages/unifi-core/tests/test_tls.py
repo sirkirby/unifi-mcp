@@ -104,6 +104,15 @@ class TestWarning:
         assert "UNIFI_NETWORK_SSL_FINGERPRINT" in message
         assert "\n" not in message
 
+    def test_a_server_without_the_shared_pin_names_only_its_own(self, caplog):
+        logger = logging.getLogger("test-tls")
+        with caplog.at_level(logging.WARNING, logger="test-tls"):
+            warn_if_unverified(logger, False, product="Drive", env_prefix="DRIVE", shared_pin=False)
+        [record] = caplog.records
+        message = record.getMessage()
+        assert "UNIFI_DRIVE_SSL_FINGERPRINT" in message
+        assert "UNIFI_SSL_FINGERPRINT" not in message
+
 
 class TestServerStartup:
     logger = logging.getLogger("test-tls-startup")
@@ -134,6 +143,20 @@ class TestServerStartup:
         captured = capsys.readouterr()
         for text in (caplog.text, captured.out, captured.err):
             assert value not in text
+
+    def test_a_server_without_the_shared_pin_names_only_its_own_when_the_pin_is_malformed(self, caplog):
+        with caplog.at_level(logging.DEBUG, logger=self.logger.name):
+            with pytest.raises(SystemExit):
+                server_ssl_setting(
+                    self.logger, False, "not-a-fingerprint", product="Drive", env_prefix="DRIVE", shared_pin=False
+                )
+        assert "UNIFI_DRIVE_SSL_FINGERPRINT" in caplog.text
+        assert "UNIFI_SSL_FINGERPRINT" not in caplog.text
+
+    def test_a_server_without_the_shared_pin_is_warned_with_only_its_own(self, caplog):
+        with caplog.at_level(logging.WARNING, logger=self.logger.name):
+            server_ssl_setting(self.logger, False, None, product="Drive", env_prefix="DRIVE", shared_pin=False)
+        assert [("UNIFI_SSL_FINGERPRINT" in r.getMessage()) for r in caplog.records] == [False]
 
 
 class TestCertificateError:
