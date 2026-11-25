@@ -46,13 +46,13 @@ DIRECTORY_CHECKS = re.compile(
 USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
 # Variables the servers resolve with resolve_env, where an empty value counts as unset.
 EMPTY_IS_UNSET = re.compile(
-    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
 )
-RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:PASSWORD|API_KEY)$")
+RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:PASSWORD|API_KEY)$")
 # Claude option defaults must match today's closed, preview-first behaviour.
 SAFE_DEFAULTS = (
-    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_(?:CREATE|UPDATE|DELETE)$"), False),
-    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER)_TOOL_PERMISSION_MODE$"), "confirm"),
+    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:CREATE|UPDATE|DELETE)$"), False),
+    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_TOOL_PERMISSION_MODE$"), "confirm"),
     (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
 )
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
@@ -867,7 +867,7 @@ def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
     return env
 
 
-@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name != "unifi-sitemanager"])
+@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name not in ("unifi-sitemanager", "unifi-drive")])
 def test_claude_options_resolve_like_unset_variables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, name: str
 ) -> None:
@@ -958,3 +958,80 @@ def test_sitemanager_is_a_key_only_read_only_bundle() -> None:
         assert not (bundle / filename).exists()
     assert claude["icon"] == codex["interface"]["logo"] == codex["interface"]["composerIcon"] == "./assets/icon.png"
     assert "sitemanager" in claude["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+
+
+def test_drive_bundle_connects_to_the_nas_with_its_own_settings_only() -> None:
+    bundle = REPO_ROOT / "plugins/unifi-drive"
+    claude = _load(bundle / CLAUDE_MANIFEST)
+    codex = _load(bundle / ".codex-plugin/plugin.json")
+    env = claude["mcpServers"]["unifi-drive"]["env"]
+    # The NAS is its own console with no API key: only Drive-scoped connection settings reach the server.
+    assert {v for v in env if v.startswith("UNIFI_DRIVE_")} == {
+        "UNIFI_DRIVE_HOST",
+        "UNIFI_DRIVE_USERNAME",
+        "UNIFI_DRIVE_PASSWORD",
+        "UNIFI_DRIVE_PASSWORD_FILE",
+        "UNIFI_DRIVE_PASSWORD_COMMAND",
+        "UNIFI_DRIVE_PORT",
+        "UNIFI_DRIVE_VERIFY_SSL",
+        "UNIFI_DRIVE_SSL_FINGERPRINT",
+        "UNIFI_DRIVE_TOOL_PERMISSION_MODE",
+    }
+    assert set(env) - {v for v in env if v.startswith(("UNIFI_DRIVE_", "UNIFI_POLICY_DRIVE_"))} == {
+        "UNIFI_TOOL_REGISTRATION_MODE"
+    }
+    assert claude["userConfig"]["password"]["sensitive"] is True
+    assert claude["version"] == codex["version"]
+    assert codex["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
+    pins = set()
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
+        server = _load(bundle / filename)["mcpServers"]["unifi-drive"]
+        assert server["args"][:2] == ["--python-preference", "system"] and len(server["args"]) == 3
+        assert re.fullmatch(r"unifi-drive-mcp==\d+\.\d+\.\d+", server["args"][2])
+        pins.add(server["args"][2])
+    assert len(pins) == 1
+    # No support-bundle tool, so no support skill.
+    assert sorted(p.name for p in (bundle / "skills").iterdir()) == ["unifi-drive", "unifi-drive-setup"]
+    for filename in (".mcp.json", "hooks.json", "README.md"):
+        assert not (bundle / filename).exists()
+    assert claude["icon"] == codex["interface"]["logo"] == codex["interface"]["composerIcon"] == "./assets/icon.png"
+    assert "drive" in claude["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+
+
+def test_drive_claude_options_never_fall_back_to_shared_console_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
+    policy_gate = pytest.importorskip("unifi_core.policy_gate")
+    monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
+    password = tmp_path / "password"
+    password.write_text("FAKE-file-password\n", encoding="utf-8")
+    shared = tmp_path / "shared"
+    shared.write_text("FAKE-shared-password", encoding="utf-8")
+    # The gateway's shared settings, inherited by the server process.
+    inherited = {"UNIFI_HOST": "192.0.2.1", "UNIFI_PASSWORD_FILE": str(shared), "UNIFI_USERNAME": "gateway-admin"}
+
+    def resolve(values: dict[str, str]) -> None:
+        for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+            monkeypatch.delenv(key)
+        for key, value in {**inherited, **_claude_server_env("unifi-drive", values)}.items():
+            monkeypatch.setenv(key, value)
+
+    def config() -> dict:
+        drive_bootstrap = pytest.importorskip("unifi_drive_mcp.bootstrap")
+        return dict(drive_bootstrap.load_config().unifi)
+
+    resolve({"host": "192.0.2.20", "username": "mcp", "password_file": str(password)})
+    loaded = config()
+    assert (loaded["host"], loaded["username"], loaded["password"]) == ("192.0.2.20", "mcp", "FAKE-file-password")
+    checker = policy_gate.PolicyGateChecker("DRIVE")
+    assert not any(checker.check("any_category", action) for action in ("create", "update", "delete"))
+    assert policy_gate.resolve_permission_mode("DRIVE") == "confirm"
+
+    resolve({})
+    # Unset options leave the server in setup mode: the gateway's host and login never reach the NAS.
+    loaded = config()
+    assert not loaded["host"] and not loaded["username"] and not loaded["password"]
+
+    resolve({"policy_update": True})
+    assert checker.check("file_services", "update") and not checker.check("nfs_connections", "delete")

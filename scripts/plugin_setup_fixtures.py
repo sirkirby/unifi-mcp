@@ -276,7 +276,7 @@ class Fixtures:
     def check_script_parity(self):
         """Keep shipped setup implementations byte-identical across products."""
         reference = self.repo / "plugins/unifi-network/scripts"
-        for product in ("network", "protect", "access", "sitemanager"):
+        for product in ("network", "protect", "access", "sitemanager", "drive"):
             scripts = self.repo / f"plugins/unifi-{product}/scripts"
             for filename in (
                 "set-env.sh",
@@ -301,6 +301,201 @@ class Fixtures:
 
         for target in ("claude", "codex", "openclaw"):
             self.sitemanager_scenario(target)
+            self.drive_scenario(target)
+
+    def drive_scenario(self, target):
+        """NAS setup through each shipped wrapper: Drive-scoped settings only, using synthetic secrets."""
+        plugin = self.repo / "plugins/unifi-drive"
+        scripts = plugin / "scripts"
+        workspace = self.root / ("drive-" + target)
+        bindir = workspace / "bin"
+        bindir.mkdir(parents=True)
+        for name in ("uvx", target):
+            client_executable(bindir, name)
+        provider_marker = workspace / "provider-ran"
+        executable(
+            bindir, "fixture-provider", "from pathlib import Path\nPath(" + repr(str(provider_marker)) + ").touch()\n"
+        )
+        nas_value = 'FAKE-nas-only "quoted" Ω'
+        provider_file = workspace / "provider-password"
+        provider_file.write_text(nas_value, encoding="utf-8")
+        output_marker = workspace / "output-marker"
+        output_marker.write_text(nas_value, encoding="utf-8")
+        config = workspace / "client"
+        config.mkdir()
+        environment = {
+            k: v for k, v in os.environ.items() if not k.startswith(("UNIFI_", "CODEX_", "CLAUDE_", "OPENCLAW_"))
+        }
+        environment.update(
+            HOME=str(workspace),
+            USERPROFILE=str(workspace),
+            CODEX_HOME=str(config),
+            CLAUDE_CONFIG_DIR=str(config),
+            OPENCLAW_CONFIG_PATH=str(config / "openclaw.json"),
+            OPENCLAW_STATE_DIR=str(config),
+            PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+            FIXTURE_PLUGIN_ROOT=str(plugin),
+            FIXTURE_ARGV=str(workspace / "argv.jsonl"),
+            FIXTURE_OUTPUT_MARKER_FILE=str(output_marker),
+            PYTHONIOENCODING="cp1252",
+            # The gateway's shared settings: never Drive's host or credentials.
+            UNIFI_HOST="192.0.2.1",
+            UNIFI_PASSWORD="FAKE-shared-gateway-password",
+        )
+        (config / "config.toml").write_text('model = "fixture"\n', encoding="utf-8")
+        (config / "openclaw.json").write_text('{"keep":true}\n', encoding="utf-8")
+        settings = workspace / ".config/unifi-mcp/drive.env"
+        legacy_path = workspace / ".claude/settings.local.json"
+        (workspace / "argv.jsonl").touch()
+        base = "UNIFI_DRIVE_PASSWORD"
+        module = setup_module(scripts)
+
+        def run(name, patch=None, extra=(), env=None):
+            if self.powershell:
+                command = [
+                    self.powershell,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(scripts / (name + ".ps1")),
+                    "-Target",
+                    target,
+                ]
+                if patch is not None:
+                    command += ["-InputJson"]
+            else:
+                command = [self.shell, str(scripts / (name + ".sh")), "--target", target]
+                if patch is not None:
+                    command += ["--input-json"]
+            result = subprocess.run(
+                command + list(extra),
+                env=env or environment,
+                cwd=workspace,
+                input=json.dumps(patch, ensure_ascii=False).encode("utf-8") if patch is not None else b"",
+                capture_output=True,
+                timeout=60,
+            )
+            self.check(b"FAKE-nas-only" not in result.stdout + result.stderr, "NAS password absent from wrapper output")
+            self.check(
+                "FAKE-nas-only" not in (workspace / "argv.jsonl").read_text(encoding="utf-8"),
+                "NAS password absent from client argv",
+            )
+            return result
+
+        def state():
+            return {
+                str(p): p.read_bytes() if p.exists() else None
+                for p in (
+                    settings,
+                    config / "settings.json",
+                    config / "fake-keychain.json",
+                    config / "config.toml",
+                    config / "openclaw.json",
+                    legacy_path,
+                )
+            }
+
+        def configured():
+            if target == "claude":
+                saved = json.loads((config / "settings.json").read_text(encoding="utf-8"))
+                options = saved["pluginConfigs"]["unifi-drive@fixture-market"]["options"]
+                names = (
+                    ("UNIFI_DRIVE_HOST", "host"),
+                    ("UNIFI_DRIVE_USERNAME", "username"),
+                    (base + "_FILE", "password_file"),
+                    (base + "_COMMAND", "password_command"),
+                )
+                return {variable: options.get(option, "") for variable, option in names}
+            return module.read_settings(settings)
+
+        connection = {"UNIFI_DRIVE_HOST": "192.0.2.20", "UNIFI_DRIVE_USERNAME": "mcp"}
+        self.check(run("check-prereqs").returncode == 0, "NAS unconfigured prerequisites")
+        self.check(not settings.exists(), "NAS unconfigured check creates no settings")
+        self.check(run("set-env", dict(connection, **{base: nas_value})).returncode == 0, "NAS raw password via stdin")
+        if target == "claude":
+            chain = json.loads((config / "fake-keychain.json").read_text(encoding="utf-8"))
+            self.check(chain["unifi-drive@fixture-market"]["password"] == nas_value, "NAS raw password uses keychain")
+            self.check(
+                nas_value not in (config / "settings.json").read_text(encoding="utf-8"),
+                "NAS raw password absent from ordinary Claude options",
+            )
+            self.check(configured()["UNIFI_DRIVE_HOST"] == "192.0.2.20", "NAS host saved as an option")
+            # Model a future client that supports clearing a keychain value.
+            environment["FIXTURE_CLAUDE_VERSION"] = "99.0.0"
+            environment["FIXTURE_CLAUDE_CLEARS"] = "1"
+        else:
+            self.check(
+                module.read_settings(settings) == dict(connection, **{base: nas_value}),
+                "NAS settings hold only Drive-scoped values",
+            )
+            if os.name != "nt":
+                self.check(settings.stat().st_mode & 0o077 == 0, "NAS settings private")
+        self.check(run("set-env", {base + "_FILE": str(provider_file)}).returncode == 0, "NAS switch to file provider")
+        self.check(configured().get(base + "_FILE") == str(provider_file), "NAS file provider retained")
+        command = "fixture-provider"
+        self.check(run("set-env", {base + "_COMMAND": command}).returncode == 0, "NAS switch to command provider")
+        self.check(configured().get(base + "_COMMAND") == command, "NAS command provider retained")
+        self.check(configured().get("UNIFI_DRIVE_HOST") == "192.0.2.20", "NAS host kept across provider switches")
+        self.check(not provider_marker.exists(), "NAS setup never executes provider")
+        for first, second in ((base, base + "_FILE"), (base, base + "_COMMAND"), (base + "_FILE", base + "_COMMAND")):
+            values = {base: nas_value, base + "_FILE": str(provider_file), base + "_COMMAND": command}
+            before = state()
+            self.check(
+                run("set-env", {first: values[first], second: values[second]}).returncode != 0,
+                "NAS refuses two password forms",
+            )
+            self.check(state() == before, "NAS ambiguity changes nothing")
+        for rejected in (
+            "UNIFI_HOST",
+            "UNIFI_USERNAME",
+            "UNIFI_PORT",
+            "UNIFI_PASSWORD",
+            "UNIFI_PASSWORD_FILE",
+            "UNIFI_API_KEY",
+            "UNIFI_DRIVE_API_KEY",
+            "UNIFI_DRIVE_API_KEY_FILE",
+            "UNIFI_SSL_FINGERPRINT",
+        ):
+            before = state()
+            self.check(run("set-env", {rejected: "FAKE-rejected"}).returncode != 0, "NAS refuses shared console input")
+            self.check(state() == before, "NAS rejected input changes nothing")
+        if target == "claude":
+            before = state()
+            failure_env = dict(environment, FIXTURE_FAIL="register")
+            self.check(run("set-env", {base: nas_value}, env=failure_env).returncode != 0, "NAS client failure is safe")
+            self.check(state() == before, "NAS client failure leaves settings intact")
+            legacy_path.parent.mkdir()
+            legacy_path.write_text(
+                json.dumps({"env": {"UNIFI_DRIVE_HOST": "192.0.2.21", "UNIFI_HOST": "192.0.2.1"}}), encoding="utf-8"
+            )
+            before = state()
+            flag = "-Migrate" if self.powershell else "--migrate"
+            result = run("set-env", extra=(flag,))
+            self.check(result.returncode != 0, "NAS refuses legacy migration")
+            self.check(
+                b"UniFi Drive has no settings from an earlier plugin version" in result.stdout + result.stderr,
+                "NAS migration gives the Drive refusal",
+            )
+            self.check(state() == before, "NAS migration refusal preserves project, keychain and options")
+            return
+        self.check((config / "config.toml").read_text() == 'model = "fixture"\n', "NAS leaves Codex config untouched")
+        self.check((config / "openclaw.json").read_text() == '{"keep":true}\n', "NAS leaves OpenClaw config untouched")
+        entry = {"command": "fixture", "env": module.read_settings(settings)}
+        if target == "codex":
+            write_toml(config / "config.toml", {"mcp_servers": {"unifi-drive": entry}})
+        else:
+            (config / "openclaw.json").write_text(json.dumps({"mcp": {"servers": {"unifi-drive": entry}}}))
+        before = state()
+        result = run("set-env", {"UNIFI_DRIVE_USERNAME": "other"})
+        self.check(result.returncode != 0, "NAS refuses shadowing entry")
+        self.check(
+            b"A client entry shadows the bundled UniFi Drive server" in result.stdout + result.stderr,
+            "NAS shadowing entry gives the explicit refusal",
+        )
+        self.check(state() == before, "NAS shadow refusal preserves entry and settings file")
 
     def sitemanager_scenario(self, target):
         """Key-only cloud setup through each shipped wrapper, using synthetic secrets."""

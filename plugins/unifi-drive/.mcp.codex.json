@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "unifi-drive": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-drive-mcp==0.1.0"
+      ],
+      "env": {
+        "UNIFI_SETTINGS_FILE": "~/.config/unifi-mcp/drive.env"
+      }
+    }
+  }
+}

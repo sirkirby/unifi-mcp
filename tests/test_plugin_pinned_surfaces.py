@@ -244,3 +244,63 @@ def test_sitemanager_missing_release_tag_never_uses_workspace(sitemanager_repo: 
     git(sitemanager_repo, "tag", "-d", SITEMANAGER_TAG)
     with pytest.raises(ValueError, match=f"pinned release tag {re.escape(SITEMANAGER_TAG)} is missing; fetch tags"):
         refs.pinned_manifest(sitemanager_repo, "sitemanager")
+
+
+DRIVE_BUNDLE = "plugins/unifi-drive"
+DRIVE_REFERENCE = f"{DRIVE_BUNDLE}/skills/unifi-drive/references/drive-tools.md"
+DRIVE_SKILL = f"{DRIVE_BUNDLE}/skills/unifi-drive/SKILL.md"
+
+
+def _drive_pin_tag() -> str:
+    args = json.loads((ROOT / DRIVE_BUNDLE / ".mcp.codex.json").read_text())["mcpServers"]["unifi-drive"]["args"]
+    return "drive/v" + args[-1].removeprefix("unifi-drive-mcp==")
+
+
+@pytest.fixture
+def drive_repo(tmp_path: Path) -> Path:
+    """The shipped Drive bundle and its pinned release, with workspace-only drift after the tag."""
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "--local", "user.name", "Fixture")
+    git(tmp_path, "config", "--local", "user.email", "fixture@example.invalid")
+    git(tmp_path, "config", "--local", "commit.gpgsign", "false")
+    git(tmp_path, "config", "--local", "core.hooksPath", str(tmp_path / "no-hooks"))
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        write(tmp_path, f"{DRIVE_BUNDLE}/{filename}", (ROOT / DRIVE_BUNDLE / filename).read_text())
+    for path in (DRIVE_SKILL, DRIVE_REFERENCE):
+        write(tmp_path, path, (ROOT / path).read_text())
+    tag = _drive_pin_tag()
+    path = refs.manifest_path("drive")
+    source = json.loads(git(ROOT, "show", f"{tag}:{path}"))
+    write(tmp_path, path, json.dumps(source))
+    release(tmp_path, tag)
+    source["tools"].append({"name": "drive_fixture_future", "schema": {"input": {"properties": {"confirm": {}}}}})
+    source["module_map"]["drive_fixture_future"] = "unifi_drive_mcp.tools.nfs"
+    write(tmp_path, path, json.dumps(source))
+    return tmp_path
+
+
+def test_drive_counts_domain_tools_and_meta_tools_from_its_pin(drive_repo: Path) -> None:
+    tag, pinned = refs.pinned_manifest(drive_repo, "drive")
+    assert tag == _drive_pin_tag()
+    domain = set(pinned["module_map"])
+    names = {tool["name"] for tool in pinned["tools"]}
+    assert refs.tool_count(pinned, "drive") == len(domain) == 11
+    assert names - domain == {f"drive_{name}" for name in refs.META_TOOLS} | {"drive_batch_cancel"}
+    assert "drive_fixture_future" not in names
+    assert "drive_get_support_bundle" not in refs.pinned_release(drive_repo, "drive").tools
+
+
+def test_drive_reference_and_skill_counts_name_domain_tools_without_read_only(drive_repo: Path) -> None:
+    for path in (DRIVE_REFERENCE, DRIVE_SKILL):
+        original = (drive_repo / path).read_text()
+        drifted = re.sub(r"\d+ domain tools, plus \d+ meta-tools", "0 domain tools, plus 5 meta-tools", original)
+        assert drifted != original
+        write(drive_repo, path, drifted)
+    assert generator.run(drive_repo, check_mode=True) == 1
+    assert generator.run(drive_repo, check_mode=False) == 0
+    reference = (drive_repo / DRIVE_REFERENCE).read_text()
+    assert "# Drive Server Tool Reference (11 domain tools, plus 6 meta-tools)" in reference
+    assert "drive_fixture_future" not in reference
+    assert "| `drive_set_file_service` | Mutate |" in reference
+    assert "It provides 11 domain tools, plus 6 meta-tools." in (drive_repo / DRIVE_SKILL).read_text()
+    assert generator.run(drive_repo, check_mode=True) == 0

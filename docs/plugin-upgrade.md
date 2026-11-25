@@ -38,6 +38,28 @@ it leaves behind, without values. These releases do not move the server pin.
 `unifi-sitemanager` 1.0.4 ships the same setup helper; Site Manager setup is
 unchanged.
 
+## unifi-drive 1.0.0
+
+The new `unifi-drive` bundle pins `unifi-drive-mcp==0.1.0` and supports the
+same Claude Code, Codex and OpenClaw bundle mechanisms. Real-client acceptance
+is not yet measured.
+
+The NAS is its own UniFi OS console. Setup takes `UNIFI_DRIVE_HOST`,
+`UNIFI_DRIVE_USERNAME` (a local account on the NAS) and exactly one of
+`UNIFI_DRIVE_PASSWORD`, `_PASSWORD_FILE` or `_PASSWORD_COMMAND`. The gateway's
+shared `UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`, `UNIFI_PORT` and
+`UNIFI_SSL_FINGERPRINT` and any API key are refused and never migrated. Writes
+stay off until allowed and are previewed first. Codex and OpenClaw read
+`~/.config/unifi-mcp/drive.env` through the bundled `.mcp.codex.json`; setup
+creates no MCP client entry. There is no earlier Drive setup to migrate.
+
+The shared setup helper also ships in `unifi-network` 1.14.6, `unifi-protect`
+1.8.3, `unifi-access` 1.5.3 and `unifi-sitemanager` 1.1.3. Their setup and
+server pins are unchanged, except that Drive settings in a project's
+`.claude/settings.local.json` count as another plugin's settings during a
+legacy migration, not as shared console settings. Update them with the
+ordinary client update steps; existing users need no setup rerun.
+
 ## unifi-sitemanager 1.0.0
 
 The new `unifi-sitemanager` bundle pins `unifi-sitemanager-mcp==0.1.0` and

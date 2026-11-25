@@ -1,0 +1,145 @@
+{
+  "name": "unifi-drive",
+  "version": "1.0.0",
+  "description": "UniFi Drive MCP server \u2014 read NAS storage pools, disk health and shared drives, and manage file services and NFS clients",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "license": "MIT",
+  "icon": "./assets/icon.png",
+  "keywords": [
+    "unifi",
+    "drive",
+    "unas",
+    "nas",
+    "storage",
+    "nfs",
+    "mcp"
+  ],
+  "mcpServers": {
+    "unifi-drive": {
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-drive-mcp==0.1.0"
+      ],
+      "env": {
+        "UNIFI_DRIVE_HOST": "${user_config.host}",
+        "UNIFI_DRIVE_USERNAME": "${user_config.username}",
+        "UNIFI_DRIVE_PASSWORD_FILE": "${user_config.password_file}",
+        "UNIFI_DRIVE_PASSWORD_COMMAND": "${user_config.password_command}",
+        "UNIFI_DRIVE_PASSWORD": "${user_config.password}",
+        "UNIFI_DRIVE_PORT": "${user_config.port}",
+        "UNIFI_DRIVE_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_DRIVE_SSL_FINGERPRINT": "${user_config.ssl_fingerprint}",
+        "UNIFI_POLICY_DRIVE_CREATE": "${user_config.policy_create}",
+        "UNIFI_POLICY_DRIVE_UPDATE": "${user_config.policy_update}",
+        "UNIFI_POLICY_DRIVE_DELETE": "${user_config.policy_delete}",
+        "UNIFI_DRIVE_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
+        "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
+      }
+    }
+  },
+  "userConfig": {
+    "host": {
+      "type": "string",
+      "title": "Host",
+      "description": "IP address or hostname of the UniFi NAS itself, not the gateway"
+    },
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Local UniFi OS account on the NAS; a UI.com account with MFA cannot log in"
+    },
+    "password_file": {
+      "type": "string",
+      "title": "Password file",
+      "description": "Absolute path to a file that holds the password. Set one password source only"
+    },
+    "password_command": {
+      "type": "string",
+      "title": "Password command",
+      "description": "Absolute argv, run without a shell, that prints the password. Set one password source only"
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password stored in the system keychain. Prefer a password file or command. Set one password source only",
+      "sensitive": true
+    },
+    "port": {
+      "type": "number",
+      "title": "Port",
+      "description": "HTTPS port of the NAS",
+      "default": 443,
+      "min": 1,
+      "max": 65535
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "title": "Verify SSL",
+      "description": "Verify the NAS certificate",
+      "default": false
+    },
+    "ssl_fingerprint": {
+      "type": "string",
+      "title": "Certificate fingerprint",
+      "description": "SHA-256 fingerprint of the NAS certificate, as openssl prints it. When set, only that certificate is accepted, whatever Verify SSL says"
+    },
+    "policy_create": {
+      "type": "boolean",
+      "title": "Allow create",
+      "description": "Allow adding NFS client connections. Off keeps the server read-only for creation",
+      "default": false
+    },
+    "policy_update": {
+      "type": "boolean",
+      "title": "Allow update",
+      "description": "Allow turning SMB, NFS or Time Machine on or off and changing NFS clients. Off keeps the server read-only for changes",
+      "default": false
+    },
+    "policy_delete": {
+      "type": "boolean",
+      "title": "Allow delete",
+      "description": "Allow removing NFS client connections. Off keeps it disabled",
+      "default": false
+    },
+    "permission_mode": {
+      "type": "string",
+      "title": "Permission mode",
+      "description": "confirm previews every mutation before it runs; bypass runs it immediately",
+      "options": [
+        "confirm",
+        "bypass"
+      ],
+      "default": "confirm"
+    },
+    "registration_mode": {
+      "type": "string",
+      "title": "Tool registration",
+      "description": "lazy loads tools on demand; eager registers every tool; meta_only exposes only discovery tools",
+      "options": [
+        "lazy",
+        "eager",
+        "meta_only"
+      ],
+      "default": "lazy"
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/claude-session-check.sh\" drive",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

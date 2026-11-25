@@ -1,0 +1,45 @@
+{
+  "name": "unifi-drive",
+  "version": "1.0.0",
+  "description": "UniFi Drive MCP server \u2014 read NAS storage pools, disk health and shared drives, and manage file services and NFS clients",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "drive",
+    "unas",
+    "nas",
+    "storage",
+    "nfs",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.codex.json",
+  "interface": {
+    "displayName": "UniFi Drive",
+    "shortDescription": "Read UniFi NAS storage health and manage file sharing",
+    "longDescription": "Read storage pools, RAID state, disk SMART health and shared drives on a UniFi NAS (UNAS), turn SMB, NFS or Time Machine on or off, and manage NFS client connections, each write previewed before it runs. Connects to the NAS itself with a local UniFi OS account.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi Drive MCP",
+      "How full is my NAS?",
+      "Check my NAS disk health"
+    ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}
