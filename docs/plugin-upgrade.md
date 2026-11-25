@@ -5,6 +5,17 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## unifi-network 1.17.1, unifi-protect 1.8.4, unifi-access 1.5.5, unifi-sitemanager 1.1.4, unifi-drive 1.1.2
+
+These releases ship the shared setup helper with an InnerSpace mode. In these
+five plugins, InnerSpace settings (`UNIFI_INNERSPACE_*` and
+`UNIFI_POLICY_INNERSPACE_*`) found in a project's older
+`.claude/settings.local.json` are treated as another plugin's settings: they are
+never migrated into this plugin's options or reported as shared settings.
+Console credential validation, Site Manager and Drive handling and server
+pins are unchanged. Update these plugins using the ordinary client update steps;
+existing users need no setup rerun.
+
 ## Credentials follow the host (newer Network, Protect and Access server releases)
 
 Newer Network, Protect and Access server releases send the shared

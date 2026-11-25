@@ -13,6 +13,7 @@ import argparse
 import contextlib
 import datetime
 import json
+import math
 import os
 import re
 import shlex
@@ -63,6 +64,8 @@ def secret_base(key, product):
         return re.fullmatch(r"(UNIFI_SITEMANAGER_API_KEY)(.*)", key)
     if product == "DRIVE":
         return re.fullmatch(r"(UNIFI_DRIVE_PASSWORD)(.*)", key)
+    if product == "INNERSPACE":
+        return re.fullmatch(r"(UNIFI_INNERSPACE_PASSWORD)(.*)", key)
     return re.fullmatch(r"(UNIFI_(?:(?:NETWORK|PROTECT|ACCESS)_)?(?:PASSWORD|API_KEY))(.*)", key)
 
 
@@ -115,17 +118,109 @@ def validate_drive_keys(settings):
         )
 
 
+# InnerSpace takes the console login session only, never an API key. Besides the login and TLS settings
+# it takes the server-level and category write gates, the permission mode (confirm or bypass), the
+# read-only and preview-token switches, the operation-gate budgets and the MCP content mode. It refuses
+# the HTTP transport settings (the bundle runs over stdio) and the redaction switch (it only weakens it).
+INNERSPACE_MIGRATION_ERROR = (
+    "InnerSpace has no legacy settings to migrate; run setup to enter its console login instead."
+)
+INNERSPACE_PERMISSION_MODE = "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"
+INNERSPACE_SERVER_GATES = tuple("UNIFI_POLICY_INNERSPACE_" + action for action in ("CREATE", "UPDATE", "DELETE"))
+INNERSPACE_CATEGORY_GATES = tuple(
+    "UNIFI_POLICY_INNERSPACE_" + gate
+    for gate in (
+        "WALLS_CREATE",
+        "WALLS_UPDATE",
+        "WALLS_DELETE",
+        "WALL_TYPES_CREATE",
+        "WALL_TYPES_UPDATE",
+        "ATTENUATION_CREATE",
+        "ATTENUATION_UPDATE",
+        "ATTENUATION_DELETE",
+        "FLOOR_PLANS_UPDATE",
+        "FLOOR_PLANS_DELETE",
+        "PROJECT_UPDATE",
+    )
+)
+INNERSPACE_SWITCHES = frozenset(
+    INNERSPACE_SERVER_GATES
+    + INNERSPACE_CATEGORY_GATES
+    + ("UNIFI_INNERSPACE_READ_ONLY", "UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN")
+)
+# The bounds the server enforces at startup (unifi_mcp_shared.tool_gate).
+INNERSPACE_SECONDS = {
+    "UNIFI_INNERSPACE_WRITE_HOLD_SECONDS": (10, 3600),
+    "UNIFI_INNERSPACE_CALL_WAIT_SECONDS": (1, 3600),
+}
+INNERSPACE_READ_CONCURRENCY = "UNIFI_INNERSPACE_READ_CONCURRENCY"
+INNERSPACE_CONTENT_MODE = "UNIFI_INNERSPACE_MCP_CONTENT_MODE"
+INNERSPACE_KEYS = frozenset(
+    ["UNIFI_INNERSPACE_PASSWORD" + suffix for suffix in ("", "_FILE", "_COMMAND")]
+    + ["UNIFI_INNERSPACE_" + name for name in ("HOST", "USERNAME", "PORT", "VERIFY_SSL", "SSL_FINGERPRINT")]
+    + ["UNIFI_TOOL_REGISTRATION_MODE", INNERSPACE_PERMISSION_MODE, *INNERSPACE_SWITCHES, *INNERSPACE_SECONDS]
+    + [INNERSPACE_READ_CONCURRENCY, INNERSPACE_CONTENT_MODE]
+)
+
+
+def validate_innerspace_keys(settings):
+    unknown = sorted(set(settings) - INNERSPACE_KEYS)
+    if any("API_KEY" in key for key in unknown):
+        refuse("InnerSpace uses the console login only, never an API key; settings unchanged.")
+    if unknown:
+        # Names only: a key is not a value.
+        refuse(
+            "InnerSpace setup does not take " + ", ".join(unknown) + ". It takes its console login and TLS "
+            "settings, the tool registration mode, its write gates, permission mode and switches, the "
+            "operation-gate budgets and the MCP content mode; settings unchanged."
+        )
+
+    def given(key):
+        value = settings.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    mode = given(INNERSPACE_PERMISSION_MODE)
+    if mode is not None and mode.lower() not in ("confirm", "bypass"):
+        refuse("InnerSpace permission mode takes confirm or bypass; settings unchanged.")
+    for key in sorted(INNERSPACE_SWITCHES):
+        value = given(key)
+        if value is not None and value.lower() not in ("true", "false"):
+            refuse(key + ": InnerSpace write gates and switches take true or false; settings unchanged.")
+    for key, (low, high) in INNERSPACE_SECONDS.items():
+        value = given(key)
+        try:
+            number = float(value) if value is not None else low
+        except ValueError:
+            number = math.nan
+        if not math.isfinite(number) or not low <= number <= high:
+            refuse(f"{key} takes a number of seconds from {low} to {high}; settings unchanged.")
+    value = given(INNERSPACE_READ_CONCURRENCY)
+    if value is not None and not (value.isascii() and value.isdigit() and 1 <= int(value) <= 64):
+        refuse(INNERSPACE_READ_CONCURRENCY + " takes a whole number from 1 to 64; settings unchanged.")
+    value = given(INNERSPACE_CONTENT_MODE)
+    if value is not None and value.lower() not in ("adaptive", "compat", "compact"):
+        refuse(INNERSPACE_CONTENT_MODE + " takes adaptive, compat or compact; settings unchanged.")
+
+
 # Products that no earlier plugin version configured, so they have no legacy settings to migrate or
 # client entries to take over, and whose setup checks only their own credential level. The Site
-# Manager and Drive servers never read the shared keys.
-ISOLATED = {"SITEMANAGER": "Site Manager", "DRIVE": "UniFi Drive"}
+# Manager and Drive servers never read the shared keys; the InnerSpace server still falls back to
+# them key by key when its own are unset, like the console servers.
+ISOLATED = {"SITEMANAGER": "Site Manager", "DRIVE": "UniFi Drive", "INNERSPACE": "InnerSpace"}
 MIGRATION_ERRORS = {
     "SITEMANAGER": CLOUD_MIGRATION_ERROR,
     "DRIVE": DRIVE_MIGRATION_ERROR,
+    "INNERSPACE": INNERSPACE_MIGRATION_ERROR,
 }
 PRODUCT_KEY_CHECKS = {
     "SITEMANAGER": validate_cloud_keys,
     "DRIVE": validate_drive_keys,
+    "INNERSPACE": validate_innerspace_keys,
+}
+# Written on a product's first Codex or OpenClaw setup unless the user chose otherwise, so its
+# writes stay off until the user opts in, as the Claude Code options default.
+FIRST_SETUP_DEFAULTS = {
+    "INNERSPACE": {**dict.fromkeys(INNERSPACE_SERVER_GATES, "false"), INNERSPACE_PERMISSION_MODE: "confirm"},
 }
 
 
@@ -133,6 +228,10 @@ def validate_product_keys(settings, product):
     check = PRODUCT_KEY_CHECKS.get(product)
     if check:
         check(settings)
+
+
+def first_setup_defaults(product):
+    return dict(FIRST_SETUP_DEFAULTS.get(product, {}))
 
 
 def merge_env(existing, patch, product, inherited=None):
@@ -161,8 +260,10 @@ def merge_env(existing, patch, product, inherited=None):
     effective = dict(os.environ if inherited is None else inherited)
     effective.update(merged)
     # Match resolve_env: only the first non-empty level is resolved. Isolated products check their
-    # own level only, the one setup writes.
-    credentials = {"SITEMANAGER": ("API_KEY",), "DRIVE": ("PASSWORD",)}.get(product, ("PASSWORD", "API_KEY"))
+    # own level only, the one setup writes (the InnerSpace server would still fall back to shared keys).
+    credentials = {"SITEMANAGER": ("API_KEY",), "DRIVE": ("PASSWORD",), "INNERSPACE": ("PASSWORD",)}.get(
+        product, ("PASSWORD", "API_KEY")
+    )
     for credential in credentials:
         levels = (
             (f"UNIFI_{product}_{credential}",)
@@ -393,7 +494,7 @@ def package_pin(root, name, *, bundled=False):
     for filename in files:
         if filename.exists():
             match = re.search(
-                r"unifi-(?:network|protect|access|sitemanager|drive)-mcp==[0-9][A-Za-z0-9.+-]*",
+                r"unifi-(?:network|protect|access|sitemanager|drive|innerspace)-mcp==[0-9][A-Za-z0-9.+-]*",
                 filename.read_text(encoding="utf-8"),
             )
             if match:
@@ -560,7 +661,7 @@ def auto_confirm_notice(env, product, deprecated_client=False):
     )
 
 
-PRODUCTS = ("NETWORK", "PROTECT", "ACCESS", "SITEMANAGER", "DRIVE")
+PRODUCTS = ("NETWORK", "PROTECT", "ACCESS", "SITEMANAGER", "DRIVE", "INNERSPACE")
 
 
 def other_prefixes(product):
@@ -1356,6 +1457,8 @@ def bundled_main(args, root, name, product, patch, client):
         )
         client.warm(root, name)
         return
+    if saved is None and entry is None:
+        patch = {**first_setup_defaults(product), **patch}
     merged = merge_env(base, patch, product)
     text = settings_text(merged, name).encode("utf-8")
     auto_notice = auto_confirm_notice(merged, product)

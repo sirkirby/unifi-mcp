@@ -525,3 +525,466 @@ def test_drive_refuses_a_shadowing_client_entry(tmp_path, monkeypatch, target) -
         )
     assert config.read_bytes() == original
     assert not module.settings_path("DRIVE").exists()
+
+
+# InnerSpace uses the console login session only. Setup never writes or checks the shared
+# UNIFI_* keys (the server still falls back to them key by key) and never accepts an API key;
+# the console helpers keep its keys apart.
+INNERSPACE_PASSWORD = "UNIFI_INNERSPACE_PASSWORD"
+INNERSPACE_API_KEY = "UNIFI_INNERSPACE_API_KEY"
+SHARED_PASSWORD = "UNIFI_PASSWORD"
+SHARED_API_KEY = "UNIFI_API_KEY"
+INNERSPACE_ACCEPTED = {
+    "UNIFI_INNERSPACE_HOST": "192.0.2.10",
+    "UNIFI_INNERSPACE_USERNAME": "fixture-user",
+    "UNIFI_INNERSPACE_PORT": "443",
+    "UNIFI_INNERSPACE_VERIFY_SSL": "false",
+    "UNIFI_INNERSPACE_SSL_FINGERPRINT": "AA:BB",
+    "UNIFI_TOOL_REGISTRATION_MODE": "lazy",
+}
+
+
+def test_innerspace_setup_accepts_its_console_session_settings(tmp_path) -> None:
+    module = load_setup_config("network")
+    path = tmp_path / "password"
+    path.write_text("FAKE-password")
+    for key, value in ((INNERSPACE_PASSWORD, "FAKE-password"), (INNERSPACE_PASSWORD + "_FILE", str(path))):
+        patch = {**INNERSPACE_ACCEPTED, key: value}
+        assert module.merge_env({}, patch, "INNERSPACE", inherited={}) == patch
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "UNIFI_INNERSPACE_" + suffix
+        for suffix in (
+            "API_KEY",
+            "API_KEY_FILE",
+            "API_KEY_COMMAND",
+            "SITE",
+            "API_SSL_FINGERPRINT",
+            "USERNAME_FILE",
+            "PASSWORD_EXEC",
+        )
+    ]
+    + [
+        SHARED_API_KEY,
+        SHARED_API_KEY + "_FILE",
+        SHARED_API_KEY + "_COMMAND",
+        "UNIFI_HOST",
+        "UNIFI_USERNAME",
+        SHARED_PASSWORD,
+        SHARED_PASSWORD + "_FILE",
+        SHARED_PASSWORD + "_COMMAND",
+        "UNIFI_SETTINGS_FILE",
+        "UNIFI_AUTO_CONFIRM",
+        "UNIFI_ACCESS_HOST",
+        "UNIFI_NETWORK_PASSWORD",
+        "UNIFI_SITEMANAGER_API_KEY",
+        "UNIFI_POLICY_INNERSPACE_WALL_TYPES_DELETE",
+        "UNIFI_POLICY_INNERSPACE_PROJECT_CREATE",
+        "UNIFI_POLICY_INNERSPACE_FLOOR_PLAN_UPDATE",
+        "UNIFI_INNERSPACE_MCP_HTTP_ENABLED",
+        "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN",
+        "UNIFI_INNERSPACE_MCP_HTTP_AUTH_TRUSTED_NETWORKS",
+        "UNIFI_INNERSPACE_REDACT_SENSITIVE_FIELDS",
+        "UNIFI_DRIVE_HOST",
+        "UNIFI_POLICY_DRIVE_UPDATE",
+        "UNIFI_POLICY_CREATE",
+        "UNIFI_TOOL_PERMISSION_MODE",
+        "UNIFI_READ_ONLY",
+    ],
+)
+def test_innerspace_setup_rejects_other_settings_even_when_deleting(key: str) -> None:
+    module = load_setup_config("network")
+    for value in ("FAKE-input", "", None):
+        with pytest.raises(module.SetupError):
+            module.merge_env({}, {key: value}, "INNERSPACE", inherited={})
+    with pytest.raises(module.SetupError):
+        module.merge_env({key: "FAKE-existing"}, {}, "INNERSPACE", inherited={})
+
+
+INNERSPACE_WRITE_SETTINGS = {
+    "UNIFI_POLICY_INNERSPACE_CREATE": "false",
+    "UNIFI_POLICY_INNERSPACE_UPDATE": "true",
+    "UNIFI_POLICY_INNERSPACE_DELETE": "False",
+    "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE": "confirm",
+    "UNIFI_INNERSPACE_READ_ONLY": "true",
+    "UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN": "TRUE",
+}
+
+
+def test_innerspace_setup_accepts_the_write_gates_and_switches() -> None:
+    module = load_setup_config("network")
+    assert module.merge_env({}, INNERSPACE_WRITE_SETTINGS, "INNERSPACE", inherited={}) == INNERSPACE_WRITE_SETTINGS
+    # A read-only switch added by hand no longer makes a later setup run refuse the file.
+    saved = {"UNIFI_INNERSPACE_HOST": "192.0.2.10", "UNIFI_INNERSPACE_READ_ONLY": "true"}
+    patch = {"UNIFI_INNERSPACE_USERNAME": "fixture-user", "UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN": None}
+    assert module.merge_env(saved, patch, "INNERSPACE", inherited={}) == {
+        **saved,
+        "UNIFI_INNERSPACE_USERNAME": "fixture-user",
+    }
+
+
+# The server's category gates (permissions.md) and its operation-gate and content tuning.
+INNERSPACE_CATEGORY_GATES = [
+    "UNIFI_POLICY_INNERSPACE_" + gate
+    for gate in (
+        "WALLS_CREATE",
+        "WALLS_UPDATE",
+        "WALLS_DELETE",
+        "WALL_TYPES_CREATE",
+        "WALL_TYPES_UPDATE",
+        "ATTENUATION_CREATE",
+        "ATTENUATION_UPDATE",
+        "ATTENUATION_DELETE",
+        "FLOOR_PLANS_UPDATE",
+        "FLOOR_PLANS_DELETE",
+        "PROJECT_UPDATE",
+    )
+]
+INNERSPACE_TUNING = {
+    "UNIFI_INNERSPACE_WRITE_HOLD_SECONDS": "300",
+    "UNIFI_INNERSPACE_CALL_WAIT_SECONDS": "2.5",
+    "UNIFI_INNERSPACE_READ_CONCURRENCY": "4",
+    "UNIFI_INNERSPACE_MCP_CONTENT_MODE": "compact",
+}
+
+
+def test_innerspace_setup_accepts_category_gates_and_tuning() -> None:
+    module = load_setup_config("network")
+    patch = {key: ("true" if index % 2 else "false") for index, key in enumerate(INNERSPACE_CATEGORY_GATES)}
+    patch.update(INNERSPACE_TUNING)
+    assert module.merge_env({}, patch, "INNERSPACE", inherited={}) == patch
+    # Saved by hand in the settings file, they never make a later setup run refuse it.
+    assert module.merge_env(patch, {"UNIFI_INNERSPACE_USERNAME": "fixture-user"}, "INNERSPACE", inherited={}) == {
+        **patch,
+        "UNIFI_INNERSPACE_USERNAME": "fixture-user",
+    }
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("UNIFI_POLICY_INNERSPACE_WALLS_DELETE", "yes"),
+        ("UNIFI_INNERSPACE_WRITE_HOLD_SECONDS", "5"),
+        ("UNIFI_INNERSPACE_WRITE_HOLD_SECONDS", "3601"),
+        ("UNIFI_INNERSPACE_WRITE_HOLD_SECONDS", "two minutes"),
+        ("UNIFI_INNERSPACE_CALL_WAIT_SECONDS", "0"),
+        ("UNIFI_INNERSPACE_CALL_WAIT_SECONDS", "nan"),
+        ("UNIFI_INNERSPACE_READ_CONCURRENCY", "65"),
+        ("UNIFI_INNERSPACE_READ_CONCURRENCY", "1.5"),
+        ("UNIFI_INNERSPACE_READ_CONCURRENCY", "\u00b2"),
+        ("UNIFI_INNERSPACE_MCP_CONTENT_MODE", "json"),
+    ],
+)
+def test_innerspace_setup_refuses_values_the_server_would_refuse(key: str, value: str) -> None:
+    module = load_setup_config("network")
+    with pytest.raises(module.SetupError, match=key):
+        module.merge_env({}, {key: value}, "INNERSPACE", inherited={})
+
+
+@pytest.mark.parametrize(
+    "key", ["UNIFI_INNERSPACE_MCP_HTTP_AUTH_TOKEN", "UNIFI_INNERSPACE_REDACT_SENSITIVE_FIELDS", "UNIFI_DRIVE_HOST"]
+)
+def test_innerspace_refusal_names_the_key_but_never_its_value(key: str) -> None:
+    module = load_setup_config("network")
+    for saved, patch in (({}, {key: "FAKE-SENTINEL-value"}), ({key: "FAKE-SENTINEL-value"}, {})):
+        with pytest.raises(module.SetupError) as refused:
+            module.merge_env(saved, patch, "INNERSPACE", inherited={})
+        assert key in str(refused.value) and "FAKE-SENTINEL" not in str(refused.value)
+
+
+@pytest.mark.parametrize("value", ["confirm", "bypass", "BYPASS", " bypass "])
+def test_innerspace_setup_accepts_confirm_and_bypass(value: str) -> None:
+    module = load_setup_config("network")
+    key = "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"
+    assert module.merge_env({}, {key: value}, "INNERSPACE", inherited={}) == {key: value}
+    assert module.merge_env({key: value}, {}, "INNERSPACE", inherited={}) == {key: value}
+
+
+@pytest.mark.parametrize("value", ["auto", "yes", "confirm-all"])
+def test_innerspace_setup_refuses_an_unknown_permission_mode(value: str) -> None:
+    module = load_setup_config("network")
+    key = "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"
+    with pytest.raises(module.SetupError, match="confirm or bypass"):
+        module.merge_env({}, {key: value}, "INNERSPACE", inherited={})
+    with pytest.raises(module.SetupError, match="confirm or bypass"):
+        module.merge_env({key: value}, {}, "INNERSPACE", inherited={})
+
+
+@pytest.mark.parametrize("key", sorted(INNERSPACE_WRITE_SETTINGS.keys() - {"UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"}))
+@pytest.mark.parametrize("value", ["yes", "1", "on", "maybe"])
+def test_innerspace_setup_takes_true_or_false_for_each_switch(key: str, value: str) -> None:
+    module = load_setup_config("network")
+    with pytest.raises(module.SetupError, match="take true or false"):
+        module.merge_env({}, {key: value}, "INNERSPACE", inherited={})
+
+
+def test_auto_confirm_notice_suggests_the_innerspace_bypass_mode() -> None:
+    module = load_setup_config("network")
+    notice = module.auto_confirm_notice({"UNIFI_AUTO_CONFIRM": "true"}, "INNERSPACE")
+    assert "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE=bypass" in notice
+    assert "UNIFI_AUTO_CONFIRM" in notice and "FAKE" not in notice
+    assert notice == module.auto_confirm_notice({"UNIFI_AUTO_CONFIRM": "true"}, "ACCESS").replace(
+        "ACCESS", "INNERSPACE"
+    )
+
+
+@pytest.mark.parametrize("key", [INNERSPACE_API_KEY, INNERSPACE_API_KEY + "_FILE", SHARED_API_KEY])
+def test_innerspace_setup_names_the_api_key_refusal(key: str) -> None:
+    module = load_setup_config("network")
+    with pytest.raises(module.SetupError, match="InnerSpace uses the console login only, never an API key"):
+        module.merge_env({}, {key: "FAKE-console"}, "INNERSPACE", inherited={})
+
+
+@pytest.mark.parametrize("suffixes", [("", "_FILE"), ("", "_COMMAND"), ("_FILE", "_COMMAND")])
+def test_innerspace_setup_refuses_each_ambiguous_password_pair(tmp_path, suffixes) -> None:
+    import sys
+
+    module = load_setup_config("network")
+    path = tmp_path / "password"
+    path.write_text("FAKE-password")
+    values = {"": "FAKE-password", "_FILE": str(path), "_COMMAND": sys.executable}
+    patch = {INNERSPACE_PASSWORD + suffix: values[suffix] for suffix in suffixes}
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, patch, "INNERSPACE", inherited={})
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, {}, "INNERSPACE", inherited=patch)
+
+
+def test_innerspace_setup_ignores_shared_credentials_and_switches_only_its_own_source(tmp_path) -> None:
+    module = load_setup_config("network")
+    path = tmp_path / "password"
+    path.write_text("FAKE-password")
+    # A console product validates these shared providers; InnerSpace never consults them.
+    shared = dict(
+        zip(
+            (SHARED_PASSWORD, SHARED_PASSWORD + "_COMMAND", "UNIFI_HOST", SHARED_API_KEY + "_COMMAND"),
+            ("FAKE-shared", "missing-shared-provider", "192.0.2.99", "missing-console-provider"),
+        )
+    )
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, {}, "ACCESS", inherited=shared)
+    assert module.merge_env({}, {}, "INNERSPACE", inherited=shared) == {}
+    saved = {INNERSPACE_PASSWORD: "FAKE-old", "UNIFI_INNERSPACE_HOST": "192.0.2.10"}
+    assert module.merge_env(saved, {INNERSPACE_PASSWORD + "_FILE": str(path)}, "INNERSPACE", inherited=shared) == {
+        "UNIFI_INNERSPACE_HOST": "192.0.2.10",
+        INNERSPACE_PASSWORD + "_FILE": str(path),
+    }
+
+
+@pytest.mark.parametrize(
+    "suffix,value", [("_FILE", "relative-password"), ("_FILE", "/missing-password"), ("_COMMAND", "missing-provider")]
+)
+def test_innerspace_setup_validates_provider_references(suffix, value) -> None:
+    module = load_setup_config("network")
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, {INNERSPACE_PASSWORD + suffix: value}, "INNERSPACE", inherited={})
+
+
+def test_innerspace_provider_validation_never_reads_or_executes_the_password(tmp_path, monkeypatch) -> None:
+    import sys
+
+    module = load_setup_config("network")
+    path = tmp_path / "password"
+    path.write_text("FAKE-provider-secret")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Setup read or executed a credential provider")
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden)
+    monkeypatch.setattr(Path, "read_text", forbidden)
+    monkeypatch.setattr(module.subprocess, "run", forbidden)
+    for key, value in ((INNERSPACE_PASSWORD + "_FILE", str(path)), (INNERSPACE_PASSWORD + "_COMMAND", sys.executable)):
+        assert module.merge_env({}, {key: value}, "INNERSPACE", inherited={}) == {key: value}
+
+
+def test_innerspace_has_no_legacy_settings_to_migrate() -> None:
+    module = load_setup_config("network")
+    mapping = {"UNIFI_INNERSPACE_HOST": "host", INNERSPACE_PASSWORD: "password"}
+    with pytest.raises(module.SetupError, match="InnerSpace has no legacy settings to migrate"):
+        module.legacy_patch(
+            {"UNIFI_INNERSPACE_HOST": "192.0.2.10"}, {SHARED_PASSWORD: "FAKE-shared"}, mapping, "INNERSPACE"
+        )
+
+
+@pytest.mark.parametrize("product", ["NETWORK", "PROTECT", "ACCESS", "SITEMANAGER", "DRIVE"])
+def test_sibling_helpers_keep_innerspace_keys_separate(tmp_path, monkeypatch, product) -> None:
+    import json
+
+    module = load_setup_config(product.lower())
+    others = module.other_prefixes(product)
+    assert "UNIFI_INNERSPACE_" in others and "UNIFI_POLICY_INNERSPACE_" in others
+    assert f"UNIFI_{product}_" in module.other_prefixes("INNERSPACE")
+    if product in ("SITEMANAGER", "DRIVE"):
+        return
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    env = {
+        f"UNIFI_{product}_HOST": "192.0.2.1",
+        "UNIFI_INNERSPACE_HOST": "192.0.2.20",
+        INNERSPACE_PASSWORD + "_FILE": "FAKE-innerspace-provider",
+        "UNIFI_POLICY_INNERSPACE_WALLS_DELETE": "false",
+        SHARED_API_KEY: "FAKE-shared-console",
+    }
+    (tmp_path / ".claude/settings.local.json").write_text(json.dumps({"env": env}))
+    _, _, owned, shared = module.legacy_settings(product)
+    assert owned == {f"UNIFI_{product}_HOST": "192.0.2.1"}
+    assert shared == {SHARED_API_KEY: "FAKE-shared-console"}
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+def test_console_helpers_save_innerspace_named_inputs_unchanged(tmp_path, product) -> None:
+    # The helper released before the InnerSpace mode accepted these inputs for a
+    # console product and saved them unchanged; it still does.
+    patch = {
+        "UNIFI_INNERSPACE_HOST": "192.0.2.20",
+        INNERSPACE_PASSWORD + "_FILE": str(tmp_path / "missing-provider"),
+        INNERSPACE_API_KEY: "FAKE-opaque",
+    }
+    module = load_setup_config(product)
+    assert module.merge_env({}, dict(patch), product.upper(), inherited={}) == patch
+
+
+def test_innerspace_package_pin_is_recognised(tmp_path) -> None:
+    import json
+
+    module = load_setup_config("network")
+    (tmp_path / ".claude-plugin").mkdir()
+    server = {"command": "uvx", "args": ["--python-preference", "system", "unifi-innerspace-mcp==0.1.0"]}
+    (tmp_path / ".claude-plugin/plugin.json").write_text(json.dumps({"mcpServers": {"unifi-innerspace": server}}))
+    (tmp_path / ".mcp.codex.json").write_text(json.dumps({"mcpServers": {"unifi-innerspace": server}}))
+    assert module.package_pin(tmp_path, "unifi-innerspace", bundled=True) == "unifi-innerspace-mcp==0.1.0"
+
+
+def _innerspace_openclaw(module, tmp_path, monkeypatch, entry=None):
+    import json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    config = tmp_path / "openclaw.json"
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config))
+    servers = {"unifi-innerspace": entry} if entry is not None else {}
+    config.write_text(json.dumps({"mcp": {"servers": servers}}))
+    return config, module.OpenClawClient()
+
+
+def test_innerspace_settings_file_is_private_and_setup_prints_no_value(tmp_path, monkeypatch, capsys) -> None:
+    import os
+    from types import SimpleNamespace
+
+    module = load_setup_config("network")
+    _, client = _innerspace_openclaw(module, tmp_path, monkeypatch)
+    monkeypatch.setattr(module.shutil, "which", lambda name, path=None: "/usr/bin/" + name)
+    patch = {
+        "UNIFI_INNERSPACE_HOST": "192.0.2.77",
+        "UNIFI_INNERSPACE_USERNAME": "FAKE-innerspace-user",
+        INNERSPACE_PASSWORD + "_COMMAND": "fixture-password-helper --vault FAKE-vault-item",
+    }
+    module.bundled_main(
+        SimpleNamespace(check=False, refresh=False, dry_run=False),
+        tmp_path / "plugin",
+        "unifi-innerspace",
+        "INNERSPACE",
+        patch,
+        client,
+    )
+    path = module.settings_path("INNERSPACE")
+    assert path == tmp_path / ".config" / "unifi-mcp" / "innerspace.env"
+    assert module.read_settings(path) == {**patch, **INNERSPACE_FIRST_SETUP_DEFAULTS}
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o777 == 0o600
+    output = capsys.readouterr()
+    for value in (*patch.values(), "FAKE-vault-item"):
+        assert value not in output.out + output.err
+
+
+@pytest.mark.parametrize("credential", ["shared", "own", None])
+def test_innerspace_refuses_a_shadowing_client_entry(tmp_path, monkeypatch, credential) -> None:
+    from types import SimpleNamespace
+
+    module = load_setup_config("network")
+    entry = {"command": "fixture"}
+    entry_env = None
+    if credential is not None:
+        entry_env = {(SHARED_PASSWORD if credential == "shared" else INNERSPACE_PASSWORD): "FAKE-shadow"}
+        entry["env"] = entry_env
+    config, client = _innerspace_openclaw(module, tmp_path, monkeypatch, entry)
+    settings = module.settings_path("INNERSPACE")
+    settings.parent.mkdir(parents=True)
+    # Matching file and entry settings, so the conflict check cannot stand in for the refusal.
+    module.write_private(settings, module.settings_text(entry_env or {}, "unifi-innerspace").encode())
+    original = config.read_bytes(), settings.read_bytes()
+    with pytest.raises(module.SetupError, match="A client entry shadows the bundled InnerSpace server"):
+        module.bundled_main(
+            SimpleNamespace(check=False, refresh=False, dry_run=False),
+            tmp_path / "plugin",
+            "unifi-innerspace",
+            "INNERSPACE",
+            {INNERSPACE_PASSWORD: "FAKE-password"},
+            client,
+        )
+    assert (config.read_bytes(), settings.read_bytes()) == original
+
+
+# Writes stay off on Codex and OpenClaw until the user opts in, as the Claude Code options default.
+INNERSPACE_FIRST_SETUP_DEFAULTS = {
+    "UNIFI_POLICY_INNERSPACE_CREATE": "false",
+    "UNIFI_POLICY_INNERSPACE_UPDATE": "false",
+    "UNIFI_POLICY_INNERSPACE_DELETE": "false",
+    "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE": "confirm",
+}
+
+
+def _innerspace_setup(module, client, patch) -> dict:
+    from types import SimpleNamespace
+
+    module.bundled_main(
+        SimpleNamespace(check=False, refresh=False, dry_run=False),
+        Path("/nonexistent/plugin"),
+        "unifi-innerspace",
+        "INNERSPACE",
+        patch,
+        client,
+    )
+    return module.read_settings(module.settings_path("INNERSPACE"))
+
+
+def test_innerspace_first_bundled_setup_saves_writes_off(tmp_path, monkeypatch) -> None:
+    module = load_setup_config("network")
+    _, client = _innerspace_openclaw(module, tmp_path, monkeypatch)
+    monkeypatch.setattr(module.shutil, "which", lambda name, path=None: "/usr/bin/" + name)
+    login = {"UNIFI_INNERSPACE_HOST": "192.0.2.10", "UNIFI_INNERSPACE_USERNAME": "fixture-user"}
+    saved = _innerspace_setup(module, client, login)
+    assert saved == {**login, **INNERSPACE_FIRST_SETUP_DEFAULTS}
+    # The saved file is what the server reads: no write is allowed and confirmation stays on.
+    assert {saved[key] for key in INNERSPACE_FIRST_SETUP_DEFAULTS} == {"false", "confirm"}
+    # A later run keeps the user's own changes, including a gate they removed.
+    later = _innerspace_setup(
+        module, client, {"UNIFI_POLICY_INNERSPACE_UPDATE": "true", "UNIFI_POLICY_INNERSPACE_DELETE": None}
+    )
+    assert later["UNIFI_POLICY_INNERSPACE_UPDATE"] == "true"
+    assert "UNIFI_POLICY_INNERSPACE_DELETE" not in later
+
+
+def test_innerspace_first_bundled_setup_keeps_explicit_write_choices(tmp_path, monkeypatch) -> None:
+    module = load_setup_config("network")
+    _, client = _innerspace_openclaw(module, tmp_path, monkeypatch)
+    monkeypatch.setattr(module.shutil, "which", lambda name, path=None: "/usr/bin/" + name)
+    patch = {
+        "UNIFI_INNERSPACE_HOST": "192.0.2.10",
+        "UNIFI_POLICY_INNERSPACE_UPDATE": "true",
+        "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE": "bypass",
+    }
+    saved = _innerspace_setup(module, client, patch)
+    assert saved["UNIFI_POLICY_INNERSPACE_UPDATE"] == "true"
+    assert saved["UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"] == "bypass"
+    assert saved["UNIFI_POLICY_INNERSPACE_CREATE"] == saved["UNIFI_POLICY_INNERSPACE_DELETE"] == "false"
+
+
+@pytest.mark.parametrize("product", ["network", "drive"])
+def test_other_bundled_setups_add_no_write_defaults(tmp_path, monkeypatch, product) -> None:
+    module = load_setup_config(product)
+    assert module.first_setup_defaults(product.upper()) == {}
+    assert module.first_setup_defaults("INNERSPACE") == INNERSPACE_FIRST_SETUP_DEFAULTS

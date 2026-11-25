@@ -11,6 +11,10 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-28 — unifi-network 1.17.1, unifi-protect 1.8.4, unifi-access 1.5.5, unifi-sitemanager 1.1.4, unifi-drive 1.1.2
+
+- Setup treats InnerSpace settings found in an older project settings file as another plugin's settings. They are never copied into this plugin's settings or offered for migration. Nothing else about setup changes.
+
 ## 2026-11-28 — unifi-network 1.17.0
 
 - Pins `unifi-network-mcp` [0.53.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.53.0).
