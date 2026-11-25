@@ -23,6 +23,9 @@ READ_TOOLS = {
     "drive_get_storage_usage",
     "drive_get_smb_advanced_settings",
     "drive_get_rsync_settings",
+    "drive_get_network_throughput",
+    "drive_get_fan_profile",
+    "drive_get_disk_stats",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",

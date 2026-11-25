@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 15 domain tools: eleven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 18 domain tools: fourteen reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -144,3 +144,25 @@ Each entry has `time` (ISO 8601 with the NAS's UTC offset), `severity`, `categor
 `next_cursor` is set when there are more entries. Pass it back as `cursor` with the same filters: Drive ties a cursor to the filters it was returned with.
 
 A category is sent to Drive as its list of types, because Drive ignores a category filter. Drive answers an unknown category or type with an empty list, so the tool checks both against the firmware's own definitions first and returns an error listing the valid values instead.
+
+
+## Performance
+
+All three are reads. Drive reports throughput in KB/s.
+
+### `drive_get_network_throughput`
+
+No parameters. Reads `GET /proxy/drive/api/v2/systems/network-io` and returns `receive_kbps`, `transmit_kbps` and the `timestamp` Drive took the sample at. It is the live figure the dashboard's Network Throughput graph shows, not an average.
+
+### `drive_get_fan_profile`
+
+No parameters. Reads `GET /proxy/drive/api/v2/systems/fan-control` and returns `current_profile`, `current_label` and `available_profiles` (each a `profile` and a `label`). Drive's profile names map to the web app's labels: `cooling` is Cooling, `default` is Balanced and `quiet` is Quiet. Fan control aims at a disk temperature range; the profile sets how hard it works for it. There is no tool that changes the profile.
+
+### `drive_get_disk_stats`
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hours` | `24` | How far back to read, 1 to 2160 (90 days) |
+| `include_samples` | `false` | Also return every bucket's values |
+
+Reads `GET /proxy/drive/api/v2/systems/disk-stats` with a window ending now. Buckets follow the dashboard's steps: 15 minutes under 7 days, 1 hour under 30 days, 6 hours beyond. Returns `window_start`, `window_end`, `interval_seconds`, `sample_count` and `disks`. Each disk has `slot_id` and `bay_type` (as `drive_list_disks` reports them), `type`, `samples_with_data`, `read_kbps_avg`/`_max`, `write_kbps_avg`/`_max`, `temperature_c_latest`/`_max`, `bad_sector_count_latest` and `bad_sector_count_increase`. With `include_samples`, `samples` holds one entry per bucket, oldest first; a bucket Drive has no data for carries only its `time`. `samples_with_data` counts the buckets Drive has data for, which can be far fewer than `sample_count` over a long window.
