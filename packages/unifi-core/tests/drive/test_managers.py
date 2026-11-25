@@ -144,6 +144,22 @@ async def test_plan_does_not_write(files, console):
     assert console.writes == []
 
 
+async def test_turning_smb_off_warns_that_time_machine_stays_off(files, console):
+    _script_services(console)
+
+    change = await files.plan_set_file_service("smb", False)
+
+    assert any("turning SMB back on leaves it off" in w for w in change.warnings)
+
+
+async def test_turning_smb_on_says_time_machine_is_still_off(files, console):
+    _script_services(console, smb=False, time_machine=False)
+
+    change = await files.plan_set_file_service("smb", True)
+
+    assert any("Time Machine stays off" in w for w in change.warnings)
+
+
 async def test_time_machine_needs_smb(files, console):
     _script_services(console, smb=False, time_machine=False)
 
@@ -230,8 +246,8 @@ async def test_add_keeps_every_other_client_and_drops_read_only_keys(files, cons
     console.reply(
         "POST", TEST_HOSTNAMES, {"err": None, "type": "single", "data": {"hostnames": [{"hostname": "nas-client.lan"}]}}
     )
-    console.reply("GET", NFS_ADVANCED, _existing())  # re-read just before the PUT
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("GET", NFS_ADVANCED, _existing())  # re-read just before the PATCH
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     after = _existing()
     after["data"]["connections"].append(fx.nfs_connection("nas-client.lan", (fx.OTHER_DRIVE_ID, "Media", "ro")))
     console.reply("GET", NFS_ADVANCED, after)
@@ -328,7 +344,7 @@ async def test_remove_sends_the_others_and_verifies_it_is_gone(files, console):
     assert "/var/nfs/shared/Shared_Drive" in change.warnings[0]
 
     console.reply("GET", NFS_ADVANCED, _existing())
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     console.reply(
         "GET", NFS_ADVANCED, fx.nfs_advanced(fx.nfs_connection(fx.OTHER_CLIENT, (fx.OTHER_DRIVE_ID, "Media", "ro")))
     )
@@ -342,7 +358,7 @@ async def test_write_that_drops_another_client_is_reported(files, console):
     console.reply("GET", NFS_ADVANCED, _existing())
     change = await files.plan_remove_nfs_connection(fx.CLIENT)
     console.reply("GET", NFS_ADVANCED, _existing())
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     console.reply("GET", NFS_ADVANCED, fx.nfs_advanced(fx.nfs_connection("192.0.2.1")))
 
     with pytest.raises(UniFiOperationError, match=fx.OTHER_CLIENT):
@@ -469,17 +485,72 @@ def _with_other_async(async_writes):
     )
 
 
+def _as_current_firmware_reads_it(body):
+    """An ``nfs/advanced-settings`` body as Drive 4.6 answers it: other settings, and error codes per grant."""
+    body["data"].update({"domainName": "", "maxProtocolVersion": "3", "security": "AUTH_SYS"})
+    for connection in body["data"]["connections"]:
+        for grant in connection["sharedDrives"]:
+            grant["errorCodes"] = []
+    return body
+
+
+async def test_an_nfs_change_is_a_patch_of_the_list_alone(files, console):
+    _script_add_lookups(console)
+    console.reply("GET", NFS_ADVANCED, _as_current_firmware_reads_it(_existing()))  # plan
+    console.reply("GET", NFS_ADVANCED, _as_current_firmware_reads_it(_existing()))  # re-read before the PATCH
+    console.reply("PATCH", NFS_ADVANCED, "OK")
+    after = _existing()
+    after["data"]["connections"].append(fx.nfs_connection("192.0.2.101", (fx.DRIVE_ID, "Shared_Drive", "ro")))
+    console.reply("GET", NFS_ADVANCED, _as_current_firmware_reads_it(after))
+
+    _, saved = await files.add_nfs_connection(
+        NfsConnectionInput(client="192.0.2.101", shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID, permission="ro")])
+    )
+
+    assert saved.client == "192.0.2.101"
+    assert console.calls("PUT") == []
+    (patch,) = console.calls("PATCH", NFS_ADVANCED)
+    # Only the list, each grant as id and permission: Drive keeps domainName, maxProtocolVersion
+    # and security, and the read-only keys it adds on read are not sent back.
+    assert patch.body == {
+        "connections": [
+            {"client": fx.CLIENT, "async": False, "sharedDrives": [{"id": fx.DRIVE_ID, "permission": "rw"}]},
+            {
+                "client": fx.OTHER_CLIENT,
+                "async": False,
+                "sharedDrives": [{"id": fx.OTHER_DRIVE_ID, "permission": "ro"}],
+                "futureOption": "kept",
+            },
+            {"client": "192.0.2.101", "async": False, "sharedDrives": [{"id": fx.DRIVE_ID, "permission": "ro"}]},
+        ]
+    }
+
+
+async def test_a_personal_drive_cannot_be_granted_over_nfs(files, console):
+    personal = fx.drives()
+    personal["drives"][0]["type"] = "personal"
+    console.reply("GET", DRIVES, personal, always=True)
+    console.reply("GET", NFS_ADVANCED, _existing())
+
+    with pytest.raises(UniFiValidationError, match="only export shared drives"):
+        await files.plan_add_nfs_connection(
+            NfsConnectionInput(client="192.0.2.101", shared_drives=[NfsSharedDriveAccess(id=fx.DRIVE_ID)])
+        )
+
+    assert console.writes == []
+
+
 async def test_update_writes_and_reads_back(files, console):
     console.reply("GET", NFS_ADVANCED, _existing())  # plan
     _script_add_lookups(console)
-    console.reply("GET", NFS_ADVANCED, _existing())  # re-read before the PUT
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("GET", NFS_ADVANCED, _existing())  # re-read before the PATCH
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     console.reply("GET", NFS_ADVANCED, _with_other_async(True))  # read back
 
     change, saved = await files.update_nfs_connection(fx.OTHER_CLIENT, async_writes=True)
 
     assert saved.client == fx.OTHER_CLIENT and saved.async_writes is True
-    put = console.calls("PUT", NFS_ADVANCED)[0]
+    put = console.calls("PATCH", NFS_ADVANCED)[0]
     assert put.body == {"connections": change.connections}
     assert put.body["connections"][1]["async"] is True
 
@@ -488,7 +559,7 @@ async def test_update_that_reads_back_differently_is_reported(files, console):
     console.reply("GET", NFS_ADVANCED, _existing())
     _script_add_lookups(console)
     console.reply("GET", NFS_ADVANCED, _existing())
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     console.reply("GET", NFS_ADVANCED, _with_other_async(False))
 
     with pytest.raises(UniFiOperationError, match="does not match"):
@@ -498,7 +569,7 @@ async def test_update_that_reads_back_differently_is_reported(files, console):
 async def test_removed_client_still_listed_is_reported(files, console):
     console.reply("GET", NFS_ADVANCED, _existing())
     console.reply("GET", NFS_ADVANCED, _existing())
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}})
     console.reply("GET", NFS_ADVANCED, _existing())
 
     with pytest.raises(UniFiOperationError, match="still listed"):
@@ -517,7 +588,7 @@ async def test_concurrent_adds_through_the_operation_gate_both_land(files, conso
     # plan, re-read and read back for the first add, then the same for the second.
     for body in (_existing(), _existing(), with_first, with_first, with_first, with_both):
         console.reply("GET", NFS_ADVANCED, body)
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, always=True)
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, always=True)
 
     gate = OperationGate(GateSettings(), name="drive-test")
 
@@ -530,7 +601,7 @@ async def test_concurrent_adds_through_the_operation_gate_both_land(files, conso
     results = await asyncio.gather(add("192.0.2.101"), add("192.0.2.102"))
 
     assert [saved.client for _, saved in results] == ["192.0.2.101", "192.0.2.102"]
-    first_put, second_put = console.calls("PUT", NFS_ADVANCED)
+    first_put, second_put = console.calls("PATCH", NFS_ADVANCED)
     assert [c["client"] for c in first_put.body["connections"]] == [fx.CLIENT, fx.OTHER_CLIENT, "192.0.2.101"]
     assert [c["client"] for c in second_put.body["connections"]] == [
         fx.CLIENT,
@@ -561,18 +632,18 @@ async def test_an_unanswered_hostname_check_means_nothing_was_changed(impatient_
     with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
         await impatient_files.add_nfs_connection(_add_client())
 
-    assert console.calls("PUT", NFS_ADVANCED) == []
+    assert console.calls("PATCH", NFS_ADVANCED) == []
 
 
 async def test_an_unanswered_nfs_put_has_an_unknown_outcome(impatient_files, console):
     _script_add_lookups(console)
     console.reply("GET", NFS_ADVANCED, _existing(), always=True)
-    console.reply("PUT", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, delay=1)
+    console.reply("PATCH", NFS_ADVANCED, {"err": None, "type": "single", "data": {}}, delay=1)
 
     with pytest.raises(DriveWriteOutcomeUnknown, match="whether it was applied is unknown"):
         await impatient_files.add_nfs_connection(_add_client())
 
-    assert len(console.calls("PUT", NFS_ADVANCED)) == 1
+    assert len(console.calls("PATCH", NFS_ADVANCED)) == 1
 
 
 async def test_plan_from_a_list_that_changed_is_not_written(files, console):
@@ -589,7 +660,7 @@ async def test_plan_from_a_list_that_changed_is_not_written(files, console):
     with pytest.raises(UniFiOperationError, match="changed since this change was planned"):
         await files.apply_nfs_change(change)
 
-    assert console.calls("PUT", NFS_ADVANCED) == []
+    assert console.calls("PATCH", NFS_ADVANCED) == []
 
 
 def test_listed_connection_round_trips_into_an_input():

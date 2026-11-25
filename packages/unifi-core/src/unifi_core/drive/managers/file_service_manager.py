@@ -7,26 +7,27 @@ writes it and reads it back. The confirmed methods (``set_file_service``,
 plan again and apply in one call, so the write is built from fresh state
 rather than from the preview.
 
-``PUT nfs/advanced-settings`` replaces the whole connection list. Every change
-to one client therefore sends every other client exactly as it was read (see
+``PATCH nfs/advanced-settings`` with ``connections`` replaces the whole
+connection list; it is how the Drive web app writes it. Every change to one client
+therefore sends every other client exactly as it was read (see
 :func:`unifi_core.drive.models.services.connections_for_put`). Two NFS writes
 must not interleave, or the second would send a list without the first one's
 client. The caller's operation gate runs confirmed writes one at a time; this
 module takes no lock of its own. ``apply_nfs_change`` also re-reads the list
-just before the ``PUT`` and stops if it changed since the plan, which catches
+just before the ``PATCH`` and stops if it changed since the plan, which catches
 an edit made in the Drive web UI, or by another process, before that re-read.
 
-A confirmed method whose write's hold budget runs out before the ``PUT`` is
+A confirmed method whose write's hold budget runs out before the change is
 sent raises :class:`~unifi_core.drive.managers.connection_manager.DriveWriteNotSent`:
 only reads (and Drive's hostname check, which saves nothing) went out. A
-``PUT`` that was sent and never answered raises
+change that was sent and never answered raises
 :class:`~unifi_core.drive.managers.connection_manager.DriveWriteOutcomeUnknown`.
 
 Known risk: Drive keeps no version on this list, so nothing closes the gap
-between that re-read and the ``PUT``. The operation gate covers one server
+between that re-read and the ``PATCH``. The operation gate covers one server
 process, so a write from another process (a second MCP server or the API
 server against the same NAS) that lands in that gap is overwritten by this
-``PUT``, and neither call reports it. The read-back only catches a write that
+``PATCH``, and neither call reports it. The read-back only catches a write that
 lands after this one.
 """
 
@@ -94,9 +95,9 @@ class ServiceChange:
 
 @dataclass(frozen=True)
 class NfsChange:
-    """A planned change to one NFS client, and the full list the ``PUT`` will send.
+    """A planned change to one NFS client, and the full list the ``PATCH`` will send.
 
-    ``based_on`` is the list the plan was built from, in ``PUT`` shape. The
+    ``based_on`` is the list the plan was built from, in write shape. The
     write refuses to go ahead if Drive's list no longer matches it.
     """
 
@@ -228,7 +229,12 @@ class FileServiceManager:
         if service == "time_machine" and enabled and current.smb_enabled is False:
             raise UniFiValidationError("Time Machine runs over SMB. Enable SMB first.")
         if service == "smb" and not enabled and current.time_machine_enabled:
-            warnings.append("Time Machine runs over SMB, so Time Machine backups stop while SMB is off.")
+            warnings.append(
+                "Time Machine runs over SMB: turning SMB off turns Time Machine off too, and turning SMB back on "
+                "leaves it off. Turn Time Machine on again afterwards (drive_set_file_service)."
+            )
+        if service == "smb" and enabled and current.time_machine_enabled is False:
+            warnings.append("Time Machine stays off; turn it on with drive_set_file_service if it should run.")
         if service == "nfs" and not enabled:
             connections = await self.list_nfs_connections()
             if connections:
@@ -276,12 +282,24 @@ class FileServiceManager:
     # ------------------------------------------------------------------
 
     async def _drive_names(self, grants: list[NfsSharedDriveAccess]) -> dict[str, str | None]:
-        """Shared drive id -> name, refusing ids that do not exist."""
-        drives = {drive.id: drive.name for drive in await self._shared_drives.list_shared_drives() if drive.id}
+        """Shared drive id -> name, refusing ids that do not exist and personal drives.
+
+        Drive exports only shared drives over NFS: a connection granting a
+        personal drive is answered with HTTP 500 and not saved.
+        """
+        listed = [drive for drive in await self._shared_drives.list_shared_drives() if drive.id]
+        drives = {drive.id: drive.name for drive in listed}
         unknown = [grant.id for grant in grants if grant.id not in drives]
         if unknown:
             raise UniFiValidationError(
                 f"Unknown shared drive id(s): {', '.join(unknown)}. Use drive_list_shared_drives for valid ids."
+            )
+        personal = {drive.id for drive in listed if drive.type == "personal"}
+        refused = [drives[grant.id] or grant.id for grant in grants if grant.id in personal]
+        if refused:
+            raise UniFiValidationError(
+                f"NFS can only export shared drives; {', '.join(refused)} is a personal drive. "
+                "Pick a drive whose type is shared in drive_list_shared_drives."
             )
         return drives
 
@@ -453,13 +471,14 @@ class FileServiceManager:
                 if flagged:
                     codes = ", ".join(str(entry["error_code"]) for entry in flagged)
                     raise UniFiValidationError(f"UniFi Drive rejected NFS client {change.client}: {codes}")
-            # Last check before the PUT, which replaces the whole list.
+            # Last check before the PATCH, which replaces the whole list.
             if connections_for_put(await self._read_nfs_settings()) != change.based_on:
                 raise UniFiOperationError(
                     "The NFS connection list changed since this change was planned (another write, or an edit in "
                     "the Drive web UI). Nothing was written; run the change again."
                 )
-        await self._connection.put(
+        # The list alone: Drive keeps its other NFS settings as they are.
+        await self._connection.patch(
             drive_path(1, "services", "nfs", "advanced-settings"), {"connections": change.connections}
         )
         after = await self.list_nfs_connections()

@@ -59,7 +59,9 @@ class StubConsole:
     @property
     def writes(self) -> list[Recorded]:
         return [
-            r for r in self.requests if r.method in ("PUT", "POST", "DELETE") and not r.path.startswith("/api/auth")
+            r
+            for r in self.requests
+            if r.method in ("PUT", "PATCH", "POST", "DELETE") and not r.path.startswith("/api/auth")
         ]
 
     async def handle(self, request: web.Request) -> web.Response:
