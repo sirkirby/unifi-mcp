@@ -602,6 +602,7 @@ def test_live_api_catalog_probe_reports_exact_parity(monkeypatch, tmp_path):
             {"name": "unifi_list_clients", "product": "network"},
             {"name": "protect_list_cameras", "product": "protect"},
             {"name": "access_list_doors", "product": "access"},
+            {"name": "drive_list_storage_pools", "product": "drive"},
         ]
     }
     catalog_path = tmp_path / "action_catalog.json"
@@ -610,8 +611,8 @@ def test_live_api_catalog_probe_reports_exact_parity(monkeypatch, tmp_path):
 
     result = live_smoke._validate_api_action_catalog({"items": [{"name": item["name"]} for item in catalog["actions"]]})
 
-    assert result["expected_count"] == 3
-    assert result["actual_count"] == 3
+    assert result["expected_count"] == 4
+    assert result["actual_count"] == 4
     assert result["missing"] == []
     assert result["unexpected"] == []
     assert all(result["sentinels"].values())
@@ -674,7 +675,10 @@ def test_api_resource_parity_uses_public_network_mac_identity_and_complete_clien
         sample for sample in live_smoke.API_RESOURCES_SAMPLE if sample[1] == "/v1/sites/{site}/clients"
     )
     assert client_sample[4] == {"limit": 1000}
-    assert live_smoke.API_RESOURCE_PARITY_ID_KEYS == {
+    network_keys = {
+        path: keys for path, keys in live_smoke.API_RESOURCE_PARITY_ID_KEYS.items() if "/drive/" not in path
+    }
+    assert network_keys == {
         "/v1/sites/{site}/clients": ("mac",),
         "/v1/sites/{site}/devices": ("mac",),
     }
@@ -2941,3 +2945,337 @@ def test_an_applied_object_create_that_names_no_single_id_is_a_failure(created_i
     asyncio.run(runner.lifecycle_innerspace_attenuation_objects())
 
     assert ("innerspace_remove_attenuation_objects", "lifecycle") in _statuses(runner, "failed")
+
+
+# ---------------------------------------------------------------------------
+# Drive in the API phases
+# ---------------------------------------------------------------------------
+
+_API_HOST_VARS = (
+    "UNIFI_NETWORK_HOST",
+    "UNIFI_PROTECT_HOST",
+    "UNIFI_ACCESS_HOST",
+    "UNIFI_DRIVE_HOST",
+    "UNIFI_DRIVE_PORT",
+    "UNIFI_DRIVE_USERNAME",
+    "UNIFI_DRIVE_PASSWORD",
+    "UNIFI_DRIVE_API_KEY",
+    "UNIFI_DRIVE_VERIFY_SSL",
+)
+
+
+@pytest.fixture
+def drive_env(monkeypatch):
+    import live_smoke
+
+    monkeypatch.setattr(live_smoke, "load_dotenv", lambda *args, **kwargs: None)
+    for name in _API_HOST_VARS:
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+def _catalog_actions() -> dict[str, dict]:
+    import live_smoke
+
+    return {item["name"]: item for item in json.loads(live_smoke.API_ACTION_CATALOG.read_text())["actions"]}
+
+
+def test_api_phases_register_drive_with_its_local_login_and_no_token(drive_env):
+    import live_smoke
+
+    drive_env.setenv("UNIFI_DRIVE_HOST", "https://192.0.2.20/")
+    drive_env.setenv("UNIFI_DRIVE_USERNAME", "smoke-user")
+    drive_env.setenv("UNIFI_DRIVE_PASSWORD", "smoke-password")
+    drive_env.setenv("UNIFI_DRIVE_API_KEY", "not-for-drive")
+
+    payloads = live_smoke._api_actions_controllers_from_env()
+
+    assert payloads == {
+        "drive": {
+            "name": "smoke-drive",
+            "base_url": "https://192.0.2.20:443",
+            "username": "smoke-user",
+            "password": "smoke-password",
+            "api_token": None,
+            "product_kinds": ["drive"],
+            "verify_tls": False,
+            "is_default": False,
+        }
+    }
+
+
+@pytest.mark.parametrize("missing", ["UNIFI_DRIVE_HOST", "UNIFI_DRIVE_USERNAME", "UNIFI_DRIVE_PASSWORD"])
+def test_api_phases_skip_drive_without_a_complete_login(drive_env, missing):
+    import live_smoke
+
+    drive_env.setenv("UNIFI_NETWORK_HOST", "192.0.2.1")
+    for name, value in (
+        ("UNIFI_DRIVE_HOST", "192.0.2.20"),
+        ("UNIFI_DRIVE_USERNAME", "smoke-user"),
+        ("UNIFI_DRIVE_PASSWORD", "smoke-password"),
+    ):
+        if name != missing:
+            drive_env.setenv(name, value)
+
+    assert set(live_smoke._api_actions_controllers_from_env()) == {"network"}
+
+
+def test_api_actions_cover_every_drive_read_and_nothing_that_writes():
+    import live_smoke
+
+    actions = _catalog_actions()
+    drive_reads = {name for name, item in actions.items() if item["product"] == "drive" and item["read_only_hint"]}
+    sampled = {tool for product, tool, _args in live_smoke.API_ACTIONS_SAMPLE if product == "drive"}
+    derived = {tool for product, tool, _seed, _arg in live_smoke.API_ACTION_DERIVED_READS if product == "drive"}
+
+    assert sampled | derived == drive_reads
+    assert not sampled & derived
+    for _product, tool, seed, arg in live_smoke.API_ACTION_DERIVED_READS:
+        assert seed in sampled
+        assert arg in actions[tool]["input_schema"]["properties"]
+    assert live_smoke.API_ACTION_SENTINELS["drive"] in drive_reads
+    # The only Drive write the phase sends is a preview (confirm false), which the API answers itself.
+    preview_tool, preview_args = live_smoke.API_CONFIRMATION_PREVIEW_CONTROLS["drive"]
+    assert actions[preview_tool]["permission_action"] == "delete"
+    assert preview_args == {"client": live_smoke.DRIVE_SMOKE_NFS_CLIENT}
+
+
+def test_api_resources_cover_every_drive_route_with_action_parity():
+    import live_smoke
+
+    spec = json.loads((live_smoke.REPO_ROOT / "apps/api/openapi.json").read_text())
+    routes = {path.replace("{site_id}", "{site}") for path in spec["paths"] if "/drive/" in path}
+    samples = {sample[1]: sample for sample in live_smoke.API_RESOURCES_SAMPLE if sample[0] == "drive"}
+    actions = _catalog_actions()
+
+    assert set(samples) == routes
+    for path, (_product, _path, _query, tool, _args, keys) in samples.items():
+        assert actions[tool]["read_only_hint"] is True
+        shape = live_smoke.API_RESOURCE_SHAPES[path]
+        if shape == "detail":
+            assert live_smoke.API_RESOURCE_DETAIL_PARITY_FIELDS[path]
+        else:
+            assert shape == "list" and keys == ("data",)
+            assert path in live_smoke.API_RESOURCE_PARITY_ID_KEYS
+    # A seeded path comes after the resource that lists its seed.
+    order = [sample[1] for sample in live_smoke.API_RESOURCES_SAMPLE]
+    for name, (seed_path, _key) in live_smoke.API_RESOURCE_SEEDS.items():
+        for path in order:
+            if "{" + name + "}" in path:
+                assert order.index(seed_path) < order.index(path)
+
+
+def test_resource_shapes():
+    import live_smoke
+
+    page = {"items": [], "next_cursor": None, "render_hint": {}}
+    whole = {"items": [{"id": "a"}], "render_hint": {}}
+    one = {"data": {"id": "a"}, "render_hint": {}}
+
+    assert live_smoke._resource_shape_ok(200, page, "page")
+    assert not live_smoke._resource_shape_ok(200, whole, "page")
+    assert live_smoke._resource_shape_ok(200, whole, "list")
+    assert live_smoke._resource_shape_ok(200, one, "detail")
+    assert not live_smoke._resource_shape_ok(200, whole, "detail")
+    assert not live_smoke._resource_shape_ok(200, {"data": {"id": "a"}}, "detail")
+    assert not live_smoke._resource_shape_ok(502, one, "detail")
+
+
+def test_seeded_resource_path_fills_from_the_listing_or_skips():
+    import live_smoke
+
+    template = "/v1/sites/{site}/drive/shared-drives/{drive_id}"
+    listing = "/v1/sites/{site}/drive/shared-drives"
+    seeds: dict = {}
+
+    assert live_smoke._resource_placeholders(template, "default", seeds) == ({"site": "default"}, listing)
+
+    live_smoke._record_resource_seeds(listing, [{"name": "no id"}, {"id": "drive-1"}, {"id": "drive-2"}], seeds)
+    live_smoke._record_resource_seeds(listing, [{"id": "drive-3"}], seeds)
+    placeholders, missing = live_smoke._resource_placeholders(template, "default", seeds)
+
+    assert missing is None
+    assert template.format(**placeholders) == "/v1/sites/default/drive/shared-drives/drive-1"
+
+    empty: dict = {}
+    live_smoke._record_resource_seeds(listing, [], empty)
+    assert live_smoke._resource_placeholders(template, "default", empty)[1] == listing
+
+
+def test_detail_parity_compares_only_the_stable_fields():
+    import live_smoke
+
+    resource = {"data": {"mac": "m", "model": "UNAS", "uptime_seconds": 10}}
+    action = {"success": True, "data": {"mac": "m", "model": "UNAS", "uptime_seconds": 12}}
+
+    assert live_smoke._detail_parity(resource, action, ("mac", "model")) == []
+    assert live_smoke._detail_parity(resource, {"data": {"mac": "x", "model": "UNAS"}}, ("mac", "model")) == ["mac"]
+    assert live_smoke._detail_parity(resource, {"success": False}, ("mac",)) == ["mac"]
+
+
+def test_derived_read_takes_the_first_listed_id():
+    import live_smoke
+
+    assert live_smoke._first_listed_id({"success": True, "data": [{"name": "x"}, {"id": "drive-1"}]}) == "drive-1"
+    assert live_smoke._first_listed_id({"success": True, "data": []}) is None
+    assert live_smoke._first_listed_id({"success": False, "data": [{"id": "drive-1"}]}) is None
+    assert live_smoke._first_listed_id(None) is None
+
+
+class _FakeApi:
+    """Answers the API phases' HTTP calls for one registered Drive controller."""
+
+    def __init__(self, *, shared_drives: list[dict]):
+        self.shared_drives = shared_drives
+        self.calls: list[tuple[str, str, dict | None]] = []
+
+    def __call__(self, method, url, *, headers=None, body=None, timeout=60.0):
+        import live_smoke
+
+        path = url.split("127.0.0.1", 1)[1].split("/", 1)[1]
+        path = "/" + path.split("?", 1)[0]
+        self.calls.append((method, path, body))
+        if path == "/v1/catalog/tools":
+            return 200, {"items": [{"name": item} for item in _catalog_actions()]}
+        if path == "/v1/controllers":
+            return 201, {"id": "cid-drive", "name": body["name"], "base_url": body["base_url"]}
+        system = {"mac": "m", "model": "UNAS", "hostname": "nas", "firmware_version": "5.0.12"}
+        services = {"smb_enabled": True, "nfs_enabled": True, "time_machine_enabled": False}
+        lists = {
+            "storage-pools": [{"id": "pool-1"}],
+            "disks": [{"slot_id": "1", "serial": "S1"}],
+            "shared-drives": self.shared_drives,
+            "nfs-connections": [{"client": "192.0.2.76"}],
+        }
+        if path.startswith("/v1/actions/"):
+            tool = path.rsplit("/", 1)[1]
+            if body["confirm"] is False and tool == live_smoke.API_CONFIRMATION_PREVIEW_CONTROLS["drive"][0]:
+                return 200, {
+                    "success": True,
+                    "requires_confirmation": True,
+                    "action": "delete",
+                    "preview": {},
+                    "tool": tool,
+                }
+            data = {
+                "drive_get_system_info": system,
+                "drive_get_file_services": services,
+                "drive_get_shared_drive": {"id": body["args"].get("drive_id"), "name": "Media"},
+                "drive_list_storage_pools": lists["storage-pools"],
+                "drive_list_disks": lists["disks"],
+                "drive_list_shared_drives": lists["shared-drives"],
+                "drive_list_nfs_connections": lists["nfs-connections"],
+            }[tool]
+            return 200, {"success": True, "data": data, "render_hint": {}}
+        resource = path.split("/drive/", 1)[1]
+        if resource == "system":
+            return 200, {"data": system, "render_hint": {}}
+        if resource == "file-services":
+            return 200, {"data": services, "render_hint": {}}
+        if resource.startswith("shared-drives/"):
+            return 200, {"data": {"id": resource.split("/", 1)[1], "name": "Media"}, "render_hint": {}}
+        return 200, {"items": lists[resource], "render_hint": {}}
+
+
+def _run_api_phase(monkeypatch, tmp_path, drive_env, phase, fake):
+    import live_smoke
+
+    drive_env.setenv("UNIFI_DRIVE_HOST", "192.0.2.20")
+    drive_env.setenv("UNIFI_DRIVE_USERNAME", "smoke-user")
+    drive_env.setenv("UNIFI_DRIVE_PASSWORD", "smoke-password")
+    monkeypatch.setattr(live_smoke, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(live_smoke, "_bootstrap_unifi_api", lambda env: "unifi_test_key")
+    monkeypatch.setattr(live_smoke, "_wait_for_health", lambda *args, **kwargs: True)
+    monkeypatch.setattr(live_smoke, "_http_request", fake)
+    monkeypatch.setattr(
+        live_smoke.subprocess, "Popen", lambda *args, **kwargs: SimpleNamespace(poll=lambda: 0, terminate=lambda: None)
+    )
+    monkeypatch.setattr(
+        live_smoke,
+        "API_ACTION_CATALOG",
+        Path(__file__).resolve().parents[1] / "apps/api/src/unifi_api/action_catalog.json",
+    )
+    args = SimpleNamespace(tool=[], delay=0, report_dir="reports")
+    runner = live_smoke.run_api_actions_phase if phase == "api-actions" else live_smoke.run_api_resources_phase
+    code = runner(args)
+    folder = "phase2-api-actions" if phase == "api-actions" else "phase3-api-resources"
+    [report] = (tmp_path / "reports" / folder).glob("*.json")
+    return code, json.loads(report.read_text())
+
+
+def test_api_actions_phase_runs_every_drive_read_and_only_a_preview(monkeypatch, tmp_path, drive_env):
+    fake = _FakeApi(shared_drives=[{"id": "drive-1", "type": "shared"}])
+
+    code, report = _run_api_phase(monkeypatch, tmp_path, drive_env, "api-actions", fake)
+
+    assert code == 0, report
+    assert {result["tool"] for result in report["results"]} == {
+        "drive_get_system_info",
+        "drive_list_storage_pools",
+        "drive_list_disks",
+        "drive_list_shared_drives",
+        "drive_get_shared_drive",
+        "drive_get_file_services",
+        "drive_list_nfs_connections",
+    }
+    assert all(result["classification"] == "pass" for result in report["results"])
+    [preview] = report["confirmation_preview_controls"]
+    assert preview["passed"] is True
+    sent = [body for method, path, body in fake.calls if path.startswith("/v1/actions/")]
+    assert all(body["confirm"] is False for body in sent)
+    assert {"drive_id": "drive-1"} in [body["args"] for body in sent]
+
+
+def test_api_actions_phase_skips_the_shared_drive_read_without_a_shared_drive(monkeypatch, tmp_path, drive_env):
+    code, report = _run_api_phase(monkeypatch, tmp_path, drive_env, "api-actions", _FakeApi(shared_drives=[]))
+
+    assert code == 0, report
+    assert "drive_get_shared_drive" not in {result["tool"] for result in report["results"]}
+    assert report["skipped_reads"] == [
+        {
+            "product": "drive",
+            "tool": "drive_get_shared_drive",
+            "reason": "drive_list_shared_drives listed nothing to read",
+        }
+    ]
+
+
+def test_api_resources_phase_checks_every_drive_route_against_its_action(monkeypatch, tmp_path, drive_env):
+    code, report = _run_api_phase(
+        monkeypatch, tmp_path, drive_env, "api-resources", _FakeApi(shared_drives=[{"id": "drive-1"}])
+    )
+
+    assert code == 0, report
+    drive = [result for result in report["results"] if result["product"] == "drive"]
+    assert [result["path"] for result in drive] == [
+        "/v1/sites/default/drive/system",
+        "/v1/sites/default/drive/storage-pools",
+        "/v1/sites/default/drive/disks",
+        "/v1/sites/default/drive/shared-drives",
+        "/v1/sites/default/drive/shared-drives/drive-1",
+        "/v1/sites/default/drive/file-services",
+        "/v1/sites/default/drive/nfs-connections",
+    ]
+    assert all(result["classification"] == "pass" for result in drive)
+    assert all(result["parity"]["resource_subset_of_action"] for result in drive)
+    assert report["summary"]["parity_checked"] == 7
+    assert report["summary"]["parity_mismatches"] == 0
+
+
+def test_api_resources_phase_flags_a_detail_mismatch_and_skips_an_unseeded_route(monkeypatch, tmp_path, drive_env):
+    fake = _FakeApi(shared_drives=[])
+    original = fake.__call__
+
+    def drifting(method, url, **kwargs):
+        status, body = original(method, url, **kwargs)
+        if "/v1/actions/drive_get_file_services" in url:
+            body = {**body, "data": {**body["data"], "smb_enabled": False}}
+        return status, body
+
+    code, report = _run_api_phase(monkeypatch, tmp_path, drive_env, "api-resources", drifting)
+
+    assert code == 1
+    by_path = {result["path"]: result for result in report["results"] if result["product"] == "drive"}
+    assert by_path["/v1/sites/default/drive/file-services"]["parity"]["differing_fields"] == ["smb_enabled"]
+    assert by_path["/v1/sites/{site}/drive/shared-drives/{drive_id}"]["classification"] == "skipped_no_seed"
+    assert report["summary"]["skipped_no_seed"] == 1

@@ -3466,6 +3466,21 @@ API_ACTIONS_SAMPLE: list[tuple[str, str, dict[str, Any]]] = [
     ("access", "access_list_doors", {}),
     ("access", "access_list_users", {}),
     ("access", "access_list_visitors", {}),
+    # Drive: every read action. drive_get_shared_drive needs a live id, so it is
+    # exercised separately (API_ACTION_DERIVED_READS).
+    ("drive", "drive_get_system_info", {}),
+    ("drive", "drive_list_storage_pools", {}),
+    ("drive", "drive_list_disks", {"include_empty": True}),
+    ("drive", "drive_list_shared_drives", {}),
+    ("drive", "drive_get_file_services", {}),
+    ("drive", "drive_list_nfs_connections", {}),
+]
+
+# Read actions whose argument comes from an earlier sampled read:
+# (product, tool, seed tool, argument name). With nothing to read (a NAS with
+# no shared drive) the read is recorded as skipped, not failed.
+API_ACTION_DERIVED_READS: list[tuple[str, str, str, str]] = [
+    ("drive", "drive_get_shared_drive", "drive_list_shared_drives", "drive_id"),
 ]
 
 # Non-default, read-only probes derive a guaranteed match from the corresponding
@@ -3479,12 +3494,16 @@ API_ACTION_SENTINELS: dict[str, str] = {
     "network": "unifi_list_clients",
     "protect": "protect_list_cameras",
     "access": "access_list_doors",
+    "drive": "drive_list_storage_pools",
 }
 
 API_CONFIRMATION_PREVIEW_CONTROLS: dict[str, tuple[str, dict[str, Any]]] = {
     "network": ("unifi_reboot_device", {"mac_address": "00:00:00:00:00:00"}),
     "protect": ("protect_reboot_camera", {"camera_id": "__confirmation_probe__"}),
     "access": ("access_unlock_door", {"door_id": "__confirmation_probe__", "duration": 2}),
+    # A request-only preview: the API answers it without calling a manager, so
+    # nothing reaches the NAS. The client is a documentation address.
+    "drive": ("drive_remove_nfs_connection", {"client": DRIVE_SMOKE_NFS_CLIENT}),
 }
 
 
@@ -3524,6 +3543,16 @@ def _classify_confirmation_preview_control(
         and tool == expected_tool
     )
     return {"passed": passed, "tool_returned": tool, "response": response}
+
+
+def _first_listed_id(response: object) -> str | None:
+    """The first ``id`` in a successful list action's data, or ``None``."""
+    if not isinstance(response, dict) or response.get("success") is not True:
+        return None
+    for item in response.get("data") or []:
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]:
+            return item["id"]
+    return None
 
 
 def _classify_api_action_result(success: bool | None, shape_match: bool) -> str:
@@ -3597,6 +3626,7 @@ def _api_actions_baseline_dirs() -> dict[str, str]:
         "network": "network-readonly-clean",
         "protect": "protect-readonly-clean",
         "access": "access-readonly",
+        "drive": "drive-readonly",
     }
 
 
@@ -3621,6 +3651,11 @@ def _load_api_actions_baseline(product: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+# Products registered with a console login only: skipped unless host, username
+# and password are all set.
+SESSION_ONLY_API_PRODUCTS = frozenset({"drive"})
+
+
 def _api_actions_controllers_from_env() -> dict[str, dict[str, Any]]:
     """Build controller-registration payloads from .env, one per product.
 
@@ -3643,6 +3678,12 @@ def _api_actions_controllers_from_env() -> dict[str, dict[str, Any]]:
         username = os.environ.get(f"UNIFI_{product.upper()}_USERNAME") or ""
         password = os.environ.get(f"UNIFI_{product.upper()}_PASSWORD") or ""
         api_key = os.environ.get(f"UNIFI_{product.upper()}_API_KEY") or None
+        if product in SESSION_ONLY_API_PRODUCTS:
+            # The NAS is its own console with its own local login; the API refuses
+            # a Drive controller without one and never uses an API token for it.
+            if not (username and password):
+                return None
+            api_key = None
         verify_tls = _bool(os.environ.get(f"UNIFI_{product.upper()}_VERIFY_SSL"), False)
         scheme = "https"
         # Strip any scheme the user may have included in HOST.
@@ -3664,6 +3705,7 @@ def _api_actions_controllers_from_env() -> dict[str, dict[str, Any]]:
         ("network", "UNIFI_NETWORK_HOST", "UNIFI_NETWORK_PORT"),
         ("protect", "UNIFI_PROTECT_HOST", "UNIFI_PROTECT_PORT"),
         ("access", "UNIFI_ACCESS_HOST", "UNIFI_ACCESS_PORT"),
+        ("drive", "UNIFI_DRIVE_HOST", "UNIFI_DRIVE_PORT"),
     ):
         payload = _build(product, host_var, port_var)
         if payload:
@@ -3809,6 +3851,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         "confirmation_preview_controls": [],
         "read_contract_probes": [],
         "results": [],
+        "skipped_reads": [],
         "summary": {
             "preview_controls_exercised": 0,
             "preview_controls_passed": 0,
@@ -3888,7 +3931,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         # Step 1: register controllers from .env
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS,DRIVE}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
@@ -3910,7 +3953,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             )
             print(f"  registered controller: {product} -> {body['id']}", flush=True)
 
-        for product in ("network", "protect", "access"):
+        for product in API_CONFIRMATION_PREVIEW_CONTROLS:
             controller_id = product_to_controller_id.get(product)
             if controller_id is None:
                 continue
@@ -3957,14 +4000,11 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             "network": os.environ.get("UNIFI_NETWORK_SITE") or "default",
             "protect": "default",
             "access": "default",
+            "drive": "default",
         }
         live_action_responses: dict[str, dict[str, Any]] = {}
 
-        for product, tool_name, tool_args in API_ACTIONS_SAMPLE:
-            if product not in product_to_controller_id:
-                continue
-            if args.tool and tool_name not in args.tool:
-                continue
+        def _exercise_action(product: str, tool_name: str, tool_args: dict[str, Any]) -> None:
             controller_id = product_to_controller_id[product]
             site = site_for_product[product]
             body = {
@@ -4049,6 +4089,28 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             )
             if args.delay:
                 time.sleep(args.delay)
+
+        for product, tool_name, tool_args in API_ACTIONS_SAMPLE:
+            if product not in product_to_controller_id:
+                continue
+            if args.tool and tool_name not in args.tool:
+                continue
+            _exercise_action(product, tool_name, tool_args)
+
+        # Reads whose argument comes from a sampled read: an id the seed listed.
+        for product, tool_name, seed_tool, arg_name in API_ACTION_DERIVED_READS:
+            if product not in product_to_controller_id:
+                continue
+            if args.tool and tool_name not in args.tool:
+                continue
+            seed_id = _first_listed_id(live_action_responses.get(seed_tool))
+            if seed_id is None:
+                artifact["skipped_reads"].append(
+                    {"product": product, "tool": tool_name, "reason": f"{seed_tool} listed nothing to read"}
+                )
+                print(f"  api-actions skip: {tool_name} ({seed_tool} listed nothing to read)", flush=True)
+                continue
+            _exercise_action(product, tool_name, {arg_name: seed_id})
 
         # Step 3: prove representative non-default read behavior through the
         # running action endpoint. The positive control derives an exact search
@@ -4262,7 +4324,57 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
         {},
         ("visitors", "items"),
     ),
+    # Drive: every read route. Its lists are whole (no cursor) and the action
+    # data is the bare list, so the parity collection key is "data".
+    ("drive", "/v1/sites/{site}/drive/system", {}, "drive_get_system_info", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/storage-pools", {}, "drive_list_storage_pools", {}, ("data",)),
+    (
+        "drive",
+        "/v1/sites/{site}/drive/disks",
+        {"include_empty": "true"},
+        "drive_list_disks",
+        {"include_empty": True},
+        ("data",),
+    ),
+    ("drive", "/v1/sites/{site}/drive/shared-drives", {}, "drive_list_shared_drives", {}, ("data",)),
+    (
+        "drive",
+        "/v1/sites/{site}/drive/shared-drives/{drive_id}",
+        {},
+        "drive_get_shared_drive",
+        {"drive_id": "{drive_id}"},
+        (),
+    ),
+    ("drive", "/v1/sites/{site}/drive/file-services", {}, "drive_get_file_services", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/nfs-connections", {}, "drive_list_nfs_connections", {}, ("data",)),
 ]
+
+# Response shape per resource path; anything not listed is a cursor page
+# ({items, next_cursor, render_hint}). "list" is a whole list without a cursor
+# ({items, render_hint}); "detail" is one object ({data, render_hint}).
+API_RESOURCE_SHAPES: dict[str, str] = {
+    "/v1/sites/{site}/drive/system": "detail",
+    "/v1/sites/{site}/drive/storage-pools": "list",
+    "/v1/sites/{site}/drive/disks": "list",
+    "/v1/sites/{site}/drive/shared-drives": "list",
+    "/v1/sites/{site}/drive/shared-drives/{drive_id}": "detail",
+    "/v1/sites/{site}/drive/file-services": "detail",
+    "/v1/sites/{site}/drive/nfs-connections": "list",
+}
+
+# Path placeholders filled from an earlier resource's items:
+# placeholder -> (resource path that lists them, item key).
+API_RESOURCE_SEEDS: dict[str, tuple[str, str]] = {
+    "drive_id": ("/v1/sites/{site}/drive/shared-drives", "id"),
+}
+
+# Detail resources compare these fields with the matching action's data; the
+# others (uptime, load, temperatures) move between the two calls.
+API_RESOURCE_DETAIL_PARITY_FIELDS: dict[str, tuple[str, ...]] = {
+    "/v1/sites/{site}/drive/system": ("mac", "model", "hostname", "firmware_version"),
+    "/v1/sites/{site}/drive/shared-drives/{drive_id}": ("id", "name", "storage_pool_id"),
+    "/v1/sites/{site}/drive/file-services": ("smb_enabled", "nfs_enabled", "time_machine_enabled"),
+}
 
 # Network resource types intentionally expose MAC addresses as their public
 # identities, while the matching action rows can also carry private controller
@@ -4271,7 +4383,59 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
 API_RESOURCE_PARITY_ID_KEYS: dict[str, tuple[str, ...]] = {
     "/v1/sites/{site}/clients": ("mac",),
     "/v1/sites/{site}/devices": ("mac",),
+    "/v1/sites/{site}/drive/storage-pools": ("id",),
+    # An empty bay has no serial; it falls back to its slot number.
+    "/v1/sites/{site}/drive/disks": ("serial", "slot_id"),
+    "/v1/sites/{site}/drive/shared-drives": ("id",),
+    "/v1/sites/{site}/drive/nfs-connections": ("client",),
 }
+
+
+def _resource_placeholders(path_tpl: str, site: str, seeds: dict[str, str | None]) -> tuple[dict[str, str], str | None]:
+    """Values for a resource path's placeholders, or the seed path that listed nothing to fill one."""
+    placeholders = {"site": site}
+    for name, (seed_path, _key) in API_RESOURCE_SEEDS.items():
+        if "{" + name + "}" not in path_tpl:
+            continue
+        value = seeds.get(name)
+        if not value:
+            return placeholders, seed_path
+        placeholders[name] = value
+    return placeholders, None
+
+
+def _record_resource_seeds(path_tpl: str, items: object, seeds: dict[str, str | None]) -> None:
+    """Keep the first listed value of every placeholder this resource seeds."""
+    for name, (seed_path, key) in API_RESOURCE_SEEDS.items():
+        if seed_path == path_tpl and name not in seeds:
+            seeds[name] = next(
+                (
+                    str(item[key])
+                    for item in (items if isinstance(items, list) else [])
+                    if isinstance(item, dict) and item.get(key)
+                ),
+                None,
+            )
+
+
+def _resource_shape_ok(status: int, response: object, shape: str) -> bool:
+    """Whether a 200 resource body has the keys its shape promises."""
+    if status != 200 or not isinstance(response, dict) or "render_hint" not in response:
+        return False
+    if shape == "detail":
+        return isinstance(response.get("data"), dict)
+    if not isinstance(response.get("items"), list):
+        return False
+    return shape == "list" or "next_cursor" in response
+
+
+def _detail_parity(resource: object, action: object, fields: tuple[str, ...]) -> list[str]:
+    """Fields whose resource and action values differ; both bodies carry the object under ``data``."""
+    resource_data = resource.get("data") if isinstance(resource, dict) else None
+    action_data = action.get("data") if isinstance(action, dict) else None
+    if not isinstance(resource_data, dict) or not isinstance(action_data, dict):
+        return list(fields)
+    return [field for field in fields if resource_data.get(field) != action_data.get(field)]
 
 
 def _items_id_set(items: Any, id_keys: tuple[str, ...] = ("id", "_id", "mac", "uuid")) -> set[str]:
@@ -4355,6 +4519,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             "shape_failures": 0,
             "controller_errors": 0,
             "skipped_no_controller": 0,
+            "skipped_no_seed": 0,
             "parity_checked": 0,
             "parity_matches": 0,
             "parity_mismatches": 0,
@@ -4394,7 +4559,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
         # Step 1: register controllers from .env (same as api-actions).
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS,DRIVE}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
@@ -4421,8 +4586,10 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             "network": os.environ.get("UNIFI_NETWORK_SITE") or "default",
             "protect": "default",
             "access": "default",
+            "drive": "default",
         }
 
+        resource_seeds: dict[str, str | None] = {}
         for product, path_tpl, query_extras, parity_tool, parity_args, parity_keys in API_RESOURCES_SAMPLE:
             if product not in product_to_controller_id:
                 artifact["summary"]["skipped_no_controller"] += 1
@@ -4430,7 +4597,15 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                 continue
             controller_id = product_to_controller_id[product]
             site = site_for_product[product]
-            path = path_tpl.format(site=site)
+            placeholders, missing_seed = _resource_placeholders(path_tpl, site, resource_seeds)
+            if missing_seed is not None:
+                artifact["summary"]["skipped_no_seed"] += 1
+                artifact["results"].append(
+                    {"product": product, "path": path_tpl, "classification": "skipped_no_seed", "seed": missing_seed}
+                )
+                print(f"  api-resources skip: {path_tpl} ({missing_seed} listed nothing to read)", flush=True)
+                continue
+            path = path_tpl.format(**placeholders)
             qs = "&".join([f"controller={controller_id}"] + [f"{k}={v}" for k, v in query_extras.items()])
             url = f"{base_url}{path}?{qs}"
 
@@ -4447,16 +4622,13 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                 response = f"{type(exc).__name__}: {exc}"
             duration_ms = int((time.perf_counter() - t0) * 1000)
 
-            # Resource shape: {items, next_cursor, render_hint}
-            shape_match = (
-                status == 200
-                and isinstance(response, dict)
-                and "items" in response
-                and "next_cursor" in response
-                and "render_hint" in response
-                and isinstance(response.get("items"), list)
-            )
+            # Resource shape: a cursor page {items, next_cursor, render_hint} unless
+            # API_RESOURCE_SHAPES says otherwise.
+            shape = API_RESOURCE_SHAPES.get(path_tpl, "page")
+            shape_match = _resource_shape_ok(status, response, shape)
             items = response.get("items") if isinstance(response, dict) else None
+            if shape_match:
+                _record_resource_seeds(path_tpl, items, resource_seeds)
             item_count = len(items) if isinstance(items, list) else None
 
             classification: str
@@ -4487,7 +4659,10 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                 action_body = {
                     "site": site,
                     "controller": controller_id,
-                    "args": parity_args or {},
+                    "args": {
+                        key: value.format(**placeholders) if isinstance(value, str) else value
+                        for key, value in (parity_args or {}).items()
+                    },
                     "confirm": False,
                 }
                 try:
@@ -4502,7 +4677,29 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                     a_status = 0
                     a_response = f"{type(exc).__name__}: {exc}"
 
-                if a_status == 200 and isinstance(a_response, dict) and a_response.get("success"):
+                if (
+                    a_status == 200
+                    and isinstance(a_response, dict)
+                    and a_response.get("success")
+                    and path_tpl in API_RESOURCE_DETAIL_PARITY_FIELDS
+                ):
+                    differing = _detail_parity(response, a_response, API_RESOURCE_DETAIL_PARITY_FIELDS[path_tpl])
+                    parity = {
+                        "tool": parity_tool,
+                        "action_http_status": a_status,
+                        "action_success": True,
+                        "compared_fields": list(API_RESOURCE_DETAIL_PARITY_FIELDS[path_tpl]),
+                        "differing_fields": differing,
+                        "resource_subset_of_action": not differing,
+                        "resource_id_count": 1,
+                        "action_id_count": 1,
+                    }
+                    artifact["summary"]["parity_checked"] += 1
+                    if differing:
+                        artifact["summary"]["parity_mismatches"] += 1
+                    else:
+                        artifact["summary"]["parity_matches"] += 1
+                elif a_status == 200 and isinstance(a_response, dict) and a_response.get("success"):
                     action_collection = _action_collection(a_response, parity_keys)
                     parity_id_keys = API_RESOURCE_PARITY_ID_KEYS.get(
                         path_tpl,
@@ -4860,7 +5057,7 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
         # Step 1: register controllers from .env (same as api-actions/resources).
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS,DRIVE}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
