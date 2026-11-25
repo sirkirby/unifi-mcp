@@ -221,6 +221,61 @@ _SYSTEM = {
 }
 
 
+_NETWORK_IO = {"receiveKBPS": 6.319893, "transmitKBPS": 17.447551, "timestamp": "2026-01-02T03:04:05.123456789-05:00"}
+
+_FAN_CONTROL = {"availableProfiles": ["cooling", "default", "quiet"], "currentProfile": "default"}
+
+# Two buckets of 15 minutes; the second has no data for bay 2.
+_DISK_STATS = {
+    "series": {
+        "disks": [
+            {
+                "slotId": "1",
+                "type": "HDD",
+                "serial": "SYNTHETIC-SERIAL-1",
+                "temperatures": [34, 36],
+                "readKBPS": [100.5, 300.25],
+                "writeKBPS": [0, 50],
+                "badSectorCount": [0, 2],
+            },
+            {
+                "slotId": "2",
+                "type": "HDD",
+                "serial": "SYNTHETIC-SERIAL-2",
+                "temperatures": [37, None],
+                "readKBPS": [10, None],
+                "writeKBPS": [20, None],
+                "badSectorCount": [0, None],
+            },
+        ],
+        "cacheSlots": [
+            {
+                "slotId": "1",
+                "type": "SSD",
+                "serial": "SYNTHETIC-SERIAL-3",
+                "temperatures": [None, None],
+                "readKBPS": [None, None],
+                "writeKBPS": [None, None],
+                "badSectorCount": [None, None],
+            }
+        ],
+    },
+    "window": {"samples": 2, "start": 1767225600, "end": 1767227400, "interval": 900},
+}
+
+
+def network_io() -> dict[str, Any]:
+    return copy.deepcopy(_NETWORK_IO)
+
+
+def fan_control() -> dict[str, Any]:
+    return copy.deepcopy(_FAN_CONTROL)
+
+
+def disk_stats() -> dict[str, Any]:
+    return copy.deepcopy(_DISK_STATS)
+
+
 def storage() -> dict[str, Any]:
     return copy.deepcopy(_STORAGE)
 

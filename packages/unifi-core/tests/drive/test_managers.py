@@ -9,6 +9,7 @@ from unifi_core.drive.managers.connection_manager import (
     DriveWriteOutcomeUnknown,
 )
 from unifi_core.drive.managers.file_service_manager import FileServiceManager
+from unifi_core.drive.managers.performance_manager import PerformanceManager, disk_stats_interval
 from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.drive.managers.storage_manager import StorageManager
 from unifi_core.drive.managers.system_manager import DriveSystemManager
@@ -22,7 +23,12 @@ from unifi_core.drive.models.services import (
     is_world_client,
     nfs_connection_from_api,
 )
-from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, UniFiValidationError
+from unifi_core.exceptions import (
+    UniFiMalformedResponseError,
+    UniFiNotFoundError,
+    UniFiOperationError,
+    UniFiValidationError,
+)
 from unifi_core.operation_gate import GateSettings, OperationGate
 
 from tests.drive import fixtures as fx
@@ -32,6 +38,7 @@ V1 = "/proxy/drive/api/v1/services"
 NFS_ADVANCED = f"{V1}/nfs/advanced-settings"
 TEST_HOSTNAMES = f"{V1}/nfs/test-hostnames"
 DRIVES = "/proxy/drive/api/v2/drives"
+SYSTEMS = "/proxy/drive/api/v2/systems"
 
 
 @pytest.fixture
@@ -147,6 +154,113 @@ async def test_nfs_connections_carry_export_paths(files, console):
 
     assert connection.client == fx.CLIENT and connection.async_writes is False
     assert connection.shared_drives[0].export_path == "/var/nfs/shared/Shared_Drive"
+
+
+# --- performance --------------------------------------------------------------
+
+
+async def test_network_throughput_is_rounded_as_the_dashboard_shows_it(connection, console):
+    console.reply("GET", f"{SYSTEMS}/network-io", fx.network_io())
+
+    throughput = await PerformanceManager(connection).get_network_throughput()
+
+    assert (throughput.receive_kbps, throughput.transmit_kbps) == (6.32, 17.45)
+    assert throughput.timestamp == "2026-01-02T03:04:05.123456789-05:00"
+
+
+async def test_fan_profile_carries_the_web_app_labels(connection, console):
+    console.reply("GET", f"{SYSTEMS}/fan-control", fx.fan_control())
+
+    fan = (await PerformanceManager(connection).get_fan_profile()).model_dump()
+
+    assert (fan["current_profile"], fan["current_label"]) == ("default", "Balanced")
+    assert [(p["profile"], p["label"]) for p in fan["available_profiles"]] == [
+        ("cooling", "Cooling"),
+        ("default", "Balanced"),
+        ("quiet", "Quiet"),
+    ]
+    assert not console.writes
+
+
+async def test_fan_profile_unknown_to_the_web_app_has_no_label(connection, console):
+    console.reply("GET", f"{SYSTEMS}/fan-control", {"availableProfiles": ["turbo"], "currentProfile": "turbo"})
+
+    fan = await PerformanceManager(connection).get_fan_profile()
+
+    assert fan.current_profile == "turbo" and fan.current_label is None
+    assert fan.available_profiles[0].label is None
+
+
+@pytest.mark.parametrize("path", ["network-io", "fan-control"])
+async def test_unreadable_performance_answer_is_an_error(connection, console, path):
+    console.reply("GET", f"{SYSTEMS}/{path}", ["not", "an", "object"])
+    manager = PerformanceManager(connection)
+    read = manager.get_network_throughput if path == "network-io" else manager.get_fan_profile
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await read()
+
+
+async def test_disk_stats_asks_for_the_window_and_summarizes_each_disk(connection, console):
+    console.reply("GET", f"{SYSTEMS}/disk-stats", fx.disk_stats())
+
+    stats = await PerformanceManager(connection).get_disk_stats(hours=24)
+
+    query = console.calls("GET", f"{SYSTEMS}/disk-stats")[0].query
+    assert int(query["end"]) - int(query["start"]) == 24 * 3600
+    assert query["interval"] == "900"
+    assert (stats.interval_seconds, stats.sample_count) == (900, 2)
+    assert stats.window_start == "2026-01-01T00:00:00+00:00"
+    assert stats.window_end == "2026-01-01T00:30:00+00:00"
+
+    first, second, cache = stats.disks
+    assert (first.slot_id, first.bay_type, first.type) == ("1", "disk", "HDD")
+    assert first.samples_with_data == 2
+    assert (first.read_kbps_avg, first.read_kbps_max) == (200.38, 300.25)
+    assert (first.write_kbps_avg, first.write_kbps_max) == (25.0, 50)
+    assert (first.temperature_c_latest, first.temperature_c_max) == (36, 36)
+    assert (first.bad_sector_count_latest, first.bad_sector_count_increase) == (2, 2)
+    assert [s.time for s in first.samples] == ["2026-01-01T00:00:00+00:00", "2026-01-01T00:15:00+00:00"]
+
+    # A bucket without data is kept as nulls and left out of the summary.
+    assert second.samples_with_data == 1 and second.temperature_c_latest == 37
+    assert second.samples[1].read_kbps is None
+
+    assert (cache.bay_type, cache.samples_with_data, cache.read_kbps_avg) == ("cache", 0, None)
+    assert "SYNTHETIC-SERIAL" not in str(stats.model_dump())
+
+
+@pytest.mark.parametrize(
+    ("hours", "interval"),
+    [(1, 900), (167, 900), (168, 3600), (719, 3600), (720, 21600), (2160, 21600)],
+)
+def test_disk_stats_interval_follows_the_dashboard_steps(hours, interval):
+    assert disk_stats_interval(hours) == interval
+    # Drive refuses about a thousand buckets or more in one answer.
+    assert hours * 3600 // interval <= 1000
+
+
+@pytest.mark.parametrize("hours", [0, -1, 2161, True, 1.5])
+async def test_disk_stats_refuses_a_bad_window_without_a_request(connection, console, hours):
+    with pytest.raises(UniFiValidationError):
+        await PerformanceManager(connection).get_disk_stats(hours=hours)
+
+    assert not console.requests
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"window": {"start": 1767225600, "interval": 900}},
+        {"series": {"disks": []}, "window": {"interval": 900}},
+        {"series": {"disks": []}, "window": {"start": 1767225600, "interval": 0}},
+    ],
+)
+async def test_unreadable_disk_stats_are_an_error(connection, console, body):
+    console.reply("GET", f"{SYSTEMS}/disk-stats", body)
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await PerformanceManager(connection).get_disk_stats(hours=1)
 
 
 # --- file service toggles -----------------------------------------------------
