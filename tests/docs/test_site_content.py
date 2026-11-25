@@ -1404,6 +1404,7 @@ class ContentReconciliationTests(unittest.TestCase):
             "UNIFI_DRIVE_READ_ONLY",
             "drive_set_file_service",
             "drive_remove_nfs_connection",
+            "Turning SMB off also turns Time Machine off",
             "BAD_REQUEST",
         ):
             with self.subTest(phrase=phrase):

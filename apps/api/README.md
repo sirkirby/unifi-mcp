@@ -545,6 +545,17 @@ The four writes are catalog actions and need the `write` scope:
 `drive_add_nfs_connection`, `drive_update_nfs_connection` and
 `drive_remove_nfs_connection`. Their arguments are the MCP tools' arguments.
 
+What a toggle does beyond the service you name, which the request-only preview
+does not show:
+
+- **Turning SMB off also turns Time Machine off**, because Time Machine runs over
+  SMB, and turning SMB back on leaves Time Machine off: turn it on again with
+  `drive_set_file_service` (`time_machine`, `true`). Turning Time Machine on
+  while SMB is off is refused.
+- Turning any service off disconnects its clients.
+- Turning NFS off keeps the NFS client list, so those clients can mount again
+  when NFS is turned back on.
+
 - `confirm: false` (the default) validates the request and returns a request-only
   preview with `requires_confirmation: true`. It calls no manager and sends
   nothing to the NAS, so it does not show the NAS's current state or the
