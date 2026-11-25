@@ -308,7 +308,7 @@ def get_nat_manager() -> NatManager:
 
 @lru_cache
 def get_traffic_flow_manager() -> TrafficFlowManager:
-    return TrafficFlowManager(get_connection_manager(), get_dpi_manager())
+    return TrafficFlowManager(get_connection_manager(), get_dpi_manager(), get_client_manager())
 
 
 @lru_cache

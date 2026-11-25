@@ -13,6 +13,7 @@ from typing import Any, Dict, Protocol
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiAuthError
+from unifi_core.mac import canonical_mac, looks_like_mac
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.traffic_flows import (
     DPI_NAMES_API_KEY_REQUIRED,
@@ -44,6 +45,12 @@ class DpiCatalogProvider(Protocol):
     """Narrow dependency used for read-only traffic-flow DPI annotation."""
 
     async def get_full_dpi_catalog(self) -> Dict[str, list[dict[str, Any]]]: ...
+
+
+class ClientListProvider(Protocol):
+    """Narrow dependency used to resolve names the flow filter-data omits."""
+
+    async def get_clients(self, include_offline: bool = False) -> list[Any]: ...
 
 
 def validate_statistics_period(period: str) -> str:
@@ -93,9 +100,15 @@ _ALL_ARRAY_FIELDS = _FILTER_FIELDS + (
 class TrafficFlowManager:
     """Reads completed traffic flows from the controller's private v2 API."""
 
-    def __init__(self, connection_manager: ConnectionManager, dpi_manager: DpiCatalogProvider | None = None):
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        dpi_manager: DpiCatalogProvider | None = None,
+        client_manager: ClientListProvider | None = None,
+    ):
         self._connection = connection_manager
         self._dpi_manager = dpi_manager
+        self._client_manager = client_manager
 
     def _build_body(self, query: TrafficFlowQuery) -> Dict[str, Any]:
         if query.time_from is None or query.time_to is None:
@@ -135,17 +148,44 @@ class TrafficFlowManager:
         self._connection._update_cache(cache_key, response, timeout=_FLOWS_CACHE_TTL)
         return response
 
-    async def _resolve_source_hosts(self, names: list[str]) -> list[Dict[str, Any]]:
-        """Resolve source host/client names to the controller's host objects."""
-        filter_data = await self._get_flow_filter_data()
-        source = filter_data.get("source")
-        if not isinstance(source, dict):
-            source = (filter_data.get("data") or {}).get("source") or {}
-        hosts = source.get("hosts") or []
+    @staticmethod
+    def _client_raw(client: Any) -> Dict[str, Any]:
+        """Raw payload of a client-list entry, whether dict or model object."""
+        if isinstance(client, dict):
+            return client
+        raw = getattr(client, "raw", None)
+        return raw if isinstance(raw, dict) else {}
 
+    async def _resolve_source_hosts(self, names: list[str]) -> list[Dict[str, Any]]:
+        """Resolve source host/client names to minimal {"mac": ...} objects.
+
+        Filter-data hosts are tried first; names it omits fall back to the
+        client list including offline clients. A MAC-shaped entry passes
+        through directly, covering devices that only carry a generated
+        display name. The controller accepts a bare {"mac": ...} element,
+        which keeps the POST body minimal.
+        """
         resolved: list[Dict[str, Any]] = []
-        seen: set = set()
+        seen: set[str] = set()
+
+        def add(mac: Any) -> None:
+            canonical = canonical_mac(mac)
+            if canonical is not None and canonical not in seen:
+                seen.add(canonical)
+                resolved.append({"mac": canonical})
+
+        hosts: list[Any] | None = None
+        clients: list[Any] | None = None
         for name in names:
+            if looks_like_mac(name):
+                add(name)
+                continue
+            if hosts is None:
+                # Lazy: filter-data is only needed once a real name shows up,
+                # and the fetch is cached across names and queries.
+                filter_data = await self._get_flow_filter_data()
+                source = filter_data.get("source")
+                hosts = (source.get("hosts") or []) if isinstance(source, dict) else []
             folded = name.casefold()
             matches = [
                 host
@@ -157,13 +197,27 @@ class TrafficFlowManager:
                     str(host.get("host_name") or "").casefold(),
                 }
             ]
-            if not matches:
-                raise ValueError("source name filter matched no host in traffic-flow filter data")
-            for host in matches:
-                key = host.get("id") or id(host)
-                if key not in seen:
-                    seen.add(key)
-                    resolved.append(host)
+            if matches:
+                for host in matches:
+                    add(host.get("mac"))
+                continue
+            if self._client_manager is not None:
+                if clients is None:
+                    clients = await self._client_manager.get_clients(include_offline=True)
+                client_matches = [
+                    client
+                    for client in clients
+                    if folded
+                    in {
+                        str(self._client_raw(client).get("name") or "").casefold(),
+                        str(self._client_raw(client).get("hostname") or "").casefold(),
+                    }
+                ]
+                if client_matches:
+                    for client in client_matches:
+                        add(self._client_raw(client).get("mac"))
+                    continue
+            raise ValueError(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
         return resolved
 
     async def get_traffic_flows(self, query: TrafficFlowQuery) -> Dict[str, Any]:

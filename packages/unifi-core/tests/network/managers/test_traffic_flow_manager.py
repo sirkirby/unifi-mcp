@@ -464,7 +464,8 @@ async def test_result_reports_a_capped_query_as_truncated(envelope, truncated):
     assert result["truncated"] is truncated
 
 
-# E. source_host object resolution (issue #1116)
+# ---------------------------------------------------------------------------
+# E. source_host object resolution
 # ---------------------------------------------------------------------------
 
 _HOST_OBJECT = {
@@ -496,14 +497,14 @@ def _make_connection_with_filter_data(flow_response=None, filter_data=None):
 @pytest.mark.asyncio
 async def test_source_name_filter_posts_host_objects():
     """Network 11 rejects plain strings in source_host: the POST body must carry
-    the host objects listed by /traffic-flows/filter-data."""
+    host objects, and a minimal {"mac": ...} element is all the controller needs."""
     conn = _make_connection_with_filter_data()
     mgr = TrafficFlowManager(conn)
 
     await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
 
     post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
-    assert post.args[0].data["source_host"] == [_HOST_OBJECT]
+    assert post.args[0].data["source_host"] == [{"mac": _HOST_OBJECT["mac"]}]
 
 
 @pytest.mark.asyncio
@@ -514,7 +515,7 @@ async def test_source_name_matching_is_case_insensitive_and_covers_host_name():
     await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["LAB-LAPTOP.LOCAL"]))
 
     post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
-    assert post.args[0].data["source_host"] == [_HOST_OBJECT]
+    assert post.args[0].data["source_host"] == [{"mac": _HOST_OBJECT["mac"]}]
 
 
 @pytest.mark.asyncio
@@ -522,7 +523,7 @@ async def test_source_name_with_no_matching_host_raises():
     conn = _make_connection_with_filter_data()
     mgr = TrafficFlowManager(conn)
 
-    with pytest.raises(ValueError, match="source"):
+    with pytest.raises(ValueError, match="No-Such-Host"):
         await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["No-Such-Host"]))
 
     assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
@@ -536,3 +537,141 @@ async def test_no_source_name_skips_filter_data():
     await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2))
 
     assert [call.args[0].method for call in conn.request.await_args_list] == ["post"]
+
+
+_SECOND_HOST_OBJECT = {
+    "id": "64f0a1b2c3d4e5f60718293b",
+    "mac": "11:22:33:44:55:66",
+    "client_name": "Lab-Laptop",
+    "host_name": "lab-laptop-2.local",
+    "client_oui": "Apple, Inc.",
+    "client_fingerprint": "macOS",
+}
+
+_THIRD_HOST_OBJECT = {
+    "id": "64f0a1b2c3d4e5f60718293c",
+    "mac": "aa:aa:aa:aa:aa:aa",
+    "client_name": "Lab-Server",
+    "host_name": "lab-server.local",
+    "client_oui": "Dell Inc.",
+    "client_fingerprint": "Linux",
+}
+
+
+class _StubClientManager:
+    """ClientListProvider stub returning fixed raw client dicts."""
+
+    def __init__(self, clients):
+        self._clients = clients
+        self.calls = []
+
+    async def get_clients(self, include_offline: bool = False):
+        self.calls.append(include_offline)
+        return self._clients
+
+
+@pytest.mark.asyncio
+async def test_same_name_on_two_hosts_sends_both():
+    """Two hosts sharing one display name must both land in the POST body."""
+    conn = _make_connection_with_filter_data(filter_data={"source": {"hosts": [_HOST_OBJECT, _SECOND_HOST_OBJECT]}})
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": _HOST_OBJECT["mac"]}, {"mac": _SECOND_HOST_OBJECT["mac"]}]
+
+
+@pytest.mark.asyncio
+async def test_several_names_resolve_in_one_query():
+    conn = _make_connection_with_filter_data(filter_data={"source": {"hosts": [_HOST_OBJECT, _THIRD_HOST_OBJECT]}})
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop", "Lab-Server"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": _HOST_OBJECT["mac"]}, {"mac": _THIRD_HOST_OBJECT["mac"]}]
+
+
+@pytest.mark.asyncio
+async def test_same_mac_resolved_twice_is_sent_once():
+    """A host matched through both its client_name and host_name posts one element."""
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(
+        TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop", "lab-laptop.local"])
+    )
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": _HOST_OBJECT["mac"]}]
+
+
+@pytest.mark.asyncio
+async def test_name_found_only_in_client_list_resolves_to_its_mac():
+    """Filter-data omits some named clients; the offline-inclusive client list still has them."""
+    clients = [
+        {"name": "Offline-Tablet", "hostname": "tablet.local", "mac": "bb:bb:bb:bb:bb:bb"},
+        {"name": "Other", "hostname": "other.local", "mac": "cc:cc:cc:cc:cc:cc"},
+    ]
+    client_manager = _StubClientManager(clients)
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn, client_manager=client_manager)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["offline-tablet"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": "bb:bb:bb:bb:bb:bb"}]
+    assert client_manager.calls == [True]
+
+
+@pytest.mark.asyncio
+async def test_client_list_fallback_matches_hostname():
+    clients = [{"name": "", "hostname": "Printer-Corp.local", "mac": "dd:dd:dd:dd:dd:dd"}]
+    client_manager = _StubClientManager(clients)
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn, client_manager=client_manager)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["printer-corp.LOCAL"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": "dd:dd:dd:dd:dd:dd"}]
+
+
+@pytest.mark.asyncio
+async def test_name_in_neither_source_is_refused_without_post():
+    client_manager = _StubClientManager([{"name": "Someone", "hostname": "someone", "mac": "ee:ee:ee:ee:ee:ee"}])
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn, client_manager=client_manager)
+
+    with pytest.raises(ValueError, match="Ghost-Device"):
+        await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Ghost-Device"]))
+
+    assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_filter_data_is_reused_from_cache_across_queries():
+    """Two source-filtered queries within the TTL must fetch filter-data only once."""
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=3, source_host=["lab-laptop.local"]))
+
+    filter_data_gets = [
+        call for call in conn.request.await_args_list if call.args[0].path == "/traffic-flows/filter-data"
+    ]
+    assert len(filter_data_gets) == 1
+
+
+@pytest.mark.asyncio
+async def test_mac_entry_passes_through_canonicalized():
+    """A MAC-shaped source_host entry needs no lookup and posts in canonical form."""
+    conn = _make_connection_with_filter_data()
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["AA-BB-CC-00-11-22"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": "aa:bb:cc:00:11:22"}]
