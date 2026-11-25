@@ -376,7 +376,7 @@ def test_image_transform_is_never_invented(geometry):
     data = load("v1_project.json")["data"]
     del _map_of(data, PLAN_A)["imageScale"]
     del _map_of(data, PLAN_A)["imageOffset"]
-    _map_of(data, PLAN_B)["imageScale"]["x"] = 0.0
+    _map_of(data, PLAN_B)["imageScale"].update(x=0.0, y=0.0)
     _map_of(data, PLAN_B)["imageOffset"] = {"x": 0.0, "y": "1"}
     data["shapes"].remove(_map_of(data, PLAN_C))
     a, b, c, _ = project_summary_from_api(data, geometry=geometry, unit="metric", include_shapes=False).plans
@@ -457,3 +457,29 @@ def test_access_point_and_placed_device_share_one_frame(geometry):
     ap = access_point_from_api(ap_raw, ppm=geo(geometry, plan).ppm, unit="metric")
     assert device.id == ap.id
     assert (device.x, device.y) == (ap.x, ap.y) == (2.5, 3.0)
+
+
+def test_a_non_uniform_image_scale_is_not_reported_as_one_scale():
+    """image_scale is one number: an x scale that differs from y would skew every y placed with it."""
+    row = load("v1_floor_plans.json")["floor_plans"][1]
+    data = load("v1_project.json")["data"]
+    image_map = _map_of(data, PLAN_B)
+    image_map["imageScale"]["y"] = 2.5
+    plan = floor_plan_from_api(row, unit="metric", image_map=image_map)
+    assert (plan.image_scale, plan.image_offset) == (None, (12.5, -7.5))
+    del image_map["imageScale"]["y"]
+    assert floor_plan_from_api(row, unit="metric", image_map=image_map).image_scale == 1.784
+
+
+def test_an_image_scale_that_differs_only_by_float_noise_is_one_scale():
+    row = load("v1_floor_plans.json")["floor_plans"][1]
+    image_map = _map_of(load("v1_project.json")["data"], PLAN_B)
+    image_map["imageScale"]["y"] = image_map["imageScale"]["x"] * (1 + 1e-12)
+    assert floor_plan_from_api(row, unit="metric", image_map=image_map).image_scale == image_map["imageScale"]["x"]
+
+
+def test_every_unit_field_states_the_feet_factor():
+    from unifi_core.innerspace.models.floor_plans import FloorPlan
+    from unifi_core.innerspace.units import FEET_PER_METRE
+
+    assert str(FEET_PER_METRE) in FloorPlan.model_json_schema()["properties"]["unit"]["description"]

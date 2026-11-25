@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from unifi_core.innerspace.models._coerce import as_dict, finite, length, text
-from unifi_core.innerspace.units import Unit, plan_units_to_metres
+from unifi_core.innerspace.units import UNIT_DESCRIPTION, Unit, plan_units_to_metres
 from unifi_core.mac import canonical_mac
 
 ApMount = Literal["ceiling", "wall", "rack", "floor"]
@@ -30,7 +30,7 @@ class AccessPoint(BaseModel):
     azimuth: float | None = None
     mount: ApMount | str | None = None
     status: DeviceStatus | str | None = None
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
 
 
 class Switch(BaseModel):
@@ -47,7 +47,7 @@ class Switch(BaseModel):
     y: float | None = None
     scale_missing: bool = Field(description="True when the device's plan has no usable scale, so x and y are None")
     status: DeviceStatus | str | None = None
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
 
 
 class InventoryDevice(BaseModel):

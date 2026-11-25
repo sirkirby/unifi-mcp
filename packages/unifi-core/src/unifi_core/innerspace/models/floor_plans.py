@@ -8,6 +8,7 @@ up with the plan image only when ``image_scale`` is 1 and ``image_offset`` is
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -15,7 +16,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from unifi_core.innerspace.models._coerce import as_dict, finite, number, text, whole_or_number
-from unifi_core.innerspace.units import FEET_PER_METRE, Unit, plan_units_to_metres
+from unifi_core.innerspace.units import FEET_PER_METRE, UNIT_DESCRIPTION, Unit, plan_units_to_metres
 
 _FILENAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
@@ -53,11 +54,19 @@ def scale_per_unit(ppm: float | None, unit: Unit) -> float | None:
 
 
 def image_transform(image_map: Any) -> tuple[float | None, tuple[float, float] | None]:
-    """The map shape's image scale (x) and offset (x, y) as the console sent them; ``None`` where absent."""
+    """The map shape's image scale and offset (x, y) as the console sent them; ``None`` where absent.
+
+    The scale is one number: it is the x scale when the map sends no y scale or the same one, and
+    ``None`` when the y scale differs, rather than a scale that would skew every y placed with it.
+    ``None`` therefore means either case; positions can't be placed on the image in either.
+    """
     shape = as_dict(image_map)
     offset = as_dict(shape.get("imageOffset"))
     ox, oy = number(offset.get("x")), number(offset.get("y"))
-    scale = number(as_dict(shape.get("imageScale")).get("x"))
+    scales = as_dict(shape.get("imageScale"))
+    scale, scale_y = number(scales.get("x")), number(scales.get("y"))
+    if scale is not None and scale_y is not None and not math.isclose(scale, scale_y):
+        scale = None
     return scale, None if ox is None or oy is None else (ox, oy)
 
 
@@ -84,9 +93,11 @@ class FloorPlan(BaseModel):
     origin_y: float | None = None
     site_id: str | None = None
     image_filename: str | None = Field(default=None, description="Asset file name taken from the image URL")
-    image_scale: float | None = Field(default=None, description="The plan map's horizontal image scale, if sent")
+    image_scale: float | None = Field(
+        default=None, description="The plan map's image scale, or None when not sent or when its y scale differs from x"
+    )
     image_offset: tuple[float, float] | None = Field(default=None, description="The plan map's image offset (x, y)")
-    unit: Unit
+    unit: Unit = Field(description=UNIT_DESCRIPTION)
 
 
 def _image_filename(url: Any) -> str | None:

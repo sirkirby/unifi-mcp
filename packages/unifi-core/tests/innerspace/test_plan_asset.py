@@ -3,6 +3,7 @@
 import base64
 
 import pytest
+from pydantic import ValidationError
 from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError, UniFiValidationError
 from unifi_core.innerspace.managers.connection_manager import (
     ASSET_CEILING_BYTES,
@@ -122,6 +123,7 @@ async def test_unknown_plan_is_not_found(connected, console):
     with pytest.raises(UniFiNotFoundError) as caught:
         await InnerSpaceFloorPlanManager(connected).get_plan_asset("00000000-0000-4000-8000-000000009999")
     assert str(caught.value) == "get InnerSpace plan asset: no such floor plan"
+    assert caught.value.identifier == "00000000-0000-4000-8000-000000009999"
 
 
 @pytest.mark.parametrize(
@@ -268,3 +270,43 @@ async def test_json_body_over_the_cap_is_refused(connected, console, monkeypatch
     with pytest.raises(UniFiMalformedResponseError) as caught:
         await connected.request("GET", PLANS_PATH, operation="plans")
     assert str(caught.value) == "plans: the console returned a response larger than the allowed size"
+
+
+def _reads_of(console, path):
+    return [r for r in console.requests if r.path == path]
+
+
+async def test_image_type_downloads_a_matching_image_after_one_metadata_pass(connected, console):
+    _script(console)
+    console.reply("GET", ASSET_A, body_bytes=png_bytes(), headers=PNG)
+    result = await InnerSpaceFloorPlanManager(connected).get_plan_asset(
+        PLAN_A, include_image=True, image_type="image/png"
+    )
+    assert base64.b64decode(result["image_base64"]) == png_bytes()
+    assert len(_reads_of(console, PLANS_PATH)) == 1
+    assert len(_asset_calls(console)) == 1
+
+
+async def test_image_type_returns_metadata_only_for_another_type(connected, console):
+    """The caller learns the plan's type from the one metadata pass; nothing is downloaded."""
+    _script(console)
+    result = await InnerSpaceFloorPlanManager(connected).get_plan_asset(
+        PLAN_A, include_image=True, image_type="image/jpeg"
+    )
+    assert result["content_type"] == "image/png"
+    assert "image_base64" not in result
+    assert _asset_calls(console) == []
+
+
+async def test_an_unknown_image_type_is_refused_before_any_request(connected, console):
+    with pytest.raises(ValidationError):
+        await InnerSpaceFloorPlanManager(connected).get_plan_asset(PLAN_A, include_image=True, image_type="image/gif")
+    assert [r.path for r in console.requests] == ["/api/auth/login"]
+
+
+async def test_image_type_without_include_image_downloads_nothing(connected, console):
+    _script(console)
+    result = await InnerSpaceFloorPlanManager(connected).get_plan_asset(PLAN_A, image_type="image/png")
+    assert result["content_type"] == "image/png"
+    assert "image_base64" not in result
+    assert _asset_calls(console) == []

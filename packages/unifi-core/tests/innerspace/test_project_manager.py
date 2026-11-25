@@ -119,6 +119,7 @@ async def test_unknown_plan_is_not_found(connected, console):
     with pytest.raises(UniFiNotFoundError) as caught:
         await InnerSpaceProjectManager(connected).list_walls("00000000-0000-4000-8000-000000009999")
     assert str(caught.value) == "list InnerSpace walls: no such floor plan"
+    assert caught.value.identifier == "00000000-0000-4000-8000-000000009999"
 
 
 @pytest.mark.parametrize("plan_id", ["../x", "a/b", "", "a?b"])
