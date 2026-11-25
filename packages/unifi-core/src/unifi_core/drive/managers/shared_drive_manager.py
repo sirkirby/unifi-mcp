@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import re
+
 from unifi_core.drive.managers.connection_manager import DriveConnectionManager, drive_path
 from unifi_core.drive.models._coerce import as_list
 from unifi_core.drive.models.drives import SharedDrive, shared_drive_from_api
-from unifi_core.exceptions import UniFiMalformedResponseError, UniFiValidationError
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError, UniFiValidationError
 from unifi_core.request_paths import InvalidRequestPathError, object_id
+
+# Drive gives every shared drive a UUID. Asked for any other id, it answers 500
+# rather than 404, so a value that can't be one is reported as not found here.
+_DRIVE_ID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 
 class SharedDriveManager:
@@ -27,6 +33,8 @@ class SharedDriveManager:
             segment = object_id(drive_id, "shared drive")
         except InvalidRequestPathError as exc:
             raise UniFiValidationError(str(exc)) from None
+        if not _DRIVE_ID.fullmatch(segment):
+            raise UniFiNotFoundError("Shared drive", segment)
         raw = await self._connection.get(drive_path(2, "drives", segment), resource=("Shared drive", segment))
         if not isinstance(raw, dict):
             raise UniFiMalformedResponseError("UniFi Drive returned an unreadable shared drive.")
