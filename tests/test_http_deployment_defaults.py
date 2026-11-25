@@ -128,6 +128,53 @@ def test_compose_innerspace_is_opt_in_loopback_and_outside_the_relay():
             assert "innerspace" not in other.get("profiles", [])
 
 
+DRIVE_CONNECTION_VARS = {
+    "UNIFI_DRIVE_HOST",
+    "UNIFI_DRIVE_USERNAME",
+    "UNIFI_DRIVE_PASSWORD",
+    "UNIFI_DRIVE_PASSWORD_FILE",
+    "UNIFI_DRIVE_PORT",
+    "UNIFI_DRIVE_VERIFY_SSL",
+    "UNIFI_DRIVE_SSL_FINGERPRINT",
+}
+
+
+def test_compose_drive_is_opt_in_loopback_and_outside_the_relay():
+    compose = yaml.safe_load((ROOT / "docker/docker-compose.yml").read_text())
+    service = compose["services"]["unifi-drive-mcp"]
+    assert service["profiles"] == ["drive"]
+    assert service["build"] == {"context": "..", "dockerfile": "apps/drive/Dockerfile"}
+    assert service["ports"] == ["127.0.0.1:3004:3004"]
+    assert "env_file" not in service
+    names = {entry.split("=", 1)[0] for entry in service["environment"]}
+    assert names == DRIVE_CONNECTION_VARS | {
+        "UNIFI_MCP_HTTP_ENABLED",
+        "UNIFI_MCP_HTTP_TRANSPORT",
+        "UNIFI_MCP_HOST",
+        "UNIFI_MCP_PORT",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE",
+        "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET",
+        "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS",
+        "UNIFI_DRIVE_MCP_HTTP_AUTH_TOKEN",
+        "UNIFI_MCP_HTTP_AUTH_TOKEN",
+        # Only the server-level trusted networks: the shared list never reaches it.
+        "UNIFI_DRIVE_MCP_HTTP_AUTH_TRUSTED_NETWORKS",
+    }
+    # Passed through bare, so an unset token stays unset instead of empty.
+    assert "UNIFI_DRIVE_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_DRIVE_MCP_HTTP_AUTH_TRUSTED_NETWORKS" in service["environment"]
+    assert "UNIFI_MCP_HTTP_AUTH_TOKEN" in service["environment"]
+    assert "UNIFI_MCP_HTTP_TRANSPORT=streamable-http" in service["environment"]
+    assert "UNIFI_MCP_PORT=3004" in service["environment"]
+
+    relay = compose["services"]["unifi-mcp-relay"]
+    assert "unifi-drive-mcp" not in relay["depends_on"]
+    assert not any("drive" in value or ":3004" in value for value in relay["environment"])
+    for name, other in compose["services"].items():
+        if name != "unifi-drive-mcp":
+            assert "drive" not in other.get("profiles", [])
+
+
 def _resolved_compose_environments(
     tmp_path: Path,
     *,
@@ -184,6 +231,7 @@ def _resolved_compose_environments(
             "unifi-access-mcp",
             "unifi-sitemanager-mcp",
             "unifi-innerspace-mcp",
+            "unifi-drive-mcp",
         }
     }
 
@@ -303,4 +351,42 @@ def test_compose_innerspace_profile_resolves_with_only_its_own_variables(tmp_pat
         "host.docker.internal:3005",
         "unifi-innerspace-mcp",
         "unifi-innerspace-mcp:3005",
+    }
+
+
+@pytest.mark.parametrize("shell_allowed_hosts", [None, "shell.example.com", ""])
+def test_compose_drive_profile_resolves_with_only_its_own_variables(tmp_path: Path, shell_allowed_hosts):
+    default = _resolved_compose_environments(
+        tmp_path / "default", env_file_allowed_hosts=None, shell_allowed_hosts=None
+    )
+    assert len(default) == 3
+    assert "unifi-drive-mcp" not in default
+
+    environments = _resolved_compose_environments(
+        tmp_path / "profile",
+        env_file_allowed_hosts="env-file.example.com",
+        shell_allowed_hosts=shell_allowed_hosts,
+        profiles=("drive",),
+    )
+    assert len(environments) == 4
+    environment = environments["unifi-drive-mcp"]
+    # The shared env file is not loaded: no gateway settings, no env-file hosts.
+    for name in ("UNIFI_HOST", "UNIFI_API_KEY", "UNIFI_MCP_ALLOWED_HOSTS"):
+        assert name not in environment
+    assert environments["unifi-network-mcp"]["UNIFI_HOST"] == "controller.example.com"
+    # Unset settings resolve to the server's defaults, never to an empty value it cannot read.
+    assert (environment["UNIFI_DRIVE_PORT"], environment["UNIFI_DRIVE_VERIFY_SSL"]) == ("443", "false")
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE"] == (shell_allowed_hosts or "")
+    assert environment["UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET"] == (
+        "true" if shell_allowed_hosts is not None else ""
+    )
+    assert set(environment["UNIFI_MCP_INTERNAL_ALLOWED_HOSTS"].split(",")) == {
+        "localhost",
+        "localhost:3004",
+        "127.0.0.1",
+        "127.0.0.1:3004",
+        "host.docker.internal",
+        "host.docker.internal:3004",
+        "unifi-drive-mcp",
+        "unifi-drive-mcp:3004",
     }

@@ -9,6 +9,9 @@ contact_links:
   - name: InnerSpace troubleshooting
     url: https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/docs/troubleshooting.md
     about: The InnerSpace server has no support bundle. Check its troubleshooting guide, then report with the manual bug form fields.
+  - name: Drive troubleshooting
+    url: https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/docs/troubleshooting.md
+    about: The Drive server has no support bundle. Check its troubleshooting guide, then report with the manual bug form fields.
   - name: Security vulnerability
     url: https://github.com/sirkirby/unifi-mcp/security/advisories
     about: Please report suspected vulnerabilities privately through GitHub Security Advisories.

@@ -4,6 +4,8 @@ Use a support bundle when a UniFi Network, Protect, or Access MCP server starts 
 
 The InnerSpace server has no support-bundle tool either: for its problems, follow its [troubleshooting guide](../apps/innerspace/docs/troubleshooting.md) and fill in the bug form's manual fields, without the console login, console address, plan names, MAC addresses or plan images.
 
+The Drive server has no support-bundle tool either. The bundle is one closed privacy schema shared by the Network, Protect and Access servers, and adding a product would change that contract for all three. For a Drive problem, follow its [troubleshooting guide](../apps/drive/docs/troubleshooting.md), run `drive_get_system_info` for the NAS model and firmware (or `drive_setup_status` in setup mode), and fill in the bug form's manual fields, without the NAS login or address, NFS client addresses, shared drive names, disk serial numbers or MAC addresses.
+
 The Site Manager server has no support-bundle tool, and support bundles stay scoped to the three console servers. For a Site Manager problem, follow its [troubleshooting guide](../apps/sitemanager/docs/troubleshooting.md), use [`sitemanager_setup_status`](../apps/sitemanager/docs/configuration.md#the-api-key) when the server is in setup mode, and fill in the bug form's manual fields. Include the trace id from Ubiquiti when an error shows one, never the API key.
 
 The shortest path is:

@@ -2,7 +2,8 @@
 
 UniFi MCP ships independent MCP servers for Network, Protect, and Access, a
 read-only Site Manager server for a whole UniFi cloud account, a read-only
-InnerSpace server for a console's floor plans, an HTTP API for custom
+InnerSpace server for a console's floor plans, a Drive server for the storage
+on a UniFi NAS, an HTTP API for custom
 applications, and optional Cloud Relay components for remote MCP clients.
 
 This guide starts with the MCP servers. If you are building software that
@@ -86,6 +87,30 @@ command and variables. The container image is
 It has nine read-only domain tools. Stdio is the default; HTTP is opt-in and
 listens on port 3005. See the [InnerSpace README](apps/innerspace/README.md).
 
+## Drive (UniFi NAS)
+
+The Drive server reads and manages UniFi Drive on a UniFi NAS (UNAS). The NAS is
+its own UniFi OS console, so point the server at the NAS, not the gateway, and
+log in with a local account on the NAS. It never uses `UNIFI_HOST`,
+`UNIFI_USERNAME` or `UNIFI_PASSWORD`. Save the password in a file only you can
+read, and run the server:
+
+```bash
+export UNIFI_DRIVE_HOST=192.168.1.20
+export UNIFI_DRIVE_USERNAME=mcp
+export UNIFI_DRIVE_PASSWORD_FILE="$HOME/.config/unifi-mcp/drive-password"
+uvx unifi-drive-mcp@latest
+```
+
+In Claude Code, `/plugin install unifi-drive@unifi-plugins` installs it with
+guided setup. The container image is `ghcr.io/sirkirby/unifi-drive-mcp:latest`.
+
+It has 11 domain tools: seven reads, and four writes that preview before they
+change anything: SMB, NFS and Time Machine on or off, and NFS client access to
+shared drives. Turning SMB off also turns Time Machine off, because Time Machine
+runs over SMB. Stdio is the default; HTTP is opt-in and listens on port 3004.
+See the [Drive README](apps/drive/README.md).
+
 ## Claude Desktop
 
 Example Network server configuration:
@@ -128,19 +153,16 @@ uv run --package unifi-network-mcp unifi-network-mcp
 ```
 
 The other servers run the same way with their own package names, for example
-`uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp`. InnerSpace runs
-only this way until its first release:
+`uv run --package unifi-sitemanager-mcp unifi-sitemanager-mcp`. With the
+InnerSpace variables above set:
 
 ```bash
-export UNIFI_INNERSPACE_HOST=192.168.1.1
-export UNIFI_INNERSPACE_USERNAME=innerspace-mcp
-export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-password"
 uv run --package unifi-innerspace-mcp unifi-innerspace-mcp
 ```
 
 ## Optional Cloud Relay
 
-Use the relay when a cloud-hosted agent needs to reach MCP servers running on your local network without opening inbound ports. The relay does not include the Site Manager server unless you add it to `UNIFI_RELAY_SERVERS` yourself; a relay token for that location would then read the whole cloud account. It does not include the InnerSpace server by default either.
+Use the relay when a cloud-hosted agent needs to reach MCP servers running on your local network without opening inbound ports. The relay does not include the Site Manager server unless you add it to `UNIFI_RELAY_SERVERS` yourself; a relay token for that location would then read the whole cloud account. It does not include the InnerSpace or Drive server by default either.
 
 Deploy the Cloudflare Worker gateway:
 

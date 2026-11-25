@@ -10,7 +10,7 @@ Use the channel that matches what you need:
 | Need | Where to go |
 |------|-------------|
 | Setup help, configuration questions, or troubleshooting | [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions) |
-| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. The Site Manager server has no support bundle: use the manual fields and see [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md#reporting-a-problem). The InnerSpace server has none either: see [InnerSpace troubleshooting](apps/innerspace/docs/troubleshooting.md#reporting-a-problem). |
+| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. The Site Manager server has no support bundle: use the manual fields and see [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md#reporting-a-problem). The InnerSpace server has none either: see [InnerSpace troubleshooting](apps/innerspace/docs/troubleshooting.md#reporting-a-problem). Neither has the Drive server: see [Drive troubleshooting](apps/drive/docs/troubleshooting.md#reporting-a-problem). |
 | Feature requests or design discussion | [Open a feature request](https://github.com/sirkirby/unifi-mcp/issues/new/choose) or start a discussion |
 | Security vulnerabilities | [Report privately through GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories) |
 
@@ -25,6 +25,7 @@ Please check these resources first:
 - [Support bundle guide](docs/support-bundles.md) for privacy-bounded Network, Protect, and Access troubleshooting evidence
 - [Site Manager troubleshooting](apps/sitemanager/docs/troubleshooting.md) for the cloud account server, which has no support bundle
 - [InnerSpace troubleshooting](apps/innerspace/docs/troubleshooting.md) for the InnerSpace floor plan server, which has no support bundle
+- [Drive troubleshooting](apps/drive/docs/troubleshooting.md) for the UniFi Drive server on a NAS, which has no support bundle
 - [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and test commands
 - [SECURITY.md](SECURITY.md) for the security model and vulnerability reporting
 - Existing [issues](https://github.com/sirkirby/unifi-mcp/issues) and
@@ -44,6 +45,11 @@ For the InnerSpace server, include the tool name, the error text, the commit or
 version you run, and the console and InnerSpace versions. Never include the
 console login, the console address, floor plan or device names, MAC addresses,
 serial numbers or plan images.
+
+For the Drive server, include the tool name, the error text, the server version,
+the NAS model and its UniFi OS and Drive versions (`drive_get_system_info`
+returns the firmware). Never include the NAS login or address, NFS client
+addresses, shared drive names, disk serial numbers or MAC addresses.
 
 ## Scope
 

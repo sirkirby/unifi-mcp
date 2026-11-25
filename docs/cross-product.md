@@ -22,6 +22,14 @@ The InnerSpace server reads the floor plans, walls and device placements of the 
 - Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the Network and Protect servers only. The InnerSpace server has no incident evidence tool and no events.
 - The relay does not include it by default. Adding it to a relay location lets any relay token for that location read the project's floor plans.
 
+### Drive is its own family
+
+The Drive server reads and manages UniFi Drive on a UniFi NAS, which is its own console. It is not part of the cross-product features on this page:
+
+- Its storage pool, disk and shared drive IDs belong to the Drive tool family, its own family. Do not pass them to the other servers' tools or translate between them. The NAS's MAC address from `drive_get_system_info` can match the NAS in Network's client or device list, only when the user confirms the match.
+- Incident evidence, `unifi_location_timeline` and the UniFi Intelligence skills cover the Network and Protect servers only. The Drive server has no incident evidence tool and no events.
+- The relay does not include it by default. Adding it to a relay location lets any relay token for that location read the NAS's storage layout and use its write tools.
+
 ### Local Mode (stdio)
 
 Each server runs independently. An agent connected to several servers can call

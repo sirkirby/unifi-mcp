@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for taking the time to report a bug. Please do not include UniFi credentials, API keys, tokens, or private controller details.
 
-        If your bug involves one of the MCP servers (Network / Protect / Access / InnerSpace), the controller fields below are critical for reproduction — please fill them in even if they feel redundant.
+        If your bug involves one of the MCP servers (Network / Protect / Access / InnerSpace / Drive), the controller fields below are critical for reproduction — please fill them in even if they feel redundant.
 
         The Site Manager server talks to Ubiquiti's cloud API, not a console: choose "N/A — Site Manager (cloud account)" for the controller host and skip the controller and application version fields. Never paste your Site Manager API key, host or site ids, site names, MAC addresses, or IP addresses.
 
@@ -37,6 +37,7 @@ body:
         - Access MCP server
         - Site Manager MCP server
         - InnerSpace MCP server
+        - Drive MCP server
         - Relay sidecar
         - Cloudflare Worker / CLI
         - API server
@@ -57,7 +58,7 @@ body:
     id: controller_host
     attributes:
       label: Controller hardware / host
-      description: Where the UniFi controller runs. Required for Network, Protect, Access, and InnerSpace MCP server bugs.
+      description: Where the UniFi controller runs. Required for Network, Protect, Access, InnerSpace, and Drive MCP server bugs (for Drive, the NAS).
       options:
         - UDM Pro
         - UDM Pro Max
@@ -66,6 +67,7 @@ body:
         - UDR / UDR7
         - UCG Max / UCG Ultra / UCG Fiber
         - Cloud Key Gen2 / Gen2+
+        - UNAS Pro / UNAS Pro 8 / other UniFi NAS
         - Self-hosted (Linux)
         - Self-hosted (Docker)
         - UniFi-hosted (Site Manager / Cloud Console)
@@ -78,7 +80,7 @@ body:
     id: unifi_os
     attributes:
       label: UniFi OS version
-      description: Settings → System on the controller UI. Required for Network, Protect, Access, and InnerSpace MCP server bugs; not needed for Site Manager.
+      description: Settings → System on the controller UI. Required for Network, Protect, Access, InnerSpace, and Drive MCP server bugs; not needed for Site Manager.
       placeholder: "e.g. 4.0.21"
   - type: input
     id: network_app
@@ -98,6 +100,12 @@ body:
       label: Access application version
       description: Required if reporting an Access MCP bug.
       placeholder: "e.g. 1.27.5"
+  - type: input
+    id: drive_app
+    attributes:
+      label: UniFi NAS model and Drive version
+      description: Required if reporting a Drive MCP bug. drive_get_system_info returns the model and firmware.
+      placeholder: "e.g. UNAS Pro 8, UniFi OS 5.0.12"
   - type: input
     id: sitemanager_trace_id
     attributes:
@@ -159,8 +167,8 @@ body:
         dragging a reviewed `.json` file here. Review must happen before paste or
         drag-and-drop because an attachment on a public issue is publicly
         accessible. Never attach raw configuration, logs, controller responses,
-        credentials, or private identifiers in its place. The Site Manager
-        and InnerSpace servers have no support bundle; use the manual fields. Guide:
+        credentials, or private identifiers in its place. The Site Manager,
+        InnerSpace and Drive servers have no support bundle; use the manual fields. Guide:
         https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md
   - type: textarea
     id: raw_tool_output

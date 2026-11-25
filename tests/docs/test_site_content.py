@@ -37,10 +37,13 @@ MCP_SERVER_LINKS = {
     "unifi-sitemanager-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/sitemanager",
 }
 
-# The InnerSpace server is on the homepage once released, but the download-stats
-# snapshot and the site's package lists (app.js) do not cover it yet.
+# The InnerSpace and Drive servers are on the homepage once released, but the
+# download-stats snapshot and the site's package lists (app.js) do not cover them yet.
 INNERSPACE_SERVER_LINKS = {
     "unifi-innerspace-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/innerspace",
+}
+DRIVE_SERVER_LINKS = {
+    "unifi-drive-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/drive",
 }
 
 JSON_LD_PRODUCT_LINKS = MCP_SERVER_LINKS | PRODUCT_LINKS
@@ -51,6 +54,7 @@ MANIFESTS = {
     "access": Path("apps/access/src/unifi_access_mcp/tools_manifest.json"),
     "sitemanager": Path("apps/sitemanager/src/unifi_sitemanager_mcp/tools_manifest.json"),
     "innerspace": Path("apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json"),
+    "drive": Path("apps/drive/src/unifi_drive_mcp/tools_manifest.json"),
 }
 
 # Whether unifi-sitemanager-mcp has a first release. Until it does, public pages
@@ -81,6 +85,18 @@ INNERSPACE_RELEASE_ONLY_TEXT = (
     "unifi-innerspace@unifi-plugins",
     "pypi.org/project/unifi-innerspace-mcp",
     "img.shields.io/pypi/v/unifi-innerspace-mcp",
+)
+
+# Install surfaces that only work once the Drive package is published. It is
+# released, so these must be present on the pages that install servers.
+DRIVE_RELEASE_ONLY_TEXT = (
+    "uvx unifi-drive-mcp",
+    "pip install unifi-drive-mcp",
+    "pipx install unifi-drive-mcp",
+    "docker pull ghcr.io/sirkirby/unifi-drive-mcp",
+    "unifi-drive@unifi-plugins",
+    "pypi.org/project/unifi-drive-mcp",
+    "img.shields.io/pypi/v/unifi-drive-mcp",
 )
 
 # Public pages that describe the servers. The Site Manager app's own README
@@ -120,6 +136,15 @@ INNERSPACE_APP_PAGES = (
     Path("apps/innerspace/docs/troubleshooting.md"),
 )
 
+# The Drive app's own pages.
+DRIVE_APP_PAGES = (
+    Path("apps/drive/README.md"),
+    Path("apps/drive/docs/configuration.md"),
+    Path("apps/drive/docs/permissions.md"),
+    Path("apps/drive/docs/tools.md"),
+    Path("apps/drive/docs/troubleshooting.md"),
+)
+
 COUNT_SURFACES = {
     "network": [
         Path("README.md"),
@@ -149,6 +174,12 @@ COUNT_SURFACES = {
         Path("README.md"),
         Path("docs/ARCHITECTURE.md"),
         Path("apps/innerspace/docs/tools.md"),
+    ],
+    # Drive counts its domain tools the same way: 11, without the meta-tools.
+    "drive": [
+        Path("README.md"),
+        Path("docs/ARCHITECTURE.md"),
+        Path("apps/drive/docs/tools.md"),
     ],
 }
 
@@ -289,7 +320,7 @@ def pinned_counts(root: Path = Path(".")) -> dict[str, int]:
 
 
 def manifest_counts() -> dict[str, int]:
-    """Published tool counts: every manifest tool, except Site Manager and InnerSpace, which count domain tools only."""
+    """Published tool counts: every manifest tool, except Site Manager, InnerSpace and Drive (domain tools only)."""
     refs = _plugin_tool_refs()
     counts: dict[str, int] = {}
     for product, path in MANIFESTS.items():
@@ -297,7 +328,8 @@ def manifest_counts() -> dict[str, int]:
         tools = manifest["tools"]
         if manifest["count"] != len(tools):
             raise AssertionError(f"Manifest count mismatch in {path}")
-        counts[product] = refs.tool_count(manifest, product)
+        # Drive's domain tools are its module_map entries, as for Site Manager and InnerSpace.
+        counts[product] = len(manifest["module_map"]) if product == "drive" else refs.tool_count(manifest, product)
     return counts
 
 
@@ -504,7 +536,7 @@ class PublicPageMetadataTests(unittest.TestCase):
         )
         has_part = source_nodes[0].get("hasPart")
         self.assertIsInstance(has_part, list)
-        expected = JSON_LD_PRODUCT_LINKS | (INNERSPACE_SERVER_LINKS if INNERSPACE_RELEASED else {})
+        expected = JSON_LD_PRODUCT_LINKS | (INNERSPACE_SERVER_LINKS if INNERSPACE_RELEASED else {}) | DRIVE_SERVER_LINKS
         self.assertEqual(len(has_part), len(expected))
         self.assertTrue(all(isinstance(part, dict) for part in has_part))
         product_links = {part.get("name"): part.get("url") for part in has_part}
@@ -856,6 +888,7 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             ["Network", "Protect", "Access"]
             + (["Site Manager"] if SITEMANAGER_RELEASED else [])
             + (["InnerSpace"] if INNERSPACE_RELEASED else [])
+            + ["Drive"]
         )
         for path in (Path("docs/index.html"), Path("docs/404.html"), Path("docs/sponsor/index.html")):
             html = path.read_text(encoding="utf-8")
@@ -1060,7 +1093,11 @@ class ContentReconciliationTests(unittest.TestCase):
             for attributes in parser.attributes_for("div")
             if "server-row" in attributes.get("class", "").split()
         ]
-        expected = ["network", "protect", "access", "sitemanager"] + (["innerspace"] if INNERSPACE_RELEASED else [])
+        expected = (
+            ["network", "protect", "access", "sitemanager"]
+            + (["innerspace"] if INNERSPACE_RELEASED else [])
+            + ["drive"]
+        )
         self.assertEqual([row["data-product"] for row in rows], expected)
         by_product = {row["data-product"]: row for row in rows}
         self.assertIn("sitemanager", by_product["sitemanager"]["class"].split())
@@ -1075,6 +1112,9 @@ class ContentReconciliationTests(unittest.TestCase):
             self.assertIn("innerspace", by_product["innerspace"]["class"].split())
             self.assertEqual(by_product["innerspace"]["data-release"], "released")
             self.assertIn(".server-row.innerspace::before { background: var(--innerspace); }", css)
+        self.assertIn("drive", by_product["drive"]["class"].split())
+        self.assertEqual(by_product["drive"]["data-release"], "released")
+        self.assertIn(".server-row.drive::before { background: var(--drive); }", css)
         mobile = css.split("@media (max-width: 760px) {", 1)[1].split("\n}", 1)[0]
         self.assertIn(".server-row { grid-template-columns: 1fr; gap: 12px; }", mobile)
 
@@ -1333,6 +1373,97 @@ class ContentReconciliationTests(unittest.TestCase):
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)
+
+    def test_server_status_table_lists_drive_as_released(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        homepage = Path("docs/index.html").read_text(encoding="utf-8")
+        count = manifest_counts()["drive"]
+        self.assertIn(
+            f"| [Drive](apps/drive/) | Beta | {count} | "
+            "[`unifi-drive-mcp`](https://pypi.org/project/unifi-drive-mcp/) |",
+            readme,
+        )
+        self.assertIn("<h4>Drive <span>Beta</span></h4>", homepage)
+
+    def test_released_drive_install_surfaces_are_present(self):
+        expected = {
+            Path("README.md"): (
+                "img.shields.io/pypi/v/unifi-drive-mcp",
+                "uvx unifi-drive-mcp@latest",
+                "unifi-drive@unifi-plugins",
+                "| `unifi-drive` |",
+            ),
+            Path("QUICKSTART.md"): ("uvx unifi-drive-mcp@latest", "unifi-drive@unifi-plugins"),
+            Path("SECURITY.md"): ("| unifi-drive-mcp | Latest release (beta) |",),
+            Path("apps/drive/README.md"): (
+                "pypi.org/project/unifi-drive-mcp",
+                "pip install unifi-drive-mcp",
+                "docker pull ghcr.io/sirkirby/unifi-drive-mcp",
+                "unifi-drive@unifi-plugins",
+            ),
+            Path("docs/index.html"): (
+                'uvx <span class="value">unifi-drive-mcp@latest</span>',
+                'pipx install <span class="value">unifi-drive-mcp</span>',
+                '<a href="https://pypi.org/project/unifi-drive-mcp/">Drive</a>',
+            ),
+        }
+        for path, phrases in expected.items():
+            content = path.read_text(encoding="utf-8")
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+        for path in SERVER_SURFACES + DRIVE_APP_PAGES:
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            with self.subTest(path=path):
+                self.assertNotRegex(content, r"(?i)drive[^.|]*not (?:yet )?(?:published|released)")
+
+    def test_drive_is_listed_where_the_products_are_enumerated(self):
+        surfaces = {
+            Path("README.md"): ("unifi-drive-mcp", "apps/drive/docs/configuration.md", "port 3004"),
+            Path("QUICKSTART.md"): ("Drive", "unifi-drive-mcp", "port 3004"),
+            Path("CONTRIBUTING.md"): ("apps/drive/", "drive/v*", "apps/drive/docs/troubleshooting.md"),
+            Path("SECURITY.md"): ("UniFi Drive NAS Login", "UNIFI_DRIVE_SSL_FINGERPRINT", "port 3004"),
+            Path("SUPPORT.md"): ("apps/drive/docs/troubleshooting.md", "Drive"),
+            Path("PRIVACY.md"): ("UniFi Drive storage data", "file contents"),
+            Path(".env.example"): ("UNIFI_DRIVE_HOST", "UNIFI_DRIVE_PASSWORD_FILE", "port 3004"),
+            Path("docs/README.md"): ("apps/drive/docs/configuration.md", "apps/drive/docs/tools.md"),
+            Path("docs/ARCHITECTURE.md"): ("apps/drive", "unifi_core.drive"),
+            Path("docs/llms.txt"): ("apps/drive/README.md", "port 3004"),
+            Path("docs/tool-index.md"): ("`drive_`", "Drive differences"),
+            Path("docs/tls-verification.md"): ("Drive", "UNIFI_DRIVE_SSL_FINGERPRINT", "no shared fallback"),
+            Path("docs/permissions.md"): ("Drive", "UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE"),
+            Path("docs/cross-product.md"): ("Drive is its own family",),
+            Path("docs/support-bundles.md"): ("Drive", "no support-bundle"),
+            Path("docs/credential-providers.md"): ("UNIFI_DRIVE_*", "never fall back"),
+            Path("docs/agent-install.md"): ("## Drive (UniFi NAS)", "| Drive | `unifi-drive` |"),
+            Path("apps/network/docs/transports.md"): ("Drive (port 3004)", "UNIFI_DRIVE_MCP_HTTP_AUTH_TOKEN"),
+        }
+        for path, phrases in surfaces.items():
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            for phrase in phrases:
+                with self.subTest(path=path, phrase=phrase):
+                    self.assertIn(phrase, content)
+
+    def test_drive_docs_state_its_isolated_login_and_time_machine_coupling(self):
+        for path in (Path("apps/drive/README.md"), Path("apps/drive/docs/configuration.md")):
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            with self.subTest(path=path):
+                for name in (
+                    "UNIFI_HOST",
+                    "UNIFI_USERNAME",
+                    "UNIFI_PASSWORD",
+                    "UNIFI_DRIVE_MCP_HTTP_AUTH_TRUSTED_NETWORKS",
+                ):
+                    self.assertIn(name, content)
+                self.assertRegex(content, r"(?i)no request at startup")
+        for path in (Path("QUICKSTART.md"), Path("apps/drive/docs/permissions.md")):
+            content = " ".join(path.read_text(encoding="utf-8").split())
+            with self.subTest(path=path):
+                self.assertRegex(content, r"(?i)turning SMB off[^.]*turns Time Machine off")
+        support = " ".join(Path("docs/support-bundles.md").read_text(encoding="utf-8").split())
+        self.assertRegex(
+            support, r"Drive server has no support-bundle tool[^.]*\. The bundle is one closed privacy schema"
+        )
 
     def test_public_pages_do_not_make_outdated_claims(self):
         for path in PUBLIC_PAGES:
