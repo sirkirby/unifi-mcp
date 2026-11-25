@@ -24,6 +24,7 @@ class Recorded:
     path: str
     headers: dict[str, str]
     body: Any
+    query: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -67,7 +68,7 @@ class StubConsole:
     async def handle(self, request: web.Request) -> web.Response:
         body = await request.json() if request.can_read_body else None
         path = request.raw_path.split("?")[0]
-        self.requests.append(Recorded(request.method, path, dict(request.headers), body))
+        self.requests.append(Recorded(request.method, path, dict(request.headers), body, dict(request.query)))
         key = (request.method, path)
         delay = 0.0
         if self._scripts[key]:
