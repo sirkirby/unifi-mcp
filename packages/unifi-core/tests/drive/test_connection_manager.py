@@ -10,6 +10,7 @@ from unifi_core.exceptions import (
     UniFiNotFoundError,
     UniFiOperationError,
     UniFiPermissionError,
+    UniFiRateLimitError,
     UniFiValidationError,
 )
 from unifi_core.tls import CertificateVerificationError
@@ -74,6 +75,42 @@ async def test_rejected_login_pauses_further_logins(connection, console):
     assert len(console.calls("POST", "/api/auth/login")) == 1
     assert PASSWORD not in str(first.value) and USERNAME not in str(first.value)
     assert connection.last_connection_error
+
+
+async def test_reconnect_blocked_latches_on_a_refused_login_until_one_succeeds(connection, console):
+    """Like InnerSpace's: the API heals a cached connection with this flag once a probe proves the login works."""
+    assert connection.reconnect_blocked is False
+
+    console.reply("POST", "/api/auth/login", {"code": "AUTHENTICATION_FAILED_INVALID_CREDENTIALS"}, status=401)
+    with pytest.raises(UniFiAuthError):
+        await connection.get(SMB)
+    assert connection.reconnect_blocked is True
+
+    # The pause running out does not clear it: only a login that succeeds does.
+    connection._login_block_until = 0.0
+    assert connection.reconnect_blocked is True
+
+    console.reply("GET", SMB, service(True))
+    assert await connection.get(SMB) == {"enable": True}
+    assert connection.reconnect_blocked is False
+
+
+async def test_a_rate_limited_login_latches_reconnect_blocked(connection, console):
+    console.reply("POST", "/api/auth/login", {}, status=429)
+
+    with pytest.raises(UniFiRateLimitError):
+        await connection.get(SMB)
+
+    assert connection.reconnect_blocked is True
+
+
+async def test_a_console_that_is_down_does_not_latch_reconnect_blocked(connection, console):
+    console.reply("POST", "/api/auth/login", {}, status=503)
+
+    with pytest.raises(UniFiConnectionError):
+        await connection.get(SMB)
+
+    assert connection.reconnect_blocked is False
 
 
 async def test_unconfigured_manager_makes_no_request(console):

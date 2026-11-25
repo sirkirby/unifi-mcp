@@ -10,7 +10,8 @@ Rules the rest of the package relies on:
 * No request at construction or startup. The first call logs in.
 * An expired session (HTTP 401) is logged in again once and the request is
   sent once more. A rejected login pauses further logins on an escalating
-  cool-down, so repeated tool calls cannot lock the account out.
+  cool-down, so repeated tool calls cannot lock the account out;
+  ``reconnect_blocked`` stays set until a login succeeds.
 * Redirects are not followed and proxy settings from the environment are
   ignored.
 * Error text never contains the console's address, the credentials or a
@@ -161,6 +162,16 @@ class DriveConnectionManager:
     def last_connection_error(self) -> str | None:
         """Why the last login failed, or ``None`` after a success."""
         return self._last_error
+
+    @property
+    def reconnect_blocked(self) -> bool:
+        """Whether the console refused the last login and none has succeeded since.
+
+        It stays set when the login pause runs out, so a caller that has proved the
+        login works again (the API's probe) can drop this cached manager instead of
+        waiting the pause out.
+        """
+        return self._login_block_count > 0
 
     def support_status(self) -> dict[str, Any]:
         """Local connection facts with no address or credential in them."""
