@@ -646,3 +646,5 @@ def test_every_innerspace_catalog_category_is_a_policy_gate_category():
 
     assert categories
     assert categories <= set(INNERSPACE_CATEGORY_MAP)
+    # The API reads UNIFI_POLICY_INNERSPACE_<category>_* by the catalog category itself, so the server must too.
+    assert all(INNERSPACE_CATEGORY_MAP[category] == category for category in categories)

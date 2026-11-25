@@ -1,7 +1,8 @@
 """Floor plan tools: the plans and one plan's image; a plan's title, floor attenuation and scale, and the plan order.
 
-Remaining race: the write lock is per process, so a title, floor attenuation, plan order or scale line that another
-server process or the browser editor sets between the fresh read and the write is overwritten silently.
+Remaining race: the operation gate runs one write at a time per server process, so a title, floor attenuation, plan
+order or scale line that another server process or the browser editor sets between the fresh read and the write is
+overwritten silently.
 """
 
 import logging

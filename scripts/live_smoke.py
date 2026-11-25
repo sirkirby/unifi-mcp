@@ -2880,6 +2880,7 @@ class LiveSmokeRunner:
         The tool numbers the plans 1, 2, 3 ... in the order it is given, so the restore brings back the order
         of the plans, not necessarily the stored order values. When the values differ from the originals
         afterwards, the entry stays in ``created_resources`` marked ``left_changed`` instead of being cleaned.
+        When two plans share an order value the restore could never bring it back, so the swap is only previewed.
         """
         tool = "innerspace_reorder_floor_plans"
         await self.call("innerspace_get_project", {}, "approved:get")
@@ -2907,6 +2908,11 @@ class LiveSmokeRunner:
             "reorder preview sends nothing and asks for confirmation",
         )
         if preview.success is not True:
+            return
+        if len(set(original_values.values())) < len(original_values):
+            self.skip(
+                tool, "approved", "plans share an order value; the restore would renumber them, so only previewed"
+            )
             return
         changed_entry = {"type": "innerspace_plan_order", "ids": [original[first], original[second]]}
         self.report.created_resources.append(changed_entry)

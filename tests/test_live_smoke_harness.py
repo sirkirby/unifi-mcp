@@ -2605,6 +2605,22 @@ def test_innerspace_reorder_lifecycle_is_cleaned_when_the_order_values_come_back
     assert "left_changed" not in runner.report.created_resources[0]
 
 
+def test_innerspace_reorder_only_previews_when_stored_orders_are_tied() -> None:
+    """The restore renumbers the plans 1, 2, 3 ...: on tied order values it would leave the console changed."""
+    plans = tuple({**plan, "ordering": 0} for plan in INNERSPACE_PLANS)
+    console = FakeInnerSpace(plans=plans)
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
+
+    confirms = [a for tool, a in console.calls if tool == "innerspace_reorder_floor_plans" and a.get("confirm")]
+    assert confirms == []
+    assert [plan["ordering"] for plan in console.ordered()] == [0, 0, 0]
+    assert ("innerspace_reorder_floor_plans", "approved:verify-preview") in _statuses(runner, "ok")
+    assert ("innerspace_reorder_floor_plans", "approved") in _statuses(runner, "skipped")
+    assert runner.report.created_resources == []
+
+
 def test_innerspace_reorder_lifecycle_restores_after_a_reorder_with_an_unknown_outcome() -> None:
     console = FakeInnerSpace(land_and_fail={"innerspace_reorder_floor_plans"})
     runner = _innerspace_lifecycle_runner(console)

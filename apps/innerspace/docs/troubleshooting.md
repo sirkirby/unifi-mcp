@@ -112,6 +112,14 @@ The plan's image is shifted or scaled, the plan has no usable scale or image siz
 
 The console refused the write (an HTTP 4xx, or UniFi OS refusing it again on a fresh session) and the read-back shows no change; nothing was applied. The `error` says what the console answered. The same call can be sent again once the cause is fixed.
 
+### "time budget ran out before the change was sent"
+
+A confirmed write holds the console's write turn for at most `UNIFI_INNERSPACE_WRITE_HOLD_SECONDS`. When that runs out before the write goes out, during the fresh reads or just before the send, nothing is sent and the result is `mutation_applied: false`. Read the plan again and retry; raise the hold budget if a slow console keeps hitting it. When it runs out after the write was sent, the outcome is unknown (`mutation_applied: null`), below.
+
+### "The innerspace controller is busy" on a confirmed write
+
+Another write still held the console's write turn after this call had waited `UNIFI_INNERSPACE_CALL_WAIT_SECONDS`, or had held it past its hold budget, so nothing was sent and the MCP result is `mutation_applied: false` (over the API, a `503`). Retry shortly, or send the change through `innerspace_batch`, which waits its turn.
+
 ### `success: false` with `mutation_applied: null`
 
 The answer was lost, the console's answer was not a refusal (a 5xx, 429 or an unreadable answer) and the read-back did not show every change after a few re-reads, or the read-back shows only part of the change; an edit made at the same time, from another server process or the InnerSpace app, can cause this. Whether the change is on the console is unknown. Read the plan (`innerspace_list_walls`, or `innerspace_get_project` with `include_shapes`) before retrying. A repeated create whose first call did land is reported as already applied and sends nothing.

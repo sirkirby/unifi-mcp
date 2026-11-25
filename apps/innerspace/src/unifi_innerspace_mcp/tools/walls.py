@@ -1,9 +1,9 @@
 """Wall tools: create, update and remove the walls of one floor plan.
 
-Remaining race: the write lock is per process. An update sends each wall whole
-from the fresh read, so a change that another server process or the browser
-editor makes to the same wall between that read and the write is overwritten
-silently.
+Remaining race: the operation gate runs one write at a time per server process.
+An update sends each wall whole from the fresh read, so a change that another
+server process or the browser editor makes to the same wall between that read
+and the write is overwritten silently.
 """
 
 import logging

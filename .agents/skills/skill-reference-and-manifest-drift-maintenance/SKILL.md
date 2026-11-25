@@ -165,8 +165,8 @@ is no plugin reference to regenerate. Like Site Manager, it states its domain to
 the published count is `len(module_map)` (24: nine reads, `innerspace_get_status`,
 `innerspace_get_project`, `innerspace_list_floor_plans`, `innerspace_list_walls`,
 `innerspace_list_placed_devices`, `innerspace_list_access_points`,
-`innerspace_list_switches`, `innerspace_list_inventory`, `innerspace_get_plan_asset`, and
-15 layout writes),
+`innerspace_list_switches`, `innerspace_list_inventory` and `innerspace_get_plan_asset`;
+and 15 layout writes),
 without the six shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
 convention, and `tests/docs/test_site_content.py` checks the count in the root README,
 `docs/ARCHITECTURE.md` and `apps/innerspace/docs/tools.md`. A change to a tool signature

@@ -636,22 +636,36 @@ class _GateClock:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("spent_at", ["turn_start", "before_the_write"])
-async def test_an_action_whose_hold_budget_runs_out_reports_nothing_applied(
+@pytest.mark.parametrize(
+    "spent_at, applied, text, posts",
+    [
+        ("turn_start", False, "time budget ran out before the change was sent", 0),
+        ("before_the_write", False, "time budget ran out before the change was sent", 0),
+        ("after_the_post", None, "Read before retrying", 1),
+    ],
+)
+async def test_an_action_cut_off_at_its_hold_budget_reports_its_outcome(
     tmp_path,
     connected,  # noqa: F811
     console,  # noqa: F811
     monkeypatch,
     fresh_gates,
     spent_at,
+    applied,
+    text,
+    posts,
 ):
-    """Out of time at the turn's start, or after the fresh reads: the action carries the write layer's false."""
+    """The action carries the write layer's outcome: false when nothing was sent, unknown once the POST went out."""
     from unifi_api.services.operation_gate import gate_for
 
     _ready(console)
+    late = spent_at == "after_the_post"
+    if late:
+        console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=0.5)
     app, headers, cid = await _app(tmp_path, connected)
     gate = gate_for(cid, "innerspace")
     gate.clock = clock = _GateClock()
+    budget = gate.settings.hold_budget_seconds
     real_apply = InnerSpaceWallManager.apply_create_walls
     real_request = connected.request
 
@@ -659,15 +673,16 @@ async def test_an_action_whose_hold_budget_runs_out_reports_nothing_applied(
         clock.value += 10_000
         return await real_apply(self, *args, **kwargs)
 
-    async def spend_before_post(method, path, **kwargs):
+    async def spend_at_the_post(method, path, **kwargs):
         if method == "POST":
-            clock.value += 10_000
+            # A fifth of a second left, so the slow answer is cut off after the send; otherwise out of time before it.
+            clock.value = budget - 0.2 if late else clock.value + 10_000
         return await real_request(method, path, **kwargs)
 
     if spent_at == "turn_start":
         monkeypatch.setattr(InnerSpaceWallManager, "apply_create_walls", spend_first)
     else:
-        monkeypatch.setattr(connected, "request", spend_before_post)
+        monkeypatch.setattr(connected, "request", spend_at_the_post)
 
     result = await _action(
         app,
@@ -679,6 +694,29 @@ async def test_an_action_whose_hold_budget_runs_out_reports_nothing_applied(
     )
 
     assert result["success"] is False
-    assert result["mutation_applied"] is False
-    assert "time budget ran out before the change was sent" in json.dumps(result)
-    assert console.writes() == []
+    assert result["mutation_applied"] is applied
+    assert text in json.dumps(result)
+    assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == posts
+
+
+@pytest.mark.asyncio
+async def test_a_refused_write_answers_the_generic_error_and_audits_its_class(tmp_path, monkeypatch):
+    """A refusal before any send (an identical earlier create partly in place) is audited by class, value-free."""
+    from unifi_core.innerspace.managers._writes import InnerSpaceWriteRefusedError
+
+    cm = console_cm()
+    app, headers, cid = await _app(tmp_path, cm)
+    monkeypatch.setattr(
+        InnerSpaceWallManager,
+        "apply_create_walls",
+        AsyncMock(side_effect=InnerSpaceWriteRefusedError("create InnerSpace walls: refused")),
+    )
+
+    result = await _action(
+        app, headers, cid, "innerspace_create_walls", {"plan_id": PLAN, "walls": [WALL], "unit": "metric"}, confirm=True
+    )
+
+    assert result == {"success": False, "error": "Failed to execute action. Check the server audit log for details."}
+    (row,) = await _audit(app)
+    assert row.error_kind == "InnerSpaceWriteRefusedError"
+    assert cm.request.await_count == 0

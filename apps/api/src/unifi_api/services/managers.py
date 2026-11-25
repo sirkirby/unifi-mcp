@@ -198,8 +198,8 @@ def _build_innerspace_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.innerspace.managers.wall_manager import InnerSpaceWallManager
     from unifi_core.innerspace.managers.wall_type_manager import InnerSpaceWallTypeManager
 
-    # Every manager of one controller shares its connection manager, and with it
-    # the per-process write lock that serializes InnerSpace writes.
+    # Every manager of one controller shares its connection manager. The
+    # controller's operation gate, not the managers, runs one write at a time.
     return {
         "attenuation_manager": lambda cm: InnerSpaceAttenuationManager(cm),
         "floor_plan_manager": lambda cm: InnerSpaceFloorPlanManager(cm),

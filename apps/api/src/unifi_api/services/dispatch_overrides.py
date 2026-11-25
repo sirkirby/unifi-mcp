@@ -201,7 +201,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # InnerSpace — preview/execute split (preview_X + apply_X)
     # =========================================================================
     # The API preview is request-only, so only apply_X is ever dispatched. It
-    # re-reads the project, takes the write lock and reads back after one send.
+    # runs in the controller's write turn, re-reads the project and reads back after one send.
     "innerspace_create_walls": ("wall_manager", "apply_create_walls"),
     "innerspace_update_walls": ("wall_manager", "apply_update_walls"),
     "innerspace_remove_walls": ("wall_manager", "apply_remove_walls"),

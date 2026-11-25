@@ -1,9 +1,9 @@
 """Wall type tools: create and update the project's custom wall materials.
 
-Remaining race: the write lock is per process. An update sends the wall type
-whole from the fresh read, so a change that another server process or the
-browser editor makes to the same type between that read and the write is
-overwritten silently.
+Remaining race: the operation gate runs one write at a time per server process.
+An update sends the wall type whole from the fresh read, so a change that
+another server process or the browser editor makes to the same type between that
+read and the write is overwritten silently.
 """
 
 import logging

@@ -268,8 +268,9 @@ protect and access.
   and is renamed back; the first two plans of one site swap places in the plan order and the
   order is restored (skipped when no site has two plans; the restore numbers the plans 1, 2, 3
   ... in their original order, so when the stored values were not 1, 2, 3 ... the entry stays in
-  `created_resources` marked `left_changed`); the first plan's floor attenuation is set to 25 dB
-  (30 when it
+  `created_resources` marked `left_changed`; when two plans share an order value the swap is
+  only previewed, since the restore could not bring the tie back); the first plan's floor
+  attenuation is set to 25 dB (30 when it
   is already 25) and restored, read through a preview because no read tool returns it.
   Attenuation: on the wall lifecycle's plan, one `shelf_small` square at (0.1, 0.2)-(0.4, 0.5) m
   in the frame is created, listed through `innerspace_get_project` with `include_shapes`,

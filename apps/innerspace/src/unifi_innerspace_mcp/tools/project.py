@@ -1,7 +1,7 @@
 """Project tools: the project and the walls of one plan; the project's display unit.
 
-Remaining race: the write lock is per process, so a unit that another server process or the browser editor sets
-between the fresh read and the write is overwritten silently.
+Remaining race: the operation gate runs one write at a time per server process, so a unit that another server
+process or the browser editor sets between the fresh read and the write is overwritten silently.
 """
 
 import logging

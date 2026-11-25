@@ -317,9 +317,8 @@ The API server serves the nine reads and the 15 write actions of the
 [InnerSpace MCP server](../innerspace/) for a controller that
 declares the `innerspace` product. It reaches the console's InnerSpace
 application through a console login session, through the same `unifi-core`
-managers as the MCP server. The writes need the next API release; until then,
-run the API from a source checkout
-([Quickstart A](#a-local-clone-developing-or-testing-changes)).
+managers as the MCP server. The reads need `unifi-api-server` 0.34.2 or later,
+and the write actions 0.34.4 or later.
 
 ### Register the controller
 
@@ -408,7 +407,8 @@ needs `unit`. A batch takes at most 100 creates or updates, or 50 removes.
   `created_ids`, `effects`, `warnings`, `missing`, and `noop` when nothing was
   sent: `already_applied` (an earlier identical create already landed) or
   `none_found` (none of the ids a remove names is in the project). `success` is `false` whenever the
-  write was not applied (`mutation_applied: false` after a send) or its outcome
+  write was not applied (`mutation_applied: false`: refused after a send, or not
+  sent because the write's time budget ran out first) or its outcome
   is unknown (`mutation_applied: null`; read before retrying). A call that
   changes nothing answers `success: true, mutation_applied: false`.
 - A write is refused before anything is sent when InnerSpace is not installed

@@ -1,9 +1,9 @@
 """Attenuation tools: the attenuation objects of one floor plan, and the project's attenuation-object types.
 
-Remaining race: the write lock is per process. An update sends each object or
-type whole from the fresh read, so a change that another server process or the
-browser editor makes to the same object or type between that read and the
-write is overwritten silently.
+Remaining race: the operation gate runs one write at a time per server process.
+An update sends each object or type whole from the fresh read, so a change that
+another server process or the browser editor makes to the same object or type
+between that read and the write is overwritten silently.
 """
 
 import logging

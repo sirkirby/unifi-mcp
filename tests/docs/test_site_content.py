@@ -1365,6 +1365,8 @@ class ContentReconciliationTests(unittest.TestCase):
         trouble = Path("apps/innerspace/docs/troubleshooting.md").read_text(encoding="utf-8")
         section = trouble.split("### `success: false` with `mutation_applied: false`", 1)[1].split("###", 1)[0]
         self.assertIn("refused", section)
+        self.assertIn("time budget", row.split("|")[0])
+        self.assertIn("time budget ran out before the change was sent", trouble)
 
     def test_api_readme_documents_every_innerspace_route(self):
         spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))

@@ -165,7 +165,7 @@ A confirmed write shows that the console stored the values. That is configuratio
 |---|---|---|
 | `true` | `true` | Sent, and the read-back shows every change. `created_ids` lists new objects. |
 | `true` | `false` | Nothing was sent: the console already holds the values (`message` starts "No change"), an earlier identical create already made the objects (`noop: "already_applied"`, `message` starts "Already applied"), or none of the ids a remove names is in the project (`noop: "none_found"`, `message` starts "Nothing to remove"). |
-| `false` | `false` | The console refused the write (an HTTP 4xx, or UniFi OS refusing it again on a fresh session) and the read-back shows no change; nothing was applied. |
+| `false` | `false` | Nothing was applied: the console refused the write (an HTTP 4xx, or UniFi OS refusing it again on a fresh session) and the read-back shows no change; or the write's time budget ran out before it was sent; or the console's write turn was not free in time. |
 | `false` | `null` | The outcome is unknown: the answer was lost or was not a refusal (a 5xx, 429 or an unreadable answer) and the read-back does not show every change yet, or the read-back failed or shows only part of the change. Read before retrying. |
 
 `missing` lists the changes the read-back did not find, `effects` and `warnings` repeat the preview's, and `error` carries fixed text that says what the console answered.

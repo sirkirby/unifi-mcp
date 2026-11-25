@@ -7,6 +7,7 @@ InnerSpace 1.4.3 does, so preview, confirm, read-back and a repeated confirm all
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -29,6 +30,7 @@ from unifi_core.innerspace.managers.wall_type_manager import InnerSpaceWallTypeM
 from unifi_core.operation_gate import reset_gate_registry_for_tests
 from unifi_innerspace_mcp import runtime
 from unifi_innerspace_mcp.tools import attenuation, floor_plans, project, wall_types, walls
+from unifi_mcp_shared.tool_index import TOOL_REGISTRY
 
 FIXTURES = Path(__file__).resolve().parents[4] / "packages/unifi-core/tests/innerspace/fixtures"
 PLAN_A = "00000000-0000-4000-8000-000000000003"
@@ -217,10 +219,13 @@ async def test_set_plan_scale_runs_on_an_imperial_project(monkeypatch, connected
     assert line["scale"] == pytest.approx(2.5)
 
 
-# A confirmed write whose hold budget runs out, through MCP dispatch: the shared gate wrapper and the
-# console's operation gate are both in the path, with the gate's clock set by hand. After the fresh
-# reads the gate's ticket records a request as sent; only the write layer knows the write never went
-# out, and the tool must carry its ``mutation_applied: false``.
+# A confirmed write cut off at its hold budget, through MCP dispatch: the real tool body is registered under a probe
+# name through the server's own ``server.tool`` (so the result does not depend on which test module imported the
+# tools first), and the shared gate wrapper and the console's operation gate are both in the path, with the gate's
+# clock set by hand. After the fresh reads the gate's ticket records a request as sent; only the write layer knows
+# whether the write itself went out, and the tool must carry its ``mutation_applied``.
+
+PROBE = "innerspace_out_of_time_probe_create_walls"
 
 
 class _Clock:
@@ -241,39 +246,58 @@ def gate_clock(monkeypatch):
     reset_gate_registry_for_tests()
     clock = _Clock()
     runtime.get_operation_gate().clock = clock
+    main_mod.server.tool(name=PROBE, permission_category="walls", permission_action="create")(
+        inspect.unwrap(walls.innerspace_create_walls)
+    )
     yield clock
+    main_mod.server.remove_tool(PROBE)
+    TOOL_REGISTRY.pop(PROBE, None)
     reset_gate_registry_for_tests()
 
 
-@pytest.mark.parametrize("spent_at", ["turn_start", "before_the_write"])
-async def test_a_write_out_of_time_reports_nothing_applied(monkeypatch, connected, console, gate_clock, spent_at):
+@pytest.mark.parametrize(
+    "spent_at, applied, text, posts",
+    [
+        ("turn_start", False, "time budget ran out before the change was sent", 0),
+        ("before_the_write", False, "time budget ran out before the change was sent", 0),
+        ("after_the_post", None, "Read before retrying", 1),
+    ],
+)
+async def test_a_write_cut_off_at_its_hold_budget_reports_its_outcome(
+    monkeypatch, connected, console, gate_clock, spent_at, applied, text, posts
+):
     console.load_project(_state())
     console.script_write(floor_plans=_rows())
+    late = spent_at == "after_the_post"
+    if late:
+        console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=0.5)
     manager = InnerSpaceWallManager(connected)
     monkeypatch.setattr(walls, "wall_manager", manager)
     real_apply = manager.apply_create_walls
     real_request = connected.request
+    budget = runtime.get_operation_gate().settings.hold_budget_seconds
 
     async def spend_first(*args, **kwargs):
         gate_clock.value += 10_000
         return await real_apply(*args, **kwargs)
 
-    async def spend_before_post(method, path, **kwargs):
+    async def spend_at_the_post(method, path, **kwargs):
         if method == "POST":
-            gate_clock.value += 10_000
+            # A fifth of a second left, so the slow answer is cut off after the send; otherwise out of time before it.
+            gate_clock.value = budget - 0.2 if late else gate_clock.value + 10_000
         return await real_request(method, path, **kwargs)
 
     if spent_at == "turn_start":
         monkeypatch.setattr(manager, "apply_create_walls", spend_first)
     else:
-        monkeypatch.setattr(connected, "request", spend_before_post)
+        monkeypatch.setattr(connected, "request", spend_at_the_post)
 
     result = await main_mod.server.call_tool(
-        "innerspace_create_walls", {"plan_id": PLAN_A, "walls": [WALL], "unit": "metric", "confirm": True}
+        PROBE, {"plan_id": PLAN_A, "walls": [WALL], "unit": "metric", "confirm": True}
     )
     payload = json.loads(result.content[0].text)
 
     assert payload["success"] is False
-    assert payload["mutation_applied"] is False
-    assert "time budget ran out before the change was sent" in payload["error"]
-    assert console.writes() == []
+    assert payload["mutation_applied"] is applied
+    assert text in payload["error"]
+    assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == posts
