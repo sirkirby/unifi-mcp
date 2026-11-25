@@ -57,7 +57,8 @@ const META_TOOL_EXECUTE: ToolInfo = {
       },
       __location: {
         type: "string",
-        description: "Target location ID (required for multi-location write operations)",
+        description:
+          "Target location ID; must be a location that has the tool (required for multi-location write operations)",
       },
     },
     required: ["tool"],
@@ -113,12 +114,37 @@ const META_TOOLS: ToolInfo[] = [
   META_TOOL_LOCATION_TIMELINE,
 ];
 
+// handleToolCall answers the worker's own meta-tool names before routing, so a
+// location tool with one of those names cannot be called by name. Network's
+// server meta-tools share them; listed, they would sit in the index and the
+// eager tool list beside the worker's own, reachable only by wrapping them in
+// the worker's execute. Leave them out of the catalog. The relay serves a
+// server's batch status and cancel only for jobs that server's batch started
+// through it, so those go with the batch tool they belong to.
+const WORKER_OWNED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...META_TOOLS.map((tool) => tool.name),
+  `${META_TOOL_BATCH.name}_status`,
+  `${META_TOOL_BATCH.name}_cancel`,
+]);
+
 // ---------------------------------------------------------------------------
 // Agent scope helpers
 // ---------------------------------------------------------------------------
 
 function canSeeLocation(scope: AgentScope, locationId: string): boolean {
   return scope.locations === null || scope.locations.includes(locationId);
+}
+
+/**
+ * Whether the caller supplied a __location target. Absent and null both name no
+ * target: some MCP clients send null for every unset optional field, and null
+ * can never route a call somewhere the caller did not name.
+ */
+function hasLocation(args: object): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(args, "__location") &&
+    (args as { __location?: unknown }).__location != null
+  );
 }
 
 function locationDenied(locationId: string): Record<string, unknown> {
@@ -232,6 +258,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     ).toArray();
 
     for (const row of rows) {
+      if (WORKER_OWNED_TOOL_NAMES.has(row.tool_name as string)) {
+        continue;
+      }
       const locationId = row.location_id as string;
       const tool: ToolInfo = {
         name: row.tool_name as string,
@@ -948,8 +977,10 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       return META_TOOLS;
     }
 
-    // eager mode: return all deduplicated tools the caller can reach
-    return this.getAggregatedTools(scope);
+    // eager mode: the worker's own meta-tools, then every deduplicated tool
+    // the caller can reach. The catalog holds no tool with a worker-owned
+    // name, so each meta-tool is listed once, with the worker's schema.
+    return [...META_TOOLS, ...this.getAggregatedTools(scope)];
   }
 
   async handleToolCall(
@@ -997,10 +1028,11 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       return { success: false, error: "Missing required argument: tool" };
     }
 
-    const toolArgs = (args.arguments as Record<string, unknown>) || {};
-    const location = args.__location as string | undefined;
-    if (location) {
-      toolArgs.__location = location;
+    const toolArgs = { ...((args.arguments as Record<string, unknown>) || {}) };
+    // A supplied __location is passed on as given, even empty, so routing can
+    // refuse an invalid target rather than route as if none was named.
+    if (hasLocation(args)) {
+      toolArgs.__location = args.__location;
     }
 
     return this.routeToolCall(toolName, toolArgs, scope);
@@ -1015,7 +1047,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     const settled = await Promise.allSettled(
       calls.map((call) => {
         const callArgs = { ...(call.arguments || {}) };
-        if (call.__location) {
+        if (hasLocation(call)) {
           callArgs.__location = call.__location;
         }
         return this.routeToolCall(call.tool, callArgs, scope);
@@ -1082,9 +1114,22 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
     // An explicit __location is held to the scope on every path, so a token
     // that sees one location cannot name another and have the call land here.
-    const targetLocation = args.__location as string | undefined;
-    if (targetLocation && !canSeeLocation(scope, targetLocation)) {
+    const targetSupplied = hasLocation(args);
+    const targetLocation = args.__location;
+    if (targetSupplied && typeof targetLocation === "string" && !canSeeLocation(scope, targetLocation)) {
       return locationDenied(targetLocation);
+    }
+    // Every path, a single location included, routes only to a location id
+    // that holds the tool. A supplied __location that is empty or not a
+    // string is refused too, so it never runs the call somewhere the caller
+    // did not name.
+    if (targetSupplied && (typeof targetLocation !== "string" || !locations.includes(targetLocation))) {
+      return {
+        success: false,
+        error:
+          `__location must be the id of a location with ${toolName}; got ${JSON.stringify(targetLocation)}. ` +
+          `Available locations: ${JSON.stringify(this.locationChoices(locations))}`,
+      };
     }
     const { __location, ...cleanArgs } = args;
 
@@ -1116,22 +1161,14 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     }
 
     // Write tool: requires explicit __location
-    if (!targetLocation) {
-      // Build a helpful error with available locations
-      const locationNames = locations.map((locId) => {
-        const nameRow = this.ctx.storage.sql.exec(
-          `SELECT location_name FROM locations WHERE location_id = ?`,
-          locId,
-        ).toArray();
-        return { id: locId, name: (nameRow[0]?.location_name as string) || locId };
-      });
+    if (!targetSupplied) {
       return {
         success: false,
-        error: `Multi-location write operation requires __location argument. Available locations: ${JSON.stringify(locationNames)}`,
+        error: `Multi-location write operation requires __location argument. Available locations: ${JSON.stringify(this.locationChoices(locations))}`,
       };
     }
 
-    return this.sendToolCall(targetLocation, toolName, cleanArgs);
+    return this.sendToolCall(targetLocation as string, toolName, cleanArgs);
   }
 
   private async sendToolCall(
@@ -1310,6 +1347,11 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
   private findWebSocketForLocation(locationId: string): WebSocket | null {
     return this.locationWebSockets.get(locationId) ?? null;
+  }
+
+  /** The id and name of each location, for errors that ask the caller to pick one */
+  private locationChoices(locationIds: string[]): Array<{ id: string; name: string }> {
+    return locationIds.map((id) => ({ id, name: this.getLocationName(id) }));
   }
 
   private getLocationName(locationId: string): string {

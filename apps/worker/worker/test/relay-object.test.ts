@@ -1032,8 +1032,9 @@ describe("scoped agent tokens: enforcement", () => {
     addLocation(relay, "loc-b", "Office", [{ name: "office_only", description: "", annotations: { readOnlyHint: true } }]);
     const scope = { readOnly: true, locations: ["loc-a"] };
 
+    const metaNames = (await relay.getToolList("lazy", scope)).map((tool: ToolInfo) => tool.name);
     const eager = (await relay.getToolList("eager", scope)).map((tool: ToolInfo) => tool.name);
-    expect(eager.sort()).toEqual(["list_clients", "list_devices"]);
+    expect(eager.filter((name: string) => !metaNames.includes(name)).sort()).toEqual(["list_clients", "list_devices"]);
     expect(await relay.isMultiLocation(scope)).toBe(false);
     expect(await relay.isMultiLocation(FULL_AGENT_SCOPE)).toBe(true);
 
@@ -1053,6 +1054,289 @@ describe("scoped agent tokens: enforcement", () => {
 
     expect(missing).toEqual({ success: false, error: expect.stringContaining("requires __location") });
     expect(targeted).toMatchObject({ success: true, data: { locationId: "loc-b" } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Catalog names the worker answers itself
+// ---------------------------------------------------------------------------
+
+describe("location tools named like the worker's meta-tools", () => {
+  function storeTools(relay: any, locationId: string, locationName: string, names: string[]): void {
+    relay.ctx.storage.sql.exec(
+      `INSERT INTO locations (location_id, location_name, relay_token_hash, created_at, last_seen) VALUES (?, ?, ?, 0, 0)`,
+      locationId,
+      locationName,
+      `hash-${locationId}`,
+    );
+    for (const name of names) {
+      relay.ctx.storage.sql.exec(
+        `INSERT INTO location_tools (location_id, tool_name, description, annotations) VALUES (?, ?, ?, ?)`,
+        locationId,
+        name,
+        `${name} at ${locationName}`,
+        JSON.stringify({ readOnlyHint: name.includes("list") || name.endsWith("_status") }),
+      );
+    }
+  }
+
+  function relayWithServerMetaTools(): any {
+    const relay = createScopedRelay();
+    storeTools(relay, "loc-a", "Home", [
+      "unifi_tool_index",
+      "unifi_execute",
+      "unifi_batch",
+      "unifi_batch_status",
+      "unifi_batch_cancel",
+      "unifi_location_timeline",
+      "unifi_list_clients",
+      "protect_batch",
+      "protect_batch_status",
+      "protect_list_cameras",
+    ]);
+    relay.rebuildInMemoryState();
+    return relay;
+  }
+
+  const kept = ["protect_batch", "protect_batch_status", "protect_list_cameras", "unifi_list_clients"];
+
+  it("leaves them out of the tool index", async () => {
+    const relay = relayWithServerMetaTools();
+
+    const index = await relay.handleToolCall("unifi_tool_index", {}, FULL_AGENT_SCOPE);
+
+    expect(index.data.tools.map((tool: ToolInfo) => tool.name).sort()).toEqual(kept);
+  });
+
+  it("lists each worker meta-tool once, with the worker's schema, in eager mode", async () => {
+    for (const relay of [relayWithServerMetaTools(), createScopedRelay()]) {
+      const workerMetaTools: ToolInfo[] = await relay.getToolList("lazy", FULL_AGENT_SCOPE);
+      const eager: ToolInfo[] = await relay.getToolList("eager", FULL_AGENT_SCOPE);
+
+      expect(workerMetaTools.map((tool) => tool.name).sort()).toEqual([
+        "unifi_batch",
+        "unifi_execute",
+        "unifi_location_timeline",
+        "unifi_tool_index",
+      ]);
+      for (const meta of workerMetaTools) {
+        expect(eager.filter((tool) => tool.name === meta.name)).toEqual([meta]);
+      }
+      const locationTools = eager.filter((tool) => !workerMetaTools.includes(tool)).map((tool) => tool.name);
+      expect(locationTools.sort()).toEqual(relay.locationTools.size ? kept : []);
+    }
+  });
+
+  it("does not route them through the worker's execute, batch or by name", async () => {
+    const relay = relayWithServerMetaTools();
+
+    for (const name of ["unifi_execute", "unifi_batch", "unifi_tool_index", "unifi_batch_status", "unifi_batch_cancel"]) {
+      const wrapped = await relay.handleToolCall("unifi_execute", { tool: name, arguments: {} }, FULL_AGENT_SCOPE);
+      expect(wrapped).toEqual({ success: false, error: `Tool not found: ${name}` });
+    }
+    const batched = await relay.handleToolCall("unifi_batch", { calls: [{ tool: "unifi_batch" }] }, FULL_AGENT_SCOPE);
+    const direct = await relay.handleToolCall("unifi_batch_status", { jobId: "job-1" }, FULL_AGENT_SCOPE);
+
+    expect(batched.data.results[0].result).toEqual({ success: false, error: "Tool not found: unifi_batch" });
+    expect(direct).toEqual({ success: false, error: "Tool not found: unifi_batch_status" });
+    expect(relay.sendToolCall).not.toHaveBeenCalled();
+  });
+
+  it("keeps routing another server's meta-tools", async () => {
+    const relay = relayWithServerMetaTools();
+
+    const result = await relay.handleToolCall("protect_batch", { operations: [] }, FULL_AGENT_SCOPE);
+
+    expect(result).toMatchObject({ success: true, data: { locationId: "loc-a", toolName: "protect_batch" } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// __location validation
+// ---------------------------------------------------------------------------
+
+describe("an explicit __location", () => {
+  const home = { id: "loc-a", name: "Home" };
+  const office = { id: "loc-b", name: "Office" };
+
+  function choicesError(toolName: string, location: unknown, choices: Array<{ id: string; name: string }>) {
+    return {
+      success: false,
+      error:
+        `__location must be the id of a location with ${toolName}; got ${JSON.stringify(location)}. ` +
+        `Available locations: ${JSON.stringify(choices)}`,
+    };
+  }
+
+  describe("with one location", () => {
+    function oneLocationRelay(): any {
+      const relay = createScopedRelay();
+      addLocation(relay, "loc-a", "Home", sampleTools());
+      return relay;
+    }
+
+    it.each([
+      ["an unknown location", "Nowhere"],
+      ["the location's name instead of its id", "Home"],
+    ])("rejects %s on every call path, listing the location", async (_label, location) => {
+      const relay = oneLocationRelay();
+
+      const write = await relay.handleToolCall("unifi_execute", { tool: "restart_device", __location: location }, FULL_AGENT_SCOPE);
+      const read = await relay.handleToolCall("unifi_execute", { tool: "list_clients", __location: location }, FULL_AGENT_SCOPE);
+      const direct = await relay.handleToolCall("restart_device", { __location: location }, FULL_AGENT_SCOPE);
+      const batch = await relay.handleToolCall(
+        "unifi_batch",
+        { calls: [{ tool: "list_devices", __location: location }] },
+        FULL_AGENT_SCOPE,
+      );
+
+      expect(write).toEqual(choicesError("restart_device", location, [home]));
+      expect(read).toEqual(choicesError("list_clients", location, [home]));
+      expect(direct).toEqual(choicesError("restart_device", location, [home]));
+      expect(batch.data.results[0].result).toEqual(choicesError("list_devices", location, [home]));
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["an empty string", ""],
+      ["a number", 7],
+    ])("treats a supplied __location of %s as an invalid target, not as no target", async (_label, location) => {
+      const relay = oneLocationRelay();
+
+      const direct = await relay.handleToolCall("restart_device", { __location: location }, FULL_AGENT_SCOPE);
+      const execute = await relay.handleToolCall(
+        "unifi_execute",
+        { tool: "restart_device", __location: location },
+        FULL_AGENT_SCOPE,
+      );
+      const batch = await relay.handleToolCall(
+        "unifi_batch",
+        { calls: [{ tool: "restart_device", __location: location }] },
+        FULL_AGENT_SCOPE,
+      );
+
+      const refused = choicesError("restart_device", location, [home]);
+      expect(direct).toEqual(refused);
+      expect(execute).toEqual(refused);
+      expect(batch.data.results[0].result).toEqual(refused);
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it("treats __location: null as absent on direct, execute and batch calls", async () => {
+      const relay = oneLocationRelay();
+
+      const direct = await relay.handleToolCall("restart_device", { mac: "aa", __location: null }, FULL_AGENT_SCOPE);
+      const execute = await relay.handleToolCall(
+        "unifi_execute",
+        { tool: "restart_device", arguments: { mac: "aa" }, __location: null },
+        FULL_AGENT_SCOPE,
+      );
+      const batch = await relay.handleToolCall(
+        "unifi_batch",
+        { calls: [{ tool: "restart_device", arguments: { mac: "aa" }, __location: null }] },
+        FULL_AGENT_SCOPE,
+      );
+
+      const routed = { success: true, data: { locationId: "loc-a", toolName: "restart_device" } };
+      expect(direct).toEqual(routed);
+      expect(execute).toEqual(routed);
+      expect(batch.data.results[0].result).toEqual(routed);
+      expect(relay.sendToolCall.mock.calls).toEqual([
+        ["loc-a", "restart_device", { mac: "aa" }],
+        ["loc-a", "restart_device", { mac: "aa" }],
+        ["loc-a", "restart_device", { mac: "aa" }],
+      ]);
+    });
+
+    it("still refuses an empty __location as outside a location-scoped token first", async () => {
+      const relay = oneLocationRelay();
+
+      const result = await relay.handleToolCall(
+        "unifi_execute",
+        { tool: "restart_device", __location: "" },
+        { readOnly: false, locations: ["loc-a"] },
+      );
+
+      expect(result).toEqual({ success: false, error: "Location not available to this agent token: " });
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it("routes the location's id with __location stripped, and a call without __location", async () => {
+      const relay = oneLocationRelay();
+
+      const named = await relay.handleToolCall(
+        "unifi_execute",
+        { tool: "restart_device", arguments: { mac: "aa" }, __location: "loc-a" },
+        FULL_AGENT_SCOPE,
+      );
+      const omitted = await relay.handleToolCall("list_clients", {}, FULL_AGENT_SCOPE);
+
+      expect(named).toMatchObject({ success: true, data: { locationId: "loc-a", toolName: "restart_device" } });
+      expect(omitted).toMatchObject({ success: true, data: { locationId: "loc-a", toolName: "list_clients" } });
+      expect(relay.sendToolCall.mock.calls).toEqual([
+        ["loc-a", "restart_device", { mac: "aa" }],
+        ["loc-a", "list_clients", {}],
+      ]);
+    });
+  });
+
+  describe("with several locations", () => {
+    function twoLocationRelay(): any {
+      const relay = createScopedRelay();
+      addLocation(relay, "loc-a", "Home", sampleTools());
+      addLocation(relay, "loc-b", "Office", sampleTools());
+      addLocation(relay, "loc-c", "Lab", [{ name: "lab_only", description: "", annotations: { readOnlyHint: true } }]);
+      return relay;
+    }
+
+    it("rejects an unknown write target with the same error instead of trying to send to it", async () => {
+      const relay = twoLocationRelay();
+
+      const result = await relay.handleToolCall("restart_device", { __location: "Nowhere" }, FULL_AGENT_SCOPE);
+
+      expect(result).toEqual(choicesError("restart_device", "Nowhere", [home, office]));
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it("rejects a location that does not have the tool", async () => {
+      const relay = twoLocationRelay();
+
+      const result = await relay.handleToolCall("restart_device", { __location: "loc-c" }, FULL_AGENT_SCOPE);
+
+      expect(result).toEqual(choicesError("restart_device", "loc-c", [home, office]));
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it("refuses an empty __location on a write instead of asking for one, and on a read instead of fanning out", async () => {
+      const relay = twoLocationRelay();
+
+      const write = await relay.handleToolCall("unifi_execute", { tool: "restart_device", __location: "" }, FULL_AGENT_SCOPE);
+      const read = await relay.handleToolCall("unifi_execute", { tool: "list_clients", __location: "" }, FULL_AGENT_SCOPE);
+
+      expect(write).toEqual(choicesError("restart_device", "", [home, office]));
+      expect(read).toEqual(choicesError("list_clients", "", [home, office]));
+      expect(relay.sendToolCall).not.toHaveBeenCalled();
+      expect(relay.fanOutToolCall).not.toHaveBeenCalled();
+    });
+
+    it("treats __location: null like an absent one with several locations", async () => {
+      const relay = twoLocationRelay();
+
+      const write = await relay.handleToolCall("restart_device", { __location: null }, FULL_AGENT_SCOPE);
+      await relay.handleToolCall("list_clients", { __location: null }, FULL_AGENT_SCOPE);
+
+      expect(write).toEqual({ success: false, error: expect.stringContaining("requires __location") });
+      expect(relay.fanOutToolCall).toHaveBeenCalledWith("list_clients", { __location: null }, ["loc-a", "loc-b"]);
+    });
+
+    it("rejects an unknown location on a read instead of fanning out", async () => {
+      const relay = twoLocationRelay();
+
+      const result = await relay.handleToolCall("list_clients", { __location: "Nowhere" }, FULL_AGENT_SCOPE);
+
+      expect(result).toEqual(choicesError("list_clients", "Nowhere", [home, office]));
+      expect(relay.fanOutToolCall).not.toHaveBeenCalled();
+    });
   });
 });
 
