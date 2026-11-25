@@ -265,8 +265,8 @@ When multiple relay clients are connected, write operations require a `__locatio
 
 `__location` takes a location ID, not a name. Whenever it is supplied, with one
 location or several, it must name a location that has the tool; anything else,
-an empty or null value included, is refused with the ID and name of each
-location that does. Leave it out to name no location.
+an empty value included, is refused with the ID and name of each location that
+does. Leave it out, or send `null`, to name no location.
 
 Read-only operations (tools with `readOnlyHint: true`) are automatically fanned out to all connected locations and results are returned as an aggregated response.
 

@@ -1199,7 +1199,6 @@ describe("an explicit __location", () => {
 
     it.each([
       ["an empty string", ""],
-      ["null", null],
       ["a number", 7],
     ])("treats a supplied __location of %s as an invalid target, not as no target", async (_label, location) => {
       const relay = oneLocationRelay();
@@ -1221,6 +1220,32 @@ describe("an explicit __location", () => {
       expect(execute).toEqual(refused);
       expect(batch.data.results[0].result).toEqual(refused);
       expect(relay.sendToolCall).not.toHaveBeenCalled();
+    });
+
+    it("treats __location: null as absent on direct, execute and batch calls", async () => {
+      const relay = oneLocationRelay();
+
+      const direct = await relay.handleToolCall("restart_device", { mac: "aa", __location: null }, FULL_AGENT_SCOPE);
+      const execute = await relay.handleToolCall(
+        "unifi_execute",
+        { tool: "restart_device", arguments: { mac: "aa" }, __location: null },
+        FULL_AGENT_SCOPE,
+      );
+      const batch = await relay.handleToolCall(
+        "unifi_batch",
+        { calls: [{ tool: "restart_device", arguments: { mac: "aa" }, __location: null }] },
+        FULL_AGENT_SCOPE,
+      );
+
+      const routed = { success: true, data: { locationId: "loc-a", toolName: "restart_device" } };
+      expect(direct).toEqual(routed);
+      expect(execute).toEqual(routed);
+      expect(batch.data.results[0].result).toEqual(routed);
+      expect(relay.sendToolCall.mock.calls).toEqual([
+        ["loc-a", "restart_device", { mac: "aa" }],
+        ["loc-a", "restart_device", { mac: "aa" }],
+        ["loc-a", "restart_device", { mac: "aa" }],
+      ]);
     });
 
     it("still refuses an empty __location as outside a location-scoped token first", async () => {
@@ -1292,6 +1317,16 @@ describe("an explicit __location", () => {
       expect(read).toEqual(choicesError("list_clients", "", [home, office]));
       expect(relay.sendToolCall).not.toHaveBeenCalled();
       expect(relay.fanOutToolCall).not.toHaveBeenCalled();
+    });
+
+    it("treats __location: null like an absent one with several locations", async () => {
+      const relay = twoLocationRelay();
+
+      const write = await relay.handleToolCall("restart_device", { __location: null }, FULL_AGENT_SCOPE);
+      await relay.handleToolCall("list_clients", { __location: null }, FULL_AGENT_SCOPE);
+
+      expect(write).toEqual({ success: false, error: expect.stringContaining("requires __location") });
+      expect(relay.fanOutToolCall).toHaveBeenCalledWith("list_clients", { __location: null }, ["loc-a", "loc-b"]);
     });
 
     it("rejects an unknown location on a read instead of fanning out", async () => {

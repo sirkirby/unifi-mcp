@@ -135,9 +135,16 @@ function canSeeLocation(scope: AgentScope, locationId: string): boolean {
   return scope.locations === null || scope.locations.includes(locationId);
 }
 
-/** Whether the caller supplied __location at all; absent is the only way to name no target */
+/**
+ * Whether the caller supplied a __location target. Absent and null both name no
+ * target: some MCP clients send null for every unset optional field, and null
+ * can never route a call somewhere the caller did not name.
+ */
 function hasLocation(args: object): boolean {
-  return Object.prototype.hasOwnProperty.call(args, "__location");
+  return (
+    Object.prototype.hasOwnProperty.call(args, "__location") &&
+    (args as { __location?: unknown }).__location != null
+  );
 }
 
 function locationDenied(locationId: string): Record<string, unknown> {
@@ -1113,9 +1120,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       return locationDenied(targetLocation);
     }
     // Every path, a single location included, routes only to a location id
-    // that holds the tool. A supplied __location that is empty, null or not a
+    // that holds the tool. A supplied __location that is empty or not a
     // string is refused too, so it never runs the call somewhere the caller
-    // did not name. Only an absent __location means no target.
+    // did not name.
     if (targetSupplied && (typeof targetLocation !== "string" || !locations.includes(targetLocation))) {
       return {
         success: false,
