@@ -16,6 +16,7 @@ from unifi_core.operation_gate import ControllerBusyError
 from unifi_api.graphql.permissions import ScopeDenied
 from unifi_api.services.access_event_key import InvalidAccessEventCursor, InvalidAccessEventTopic
 from unifi_api.services.controllers import ControllerNotFound
+from unifi_api.services.drive import DriveAPIError
 from unifi_api.services.incident_evidence import ControllerCapabilityError, IncidentRequestError
 from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.pagination import InvalidCursor
@@ -26,6 +27,7 @@ from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 EXPECTED_ERRORS = (
     SiteManagerAPIError,
     InnerSpaceAPIError,
+    DriveAPIError,
     ControllerNotFound,
     ControllerCapabilityError,
     IncidentRequestError,
@@ -71,7 +73,7 @@ def is_expected_error(error: GraphQLError) -> bool:
 def _classify(error: GraphQLError) -> str:
     # By exception type only: messages can carry rejected input.
     orig = error.original_error
-    if isinstance(orig, (SiteManagerAPIError, InnerSpaceAPIError)):
+    if isinstance(orig, (SiteManagerAPIError, InnerSpaceAPIError, DriveAPIError)):
         return orig.graphql_code
     if isinstance(orig, ControllerNotFound):
         return "NOT_FOUND"

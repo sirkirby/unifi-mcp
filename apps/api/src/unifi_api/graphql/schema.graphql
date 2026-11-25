@@ -764,6 +764,383 @@ type DpiStats {
   categories: JSON!
 }
 
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveDisk {
+  """Bay number as printed on the NAS"""
+  slotId: String
+
+  """'disk' for a drive bay, 'cache' for an SSD cache slot"""
+  bayType: String!
+
+  """Disk state, such as optimal, or 'empty' for an empty bay"""
+  state: String
+
+  """Storage pool the disk belongs to"""
+  poolId: String
+
+  """RAID group the disk belongs to"""
+  raidGroupId: String
+
+  """Whether the disk is a global hot spare"""
+  isGlobalHotSpare: Boolean
+
+  """Whether the disk is a hot spare for its pool"""
+  isLocalHotSpare: Boolean
+
+  """Disk type, such as HDD or SSD"""
+  type: String
+
+  """Disk model"""
+  model: String
+
+  """Disk serial number"""
+  serial: String
+
+  """Disk firmware"""
+  firmware: String
+
+  """Raw disk size in bytes"""
+  sizeBytes: BigInt
+
+  """Spindle speed; absent for SSDs"""
+  rpm: Int
+
+  """SATA revision, such as SATA 3.3"""
+  interface: String
+
+  """ATA command set, such as ACS-4"""
+  ataStandard: String
+
+  """NVMe version, for NVMe disks"""
+  nvmeVersion: String
+
+  """Sector format, such as 512E"""
+  sectorFormat: String
+
+  """Disk temperature in degrees Celsius"""
+  temperatureC: Float
+
+  """SMART power-on hours"""
+  powerOnHours: BigInt
+
+  """SMART bad (reallocated) sector count"""
+  badSectorCount: BigInt
+
+  """SMART uncorrectable sector count"""
+  uncorrectableSectorCount: BigInt
+
+  """SMART read error rate"""
+  readErrorRate: BigInt
+
+  """SMART read error count"""
+  smartReadErrorCount: BigInt
+
+  """Why Drive flags the disk as at risk, if it does"""
+  riskReasons: JSON
+
+  """Why Drive considers the disk incompatible, if it does"""
+  incompatibleReasons: JSON
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveFileServices {
+  """Whether SMB is enabled"""
+  smbEnabled: Boolean
+
+  """Whether NFS is enabled"""
+  nfsEnabled: Boolean
+
+  """Whether Time Machine (over SMB) is enabled; it requires SMB"""
+  timeMachineEnabled: Boolean
+
+  """Custom domain clients use, if one is set"""
+  customDomain: String
+
+  """Interfaces clients can connect to"""
+  networkInterfaces: [DriveNetworkInterface!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNetworkInterface {
+  """Interface name, such as enp0s0"""
+  name: String
+
+  """Port type, such as ethernet or sfp+"""
+  interface: String
+
+  """Whether the link is up"""
+  connected: Boolean
+
+  """Negotiated link speed, such as 10 GbE"""
+  linkSpeed: String
+
+  """Maximum link speed of the port"""
+  maxSpeed: String
+
+  """IP address clients connect to"""
+  address: String
+
+  """Interface MAC address"""
+  mac: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNfsConnection {
+  """Client IP address or hostname"""
+  client: String
+
+  """Whether the export uses async writes"""
+  asyncWrites: Boolean
+
+  """Shared drives it may mount"""
+  sharedDrives: [DriveNfsSharedDriveGrant!]
+
+  """
+  Problems Drive reports for this connection, such as an unresolvable hostname
+  """
+  errorCodes: JSON
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNfsSharedDriveGrant {
+  """Shared drive id"""
+  id: String
+
+  """Shared drive name"""
+  name: String
+
+  """Shared drive status"""
+  status: String
+
+  """Shared drive encryption status"""
+  encryptionStatus: String
+
+  """rw (read-write) or ro (read-only)"""
+  permission: String
+
+  """Path a client mounts, <nas>:<export_path>"""
+  exportPath: String
+}
+
+"""
+Read-only access to UniFi Drive resources. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveQuery {
+  """
+  Identity, firmware and health of the NAS console. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  systemInfo(controller: ID!): DriveSystemInfo!
+
+  """
+  Storage pools and their RAID groups. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  storagePools(controller: ID!): [DriveStoragePool!]!
+
+  """
+  Drive bays and SSD cache slots with the disk in each and its SMART health. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  disks(controller: ID!, includeEmpty: Boolean! = false, includeCache: Boolean! = true): [DriveDisk!]!
+
+  """
+  Shared drives. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  sharedDrives(controller: ID!): [DriveSharedDrive!]!
+
+  """
+  One shared drive by id. Drive omits the protection flags and member count that the list includes. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  sharedDrive(controller: ID!, driveId: String!): DriveSharedDrive!
+
+  """
+  Whether SMB, NFS and Time Machine are on, and the interfaces clients connect to. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  fileServices(controller: ID!): DriveFileServices!
+
+  """
+  NFS clients allowed to mount shared drives, with their export paths. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  nfsConnections(controller: ID!): [DriveNfsConnection!]!
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveRaidGroup {
+  """RAID group number within the pool"""
+  number: Int
+
+  """RAID group id"""
+  id: String
+
+  """RAID level in effect now, such as raid1"""
+  currentLevel: String
+
+  """RAID level the pool is configured for, such as raid5"""
+  configLevel: String
+
+  """Disk failures the group survives now"""
+  currentProtection: Int
+
+  """Disk failures it survives at its configured level"""
+  expectedProtection: Int
+
+  """Recommended size in bytes for an added disk"""
+  recommendedDiskSize: BigInt
+
+  """Rebuild or expansion progress, as reported by Drive"""
+  progress: Float
+
+  """Estimated time remaining for that work, as reported by Drive"""
+  estimate: Float
+
+  """Whether this group is an SSD cache"""
+  isSsdCache: Boolean
+
+  """Why the group is a remnant, if it is one"""
+  remnantReason: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSharedDrive {
+  """
+  Shared drive id. Pass it as shared_drives[].id to the drive_*_nfs_connection actions.
+  """
+  id: String
+
+  """Shared drive name; NFS exports it as /var/nfs/shared/<name>"""
+  name: String
+
+  """Drive type, such as shared"""
+  type: String
+
+  """Drive status, such as active"""
+  status: String
+
+  """Storage pool the drive lives on"""
+  storagePoolId: String
+
+  """Quota in bytes; absent when unlimited"""
+  quotaBytes: BigInt
+
+  """Space used in bytes"""
+  usedBytes: BigInt
+
+  """The logged-in account's role on the drive"""
+  role: String
+
+  """Number of members with access"""
+  memberCount: Int
+
+  """Encryption status, such as unencrypted"""
+  encryptionStatus: String
+
+  """Whether snapshots are enabled"""
+  snapshotEnabled: Boolean
+
+  """Whether remote backup is enabled"""
+  remoteBackupEnabled: Boolean
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveStoragePool {
+  """Pool number"""
+  number: Int
+
+  """Storage pool id; shared drives name it as storage_pool_id"""
+  id: String
+
+  """Pool status, such as healthy or noDataProtectionYet"""
+  status: String
+
+  """RAID level chosen for the pool"""
+  preferLevel: String
+
+  """Volume type, such as lvm"""
+  type: String
+
+  """Usable capacity in bytes"""
+  capacityBytes: BigInt
+
+  """Used space in bytes"""
+  usedBytes: BigInt
+
+  """Used space as a percentage of capacity"""
+  usedPercent: Float
+
+  """Initialization status, such as successful"""
+  initializingStatus: String
+
+  """RAID group currently receiving writes"""
+  activeRaidGroupId: String
+
+  """RAID groups in the pool"""
+  raidGroups: [DriveRaidGroup!]
+}
+
+"""
+Identity, firmware and health of the UniFi OS console that runs UniFi Drive.
+"""
+type DriveSystemInfo {
+  """Console name"""
+  name: String
+
+  """Console hostname"""
+  hostname: String
+
+  """Hardware model, such as UniFi Network Attached Storage Pro 8"""
+  model: String
+
+  """Hardware short name, such as UNASPRO8"""
+  shortname: String
+
+  """Console MAC address"""
+  mac: String
+
+  """UniFi OS firmware version"""
+  firmwareVersion: String
+
+  """Firmware version available as an update, if any"""
+  firmwareUpdateAvailable: String
+
+  """Console state, such as setup or updateAvailable"""
+  deviceState: String
+
+  """Whether initial setup is complete"""
+  isSetup: Boolean
+
+  """Seconds since the console started"""
+  uptimeSeconds: Float
+
+  """Console timezone"""
+  timezone: String
+
+  """CPU load reported by the console, 0 to 1"""
+  cpuLoad: Float
+
+  """CPU temperature in degrees Celsius"""
+  cpuTemperatureC: Float
+
+  """Total memory in KiB"""
+  memoryTotalKb: BigInt
+
+  """Available memory in KiB"""
+  memoryAvailableKb: BigInt
+}
+
 """A Dynamic DNS provider entry configured on the controller."""
 type DynamicDns {
   id: ID
@@ -2514,6 +2891,9 @@ type Query {
 
   """Read-only access to UniFi InnerSpace resources."""
   innerspace: InnerSpaceQuery!
+
+  """Read-only access to UniFi Drive resources."""
+  drive: DriveQuery!
 }
 
 """Radio configuration entry on a UniFi device with radios."""

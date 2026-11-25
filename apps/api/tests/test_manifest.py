@@ -262,3 +262,53 @@ def test_innerspace_catalog_accepts_session_reads_and_writes(monkeypatch, action
     monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(entry))
 
     assert ManifestRegistry.load().resolve("innerspace_get_status").permission_action == action
+
+
+DRIVE_READS = {
+    "drive_get_file_services",
+    "drive_get_shared_drive",
+    "drive_get_system_info",
+    "drive_list_disks",
+    "drive_list_nfs_connections",
+    "drive_list_shared_drives",
+    "drive_list_storage_pools",
+}
+DRIVE_WRITES = {
+    "drive_set_file_service": ("file_service", "update", "set_file_service"),
+    "drive_add_nfs_connection": ("nfs_connection", "create", "add_nfs_connection"),
+    "drive_update_nfs_connection": ("nfs_connection", "update", "update_nfs_connection"),
+    "drive_remove_nfs_connection": ("nfs_connection", "delete", "remove_nfs_connection"),
+}
+
+
+def test_drive_catalog_entries_are_session_reads_and_confirmed_writes() -> None:
+    registry = ManifestRegistry.load()
+    entries = {name: registry.resolve(name) for name in registry.all_tools() if name.startswith("drive_")}
+
+    assert set(entries) == DRIVE_READS | set(DRIVE_WRITES)
+    for name, entry in entries.items():
+        assert entry.product == "drive"
+        assert entry.connection_kind == "controller"
+        assert entry.auth_method == "local_only"
+        if name in DRIVE_READS:
+            assert (entry.permission_action, entry.read_only_hint) == ("read", True)
+        else:
+            # The confirmed manager method: it plans from fresh state and applies in one call.
+            category, action, method = DRIVE_WRITES[name]
+            assert (entry.category, entry.permission_action, entry.read_only_hint) == (category, action, False)
+            assert (entry.manager_attr, entry.manager_method) == ("file_service_manager", method)
+
+
+@pytest.mark.parametrize("auth_method", ["either", "api_key_only"])
+def test_drive_catalog_refuses_anything_but_session_operations(monkeypatch, auth_method) -> None:
+    action = _action(
+        name="drive_get_system_info",
+        product="drive",
+        manager_attr="system_manager",
+        manager_method="get_system_info",
+        auth_method=auth_method,
+    )
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(action))
+
+    with pytest.raises(CatalogLoadError, match="session Drive operation"):
+        ManifestRegistry.load()

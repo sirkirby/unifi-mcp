@@ -47,6 +47,7 @@ blocked = (
     'unifi_access_mcp',
     'unifi_sitemanager_mcp',
     'unifi_innerspace_mcp',
+    'unifi_drive_mcp',
 )
 
 class BlockSiblingApps(importlib.abc.MetaPathFinder):

@@ -21,9 +21,13 @@ KNOWN_QUIRKS_BY_PRODUCT = {
 }
 
 
-# Products a console controller record may declare. InnerSpace is never probed:
-# it is session-only, and whether it is installed comes from the first read.
-CONTROLLER_PRODUCTS = ("network", "protect", "access", "innerspace")
+# Products a console controller record may declare. InnerSpace and Drive are
+# never probed: they are session-only, and whether the application is installed
+# comes from the first read.
+CONTROLLER_PRODUCTS = ("network", "protect", "access", "innerspace", "drive")
+# Products that use the console login session only and never the API token.
+SESSION_ONLY_PRODUCTS = ("innerspace", "drive")
+_PRODUCT_LIST_TEXT = "network, protect, access, innerspace, or drive"
 
 
 class ControllerNotFound(Exception):
@@ -43,7 +47,7 @@ def validate_controller_credentials(
     validate_product_kinds: bool = True,
 ) -> None:
     if validate_product_kinds and any(p not in CONTROLLER_PRODUCTS for p in product_kinds):
-        raise InvalidControllerCredentials("Controller products must be network, protect, access, or innerspace.")
+        raise InvalidControllerCredentials(f"Controller products must be {_PRODUCT_LIST_TEXT}.")
     if bool(username) != bool(password):
         raise InvalidControllerCredentials(
             "Provide both username and password, or omit both for API-key authentication."
@@ -55,6 +59,8 @@ def validate_controller_credentials(
         )
     if "innerspace" in product_kinds and not has_session:
         raise InvalidControllerCredentials("InnerSpace requires username and password; it does not use an API token.")
+    if "drive" in product_kinds and not has_session:
+        raise InvalidControllerCredentials("Drive requires username and password; it does not use an API token.")
     if not has_session and not (api_token and api_token.strip()):
         raise InvalidControllerCredentials("Provide a complete username/password pair or an API token.")
 
@@ -199,8 +205,8 @@ async def probe_capabilities(controller: Controller) -> dict:
         "not_probed": [],
     }
     declared = [p for p in controller.product_kinds.split(",") if p]
-    # Declared but never probed: InnerSpace is decided at its first read, with the session.
-    payload["not_probed"] = [p for p in declared if p == "innerspace"]
+    # Declared but never probed: InnerSpace and Drive are decided at their first read, with the session.
+    payload["not_probed"] = [p for p in declared if p in SESSION_ONLY_PRODUCTS]
 
     timeout = aiohttp.ClientTimeout(total=5)
     connector = aiohttp.TCPConnector(ssl=controller.verify_tls)

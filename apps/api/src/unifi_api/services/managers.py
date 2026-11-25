@@ -213,11 +213,28 @@ def _build_innerspace_managers() -> dict[str, Callable[..., Any]]:
     }
 
 
+def _build_drive_managers() -> dict[str, Callable[..., Any]]:
+    from unifi_core.drive.managers.file_service_manager import FileServiceManager
+    from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
+    from unifi_core.drive.managers.storage_manager import StorageManager
+    from unifi_core.drive.managers.system_manager import DriveSystemManager
+
+    # The file service manager checks NFS grants against the shared drives on the
+    # same connection, as the Drive MCP runtime builds it.
+    return {
+        "file_service_manager": lambda cm: FileServiceManager(cm, SharedDriveManager(cm)),
+        "shared_drive_manager": lambda cm: SharedDriveManager(cm),
+        "storage_manager": lambda cm: StorageManager(cm),
+        "system_manager": lambda cm: DriveSystemManager(cm),
+    }
+
+
 _PRODUCT_BUILDERS: dict[str, Callable[[], dict[str, Callable[..., Any]]]] = {
     "network": _build_network_managers,
     "protect": _build_protect_managers,
     "access": _build_access_managers,
     "innerspace": _build_innerspace_managers,
+    "drive": _build_drive_managers,
 }
 
 
@@ -482,6 +499,8 @@ class ManagerFactory:
         #   - protect: site, api_key
         #   - access:  api_key, api_port
         #   - innerspace: none; it is session-only and never receives the API token
+        #   - drive: none; it is session-only, never receives the API token, and
+        #     logs in on its first request (see below)
         # Connections are NOT established at construction time — we must call
         # initialize() eagerly here so callers don't hang on the first
         # authenticated request. The MCP servers do this at startup; the
@@ -554,6 +573,22 @@ class ManagerFactory:
                     "console host and port"
                 ) from None
             return await self._require_initialized(cm, product, keep_on_failure=keep_failed)
+        if product == "drive":
+            from unifi_core.drive.managers.connection_manager import DriveConnectionManager
+
+            # Session only: a stored API token belongs to the other products and
+            # is never passed here. No tls_env_prefix: the API reads no DRIVE
+            # settings. The Drive client has no initialize(): it logs in on its
+            # first request and pauses logins on its own escalating cool-down
+            # after a rejection, so a cached manager is never re-created to log
+            # in again. The probe proves the login with one read instead.
+            return DriveConnectionManager(
+                host=host,
+                username=creds.get("username") or "",
+                password=creds.get("password") or "",
+                port=port,
+                verify_ssl=controller.verify_tls,
+            )
         raise UnknownProduct(f"unknown product '{product}'")
 
     def _builders_for(self, product: str) -> dict[str, Callable[..., Any]]:
@@ -731,6 +766,7 @@ class ManagerFactory:
             try:
                 async with self._sm() as session:
                     cm = await self._construct_connection_manager(session, controller_id, product)
+                await self._prove_login(cm, product)
                 latency = int((time.perf_counter() - start) * 1000)
                 per_product[product] = {"ok": True, "latency_ms": latency, "error": None}
                 total_latency += latency
@@ -762,6 +798,19 @@ class ManagerFactory:
             "error_kind": None,
             "last_probed_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    @staticmethod
+    async def _prove_login(cm: Any, product: str) -> None:
+        """Log a lazily connecting client in for the probe.
+
+        Drive connects on its first request, so constructing it proves nothing.
+        One read of the console's system endpoint logs in, through the probe's
+        own client, without reading anything from the Drive application.
+        """
+        if product == "drive":
+            from unifi_core.drive.managers.system_manager import DriveSystemManager
+
+            await DriveSystemManager(cm).get_system_info()
 
     async def _heal_blocked_connections(self, controller_id: str, per_product: dict[str, dict]) -> None:
         """Drop cached connections whose auth circuit latched once a probe proves auth works.

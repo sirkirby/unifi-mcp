@@ -811,9 +811,11 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type("access_get_system_info", AccessSystemInfoType, "detail")
     reg.register_tool_type("access_get_health", AccessHealthType, "detail")
 
+    from unifi_api.graphql.types.drive.registration import register_types as register_drive_types
     from unifi_api.graphql.types.innerspace.registration import register_types as register_innerspace_types
     from unifi_api.graphql.types.sitemanager.registration import register_types
 
     register_types(reg)
     register_innerspace_types(reg)
+    register_drive_types(reg)
     return reg

@@ -33,6 +33,7 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
         "access": set(),
         "sitemanager": set(),
         "innerspace": set(),
+        "drive": set(),
     }
     for name in manifest.all_tools():
         try:
@@ -115,3 +116,22 @@ def test_all_innerspace_fields_have_exact_canonical_names():
     for name, field in expected.items():
         assert tool_to_field_path(name, product="innerspace") == "query.innerspace." + field
         assert "scoped to the InnerSpace tool family" in namespace.fields[field].description
+
+
+def test_all_drive_fields_have_exact_canonical_names():
+    expected = {
+        "drive_get_system_info": "systemInfo",
+        "drive_list_storage_pools": "storagePools",
+        "drive_list_disks": "disks",
+        "drive_list_shared_drives": "sharedDrives",
+        "drive_get_shared_drive": "sharedDrive",
+        "drive_get_file_services": "fileServices",
+        "drive_list_nfs_connections": "nfsConnections",
+    }
+    from unifi_api.graphql.schema import schema
+
+    namespace = schema._schema.get_type("DriveQuery")
+    assert set(namespace.fields) == set(expected.values())
+    for name, field in expected.items():
+        assert tool_to_field_path(name, product="drive") == "query.drive." + field
+        assert "scoped to the UniFi Drive tool family" in namespace.fields[field].description

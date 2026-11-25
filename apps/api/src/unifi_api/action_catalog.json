@@ -724,6 +724,247 @@
       }
     },
     {
+      "name": "drive_add_nfs_connection",
+      "product": "drive",
+      "category": "nfs_connection",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "add_nfs_connection",
+      "input_schema": {
+        "properties": {
+          "async_writes": {
+            "description": "Use async writes: faster, but writes can be lost on a NAS power loss (default false)",
+            "type": "boolean"
+          },
+          "client": {
+            "description": "Client IP address or hostname allowed to mount",
+            "type": "string"
+          },
+          "shared_drives": {
+            "description": "Shared drives the client may mount, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"rw\"}]. permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives; only drives of type shared can be exported, not personal ones.",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client",
+          "shared_drives"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_file_services",
+      "product": "drive",
+      "category": "file_service",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "get_file_services",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_shared_drive",
+      "product": "drive",
+      "category": "shared_drive",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "shared_drive_manager",
+      "manager_method": "get_shared_drive",
+      "input_schema": {
+        "properties": {
+          "drive_id": {
+            "description": "Shared drive ID (from drive_list_shared_drives)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "drive_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_system_info",
+      "product": "drive",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "get_system_info",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_disks",
+      "product": "drive",
+      "category": "storage",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "storage_manager",
+      "manager_method": "list_disks",
+      "input_schema": {
+        "properties": {
+          "include_cache": {
+            "description": "Include SSD cache slots (default true)",
+            "type": "boolean"
+          },
+          "include_empty": {
+            "description": "Also list empty bays and slots (default false)",
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_nfs_connections",
+      "product": "drive",
+      "category": "nfs_connection",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "list_nfs_connections",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_shared_drives",
+      "product": "drive",
+      "category": "shared_drive",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "shared_drive_manager",
+      "manager_method": "list_shared_drives",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_storage_pools",
+      "product": "drive",
+      "category": "storage",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "storage_manager",
+      "manager_method": "list_pools",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_remove_nfs_connection",
+      "product": "drive",
+      "category": "nfs_connection",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "remove_nfs_connection",
+      "input_schema": {
+        "properties": {
+          "client": {
+            "description": "The client's IP address or hostname, as listed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_set_file_service",
+      "product": "drive",
+      "category": "file_service",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "set_file_service",
+      "input_schema": {
+        "properties": {
+          "enabled": {
+            "description": "true to turn the service on, false to turn it off",
+            "type": "boolean"
+          },
+          "service": {
+            "description": "smb, nfs or time_machine",
+            "enum": [
+              "smb",
+              "nfs",
+              "time_machine"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "enabled"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_update_nfs_connection",
+      "product": "drive",
+      "category": "nfs_connection",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "update_nfs_connection",
+      "input_schema": {
+        "properties": {
+          "async_writes": {
+            "description": "Use async writes",
+            "type": "boolean"
+          },
+          "client": {
+            "description": "The client's IP address or hostname, as listed",
+            "type": "string"
+          },
+          "shared_drives": {
+            "description": "The client's new shared drive list, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"ro\"}]. It replaces the whole list. A drive the client already has keeps its current permission when permission is left out; a newly granted drive defaults to rw. IDs come from drive_list_shared_drives.",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "innerspace_create_attenuation_object_type",
       "product": "innerspace",
       "category": "attenuation",

@@ -76,6 +76,10 @@ from unifi_api.routes.resources.access import (
 from unifi_api.routes.resources.access import (
     visitors as access_visitors_routes,
 )
+from unifi_api.routes.resources.drive import file_services as drive_file_services_routes
+from unifi_api.routes.resources.drive import shared_drives as drive_shared_drives_routes
+from unifi_api.routes.resources.drive import storage as drive_storage_routes
+from unifi_api.routes.resources.drive import system as drive_system_routes
 from unifi_api.routes.resources.innerspace import devices as innerspace_devices_routes
 from unifi_api.routes.resources.innerspace import floor_plans as innerspace_floor_plans_routes
 from unifi_api.routes.resources.innerspace import project as innerspace_project_routes
@@ -252,6 +256,7 @@ from unifi_api.services.audit import write_audit
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
 from unifi_api.services.controllers import list_controllers
+from unifi_api.services.drive import DriveAPIError
 from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
@@ -531,6 +536,10 @@ def create_app(config: ApiConfig) -> FastAPI:
             status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}}, headers=headers
         )
 
+    @app.exception_handler(DriveAPIError)
+    async def _drive_error(request: Request, exc: DriveAPIError):
+        return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
+
     @app.middleware("http")
     async def _sitemanager_no_store(request: Request, call_next):
         response = await call_next(request)
@@ -738,6 +747,13 @@ def create_app(config: ApiConfig) -> FastAPI:
         innerspace_project_routes,
         innerspace_floor_plans_routes,
         innerspace_devices_routes,
+    ):
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
+    for r in (
+        drive_system_routes,
+        drive_storage_routes,
+        drive_shared_drives_routes,
+        drive_file_services_routes,
     ):
         app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (

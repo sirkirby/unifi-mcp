@@ -1872,7 +1872,40 @@ def _translate_sitemanager_query(args):
     return (), SiteManagerMetricsQueryInput.model_validate(args).model_dump(exclude_none=True)
 
 
+def _translate_drive_add_nfs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate the new client as the Drive MCP tool does, into the manager's connection input."""
+    from unifi_core.drive.models.services import NfsConnectionInput
+
+    connection = NfsConnectionInput(
+        client=args.get("client"),
+        shared_drives=args.get("shared_drives"),
+        async_writes=args.get("async_writes", False),
+    )
+    return (), {"connection": connection}
+
+
+def _translate_drive_update_nfs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate a replacement grant list as the Drive MCP tool does; omitted fields stay unset.
+
+    A grant passed without ``permission`` keeps the drive's current permission:
+    the manager reads that from the fields the caller set, which validation keeps.
+    """
+    from pydantic import TypeAdapter
+    from unifi_core.drive.models.services import NfsSharedDriveAccess
+
+    shared_drives = args.get("shared_drives")
+    grants = (
+        TypeAdapter(list[NfsSharedDriveAccess]).validate_python(shared_drives) if shared_drives is not None else None
+    )
+    return (), {"client": args.get("client"), "shared_drives": grants, "async_writes": args.get("async_writes")}
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    # Drive NFS writes: the preview echoes the caller's request, not the validated models.
+    "drive_add_nfs_connection": _spec(_translate_drive_add_nfs, "connection", preserve_public_preview=True),
+    "drive_update_nfs_connection": _spec(
+        _translate_drive_update_nfs, "client", "shared_drives", "async_writes", preserve_public_preview=True
+    ),
     "sitemanager_list_hosts": _spec(_translate_sitemanager_page, "page_size", "next_token"),
     "sitemanager_list_sites": _spec(_translate_sitemanager_page, "page_size", "next_token"),
     "sitemanager_list_devices": _spec(
