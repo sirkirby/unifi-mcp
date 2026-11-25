@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 13 domain tools: nine reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 15 domain tools: eleven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -52,6 +52,14 @@ Drive's single-drive endpoint does not return the protection flags or member cou
 ### `drive_get_file_services`
 
 No parameters. Returns `smb_enabled`, `nfs_enabled`, `time_machine_enabled`, `custom_domain` and `network_interfaces` (name, port type, link state and speed, address, MAC).
+
+### `drive_get_smb_advanced_settings`
+
+No parameters. Reads `GET /proxy/drive/api/v1/services/smb/advanced-settings` and returns `personal_drive_recycle_enabled`, the web app's SMB Trash for Personal Drives switch (files removed over SMB from a personal drive go to its Trash instead of being deleted), and `personal_drive_recycle_status`: `optimal`, or `migrateFirstFailed` / `migrateFailed` when one or more drives cannot move removed files to Trash yet. Shared drives set SMB Trash per drive, which this tool does not read.
+
+### `drive_get_rsync_settings`
+
+No parameters. Reads `GET /proxy/drive/api/v2/services/rsync/settings` and `GET /proxy/drive/api/v1/systems/info`, and returns `enabled`, `account_configured`, `account_username` and `ssh_enabled`. Rsync runs over SSH, so it does not work while `ssh_enabled` is false; the web app hides its rsync settings then. The account's password is never returned.
 
 ### `drive_set_file_service` (write)
 

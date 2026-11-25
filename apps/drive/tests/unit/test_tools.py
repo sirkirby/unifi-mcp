@@ -10,7 +10,12 @@ from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, Driv
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
 from unifi_core.drive.models.logs import DriveLogPage, DriveLogQuery, log_entry_from_api
-from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
+from unifi_core.drive.models.services import (
+    NfsConnectionInput,
+    nfs_connection_from_api,
+    rsync_settings_from_api,
+    smb_advanced_settings_from_api,
+)
 from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api, storage_pool_usage_from_api
 from unifi_core.drive.models.system import system_info_from_api
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiValidationError
@@ -139,6 +144,46 @@ async def test_list_shared_drives(monkeypatch):
     result = await shared_drives.drive_list_shared_drives()
 
     assert result["data"] == {"drives": [{"id": DRIVE_ID, "name": "Shared_Drive"}], "count": 1}
+
+
+async def test_smb_advanced_settings(files):
+    files.get_smb_advanced_settings.return_value = smb_advanced_settings_from_api(
+        {"personalDriveRecycleEnabled": True, "personalDriveRecycleStatus": "optimal"}
+    )
+
+    result = await file_services.drive_get_smb_advanced_settings()
+
+    assert result == {
+        "success": True,
+        "data": {"personal_drive_recycle_enabled": True, "personal_drive_recycle_status": "optimal"},
+    }
+
+
+async def test_rsync_settings_never_carry_the_account_password(files):
+    files.get_rsync_settings.return_value = rsync_settings_from_api(
+        {"enable": True, "rsyncAccount": {"username": "synthetic-rsync", "password": "synthetic-secret-0123"}},
+        {"sshEnabled": False},
+    )
+
+    result = await file_services.drive_get_rsync_settings()
+
+    assert result == {
+        "success": True,
+        "data": {
+            "enabled": True,
+            "account_configured": True,
+            "account_username": "synthetic-rsync",
+            "ssh_enabled": False,
+        },
+    }
+
+
+async def test_rsync_settings_unavailable_is_an_error(files):
+    files.get_rsync_settings.side_effect = UniFiConnectionError("UniFi Drive request GET /x timed out.")
+
+    result = await file_services.drive_get_rsync_settings()
+
+    assert result["success"] is False and result["error"].startswith("Failed to get rsync settings: ")
 
 
 async def test_read_failure_names_the_operation(files):
