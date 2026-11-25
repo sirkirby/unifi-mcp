@@ -133,6 +133,37 @@ async def test_delete_tool_preview_contract(
 
 
 @pytest.mark.asyncio
+async def test_delete_traffic_matching_list_preview_contract():
+    # The delete preview reads live state, so it needs a mocked manager — the
+    # no-mock parametrized list cannot cover it.
+    with patch("unifi_network_mcp.tools.traffic_matching_lists.traffic_matching_list_manager") as mock_manager:
+        mock_manager.get_traffic_matching_list = AsyncMock(
+            return_value={
+                "id": "list-1",
+                "name": "Allowed port list",
+                "type": "PORTS",
+                "items": [],
+            }
+        )
+        from unifi_network_mcp.tools.traffic_matching_lists import delete_traffic_matching_list
+
+        result = await delete_traffic_matching_list(list_id="list-1", confirm=False)
+
+    assert result["success"] is True
+    assert result["requires_confirmation"] is True
+    assert result["action"] == "delete"
+    assert result["resource_type"] == "traffic_matching_list"
+    assert result["resource_id"] == "list-1"
+    assert result["preview"]["will_delete"] == {
+        "id": "list-1",
+        "name": "Allowed port list",
+        "type": "PORTS",
+        "items": [],
+    }
+    assert result["message"] == ("Will delete traffic_matching_list 'Allowed port list'. Set confirm=true to execute.")
+
+
+@pytest.mark.asyncio
 async def test_delete_ap_group_preview_contract():
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_manager:
         mock_manager.get_ap_group_details = AsyncMock(return_value={"name": "Upstairs APs"})

@@ -1,5 +1,5 @@
 {
-  "count": 217,
+  "count": 221,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -28,6 +28,7 @@
     "unifi_create_route": "unifi_network_mcp.tools.routing",
     "unifi_create_simple_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_create_simple_qos_rule": "unifi_network_mcp.tools.qos",
+    "unifi_create_traffic_matching_list": "unifi_network_mcp.tools.traffic_matching_lists",
     "unifi_create_traffic_route": "unifi_network_mcp.tools.traffic_routes",
     "unifi_create_usergroup": "unifi_network_mcp.tools.usergroups",
     "unifi_create_voucher": "unifi_network_mcp.tools.hotspot",
@@ -47,6 +48,7 @@
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_delete_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_delete_port_profile": "unifi_network_mcp.tools.switch",
+    "unifi_delete_traffic_matching_list": "unifi_network_mcp.tools.traffic_matching_lists",
     "unifi_delete_vpn_client": "unifi_network_mcp.tools.vpn",
     "unifi_delete_wlan": "unifi_network_mcp.tools.network",
     "unifi_force_provision_device": "unifi_network_mcp.tools.devices",
@@ -109,6 +111,7 @@
     "unifi_get_top_clients": "unifi_network_mcp.tools.stats",
     "unifi_get_traffic_flow_statistics": "unifi_network_mcp.tools.traffic_flows",
     "unifi_get_traffic_flows": "unifi_network_mcp.tools.traffic_flows",
+    "unifi_get_traffic_matching_list": "unifi_network_mcp.tools.traffic_matching_lists",
     "unifi_get_traffic_route_details": "unifi_network_mcp.tools.traffic_routes",
     "unifi_get_usergroup_details": "unifi_network_mcp.tools.usergroups",
     "unifi_get_voucher_details": "unifi_network_mcp.tools.hotspot",
@@ -143,6 +146,7 @@
     "unifi_list_qos_rules": "unifi_network_mcp.tools.qos",
     "unifi_list_rogue_aps": "unifi_network_mcp.tools.devices",
     "unifi_list_routes": "unifi_network_mcp.tools.routing",
+    "unifi_list_traffic_matching_lists": "unifi_network_mcp.tools.traffic_matching_lists",
     "unifi_list_traffic_routes": "unifi_network_mcp.tools.traffic_routes",
     "unifi_list_usergroups": "unifi_network_mcp.tools.usergroups",
     "unifi_list_vouchers": "unifi_network_mcp.tools.hotspot",
@@ -3965,6 +3969,133 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "api_key_only",
+      "description": "Create a reusable traffic matching list (IP/IPv4/port entries referenced by firewall policies) through the UniFi public Integration API. These IDs are Integration API UUIDs scoped to the traffic-matching-list tool family \u2014 do not pass them to firewall group, firewall policy or MAC ACL tools. The controller rejects unknown type/item shapes and reports the valid values in its error; observed on this API: list types PORTS, IPV4_ADDRESSES, IPV6_ADDRESSES, and port items {type: PORT_NUMBER|PORT_NUMBER_RANGE, value|range}. Send type and items as the controller requires \u2014 the model carries them opaquely so a future controller's values still pass through. Requires confirmation, UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_create_traffic_matching_list",
+      "permission_action": "create",
+      "permission_category": "traffic_matching_lists",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, creates the list. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "items": {
+              "description": "Optional entry objects sent exactly as supplied (e.g. port entries). Omit to create an empty list.",
+              "type": "array"
+            },
+            "name": {
+              "description": "List name (e.g. 'Allowed port list')",
+              "type": "string"
+            },
+            "site_id": {
+              "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+              "type": "string"
+            },
+            "type": {
+              "description": "List type as an opaque string (no enum is published)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Create Traffic Matching List"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "auth_method": "local_only",
       "description": "Create a narrowly scoped Traffic Route (policy-based route). Requires confirmation.\n\nAn explicit matching_target and target network/VPN are required. DOMAIN routes\nrequire at least one domain. INTERNET routes must target one or more explicit\nCLIENTs with valid unicast MAC addresses, through a verified WAN or VPN client network.",
       "name": "unifi_create_traffic_route",
@@ -6189,6 +6320,124 @@
         }
       },
       "title": "Delete Port Profile"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "api_key_only",
+      "description": "Delete a traffic matching list by ID. A list referenced by firewall policies may be refused by the controller; that error is surfaced, never swallowed. This cannot be undone \u2014 recreate the list to restore it. These IDs are Integration API UUIDs scoped to the traffic-matching-list tool family \u2014 do not pass them to firewall group, firewall policy or MAC ACL tools. Requires confirmation, UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_delete_traffic_matching_list",
+      "permission_action": "delete",
+      "permission_category": "traffic_matching_lists",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the list. When false (default), returns a live-state preview",
+              "type": "boolean"
+            },
+            "list_id": {
+              "description": "Integration API UUID of the traffic matching list (from unifi_list_traffic_matching_lists)",
+              "type": "string"
+            },
+            "site_id": {
+              "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "list_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete Traffic Matching List"
     },
     {
       "annotations": {
@@ -13103,6 +13352,117 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "api_key_only",
+      "description": "Read one traffic matching list by ID, including its entries, from the UniFi public Integration API. These IDs are Integration API UUIDs scoped to the traffic-matching-list tool family \u2014 do not pass them to firewall group, firewall policy or MAC ACL tools. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_get_traffic_matching_list",
+      "schema": {
+        "input": {
+          "properties": {
+            "list_id": {
+              "description": "Integration API UUID of the traffic matching list (from unifi_list_traffic_matching_lists)",
+              "type": "string"
+            },
+            "site_id": {
+              "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "list_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Traffic Matching List"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "auth_method": "either",
       "description": "Get detailed information for a specific traffic route by ID.",
       "name": "unifi_get_traffic_route_details",
@@ -16713,6 +17073,125 @@
         }
       },
       "title": "List Routes"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "api_key_only",
+      "description": "List the site's reusable traffic matching lists (IP/IPv4/port lists referenced by firewall policy traffic filters) from the UniFi public Integration API, with pagination. These IDs are Integration API UUIDs scoped to the traffic-matching-list tool family \u2014 do not pass them to firewall group, firewall policy or MAC ACL tools. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_list_traffic_matching_lists",
+      "schema": {
+        "input": {
+          "properties": {
+            "filter_expr": {
+              "description": "Optional Integration API filter expression (e.g. name like 'Allowed')",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Page size (default 25)",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Page offset (default 0)",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "site_id": {
+              "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Traffic Matching Lists"
     },
     {
       "annotations": {

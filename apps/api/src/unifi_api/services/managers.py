@@ -92,6 +92,7 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.network.managers.switch_manager import SwitchManager
     from unifi_core.network.managers.system_manager import SystemManager
     from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
+    from unifi_core.network.managers.traffic_matching_list_manager import TrafficMatchingListManager
     from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
     from unifi_core.network.managers.usergroup_manager import UsergroupManager
     from unifi_core.network.managers.vpn_manager import VpnManager
@@ -135,6 +136,10 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
             DpiManager(cm, getattr(cm, "unifi_auth", None)),
         ),
         "traffic_route_manager": lambda cm, *, network_manager=None: TrafficRouteManager(cm, network_manager),
+        # TrafficMatchingListManager takes (cm, auth). Same Integration API
+        # auth pattern as DpiManager: the connection's UniFiAuth supplies
+        # X-API-Key when an API token is configured for the controller.
+        "traffic_matching_list_manager": lambda cm: TrafficMatchingListManager(cm, getattr(cm, "unifi_auth", None)),
         "usergroup_manager": lambda cm: UsergroupManager(cm),
         "vpn_manager": lambda cm: VpnManager(cm),
     }

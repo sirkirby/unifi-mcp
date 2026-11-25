@@ -65,6 +65,7 @@ from unifi_core.network.managers.stats_manager import StatsManager
 from unifi_core.network.managers.switch_manager import SwitchManager
 from unifi_core.network.managers.system_manager import SystemManager
 from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
+from unifi_core.network.managers.traffic_matching_list_manager import TrafficMatchingListManager
 from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
 from unifi_core.network.managers.usergroup_manager import UsergroupManager
 from unifi_core.network.managers.vpn_manager import VpnManager
@@ -189,6 +190,11 @@ def get_connection_manager() -> ConnectionManager:
 @lru_cache
 def get_acl_manager() -> AclManager:
     return AclManager(get_connection_manager())
+
+
+@lru_cache
+def get_traffic_matching_list_manager() -> TrafficMatchingListManager:
+    return TrafficMatchingListManager(get_connection_manager(), get_auth())
 
 
 @lru_cache
@@ -379,6 +385,7 @@ auth = get_auth()
 server = get_server()
 connection_manager = get_connection_manager()
 acl_manager = get_acl_manager()
+traffic_matching_list_manager = get_traffic_matching_list_manager()
 client_group_manager = get_client_group_manager()
 client_manager = get_client_manager()
 content_filter_manager = get_content_filter_manager()

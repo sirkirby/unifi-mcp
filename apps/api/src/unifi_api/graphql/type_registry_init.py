@@ -231,6 +231,9 @@ from unifi_api.graphql.types.network.traffic_flow import (
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlowStatistics as NetworkTrafficFlowStatisticsType,
 )
+from unifi_api.graphql.types.network.traffic_matching_lists import (
+    TrafficMatchingList as NetworkTrafficMatchingListType,
+)
 from unifi_api.graphql.types.network.voucher import (
     Voucher as NetworkVoucherType,
 )
@@ -411,6 +414,10 @@ def build_type_registry() -> TypeRegistry:
         NetworkDnsRecordType,
         "detail",
     )
+
+    # network/traffic_matching_lists (tool-keyed only)
+    reg.register_tool_type("unifi_list_traffic_matching_lists", NetworkTrafficMatchingListType, "list")
+    reg.register_tool_type("unifi_get_traffic_matching_list", NetworkTrafficMatchingListType, "detail")
 
     # network/dynamic_dns (tool-keyed only)
     reg.register_tool_type("unifi_list_dynamic_dns", NetworkDynamicDnsType, "list")

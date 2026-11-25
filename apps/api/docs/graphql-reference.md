@@ -1948,6 +1948,16 @@ type NetworkQuery {
   """Look up a single Dynamic DNS entry by id."""
   dynamicDnsEntry(controller: ID!, id: ID!, site: String! = "default"): DynamicDns
 
+  """
+  List the reusable traffic matching lists on the given controller/site (paginated). These IDs are scoped to the traffic-matching-list tool family — do not pass them to firewall group, firewall policy or MAC ACL tools.
+  """
+  trafficMatchingLists(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): TrafficMatchingListPage!
+
+  """
+  Look up a single traffic matching list by its Integration API UUID, including its entries. These IDs are scoped to the traffic-matching-list tool family — do not pass V1 firewall group IDs, V2 firewall policy IDs or MAC ACL rule IDs here.
+  """
+  trafficMatchingList(controller: ID!, id: ID!, site: String! = "default"): TrafficMatchingList
+
   """List configured static routes (paginated)."""
   routes(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): RoutePage!
 
@@ -3447,6 +3457,22 @@ type TrafficFlowTopPolicy {
   policyType: String
 }
 
+"""
+A reusable traffic matching list (IP/IPv4/port entries) referenced by firewall policies. Its id is an Integration API UUID scoped to the traffic-matching-list tool family — do not pass it to firewall group, firewall policy or MAC ACL tools.
+"""
+type TrafficMatchingList {
+  id: ID
+  name: String
+  type: String
+  items: [JSON!]
+}
+
+"""Paginated page of traffic matching lists."""
+type TrafficMatchingListPage {
+  items: [TrafficMatchingList!]!
+  nextCursor: String
+}
+
 """A traffic-route policy (V2 /trafficroutes entry)."""
 type TrafficRoute {
   id: ID
@@ -3814,6 +3840,8 @@ Read-only access to UniFi Network resources.
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
 - `trafficFlowStatistics: TrafficFlowStatistics!`  — Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
 - `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.
+- `trafficMatchingList: TrafficMatchingList`  — Look up a single traffic matching list by its Integration API UUID, including its entries. These IDs are scoped to the traffic-matching-list tool family — do not pass V1 firewall group IDs, V2 firewall policy IDs or MAC ACL rule IDs here.
+- `trafficMatchingLists: TrafficMatchingListPage!`  — List the reusable traffic matching lists on the given controller/site (paginated). These IDs are scoped to the traffic-matching-list tool family — do not pass them to firewall group, firewall policy or MAC ACL tools.
 - `trafficRoute: TrafficRoute`  — Look up a single traffic-route policy by id.
 - `trafficRoutes: TrafficRoutePage!`  — List traffic-route policies (V2 /trafficroutes) (paginated).
 - `userGroup: UserGroup`  — Look up a single QoS user group by id.

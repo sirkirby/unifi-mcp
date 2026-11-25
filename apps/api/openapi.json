@@ -2110,6 +2110,31 @@
         "title": "Detail[TrafficFlowStatisticsModel]",
         "type": "object"
       },
+      "Detail_TrafficMatchingListModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrafficMatchingListModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[TrafficMatchingListModel]",
+        "type": "object"
+      },
       "Detail_TrafficRouteModel_": {
         "additionalProperties": true,
         "properties": {
@@ -7595,6 +7620,46 @@
         "title": "Page[TrafficFlowModel]",
         "type": "object"
       },
+      "Page_TrafficMatchingListModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficMatchingListModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[TrafficMatchingListModel]",
+        "type": "object"
+      },
       "Page_TrafficRouteModel_": {
         "additionalProperties": true,
         "properties": {
@@ -10969,6 +11034,58 @@
           }
         },
         "title": "TrafficFlowTopPolicyModel",
+        "type": "object"
+      },
+      "TrafficMatchingListModel": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "title": "TrafficMatchingListModel",
         "type": "object"
       },
       "TrafficRouteModel": {
@@ -25872,6 +25989,165 @@
         "summary": "Get Traffic Flows",
         "tags": [
           "network/traffic-flows"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/traffic-matching-lists": {
+      "get": {
+        "description": "Integration API traffic matching lists. These IDs are scoped to the traffic-matching-list tool family \u2014 do not pass them to firewall group, firewall policy or MAC ACL tools.",
+        "operationId": "list_traffic_matching_lists_v1_sites__site_id__traffic_matching_lists_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_TrafficMatchingListModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Traffic Matching Lists",
+        "tags": [
+          "network/traffic_matching_lists"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/traffic-matching-lists/{list_id}": {
+      "get": {
+        "description": "One Integration API traffic matching list by its UUID. These IDs are scoped to the traffic-matching-list tool family \u2014 do not pass V1 firewall group IDs, V2 firewall policy IDs or MAC ACL rule IDs here.",
+        "operationId": "get_traffic_matching_list_v1_sites__site_id__traffic_matching_lists__list_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_TrafficMatchingListModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Traffic Matching List",
+        "tags": [
+          "network/traffic_matching_lists"
         ]
       }
     },

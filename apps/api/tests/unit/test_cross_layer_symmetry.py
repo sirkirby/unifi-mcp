@@ -36,6 +36,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "switch", "PortProfile"),
     ("network", "qos", "QosRule"),
     ("network", "traffic_routes", "TrafficRoute"),
+    ("network", "traffic_matching_lists", "TrafficMatchingList"),
     ("network", "route", "Route"),
     ("network", "route", "ActiveRoute"),
     ("network", "vpn", "VpnClient"),

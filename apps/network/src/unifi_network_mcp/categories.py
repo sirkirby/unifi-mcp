@@ -55,6 +55,7 @@ NETWORK_CATEGORY_MAP = {
     "dns": "dns",
     "dynamic_dns": "dynamic_dns",
     "gateway_settings": "gateway_settings",
+    "traffic_matching_lists": "traffic_matching_lists",
 }
 
 # Backward-compatible alias

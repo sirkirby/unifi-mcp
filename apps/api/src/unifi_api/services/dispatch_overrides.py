@@ -150,6 +150,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_get_device_stats": ("stats_manager", "get_device_stats_for_identifier"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats_for_identifier"),
     "unifi_get_top_clients": ("stats_manager", "get_top_clients"),
+    # The delete tool's preview reads live state first, so the source AST would
+    # bind the read method; the mutation applies delete_traffic_matching_list.
+    "unifi_delete_traffic_matching_list": ("traffic_matching_list_manager", "delete_traffic_matching_list"),
     # Event tools obtain their Core manager through a lazy helper rather than
     # importing a runtime singleton, so the source AST has no direct binding.
     "unifi_list_events": ("event_manager", "get_events"),
@@ -1805,6 +1808,15 @@ def _translate_nat_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     return (), {"rule_data": normalize_nat_verified_write(args["rule_data"], create=True)}
 
 
+def _translate_create_traffic_matching_list(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename ``type`` → ``list_type`` for the Integration API manager method.
+
+    The tool's LLM-facing parameter is ``type``; the manager method names it
+    ``list_type`` so it never shadows the builtin.
+    """
+    return _rename_and_drop(rename={"type": "list_type"})(args)
+
+
 def _translate_nat_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     from unifi_core.network.models.nat import normalize_nat_verified_write
 
@@ -1865,6 +1877,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_toggle_nat_rule": _spec(_translate_nat_toggle, "rule_id", "enabled"),
     "unifi_create_acl_rule": _spec(_translate_acl_create, "rule_data"),
     "unifi_update_acl_rule": _spec(_translate_acl_update, "rule_id", "update_data"),
+    "unifi_create_traffic_matching_list": _spec(
+        _translate_create_traffic_matching_list, "name", "list_type", "items", "site_id"
+    ),
     "unifi_update_gateway_settings": _spec(_translate_gateway_settings_update, "update_data"),
     # Network — dynamic DNS: create validates+translates entry_data; update reshapes
     # (entry_id, update_data) → (entry_id, entry_data) and rejects unknown/read-only keys.

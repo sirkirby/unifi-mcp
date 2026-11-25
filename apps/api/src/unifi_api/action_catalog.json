@@ -3990,6 +3990,42 @@
       }
     },
     {
+      "name": "unifi_create_traffic_matching_list",
+      "product": "network",
+      "category": "traffic_matching_lists",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "api_key_only",
+      "manager_attr": "traffic_matching_list_manager",
+      "manager_method": "create_traffic_matching_list",
+      "input_schema": {
+        "properties": {
+          "items": {
+            "description": "Optional entry objects sent exactly as supplied (e.g. port entries). Omit to create an empty list.",
+            "type": "array"
+          },
+          "name": {
+            "description": "List name (e.g. 'Allowed port list')",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+            "type": "string"
+          },
+          "type": {
+            "description": "List type as an opaque string (no enum is published)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_create_usergroup",
       "product": "network",
       "category": "usergroups",
@@ -4427,6 +4463,33 @@
         },
         "required": [
           "profile_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_delete_traffic_matching_list",
+      "product": "network",
+      "category": "traffic_matching_lists",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "api_key_only",
+      "manager_attr": "traffic_matching_list_manager",
+      "manager_method": "delete_traffic_matching_list",
+      "input_schema": {
+        "properties": {
+          "list_id": {
+            "description": "Integration API UUID of the traffic matching list (from unifi_list_traffic_matching_lists)",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id"
         ],
         "type": "object",
         "additionalProperties": false
@@ -5936,6 +5999,33 @@
       }
     },
     {
+      "name": "unifi_get_traffic_matching_list",
+      "product": "network",
+      "category": "traffic_matching_lists",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "traffic_matching_list_manager",
+      "manager_method": "get_traffic_matching_list",
+      "input_schema": {
+        "properties": {
+          "list_id": {
+            "description": "Integration API UUID of the traffic matching list (from unifi_list_traffic_matching_lists)",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_traffic_route_details",
       "product": "network",
       "category": "traffic_routes",
@@ -6692,6 +6782,41 @@
       "manager_method": "get_routes",
       "input_schema": {
         "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_list_traffic_matching_lists",
+      "product": "network",
+      "category": "traffic_matching_lists",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "traffic_matching_list_manager",
+      "manager_method": "list_traffic_matching_lists",
+      "input_schema": {
+        "properties": {
+          "filter_expr": {
+            "description": "Optional Integration API filter expression (e.g. name like 'Allowed')",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size (default 25)",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Page offset (default 0)",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "site_id": {
+            "description": "Optional Integration API site UUID; resolved from the configured site when omitted",
+            "type": "string"
+          }
+        },
         "type": "object",
         "additionalProperties": false
       }

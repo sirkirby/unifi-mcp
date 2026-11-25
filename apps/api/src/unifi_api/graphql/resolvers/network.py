@@ -110,6 +110,7 @@ from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlowPage,
     TrafficFlowStatistics,
 )
+from unifi_api.graphql.types.network.traffic_matching_lists import TrafficMatchingList
 from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
@@ -496,6 +497,27 @@ async def _fetch_dynamic_dns(
                 site=site,
             )
             return list(await mgr.list_dynamic_dns())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_traffic_matching_lists(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> list:
+    key = f"network/traffic-matching-lists/{controller}/{site}"
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "traffic_matching_list_manager",
+                site=site,
+            )
+            return list(await mgr.list_all_traffic_matching_lists())
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1667,6 +1689,12 @@ class DynamicDnsPage:
     next_cursor: str | None
 
 
+@strawberry.type(description="Paginated page of traffic matching lists.")
+class TrafficMatchingListPage:
+    items: list[TrafficMatchingList]
+    next_cursor: str | None
+
+
 @strawberry.type(description="Paginated page of static routes.")
 class RoutePage:
     items: list[Route]
@@ -2629,6 +2657,72 @@ class NetworkQuery:
             if did == id:
                 return DynamicDns.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields)
         return None
+
+    # ---- Traffic matching lists domain ------------------------------------
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List the reusable traffic matching lists on the given controller/site (paginated). "
+            "These IDs are scoped to the traffic-matching-list tool family — do not pass them "
+            "to firewall group, firewall policy or MAC ACL tools."
+        ),
+    )
+    async def traffic_matching_lists(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> TrafficMatchingListPage:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_traffic_matching_lists(ctx, controller, site)
+
+        from unifi_api.services.pagination import paginate
+
+        cursor_obj = _decode_cursor(cursor)
+        page, next_cursor = paginate(
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
+        )
+        return TrafficMatchingListPage(
+            items=[
+                TrafficMatchingList.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields) for d in page
+            ],
+            next_cursor=next_cursor.encode() if next_cursor else None,
+        )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Look up a single traffic matching list by its Integration API UUID, including its "
+            "entries. These IDs are scoped to the traffic-matching-list tool family — do not "
+            "pass V1 firewall group IDs, V2 firewall policy IDs or MAC ACL rule IDs here."
+        ),
+    )
+    async def traffic_matching_list(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        id: strawberry.ID,
+        site: str = "default",
+    ) -> TrafficMatchingList | None:
+        ctx: GraphQLContext = info.context
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "traffic_matching_list_manager",
+                site=site,
+            )
+            item = await mgr.get_traffic_matching_list(id)
+        if not isinstance(item, dict) or not item:
+            return None
+        return TrafficMatchingList.from_manager_output(item, redact_sensitive=ctx.redact_sensitive_fields)
 
     # ---- Routes domain ---------------------------------------------------
 

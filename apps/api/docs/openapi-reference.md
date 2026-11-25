@@ -1688,6 +1688,40 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 **Returns:** `Page_TrafficFlowModel_`
 
 
+## network/traffic_matching_lists
+
+### `GET /v1/sites/{site_id}/traffic-matching-lists` — List Traffic Matching Lists
+
+
+Integration API traffic matching lists. These IDs are scoped to the traffic-matching-list tool family — do not pass them to firewall group, firewall policy or MAC ACL tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_TrafficMatchingListModel_`
+
+### `GET /v1/sites/{site_id}/traffic-matching-lists/{list_id}` — Get Traffic Matching List
+
+
+One Integration API traffic matching list by its UUID. These IDs are scoped to the traffic-matching-list tool family — do not pass V1 firewall group IDs, V2 firewall policy IDs or MAC ACL rule IDs here.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `list_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_TrafficMatchingListModel_`
+
+
 ## network/vouchers
 
 ### `GET /v1/sites/{site_id}/voucher-details/{voucher_id}` — Get Voucher Details
