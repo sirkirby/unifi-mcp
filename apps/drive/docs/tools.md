@@ -64,9 +64,9 @@ No parameters. Returns `smb_enabled`, `nfs_enabled`, `time_machine_enabled`, `cu
 
 ## NFS connections
 
-`GET`/`PUT /proxy/drive/api/v1/services/nfs/advanced-settings` hold every client in one list, and the `PUT` replaces the whole list. Each write tool reads the list, changes one client, sends every other client back exactly as it was read (including any setting this server does not know about), and reads the list again to check the result. If another client is missing afterwards, the tool reports it.
+`GET`/`PATCH /proxy/drive/api/v1/services/nfs/advanced-settings` hold every client in one list, and a `PATCH` of `connections` replaces the whole list while Drive keeps its other NFS settings (Drive refuses a `PUT` here). Each write tool reads the list, changes one client, sends every other client back exactly as it was read (including any setting this server does not know about), and reads the list again to check the result. If another client is missing afterwards, the tool reports it.
 
-NFS writes from one server run one at a time. Just before the `PUT`, a write reads the list once more and stops without writing if it changed since the change was planned, for example by an edit in the Drive web app. Run the tool again in that case.
+NFS writes from one server run one at a time. Just before the `PATCH`, a write reads the list once more and stops without writing if it changed since the change was planned, for example by an edit in the Drive web app. Run the tool again in that case.
 
 ### `drive_list_nfs_connections`
 
@@ -84,6 +84,7 @@ No parameters. Each connection has `client`, `async_writes`, `error_codes` and `
 - `client` may contain only letters, digits and `. : / * - _`, or be an IP address or range (IPv6 such as `::1` included). Spaces, commas and parentheses are refused so the value cannot carry export options.
 - A client that matches every host (`*`, `0.0.0.0/0`, `::/0`) is allowed but gets a warning in the preview.
 - Unknown shared drive IDs and a client that already has a connection are refused.
+- Only shared drives can be exported over NFS; a personal drive is refused before anything is sent.
 - A `shared_drives` entry copied from `drive_list_nfs_connections` can be passed as is; its read-only fields are ignored.
 - On confirm, the client name goes through Drive's `POST .../nfs/test-hostnames` check first, as in the web app. A client Drive flags is not saved.
 

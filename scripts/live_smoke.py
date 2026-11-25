@@ -1282,7 +1282,7 @@ class LiveSmokeRunner:
                 return None, "drive_get_file_services did not report whether NFS is on"
             return {"service": "nfs", "enabled": not enabled}, ""
         if name == "drive_add_nfs_connection":
-            drive_id = self.cache.id_from_tool("drive_list_shared_drives", "drives", ("id",))
+            drive_id = self.drive_nfs_drive_id()
             if not drive_id:
                 return None, "no shared drive to grant"
             if DRIVE_SMOKE_NFS_CLIENT in self.drive_nfs_clients():
@@ -1292,6 +1292,13 @@ class LiveSmokeRunner:
         if not connection or not connection.get("client"):
             return None, "no NFS connection to preview a change to"
         return {"client": connection["client"], "async_writes": not bool(connection.get("async_writes"))}, ""
+
+    def drive_nfs_drive_id(self) -> str | None:
+        """A drive NFS can export: a shared drive, not a personal one."""
+        for drive in self.cache.items_from_tool("drive_list_shared_drives", "drives"):
+            if drive.get("id") and drive.get("type") == "shared":
+                return str(drive["id"])
+        return None
 
     def drive_nfs_clients(self) -> list[str]:
         return [
@@ -2364,7 +2371,7 @@ class LiveSmokeRunner:
         """
         tool = "drive_add_nfs_connection"
         await self.call("drive_list_shared_drives", {}, "lifecycle:seed")
-        drive_id = self.cache.id_from_tool("drive_list_shared_drives", "drives", ("id",))
+        drive_id = self.drive_nfs_drive_id()
         if not drive_id:
             self.skip(tool, "lifecycle", "no shared drive to grant")
             return

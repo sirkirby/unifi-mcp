@@ -44,7 +44,7 @@
               "type": "boolean"
             },
             "shared_drives": {
-              "description": "Shared drives the client may mount, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"rw\"}]. permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives.",
+              "description": "Shared drives the client may mount, e.g. [{\"id\": \"<shared drive id>\", \"permission\": \"rw\"}]. permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives; only drives of type shared can be exported, not personal ones.",
               "type": "array"
             }
           },

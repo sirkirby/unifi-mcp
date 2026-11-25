@@ -8,7 +8,7 @@ time, so concurrent writes from this server do not drop each other's clients.
 
 The gate only covers this process. Drive keeps no version on the list, so a
 write from another process (a second MCP server, or the API server, pointed at
-the same NAS) that lands between the last re-read and the ``PUT`` is
+the same NAS) that lands between the last re-read and the ``PATCH`` is
 overwritten without either call reporting it.
 """
 
@@ -30,7 +30,8 @@ _GRANTS = TypeAdapter(List[NfsSharedDriveAccess])
 
 _ADD_SHARED_DRIVES_DESCRIPTION = (
     'Shared drives the client may mount, e.g. [{"id": "<shared drive id>", "permission": "rw"}]. '
-    "permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives."
+    "permission is rw (read-write, default) or ro (read-only). IDs come from drive_list_shared_drives; "
+    "only drives of type shared can be exported, not personal ones."
 )
 _UPDATE_SHARED_DRIVES_DESCRIPTION = (
     'The client\'s new shared drive list, e.g. [{"id": "<shared drive id>", "permission": "ro"}]. It replaces '
