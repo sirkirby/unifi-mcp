@@ -93,6 +93,7 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.network.managers.hotspot_manager import HotspotManager
     from unifi_core.network.managers.nat_manager import NatManager
     from unifi_core.network.managers.network_manager import NetworkManager
+    from unifi_core.network.managers.network_reference_manager import NetworkReferenceManager
     from unifi_core.network.managers.oon_manager import OonManager
     from unifi_core.network.managers.qos_manager import QosManager
     from unifi_core.network.managers.routing_manager import RoutingManager
@@ -129,6 +130,9 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
         "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
         "hotspot_manager": lambda cm: HotspotManager(cm),
         "network_manager": lambda cm: NetworkManager(cm),
+        # Composes the other managers' reads; the factory passes the cached
+        # instances so their cache policy matches every other route.
+        "network_reference_manager": lambda cm, **deps: NetworkReferenceManager(cm, **deps),
         "nat_manager": lambda cm: NatManager(cm),
         "oon_manager": lambda cm: OonManager(cm),
         "qos_manager": lambda cm: QosManager(cm),
@@ -701,6 +705,21 @@ class ManagerFactory:
             if cached is not None:
                 return cached
             instance = builder(cm, network_manager=network_manager)
+        elif product == "network" and attr_name == "network_reference_manager":
+            dependencies = {
+                name: await self.get_domain_manager(session, controller_id, product, name, site=site_scope)
+                for name in (
+                    "network_manager",
+                    "switch_manager",
+                    "device_manager",
+                    "firewall_manager",
+                    "client_manager",
+                )
+            }
+            cached = self._domain_cache.get(key)
+            if cached is not None:
+                return cached
+            instance = builder(cm, **dependencies)
         else:
             instance = builder(cm)
         self._domain_cache[key] = instance

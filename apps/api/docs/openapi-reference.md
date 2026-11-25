@@ -1335,6 +1335,25 @@ Get a NAT rule by its V2 NAT-family ID; port-forward and Integration API IDs are
 **Returns:** `Detail_NatRuleModel_`
 
 
+## network/network_references
+
+### `GET /v1/sites/{site_id}/networks/{network_id}/references` — Get Network References
+
+
+What references a network: Wi-Fi networks, port profiles, switch-port overrides, V2 firewall policies and clients. network_id is the network's _id from unifi_list_networks. A family whose read failed is listed in unavailable instead of being reported as empty.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `network_id` (path) (required)
+- `include_clients` (query)
+- `controller` (query)
+
+
+**Returns:** `Detail_NetworkReferencesModel_`
+
+
 ## network/networks
 
 ### `GET /v1/sites/{site_id}/networks` — List Networks

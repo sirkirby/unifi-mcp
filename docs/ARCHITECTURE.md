@@ -75,7 +75,7 @@ Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `app
 
 ### apps/network
 
-The UniFi Network MCP server. 221 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
+The UniFi Network MCP server. 222 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
 
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch

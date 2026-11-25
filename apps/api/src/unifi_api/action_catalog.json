@@ -6833,6 +6833,33 @@
       }
     },
     {
+      "name": "unifi_get_network_references",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "either",
+      "manager_attr": "network_reference_manager",
+      "manager_method": "get_network_references",
+      "input_schema": {
+        "properties": {
+          "include_clients": {
+            "description": "Include clients currently on the network. When false, the client list is left out",
+            "type": "boolean"
+          },
+          "network_id": {
+            "description": "Network _id from unifi_list_networks",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_network_stats",
       "product": "network",
       "category": "stats",
