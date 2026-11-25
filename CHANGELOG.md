@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-25 — unifi-network 1.14.7
+
+- The network skill's tool reference explains how to reorder MAC ACL rules: order is each rule's `acl_index` (lower is evaluated first), changed with `unifi_update_acl_rule`.
+
+
 ## 2026-11-25 — unifi-drive 1.0.0
 
 - New plugin for the UniFi Drive server on a UniFi NAS: storage pools, RAID state, disk SMART health and shared drives, plus preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. It pins `unifi-drive-mcp` [0.1.0](https://github.com/sirkirby/unifi-mcp/releases/tag/drive/v0.1.0).
