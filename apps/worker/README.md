@@ -144,6 +144,11 @@ The relay always exposes these meta-tools regardless of registration mode:
 | `unifi_batch` | Execute multiple UniFi tools in a single request |
 | `unifi_location_timeline` | Collect bounded Network and Protect incident evidence with explicit per-source failures |
 
+These names belong to the relay. The Network server's own `unifi_tool_index`,
+`unifi_execute` and `unifi_batch`, and the `unifi_batch_status` and
+`unifi_batch_cancel` that serve its batch jobs, are left out of the relay's
+catalog; the relay's tools above cover them.
+
 The timeline tool accepts `start`/`end` with UTC offsets, exact `device_macs`
 and `camera_ids`, explicit `mappings`, and `max_window_seconds`, `max_events`,
 `max_calls`, `max_elapsed_ms`. `products` defaults to Network and Protect;
@@ -252,11 +257,15 @@ When multiple relay clients are connected, write operations require a `__locatio
 
 ```json
 {
-  "tool_name": "block_client",
+  "tool": "block_client",
   "arguments": { "mac": "aa:bb:cc:dd:ee:ff" },
   "__location": "a1b2c3d4-..."
 }
 ```
+
+`__location` takes a location ID, not a name. Whenever it is supplied, with one
+location or several, it must name a location that has the tool; anything else
+is refused with the ID and name of each location that does.
 
 Read-only operations (tools with `readOnlyHint: true`) are automatically fanned out to all connected locations and results are returned as an aggregated response.
 

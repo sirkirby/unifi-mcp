@@ -57,7 +57,8 @@ const META_TOOL_EXECUTE: ToolInfo = {
       },
       __location: {
         type: "string",
-        description: "Target location ID (required for multi-location write operations)",
+        description:
+          "Target location ID; must be a location that has the tool (required for multi-location write operations)",
       },
     },
     required: ["tool"],
@@ -112,6 +113,19 @@ const META_TOOLS: ToolInfo[] = [
   META_TOOL_BATCH,
   META_TOOL_LOCATION_TIMELINE,
 ];
+
+// handleToolCall answers the worker's own meta-tool names before routing, so a
+// location tool with one of those names cannot be called by name. Network's
+// server meta-tools share them; listed, they would sit in the index and the
+// eager tool list beside the worker's own, reachable only by wrapping them in
+// the worker's execute. Leave them out of the catalog. The relay serves a
+// server's batch status and cancel only for jobs that server's batch started
+// through it, so those go with the batch tool they belong to.
+const WORKER_OWNED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...META_TOOLS.map((tool) => tool.name),
+  `${META_TOOL_BATCH.name}_status`,
+  `${META_TOOL_BATCH.name}_cancel`,
+]);
 
 // ---------------------------------------------------------------------------
 // Agent scope helpers
@@ -232,6 +246,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     ).toArray();
 
     for (const row of rows) {
+      if (WORKER_OWNED_TOOL_NAMES.has(row.tool_name as string)) {
+        continue;
+      }
       const locationId = row.location_id as string;
       const tool: ToolInfo = {
         name: row.tool_name as string,
@@ -1086,6 +1103,17 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     if (targetLocation && !canSeeLocation(scope, targetLocation)) {
       return locationDenied(targetLocation);
     }
+    // Every path, a single location included, routes only to a location id
+    // that holds the tool, so a mistyped or unknown location never runs the
+    // call somewhere the caller did not name.
+    if (targetLocation && !locations.includes(targetLocation)) {
+      return {
+        success: false,
+        error:
+          `__location must be the id of a location with ${toolName}; got ${JSON.stringify(targetLocation)}. ` +
+          `Available locations: ${JSON.stringify(this.locationChoices(locations))}`,
+      };
+    }
     const { __location, ...cleanArgs } = args;
 
     // Single location: always route directly
@@ -1117,17 +1145,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
     // Write tool: requires explicit __location
     if (!targetLocation) {
-      // Build a helpful error with available locations
-      const locationNames = locations.map((locId) => {
-        const nameRow = this.ctx.storage.sql.exec(
-          `SELECT location_name FROM locations WHERE location_id = ?`,
-          locId,
-        ).toArray();
-        return { id: locId, name: (nameRow[0]?.location_name as string) || locId };
-      });
       return {
         success: false,
-        error: `Multi-location write operation requires __location argument. Available locations: ${JSON.stringify(locationNames)}`,
+        error: `Multi-location write operation requires __location argument. Available locations: ${JSON.stringify(this.locationChoices(locations))}`,
       };
     }
 
@@ -1310,6 +1330,11 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
   private findWebSocketForLocation(locationId: string): WebSocket | null {
     return this.locationWebSockets.get(locationId) ?? null;
+  }
+
+  /** The id and name of each location, for errors that ask the caller to pick one */
+  private locationChoices(locationIds: string[]): Array<{ id: string; name: string }> {
+    return locationIds.map((id) => ({ id, name: this.getLocationName(id) }));
   }
 
   private getLocationName(locationId: string): string {
