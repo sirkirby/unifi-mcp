@@ -316,11 +316,11 @@ class Fixtures:
         executable(
             bindir, "fixture-provider", "from pathlib import Path\nPath(" + repr(str(provider_marker)) + ").touch()\n"
         )
-        password = 'FAKE-nas-only "quoted" Ω'
+        nas_value = 'FAKE-nas-only "quoted" Ω'
         provider_file = workspace / "provider-password"
-        provider_file.write_text(password, encoding="utf-8")
+        provider_file.write_text(nas_value, encoding="utf-8")
         output_marker = workspace / "output-marker"
-        output_marker.write_text(password, encoding="utf-8")
+        output_marker.write_text(nas_value, encoding="utf-8")
         config = workspace / "client"
         config.mkdir()
         environment = {
@@ -414,12 +414,12 @@ class Fixtures:
         connection = {"UNIFI_DRIVE_HOST": "192.0.2.20", "UNIFI_DRIVE_USERNAME": "mcp"}
         self.check(run("check-prereqs").returncode == 0, "NAS unconfigured prerequisites")
         self.check(not settings.exists(), "NAS unconfigured check creates no settings")
-        self.check(run("set-env", dict(connection, **{base: password})).returncode == 0, "NAS raw password via stdin")
+        self.check(run("set-env", dict(connection, **{base: nas_value})).returncode == 0, "NAS raw password via stdin")
         if target == "claude":
             chain = json.loads((config / "fake-keychain.json").read_text(encoding="utf-8"))
-            self.check(chain["unifi-drive@fixture-market"]["password"] == password, "NAS raw password uses keychain")
+            self.check(chain["unifi-drive@fixture-market"]["password"] == nas_value, "NAS raw password uses keychain")
             self.check(
-                password not in (config / "settings.json").read_text(encoding="utf-8"),
+                nas_value not in (config / "settings.json").read_text(encoding="utf-8"),
                 "NAS raw password absent from ordinary Claude options",
             )
             self.check(configured()["UNIFI_DRIVE_HOST"] == "192.0.2.20", "NAS host saved as an option")
@@ -428,7 +428,7 @@ class Fixtures:
             environment["FIXTURE_CLAUDE_CLEARS"] = "1"
         else:
             self.check(
-                module.read_settings(settings) == dict(connection, **{base: password}),
+                module.read_settings(settings) == dict(connection, **{base: nas_value}),
                 "NAS settings hold only Drive-scoped values",
             )
             if os.name != "nt":
@@ -441,7 +441,7 @@ class Fixtures:
         self.check(configured().get("UNIFI_DRIVE_HOST") == "192.0.2.20", "NAS host kept across provider switches")
         self.check(not provider_marker.exists(), "NAS setup never executes provider")
         for first, second in ((base, base + "_FILE"), (base, base + "_COMMAND"), (base + "_FILE", base + "_COMMAND")):
-            values = {base: password, base + "_FILE": str(provider_file), base + "_COMMAND": command}
+            values = {base: nas_value, base + "_FILE": str(provider_file), base + "_COMMAND": command}
             before = state()
             self.check(
                 run("set-env", {first: values[first], second: values[second]}).returncode != 0,
@@ -465,7 +465,7 @@ class Fixtures:
         if target == "claude":
             before = state()
             failure_env = dict(environment, FIXTURE_FAIL="register")
-            self.check(run("set-env", {base: password}, env=failure_env).returncode != 0, "NAS client failure is safe")
+            self.check(run("set-env", {base: nas_value}, env=failure_env).returncode != 0, "NAS client failure is safe")
             self.check(state() == before, "NAS client failure leaves settings intact")
             legacy_path.parent.mkdir()
             legacy_path.write_text(
