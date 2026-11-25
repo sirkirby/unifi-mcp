@@ -119,6 +119,8 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_update_acl_rule` — Update an existing rule
 - `unifi_delete_acl_rule` — Delete a rule (requires delete permission)
 
+Rule order is each rule's `acl_index`: lower numbers are evaluated first. To reorder rules, read the chain with `unifi_list_acl_rules`, then change the `acl_index` of the rules you want to move with `unifi_update_acl_rule`. Each update previews first and applies only with `confirm=true`. Leave gaps between index values (10, 20, 30) so one rule can move without renumbering the rest.
+
 ## Traffic Routes (5 tools)
 
 - `unifi_list_traffic_routes` — List policy-based routing rules
