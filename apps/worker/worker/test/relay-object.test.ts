@@ -1133,49 +1133,6 @@ describe("location tools named like the worker's meta-tools", () => {
   });
 });
 
-describe("tool categories sent by the relay client", () => {
-  it("stores each tool's category and filters the index by it", async () => {
-    const relay = createScopedRelay();
-    addLocation(relay, "loc-a", "Home", []);
-    relay.storeLocationTools("loc-a", [
-      { name: "unifi_list_clients", description: "List clients", category: "clients" },
-      { name: "unifi_block_client", description: "Block a client at the firewall", category: "clients" },
-      { name: "unifi_list_devices", description: "List devices" },
-    ]);
-    relay.rebuildInMemoryState();
-
-    const firewall = await relay.handleToolCall("unifi_tool_index", { category: "firewall" }, FULL_AGENT_SCOPE);
-    const clients = await relay.handleToolCall("unifi_tool_index", { category: "Clients" }, FULL_AGENT_SCOPE);
-
-    expect(firewall.data.tools).toEqual([]);
-    expect(clients.data.tools.map((tool: ToolInfo) => tool.name)).toEqual(["unifi_list_clients", "unifi_block_client"]);
-    expect(relay.findToolInfo("unifi_list_devices").category).toBeUndefined();
-  });
-
-  it("adds the category column to a table created by an earlier release", async () => {
-    const db = new DatabaseSync(":memory:");
-    db.exec(`CREATE TABLE location_tools (
-      location_id TEXT NOT NULL, tool_name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
-      input_schema TEXT, annotations TEXT, server_origin TEXT, PRIMARY KEY (location_id, tool_name))`);
-    const relay = Object.create(RelayObject.prototype) as any;
-    relay.ctx = {
-      storage: {
-        sql: {
-          exec: (query: string, ...bindings: any[]) => {
-            const rows = db.prepare(query).all(...bindings);
-            return { toArray: () => rows };
-          },
-        },
-      },
-    };
-
-    await relay.ensureTables();
-
-    const columns = db.prepare(`PRAGMA table_info(location_tools)`).all().map((column: any) => column.name);
-    expect(columns).toEqual(expect.arrayContaining(["title", "category"]));
-  });
-});
-
 // ---------------------------------------------------------------------------
 // __location validation
 // ---------------------------------------------------------------------------

@@ -96,30 +96,6 @@ describe("buildToolIndexEntries", () => {
   });
 });
 
-describe("category filter", () => {
-  const tools: ToolInfo[] = [
-    { name: "unifi_list_clients", description: "List clients", category: "clients" },
-    { name: "unifi_block_client", description: "Block a client at the firewall", category: "clients" },
-    { name: "unifi_list_firewall_policies", description: "List firewall policies", category: "firewall" },
-    { name: "protect_list_cameras", description: "List cameras" },
-    { name: "protect_list_clients_of_camera", description: "Viewers of a camera" },
-  ];
-
-  function names(category: string): string[] {
-    return buildToolIndexEntries(new Map([["loc-a", tools]]), new Map(), { category }).map((tool) => tool.name);
-  }
-
-  it("matches a sent category exactly, ignoring case, as the server index does", () => {
-    expect(names("clients")).toEqual(["unifi_list_clients", "unifi_block_client", "protect_list_clients_of_camera"]);
-    expect(names("FIREWALL")).toEqual(["unifi_list_firewall_policies"]);
-    expect(names("client")).toEqual(["protect_list_clients_of_camera"]);
-  });
-
-  it("keeps the substring match for tools sent without a category", () => {
-    expect(names("camera")).toEqual(["protect_list_cameras", "protect_list_clients_of_camera"]);
-  });
-});
-
 describe("buildToolIndexResponse", () => {
   const locationTools = new Map([["location-1", fixture.tools]]);
   const toolToLocations = new Map(fixture.tools.map((tool) => [tool.name, ["location-1"]]));

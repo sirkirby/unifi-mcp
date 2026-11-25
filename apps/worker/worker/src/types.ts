@@ -78,8 +78,6 @@ export interface ToolInfo {
   annotations?: ToolAnnotations;
   serverOrigin?: string;
   server_origin?: string;
-  /** The server's tool index category (its module), when the relay sends one */
-  category?: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -143,7 +143,6 @@ export function buildToolIndexEntries(
 ): ToolIndexEntry[] {
   const entries: ToolIndexEntry[] = [];
   const seen = new Set<string>();
-  const categoryByName = new Map<string, string>();
 
   for (const [locationId, tools] of locationTools) {
     for (const tool of tools) {
@@ -152,9 +151,6 @@ export function buildToolIndexEntries(
       }
 
       seen.add(tool.name);
-      if (typeof tool.category === "string" && tool.category) {
-        categoryByName.set(tool.name, tool.category.toLowerCase());
-      }
       const entry: ToolIndexEntry = {
         name: tool.name,
         description: tool.description,
@@ -179,25 +175,15 @@ export function buildToolIndexEntries(
   }
   if (options.category) {
     const category = options.category.toLowerCase();
-    filtered = filtered.filter((tool) => matchesCategory(tool, categoryByName.get(tool.name), category));
+    filtered = filtered.filter(
+      (tool) =>
+        tool.name.toLowerCase().includes(category) || tool.description.toLowerCase().includes(category),
+    );
   }
   if (options.search) {
     filtered = rankToolsBySearch(filtered, options.search);
   }
   return filtered;
-}
-
-/**
- * Match a category as the server's own index does: exactly, ignoring case,
- * against the category the relay client sent. A tool without one (an older
- * relay client, or a server whose index has no categories) keeps the older
- * substring match over its name and description.
- */
-function matchesCategory(tool: ToolIndexEntry, toolCategory: string | undefined, category: string): boolean {
-  if (toolCategory !== undefined) {
-    return toolCategory === category;
-  }
-  return tool.name.toLowerCase().includes(category) || tool.description.toLowerCase().includes(category);
 }
 
 export const TOOL_INDEX_NAME_CONFLICT_ERROR = "Tool index name cannot be combined with category or search.";
