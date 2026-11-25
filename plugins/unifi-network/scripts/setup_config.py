@@ -115,14 +115,30 @@ def validate_drive_keys(settings):
         )
 
 
+# Products that no earlier plugin version configured, so they have no legacy settings to migrate or
+# client entries to take over, and whose setup checks only their own credential level. The Site
+# Manager and Drive servers never read the shared keys.
+ISOLATED = {"SITEMANAGER": "Site Manager", "DRIVE": "UniFi Drive"}
+MIGRATION_ERRORS = {
+    "SITEMANAGER": CLOUD_MIGRATION_ERROR,
+    "DRIVE": DRIVE_MIGRATION_ERROR,
+}
+PRODUCT_KEY_CHECKS = {
+    "SITEMANAGER": validate_cloud_keys,
+    "DRIVE": validate_drive_keys,
+}
+
+
+def validate_product_keys(settings, product):
+    check = PRODUCT_KEY_CHECKS.get(product)
+    if check:
+        check(settings)
+
+
 def merge_env(existing, patch, product, inherited=None):
     merged = env_map(existing)
-    if product == "SITEMANAGER":
-        validate_cloud_keys(merged)
-        validate_cloud_keys(patch)
-    if product == "DRIVE":
-        validate_drive_keys(merged)
-        validate_drive_keys(patch)
+    validate_product_keys(merged, product)
+    validate_product_keys(patch, product)
     for key, value in patch.items():
         validate_key(key, product)
         if value is not None and (not isinstance(value, str) or "\0" in value):
@@ -144,12 +160,13 @@ def merge_env(existing, patch, product, inherited=None):
             merged[key] = value
     effective = dict(os.environ if inherited is None else inherited)
     effective.update(merged)
-    # Match resolve_env: only the first non-empty level is resolved.
+    # Match resolve_env: only the first non-empty level is resolved. Isolated products check their
+    # own level only, the one setup writes.
     credentials = {"SITEMANAGER": ("API_KEY",), "DRIVE": ("PASSWORD",)}.get(product, ("PASSWORD", "API_KEY"))
     for credential in credentials:
         levels = (
             (f"UNIFI_{product}_{credential}",)
-            if product in ("SITEMANAGER", "DRIVE")
+            if product in ISOLATED
             else (f"UNIFI_{product}_{credential}", f"UNIFI_{credential}")
         )
         for base in levels:
@@ -642,11 +659,9 @@ def unmigrated_shared_credentials(owned, shared, product, saved=None):
 
 
 def legacy_patch(owned, shared, mapping, product, saved=None):
-    """Translate console settings only; cloud credentials never use console fallbacks."""
-    if product == "SITEMANAGER":
-        refuse(CLOUD_MIGRATION_ERROR)
-    if product == "DRIVE":
-        refuse(DRIVE_MIGRATION_ERROR)
+    """Translate console settings only; isolated products never use console fallbacks."""
+    if product in ISOLATED:
+        refuse(MIGRATION_ERRORS[product])
     legacy = dict(shared, **owned)
     reuse = same_console(legacy, product, saved)
     patch = {}
@@ -739,9 +754,7 @@ def claude_main(args, root, name, product):
     # The server's env lists every option variable, so inherited values of those
     # names never reach it; only other inherited variables can.
     inherited = {k: v for k, v in os.environ.items() if k not in mapping}
-    legacy_path, legacy_data, owned, shared = (
-        (None, None, {}, {}) if product in ("SITEMANAGER", "DRIVE") else legacy_settings(product)
-    )
+    legacy_path, legacy_data, owned, shared = (None, None, {}, {}) if product in ISOLATED else legacy_settings(product)
     notice = None
     if legacy_data is False:
         notice = "Notice: .claude/settings.local.json in this project could not be read to check for legacy settings."
@@ -818,10 +831,7 @@ def claude_main(args, root, name, product):
             patch = json_object(raw_input)
         if not patch:
             refuse("Supply at least one environment setting or null deletion.")
-    if product == "SITEMANAGER":
-        validate_cloud_keys(patch)
-    if product == "DRIVE":
-        validate_drive_keys(patch)
+    validate_product_keys(patch, product)
     for key in patch:
         validate_key(key, product)
     if "UNIFI_AUTO_CONFIRM" in patch:
@@ -1300,12 +1310,11 @@ def bundled_main(args, root, name, product, patch, client):
         refuse("Configuration symlinks are unsupported; use the client editor for this installation.")
     original, data, servers = client.read()
     entry = servers.get(name)
-    if product in ("SITEMANAGER", "DRIVE") and entry is not None:
+    if product in ISOLATED and entry is not None:
         # No earlier setup wrote these entries, so their settings are not this plugin's to move.
         refuse(
-            "A client entry shadows the bundled "
-            + ("Site Manager" if product == "SITEMANAGER" else "UniFi Drive")
-            + " server. Remove that entry with the client editor, then rerun setup; no credentials were migrated."
+            "A client entry shadows the bundled " + ISOLATED[product] + " server. Remove that entry with the client "
+            "editor, then rerun setup; no credentials were migrated."
         )
     if entry is not None and not isinstance(entry, dict):
         refuse("The existing MCP server must be an object; repair it and rerun.")
@@ -1444,10 +1453,8 @@ def main():
         refuse("Cannot identify the plugin; rerun from a complete plugin installation.")
     product = name.removeprefix("unifi-").upper()
     target = args.target
-    if product == "SITEMANAGER" and args.migrate:
-        refuse(CLOUD_MIGRATION_ERROR)
-    if product == "DRIVE" and args.migrate:
-        refuse(DRIVE_MIGRATION_ERROR)
+    if product in ISOLATED and args.migrate:
+        refuse(MIGRATION_ERRORS[product])
     if args.refresh and (target == "claude" or args.pairs or args.check):
         refuse("Refresh is only supported for Codex and OpenClaw, without environment arguments.")
     if args.migrate and (target != "claude" or args.pairs or args.check):
