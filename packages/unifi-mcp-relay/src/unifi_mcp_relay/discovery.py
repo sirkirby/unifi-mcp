@@ -7,7 +7,8 @@ tool catalog for relay registration.
 Discovery strategy:
 1. Initialize MCP session (initialize request + initialized notification)
 2. List tools via tools/list
-3. If a ``*_tool_index`` meta-tool is present, call it for the canonical catalog
+3. If a ``*_tool_index`` meta-tool is present, call it for the canonical catalog,
+   then once per category it lists to learn each tool's category
 4. Otherwise, use ``tools/list`` directly
 """
 
@@ -16,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib.metadata import PackageNotFoundError, version
 
 import aiohttp
@@ -303,6 +304,39 @@ def _build_tools_from_list(tools_list: list[dict], server_name: str) -> list[Too
     return filter_relay_tools(tools)
 
 
+async def _index_categories(
+    client: McpHttpClient,
+    tool_index_name: str,
+    index_data: dict,
+    server_name: str,
+) -> dict[str, str]:
+    """Map each indexed tool to the category the server's index filters it under.
+
+    The index lists its categories but not each tool's, so ask it once per
+    category. Any failure drops every category for the server: the worker then
+    falls back to its looser match for all of them, rather than filtering some
+    tools exactly and others not.
+    """
+    categories = index_data.get("categories")
+    if not isinstance(categories, list):
+        return {}
+    by_tool: dict[str, str] = {}
+    try:
+        for category in categories:
+            if not isinstance(category, str) or not category:
+                continue
+            result = await client.request("tools/call", {"name": tool_index_name, "arguments": {"category": category}})
+            content = result.get("content", [])
+            if not content or content[0].get("type") != "text":
+                raise ValueError(f"unexpected {tool_index_name} response for category {category!r}")
+            for entry in json.loads(content[0]["text"]).get("tools", []):
+                by_tool[entry["name"]] = category
+    except Exception as exc:
+        logger.warning("[discovery] Could not map tool categories for %s: %s", server_name, exc)
+        return {}
+    return by_tool
+
+
 def _overlay_listed_metadata(
     indexed_tools: list[ToolInfo],
     listed_tools: list[dict],
@@ -415,6 +449,8 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
                 index_data = json.loads(content[0]["text"])
                 indexed_tools = _build_tools_from_index(index_data, server_name)
                 tools = _overlay_listed_metadata(indexed_tools, listed_tools, server_name)
+                categories = await _index_categories(client, tool_index_name, index_data, server_name)
+                tools = [replace(tool, category=categories.get(tool.name)) for tool in tools]
             else:
                 logger.warning("[discovery] Unexpected tool_index response from %s", server_name)
                 tools = _build_tools_from_list(listed_tools, server_name)

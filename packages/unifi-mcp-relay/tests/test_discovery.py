@@ -806,3 +806,75 @@ async def test_concurrent_expired_requests_share_one_recovery():
             assert await asyncio.gather(first, second, third) == [{"n": 1}, {"n": 2}, {"n": 3}]
     assert initialized == 1
     notify.assert_awaited_once_with("notifications/initialized")
+
+
+def _categorised_index_server(*, fail_category: str | None = None):
+    """A lazy server whose index lists categories and answers a filter by each."""
+    import json
+
+    by_category = {"clients": ["unifi_list_clients"], "devices": ["unifi_list_devices", "unifi_restart_device"]}
+
+    def text(payload):
+        return {"content": [{"type": "text", "text": json.dumps(payload)}]}
+
+    def route_request(method, params=None):
+        if method == "initialize":
+            return {"protocolVersion": LEGACY_MCP_PROTOCOL_REVISION, "serverInfo": {"name": "unifi-network-mcp"}}
+        if method == "tools/list":
+            return {
+                "tools": [
+                    {"name": "unifi_tool_index", "description": "Index", "inputSchema": {"type": "object"}},
+                    {"name": "unifi_load_tools", "description": "Load", "inputSchema": {"type": "object"}},
+                ]
+            }
+        assert method == "tools/call" and params["name"] == "unifi_tool_index"
+        arguments = params["arguments"]
+        if arguments == {"include_schemas": True}:
+            names = [name for names in by_category.values() for name in names] + ["unifi_uncategorised"]
+            return text(
+                {
+                    "tools": [{"name": name, "description": name} for name in names],
+                    "count": len(names),
+                    "categories": sorted(by_category),
+                }
+            )
+        category = arguments["category"]
+        if category == fail_category:
+            raise aiohttp.ClientError("index unavailable")
+        return text({"tools": [{"name": name} for name in by_category[category]], "filtered": True})
+
+    return route_request
+
+
+@pytest.mark.asyncio
+async def test_discover_tools_records_each_tools_index_category(mock_mcp_client):
+    mock_cls, mock_instance = mock_mcp_client(_categorised_index_server())
+    with patch("unifi_mcp_relay.discovery.McpHttpClient", mock_cls):
+        from unifi_mcp_relay.discovery import discover_tools
+
+        result = await discover_tools("http://localhost:3000")
+
+    assert result is not None
+    assert {tool.name: tool.category for tool in result.tools} == {
+        "unifi_list_clients": "clients",
+        "unifi_list_devices": "devices",
+        "unifi_restart_device": "devices",
+        "unifi_uncategorised": None,
+    }
+    category_calls = [
+        call.args[1]["arguments"] for call in mock_instance.request.await_args_list if call.args[0] == "tools/call"
+    ][1:]
+    assert category_calls == [{"category": "clients"}, {"category": "devices"}]
+
+
+@pytest.mark.asyncio
+async def test_discover_tools_drops_every_category_when_one_lookup_fails(mock_mcp_client):
+    mock_cls, _ = mock_mcp_client(_categorised_index_server(fail_category="devices"))
+    with patch("unifi_mcp_relay.discovery.McpHttpClient", mock_cls):
+        from unifi_mcp_relay.discovery import discover_tools
+
+        result = await discover_tools("http://localhost:3000")
+
+    assert result is not None
+    assert len(result.tools) == 4
+    assert all(tool.category is None for tool in result.tools)

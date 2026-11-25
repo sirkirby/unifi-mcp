@@ -70,6 +70,18 @@ def test_register_message_matches_worker_contract_fixture():
     assert json.loads(msg.to_json()) == fixture
 
 
+def test_tool_category_is_sent_only_when_known():
+    tools = [
+        ToolInfo(name="unifi_list_clients", description="List", category="clients"),
+        ToolInfo(name="unifi_other", description="Other"),
+    ]
+
+    for message in (RegisterMessage(token="t", location_name="Lab", tools=tools), CatalogUpdateMessage(tools=tools)):
+        sent = json.loads(message.to_json())["tools"]
+        assert sent[0]["category"] == "clients"
+        assert "category" not in sent[1]
+
+
 def test_parse_registered_message():
     raw = json.dumps({"type": "registered", "location_id": "loc_abc123", "location_name": "Home Lab"})
     msg = parse_message(raw)
