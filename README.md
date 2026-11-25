@@ -91,6 +91,7 @@ adds one account-level cloud connection. Every API key with the `read` scope
 can then read the whole cloud account; see
 [Site Manager cloud connection](apps/api/README.md#site-manager-cloud-connection).
 It serves the nine InnerSpace reads and the 15 InnerSpace write actions for a controller that declares the `innerspace` product with a username and password, and never returns plan image bytes; see [InnerSpace console product](apps/api/README.md#innerspace-console-product).
+It serves the seven Drive reads and the four preview-first Drive writes for a NAS controller that declares the `drive` product with a username and password; see [UniFi Drive console product](apps/api/README.md#unifi-drive-console-product).
 
 See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
 

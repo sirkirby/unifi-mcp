@@ -50,6 +50,8 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 A gated call returns `success: false` naming the variable that re-enables the action. An unknown `UNIFI_POLICY_DRIVE_*` variable is reported at startup with the closest valid names.
 
+These gates apply to this MCP server only. [`unifi-api-server`](../../api/README.md#unifi-drive-console-product) serves the same writes as actions and refuses them under `UNIFI_DRIVE_READ_ONLY` or `UNIFI_READ_ONLY` on the API's own process, but it does not read the `UNIFI_POLICY_DRIVE_*` gates; restrict API writes with API key scopes.
+
 ## What controls access besides this server
 
 - **The NAS account.** The server acts with the login you give it. A read needs an account that can open UniFi Drive; file service and NFS changes need an administrator of Drive, and the NAS refuses them with a 403 otherwise. A dedicated local account keeps the server's access separate from yours.

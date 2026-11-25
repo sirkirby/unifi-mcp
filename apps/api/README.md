@@ -2,7 +2,7 @@
 
 REST + GraphQL HTTP API for UniFi controllers. Run it as a standalone HTTP
 service for desktop apps, web dashboards, Pi extensions, automation services,
-and MCP adapters that need typed access to UniFi Network, Protect, Access, and InnerSpace.
+and MCP adapters that need typed access to UniFi Network, Protect, Access, InnerSpace, and Drive.
 
 ## Quickstart
 
@@ -475,6 +475,138 @@ scale, and the project unit) of any registered InnerSpace controller.
 Response redaction hides secret-looking fields by name and is on by default;
 MAC addresses, serial numbers and plan geometry are not redacted.
 
+## UniFi Drive console product
+
+The API server serves the seven reads and the four preview-first writes of the
+[Drive MCP server](../drive/) for a controller that declares the `drive`
+product. A UNAS is its own UniFi OS console, so its controller record points
+at the NAS, not the gateway. It reads and writes the NAS's UniFi Drive
+application through a console login session, through the same `unifi-core`
+managers as the MCP server. Run the API from a source checkout
+([Quickstart A](#a-local-clone-developing-or-testing-changes)) to use it before
+the next API release.
+
+### Register the controller
+
+`POST /v1/controllers` (or the **Controllers** tab, or the CLI) with `"drive"`
+in `product_kinds` and the NAS's address as `base_url`. Drive needs a
+**username and password** for a local UniFi OS account on the NAS, on create
+and on update: a controller that declares it with only an API token is
+refused, and the stored API token, if any, is never passed to the Drive
+connection. A UI.com account with MFA cannot log in. Reads need an account
+with access to UniFi Drive; writes need an administrator of UniFi Drive.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/controllers \
+  -H "Authorization: Bearer $ADMIN_KEY" -H "Content-Type: application/json" \
+  -d '{"name": "Example NAS", "base_url": "https://192.168.1.20",
+       "product_kinds": ["drive"], "username": "drive-api",
+       "password": "<password>", "verify_tls": false}'
+```
+
+The capability probe does not probe Drive: `GET /v1/controllers/{cid}/capabilities`
+lists a declared `drive` under `not_probed`, never under `products`. The Drive
+connection logs in on its first request, not when it is built, and after a
+rejected login it pauses further logins on an escalating cool-down. The admin
+probe (`POST /v1/controllers/{cid}/probe`) logs in and reads the console's
+system endpoint once: it proves the login works, not that UniFi Drive is
+installed.
+
+### Reading Drive
+
+All reads need only the `read` scope, name the controller with the `controller`
+query parameter, and call the same manager methods:
+
+| Surface | Paths |
+|---|---|
+| REST | `GET /v1/sites/{site_id}/drive/system`, `GET /v1/sites/{site_id}/drive/storage-pools`, `GET /v1/sites/{site_id}/drive/disks`, `GET /v1/sites/{site_id}/drive/shared-drives`, `GET /v1/sites/{site_id}/drive/shared-drives/{drive_id}`, `GET /v1/sites/{site_id}/drive/file-services`, `GET /v1/sites/{site_id}/drive/nfs-connections` |
+| GraphQL | The `drive` namespace: `systemInfo`, `storagePools`, `disks`, `sharedDrives`, `sharedDrive`, `fileServices`, `nfsConnections` |
+| Actions | `POST /v1/actions/{tool_name}` for the seven `drive_*` read tools |
+
+The path `site_id` is the controller site of the other console products and is
+**ignored** for Drive: a NAS has no sites. `disks` takes `include_empty`
+(default false) and `include_cache` (default true). Drive lists are not paged,
+so there is no cursor. Byte counts are `BigInt` in GraphQL. IDs from these
+routes belong to the Drive family: do not pass them to other products' routes.
+
+```bash
+curl -s "http://localhost:8080/v1/sites/default/drive/storage-pools?controller=<id>" \
+  -H "Authorization: Bearer $READ_KEY"
+
+curl -s http://localhost:8080/v1/graphql \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"query":"{ drive { nfsConnections(controller: \"<id>\") { client sharedDrives { name permission exportPath } } } }"}'
+```
+
+### Changing file services and NFS clients
+
+The four writes are catalog actions and need the `write` scope:
+`drive_set_file_service` (SMB, NFS or Time Machine on or off),
+`drive_add_nfs_connection`, `drive_update_nfs_connection` and
+`drive_remove_nfs_connection`. Their arguments are the MCP tools' arguments.
+
+- `confirm: false` (the default) validates the request and returns a request-only
+  preview with `requires_confirmation: true`. It calls no manager and sends
+  nothing to the NAS, so it does not show the NAS's current state or the
+  warnings the MCP server's preview adds; use the MCP tool for those.
+- `confirm: true` plans the change from fresh NAS state and applies it in one
+  manager call, then reads it back. The result is the MCP tool's data:
+  `{"service", "enabled", "changed"}` for a toggle, `{"connection": ...}` for an
+  added or updated client, `{"removed": "<client>"}` for a removal. A toggle that
+  changes nothing sends nothing and answers `changed: false`.
+- A write stopped before its change was sent answers `success: false` with
+  `mutation_applied: false`: nothing changed. A change that was sent and never
+  answered answers `success: false` with `mutation_applied: null`: it may be
+  live, so read it back before retrying. Neither is ever a success.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/actions/drive_add_nfs_connection \
+  -H "Authorization: Bearer $WRITE_KEY" -H "Content-Type: application/json" \
+  -d '{"controller": "<id>", "site": "default", "confirm": true,
+       "args": {"client": "192.168.1.50", "shared_drives": [{"id": "<shared drive id>", "permission": "ro"}]}}'
+```
+
+Drive keeps every NFS client in one list and replaces it as a whole. A
+confirmed NFS write reads the list again just before it writes and stops if it
+changed. The API's operation gate runs confirmed writes for one NAS one at a
+time, but only within this API process: the Drive MCP server is a separate
+process, and a write from it that lands between the API's last read and its
+write is overwritten without either reporting it.
+
+`UNIFI_DRIVE_READ_ONLY=true` (or `UNIFI_READ_ONLY=true`) refuses every Drive
+write on this API, previews included, with `403`. The Drive MCP server's
+per-category `UNIFI_POLICY_DRIVE_*` gates are **not** applied by the API.
+
+### Errors
+
+Read errors are answered with fixed text built from the request path, the HTTP
+status and Drive's own capped message, never the NAS address; invalid arguments
+and a missing shared drive never echo the rejected value. REST answers
+`{"detail": {"kind": "...", "message": "..."}}`; GraphQL puts the code in the
+error's `extensions`.
+
+| Situation | REST status and `kind` | GraphQL code |
+|---|---|---|
+| Invalid arguments | `422` `invalid_drive_request` | `BAD_REQUEST` |
+| No such shared drive | `404` `drive_not_found` | `NOT_FOUND` |
+| The NAS refused the account (no access to UniFi Drive) | `403` `drive_forbidden` | `UPSTREAM_FORBIDDEN` |
+| Login rejected, connection, Drive not installed, other HTTP or malformed | `502` `drive_upstream_error` | `UPSTREAM_ERROR` |
+| The NAS rate-limited the request | `429` `drive_rate_limited` | `RATE_LIMITED` |
+| No read slot in time at the operation gate | `503` `controller_busy`, with `Retry-After` | `CONTROLLER_BUSY` |
+| Controller does not declare `drive` | `409` `capability_mismatch` | |
+
+Over the action endpoint, a failure keeps the repository's generic contract:
+HTTP `200` with `success: false`, fixed text, and the error class audited as
+`error_kind`, plus `mutation_applied` for the two write outcomes above.
+
+### What read exposes, and redaction
+
+Every key with the `read` scope can read the NAS's storage layout, disk serial
+numbers, shared drive names and NFS client addresses for any registered Drive
+controller. Response redaction hides secret-looking fields by name and is on by
+default; MAC addresses, serial numbers and NFS client addresses are not
+redacted.
+
 ## Distribution
 
 `unifi-api-server` is published to:
@@ -569,7 +701,7 @@ This is the same constraint the MCP servers (`unifi-network-mcp`,
 ## Development
 
 The project uses an `uv` workspace covering `apps/api/` plus the shared
-`packages/unifi-core/` and the five MCP apps. Common development commands:
+`packages/unifi-core/` and the six MCP apps. Common development commands:
 
 ```bash
 # Install everything once
