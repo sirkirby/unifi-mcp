@@ -41,6 +41,10 @@ DRIVES = "/proxy/drive/api/v2/drives"
 SYSTEMS = "/proxy/drive/api/v2/systems"
 
 
+RSYNC = "/proxy/drive/api/v2/services/rsync/settings"
+SYSTEMS_INFO = "/proxy/drive/api/v1/systems/info"
+
+
 @pytest.fixture
 def files(connection):
     return FileServiceManager(connection, SharedDriveManager(connection))
@@ -263,6 +267,75 @@ async def test_unreadable_disk_stats_are_an_error(connection, console, body):
 
     with pytest.raises(UniFiMalformedResponseError):
         await PerformanceManager(connection).get_disk_stats(hours=1)
+
+
+async def test_smb_advanced_settings(files, console):
+    console.reply("GET", f"{V1}/smb/advanced-settings", fx.smb_advanced(status="migrateFirstFailed"))
+
+    settings = await files.get_smb_advanced_settings()
+
+    assert settings.personal_drive_recycle_enabled is True
+    assert settings.personal_drive_recycle_status == "migrateFirstFailed"
+    assert not console.writes
+
+
+async def test_rsync_settings_without_an_account(files, console):
+    console.reply("GET", RSYNC, fx.rsync_settings())
+    console.reply("GET", SYSTEMS_INFO, fx.systems_info(ssh_enabled=False))
+
+    settings = (await files.get_rsync_settings()).model_dump()
+
+    assert settings == {
+        "enabled": False,
+        "account_configured": False,
+        "account_username": None,
+        "ssh_enabled": False,
+    }
+    assert not console.writes
+
+
+async def test_rsync_account_keeps_only_its_username(files, console):
+    account = {"username": "synthetic-rsync", "password": "synthetic-secret-0123", "passwordHash": "x"}
+    console.reply("GET", RSYNC, fx.rsync_settings(enabled=True, account=account))
+    console.reply("GET", SYSTEMS_INFO, fx.systems_info(ssh_enabled=True))
+
+    settings = await files.get_rsync_settings()
+
+    assert (settings.enabled, settings.ssh_enabled) == (True, True)
+    assert (settings.account_configured, settings.account_username) == (True, "synthetic-rsync")
+    assert "synthetic-secret" not in str(settings.model_dump()) and "passwordHash" not in str(settings.model_dump())
+
+
+async def test_rsync_answer_without_the_account_key_leaves_it_unknown(files, console):
+    console.reply("GET", RSYNC, {"enable": True})
+    console.reply("GET", SYSTEMS_INFO, fx.systems_info())
+
+    settings = await files.get_rsync_settings()
+
+    assert settings.account_configured is None
+
+
+@pytest.mark.parametrize("path", ["smb", "rsync", "systems"])
+async def test_unreadable_service_settings_are_an_error(files, console, path):
+    console.reply("GET", f"{V1}/smb/advanced-settings", {"err": None, "type": "single", "data": "nope"})
+    console.reply("GET", RSYNC, ["nope"] if path == "rsync" else fx.rsync_settings())
+    console.reply(
+        "GET", SYSTEMS_INFO, {"err": None, "type": "single", "data": None} if path == "systems" else fx.systems_info()
+    )
+
+    with pytest.raises(UniFiMalformedResponseError):
+        if path == "smb":
+            await files.get_smb_advanced_settings()
+        else:
+            await files.get_rsync_settings()
+
+
+async def test_rsync_settings_missing_on_older_firmware_is_an_error(files, console):
+    console.reply("GET", RSYNC, {"err": {"msg": "not found"}}, status=404)
+    console.reply("GET", SYSTEMS_INFO, fx.systems_info())
+
+    with pytest.raises(UniFiOperationError, match="no endpoint"):
+        await files.get_rsync_settings()
 
 
 # --- file service toggles -----------------------------------------------------
