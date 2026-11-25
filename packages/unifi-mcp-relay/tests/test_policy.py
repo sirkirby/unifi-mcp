@@ -6,9 +6,11 @@ from unifi_mcp_relay.policy import (
     RELAY_EXCLUDED_ERROR,
     RELAY_EXCLUDED_TOOL_SUFFIXES,
     RELAY_NESTED_META_ERROR,
+    RELAY_UNADVERTISED_TOOL_SUFFIXES,
     filter_relay_tools,
     filter_tool_index_result,
     is_relay_excluded_tool,
+    is_relay_unadvertised_tool,
     relay_call_rejection,
 )
 
@@ -20,6 +22,44 @@ def test_exclusion_contract_is_narrow_and_prefix_independent():
     assert is_relay_excluded_tool("access_get_support_bundle")
     assert not is_relay_excluded_tool("unifi_tool_index")
     assert not is_relay_excluded_tool("unifi_get_system_info")
+
+
+def test_lazy_loaders_are_unadvertised_but_not_call_rejected():
+    assert RELAY_UNADVERTISED_TOOL_SUFFIXES == ("_load_tools",)
+    assert is_relay_unadvertised_tool("unifi_load_tools")
+    assert is_relay_unadvertised_tool("drive_load_tools")
+    assert not is_relay_unadvertised_tool("unifi_tool_index")
+    assert not is_relay_unadvertised_tool("protect_batch")
+    # The forwarder calls the loader itself, so policy does not reject it.
+    assert relay_call_rejection("protect_load_tools", {"tools": ["protect_list_cameras"]}) is None
+
+
+def test_catalog_and_tool_index_filters_drop_lazy_loaders_and_keep_other_meta_tools():
+    catalog = [
+        SimpleNamespace(name=name)
+        for name in (
+            "access_tool_index",
+            "access_execute",
+            "access_batch",
+            "access_batch_status",
+            "access_batch_cancel",
+            "access_load_tools",
+            "access_list_doors",
+        )
+    ]
+    assert [tool.name for tool in filter_relay_tools(catalog)] == [
+        "access_tool_index",
+        "access_execute",
+        "access_batch",
+        "access_batch_status",
+        "access_batch_cancel",
+        "access_list_doors",
+    ]
+
+    result = filter_tool_index_result(
+        {"tools": [{"name": "access_load_tools"}, {"name": "access_list_doors"}], "count": 2}
+    )
+    assert result == {"tools": [{"name": "access_list_doors"}], "count": 1}
 
 
 def test_catalog_and_tool_index_filters_remove_only_support_tools():
