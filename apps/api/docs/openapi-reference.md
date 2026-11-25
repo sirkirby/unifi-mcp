@@ -505,6 +505,39 @@ Whether the InnerSpace application is installed and running on the UniFi OS cons
 **Returns:** `object`
 
 
+## network/acl_ordering
+
+### `GET /v1/sites/{site_id}/acl-rules/ordering` — Get Acl Rule Ordering
+
+
+User-defined ACL rule ordering. These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_AclRuleOrderingModel_`
+
+### `GET /v1/sites/{site_id}/integration-acl-rules` — List Integration Acl Rules
+
+
+MAC ACL rules as the Integration API lists them. These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_IntegrationAclRuleModel_`
+
+
 ## network/clients
 
 ### `GET /v1/sites/{site_id}/blocked-clients` — List Blocked Clients

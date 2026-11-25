@@ -175,6 +175,13 @@ type AclRule {
   destinationMacMask: String
 }
 
+"""
+User-defined ACL rule ordering. These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here.
+"""
+type AclRuleOrdering {
+  orderedAclRuleIds: [String!]!
+}
+
 """Paginated page of ACL rules."""
 type AclRulePage {
   items: [AclRule!]!
@@ -1484,6 +1491,26 @@ type InnerSpaceWallType {
 }
 
 """
+One MAC ACL rule as the Integration API lists it (read-only). Its id is an Integration API UUID scoped to the ACL-ordering tool family — do not pass it to V2 MAC ACL rule tools or translate between the two families.
+"""
+type IntegrationAclRule {
+  id: ID!
+  name: String
+  index: Int
+  action: String
+  enabled: Boolean
+  type: String
+  networkIdFilter: JSON
+  raw: JSON
+}
+
+"""Paginated page of Integration API ACL rules."""
+type IntegrationAclRulePage {
+  items: [IntegrationAclRule!]!
+  nextCursor: String
+}
+
+"""
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
@@ -2005,6 +2032,16 @@ type NetworkQuery {
 
   """Look up a single ACL rule by id."""
   aclRule(controller: ID!, id: ID!, site: String! = "default"): AclRule
+
+  """
+  List the site's MAC ACL rules as the Integration API sees them (paginated). Their ids are Integration API UUIDs scoped to the ACL-ordering tool family — the ID source for the ordering endpoints, not the V2 MAC ACL rule Mongo _id values.
+  """
+  integrationAclRules(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): IntegrationAclRulePage!
+
+  """
+  Read the ordering of user-defined ACL rules (Integration API UUIDs in controller order). These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here. Discover the IDs with integrationAclRules.
+  """
+  aclRuleOrdering(controller: ID!, site: String! = "default"): AclRuleOrdering!
 
   """List OON (out-of-network) policies (paginated)."""
   oonPolicies(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): OonPolicyPage!

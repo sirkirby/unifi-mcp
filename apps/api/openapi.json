@@ -147,6 +147,20 @@
         "title": "AclRuleModel",
         "type": "object"
       },
+      "AclRuleOrderingModel": {
+        "additionalProperties": true,
+        "properties": {
+          "ordered_acl_rule_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ordered Acl Rule Ids",
+            "type": "array"
+          }
+        },
+        "title": "AclRuleOrderingModel",
+        "type": "object"
+      },
       "ActionIn": {
         "properties": {
           "args": {
@@ -1358,6 +1372,31 @@
           "data"
         ],
         "title": "Detail[AclRuleModel]",
+        "type": "object"
+      },
+      "Detail_AclRuleOrderingModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AclRuleOrderingModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[AclRuleOrderingModel]",
         "type": "object"
       },
       "Detail_ApGroupModel_": {
@@ -3989,6 +4028,90 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IntegrationAclRuleModel": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "network_id_filter": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Id Filter"
+          },
+          "raw": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "title": "IntegrationAclRuleModel",
         "type": "object"
       },
       "KnownFaceModel": {
@@ -6913,6 +7036,46 @@
           "items"
         ],
         "title": "Page[FirewallZoneModel]",
+        "type": "object"
+      },
+      "Page_IntegrationAclRuleModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IntegrationAclRuleModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[IntegrationAclRuleModel]",
         "type": "object"
       },
       "Page_KnownFaceModel_": {
@@ -14420,6 +14583,67 @@
         ]
       }
     },
+    "/v1/sites/{site_id}/acl-rules/ordering": {
+      "get": {
+        "description": "User-defined ACL rule ordering. These IDs are scoped to the ACL-ordering tool family \u2014 do not pass V2 MAC ACL rule Mongo _id values here.",
+        "operationId": "get_acl_rule_ordering_v1_sites__site_id__acl_rules_ordering_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_AclRuleOrderingModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Acl Rule Ordering",
+        "tags": [
+          "network/acl_ordering"
+        ]
+      }
+    },
     "/v1/sites/{site_id}/acl-rules/{rule_id}": {
       "get": {
         "operationId": "get_acl_rule_details_v1_sites__site_id__acl_rules__rule_id__get",
@@ -20510,6 +20734,95 @@
         "summary": "List InnerSpace switches",
         "tags": [
           "innerspace/devices"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/integration-acl-rules": {
+      "get": {
+        "description": "MAC ACL rules as the Integration API lists them. These IDs are scoped to the ACL-ordering tool family \u2014 do not pass V2 MAC ACL rule Mongo _id values here.",
+        "operationId": "list_integration_acl_rules_v1_sites__site_id__integration_acl_rules_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_IntegrationAclRuleModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Integration Acl Rules",
+        "tags": [
+          "network/acl_ordering"
         ]
       }
     },

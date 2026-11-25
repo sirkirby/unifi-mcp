@@ -188,7 +188,7 @@ def get_connection_manager() -> ConnectionManager:
 
 @lru_cache
 def get_acl_manager() -> AclManager:
-    return AclManager(get_connection_manager())
+    return AclManager(get_connection_manager(), get_auth())
 
 
 @lru_cache

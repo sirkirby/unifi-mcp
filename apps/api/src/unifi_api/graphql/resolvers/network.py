@@ -36,6 +36,7 @@ from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.graphql.types.network.acl import AclRule
+from unifi_api.graphql.types.network.acl_ordering import AclRuleOrdering, IntegrationAclRule
 from unifi_api.graphql.types.network.ap_group import ApGroup
 from unifi_api.graphql.types.network.client import (
     BlockedClient,
@@ -853,6 +854,27 @@ async def _fetch_acl_rules(
                 site=site,
             )
             return list(await mgr.get_acl_rules())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_integration_acl_rules(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> list:
+    key = f"network/integration-acl-rules/{controller}/{site}"
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "acl_manager",
+                site=site,
+            )
+            return list(await mgr.list_integration_acl_rules())
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1724,6 +1746,12 @@ class ContentFilterPage:
 @strawberry.type(description="Paginated page of ACL rules.")
 class AclRulePage:
     items: list[AclRule]
+    next_cursor: str | None
+
+
+@strawberry.type(description="Paginated page of Integration API ACL rules.")
+class IntegrationAclRulePage:
+    items: list[IntegrationAclRule]
     next_cursor: str | None
 
 
@@ -3173,6 +3201,69 @@ class NetworkQuery:
             if aid == id:
                 return AclRule.from_manager_output(a)
         return None
+
+    # ---- ACL ordering (Integration API) domain ----------------------------
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List the site's MAC ACL rules as the Integration API sees them (paginated). Their "
+            "ids are Integration API UUIDs scoped to the ACL-ordering tool family — the ID source "
+            "for the ordering endpoints, not the V2 MAC ACL rule Mongo _id values."
+        ),
+    )
+    async def integration_acl_rules(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> IntegrationAclRulePage:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_integration_acl_rules(ctx, controller, site)
+
+        from unifi_api.services.pagination import paginate
+
+        cursor_obj = _decode_cursor(cursor)
+        page, next_cursor = paginate(
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=lambda item: (0, (_raw(item) or {}).get("id", "") if isinstance(_raw(item), dict) else ""),
+        )
+        return IntegrationAclRulePage(
+            items=[
+                IntegrationAclRule.from_manager_output(r, redact_sensitive=ctx.redact_sensitive_fields) for r in page
+            ],
+            next_cursor=next_cursor.encode() if next_cursor else None,
+        )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Read the ordering of user-defined ACL rules (Integration API UUIDs in controller "
+            "order). These IDs are scoped to the ACL-ordering tool family — do not pass V2 "
+            "MAC ACL rule Mongo _id values here. Discover the IDs with integrationAclRules."
+        ),
+    )
+    async def acl_rule_ordering(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> AclRuleOrdering:
+        ctx: GraphQLContext = info.context
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "acl_manager",
+                site=site,
+            )
+            ordering = await mgr.get_acl_rule_ordering()
+        return AclRuleOrdering.from_manager_output(ordering)
 
     # ---- OON domain ------------------------------------------------------
 

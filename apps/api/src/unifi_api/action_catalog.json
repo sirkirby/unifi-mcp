@@ -4571,6 +4571,26 @@
       }
     },
     {
+      "name": "unifi_get_acl_rule_ordering",
+      "product": "network",
+      "category": "acl",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "acl_manager",
+      "manager_method": "get_acl_rule_ordering",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_alerts",
       "product": "network",
       "category": "stats",
@@ -6517,6 +6537,26 @@
       }
     },
     {
+      "name": "unifi_list_integration_acl_rules",
+      "product": "network",
+      "category": "acl",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "api_key_only",
+      "manager_attr": "acl_manager",
+      "manager_method": "list_integration_acl_rules",
+      "input_schema": {
+        "properties": {
+          "site_id": {
+            "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_list_legacy_firewall_rules",
       "product": "network",
       "category": "firewall",
@@ -7000,6 +7040,33 @@
         "required": [
           "mac_address",
           "name"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_reorder_acl_rules",
+      "product": "network",
+      "category": "acl_rules",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "api_key_only",
+      "manager_attr": "acl_manager",
+      "manager_method": "reorder_acl_rules",
+      "input_schema": {
+        "properties": {
+          "ordered_acl_rule_ids": {
+            "description": "Complete ordered list of Integration API ACL rule UUIDs from unifi_get_acl_rule_ordering, in the desired order",
+            "type": "array"
+          },
+          "site_id": {
+            "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically \u2014 the same site unifi_get_acl_rule_ordering read unless told otherwise",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ordered_acl_rule_ids"
         ],
         "type": "object",
         "additionalProperties": false

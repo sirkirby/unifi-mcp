@@ -84,6 +84,9 @@ from unifi_api.routes.resources.network import (
     acl as net_acl_routes,
 )
 from unifi_api.routes.resources.network import (
+    acl_ordering as net_acl_ordering_routes,
+)
+from unifi_api.routes.resources.network import (
     ap_groups as net_ap_groups_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -687,6 +690,9 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_qos_routes,
         net_dpi_routes,
         net_content_filters_routes,
+        # The ordering router owns /acl-rules/ordering, which the V2 detail
+        # router's /acl-rules/{rule_id} would otherwise capture first.
+        net_acl_ordering_routes,
         net_acl_routes,
         net_oon_routes,
         net_port_forwards_routes,

@@ -97,7 +97,10 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.network.managers.vpn_manager import VpnManager
 
     return {
-        "acl_manager": lambda cm: AclManager(cm),
+        # AclManager takes (cm, auth). The connection's UniFiAuth supplies
+        # X-API-Key for the Integration API ordering endpoints when an API
+        # token is configured for the controller.
+        "acl_manager": lambda cm: AclManager(cm, getattr(cm, "unifi_auth", None)),
         "client_group_manager": lambda cm: ClientGroupManager(cm),
         "client_manager": lambda cm: ClientManager(cm),
         "content_filter_manager": lambda cm: ContentFilterManager(cm),

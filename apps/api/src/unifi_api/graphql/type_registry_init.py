@@ -55,6 +55,12 @@ from unifi_api.graphql.types.incident_evidence import IncidentEvidence as Incide
 from unifi_api.graphql.types.network.acl import (
     AclRule as NetworkAclRuleType,
 )
+from unifi_api.graphql.types.network.acl_ordering import (
+    AclRuleOrdering as NetworkAclRuleOrderingType,
+)
+from unifi_api.graphql.types.network.acl_ordering import (
+    IntegrationAclRule as NetworkIntegrationAclRuleType,
+)
 from unifi_api.graphql.types.network.ap_group import (
     ApGroup as NetworkApGroupType,
 )
@@ -403,6 +409,10 @@ def build_type_registry() -> TypeRegistry:
         NetworkVpnServerType,
         "detail",
     )
+
+    # network/acl_ordering (tool-keyed only)
+    reg.register_tool_type("unifi_list_integration_acl_rules", NetworkIntegrationAclRuleType, "list")
+    reg.register_tool_type("unifi_get_acl_rule_ordering", NetworkAclRuleOrderingType, "detail")
 
     # network/dns (tool-keyed only)
     reg.register_tool_type("unifi_list_dns_records", NetworkDnsRecordType, "list")

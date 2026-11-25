@@ -12,13 +12,20 @@ truth for field names, types, and read-only vs mutable metadata.
 
 import json
 import logging
+from collections import Counter
 from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiMalformedResponseError,
+    UniFiNotFoundError,
+    UniFiOperationError,
+    UniFiPermissionError,
+)
 from unifi_core.network.models.acl import (
     MUTABLE_FIELDS,
     build_acl_rule,
@@ -27,7 +34,9 @@ from unifi_core.network.models.acl import (
     to_controller_update,
     validate_update_fields,
 )
-from unifi_network_mcp.runtime import acl_manager, server
+from unifi_core.network.models.acl_ordering import integration_acl_rule_from_controller
+from unifi_core.redaction import redact_sensitive_fields
+from unifi_network_mcp.runtime import acl_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
 
@@ -370,3 +379,169 @@ async def delete_acl_rule(
     except Exception as e:
         logger.error("Error deleting ACL rule %s: %s", rule_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to delete ACL rule {rule_id}: {e}"}
+
+
+@server.tool(
+    name="unifi_list_integration_acl_rules",
+    auth="api_key_only",
+    description=(
+        "List the site's MAC ACL rules as the UniFi public Integration API sees them. This is the "
+        "ID source for the ordering endpoints: the returned id values are Integration API UUIDs — "
+        "the same family unifi_get_acl_rule_ordering returns and unifi_reorder_acl_rules accepts. "
+        "They do NOT correspond to the IDs returned by unifi_list_acl_rules, which lists the "
+        "private V2 MAC ACL rules (Mongo IDs). Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on "
+        "the UNIFI_HOST console). These IDs are scoped to the ACL-ordering tool family."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def list_integration_acl_rules(
+    site_id: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Optional Integration API site UUID; when omitted, the configured site is resolved automatically"
+            )
+        ),
+    ] = None,
+) -> Dict[str, Any]:
+    """List the site's MAC ACL rules in Integration API ID space."""
+    try:
+        rules = await acl_manager.list_integration_acl_rules(site_id=site_id)
+        return {
+            "success": True,
+            "site": acl_manager._connection.site,
+            "count": len(rules),
+            "rules": [
+                redact_sensitive_fields(
+                    integration_acl_rule_from_controller(rule).model_dump(),
+                    redact_sensitive=should_redact_sensitive_fields(),
+                )
+                for rule in rules
+            ],
+        }
+    except (UniFiAuthError, UniFiPermissionError, UniFiOperationError, UniFiMalformedResponseError) as e:
+        # Fixed-text configuration/transport errors are safe to surface.
+        logger.error("Error listing Integration ACL rules: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to list Integration ACL rules: {e}"}
+    except Exception as e:
+        logger.error("Error listing Integration ACL rules: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to list Integration ACL rules: {type(e).__name__}"}
+
+
+@server.tool(
+    name="unifi_get_acl_rule_ordering",
+    auth="api_key_only",
+    description=(
+        "Read the ordering of user-defined ACL rules from the UniFi public Integration API. "
+        "Returns Integration API ACL rule UUIDs; these IDs are scoped to the ACL-ordering tool "
+        "family — pass them ONLY to unifi_reorder_acl_rules. Discover them with "
+        "unifi_list_integration_acl_rules; they do NOT correspond to the IDs returned by "
+        "unifi_list_acl_rules, which lists the private V2 MAC ACL rules (Mongo IDs). "
+        "The controller does not document whether this list must be complete or whether "
+        "controller-defined rules participate, so it is returned verbatim. "
+        "Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console)."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def get_acl_rule_ordering(
+    site_id: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Optional Integration API site UUID; when omitted, the configured site is resolved automatically"
+            )
+        ),
+    ] = None,
+) -> Dict[str, Any]:
+    """Read user-defined ACL rule ordering from the Integration API."""
+    try:
+        ordering = await acl_manager.get_acl_rule_ordering(site_id=site_id)
+        return {"success": True, "ordered_acl_rule_ids": ordering}
+    except (UniFiAuthError, UniFiPermissionError, UniFiOperationError, UniFiMalformedResponseError) as e:
+        # Fixed-text configuration/transport errors are safe to surface.
+        logger.error("Error getting ACL rule ordering: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get ACL rule ordering: {e}"}
+    except Exception as e:
+        logger.error("Error getting ACL rule ordering: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get ACL rule ordering: {type(e).__name__}"}
+
+
+@server.tool(
+    name="unifi_reorder_acl_rules",
+    auth="api_key_only",
+    description=(
+        "Reorder user-defined ACL rules for the Integration API ACL rule family. Pass the complete "
+        "ordered_acl_rule_ids list obtained from unifi_get_acl_rule_ordering, preserving every "
+        "current ID. These Integration API UUIDs are scoped to the ACL-ordering tool family — do "
+        "NOT pass IDs from unifi_list_acl_rules (V2 Mongo IDs). The manager re-reads the current "
+        "ordering from the controller immediately before applying and refuses a payload that does "
+        "not preserve the exact current ID set, so a stale preview or partial list cannot drop "
+        "rules. Requires confirmation, UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST "
+        "console)."
+    ),
+    permission_category="acl_rules",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def reorder_acl_rules(
+    ordered_acl_rule_ids: Annotated[
+        List[str],
+        Field(
+            description=(
+                "Complete ordered list of Integration API ACL rule UUIDs from "
+                "unifi_get_acl_rule_ordering, in the desired order"
+            )
+        ),
+    ],
+    site_id: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Optional Integration API site UUID; when omitted, the configured site is resolved "
+                "automatically — the same site unifi_get_acl_rule_ordering read unless told otherwise"
+            )
+        ),
+    ] = None,
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the reorder. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Reorder user-defined ACL rules for a site through the Integration API."""
+    try:
+        if not isinstance(ordered_acl_rule_ids, list) or not ordered_acl_rule_ids:
+            return {"success": False, "error": "ordered_acl_rule_ids must be a non-empty list"}
+        if not all(isinstance(rule_id, str) and rule_id for rule_id in ordered_acl_rule_ids):
+            return {
+                "success": False,
+                "error": "ordered_acl_rule_ids must contain only non-empty ACL rule ID strings",
+            }
+        duplicate_ids = sorted(rule_id for rule_id, count in Counter(ordered_acl_rule_ids).items() if count > 1)
+        if duplicate_ids:
+            return {
+                "success": False,
+                "error": "Reorder payload contains duplicate ACL rule IDs: %s" % ", ".join(duplicate_ids),
+            }
+
+        if not confirm:
+            current_ordering = await acl_manager.get_acl_rule_ordering(site_id=site_id)
+            return update_preview(
+                resource_type="acl_rule_ordering",
+                resource_id=acl_manager._connection.site,
+                resource_name="ACL rule ordering",
+                current_state={"orderedAclRuleIds": current_ordering},
+                updates={"orderedAclRuleIds": ordered_acl_rule_ids},
+            )
+
+        ordering = await acl_manager.reorder_acl_rules(ordered_acl_rule_ids, site_id=site_id)
+        return {"success": True, "ordered_acl_rule_ids": ordering}
+    except (UniFiAuthError, UniFiPermissionError, UniFiOperationError, UniFiMalformedResponseError) as e:
+        # Fixed-text configuration/transport errors are safe to surface.
+        logger.error("Error reordering ACL rules: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to reorder ACL rules: {e}"}
+    except ValueError as e:
+        # The manager's stale-set and duplicate-payload refusals are caller-input errors.
+        return {"success": False, "error": f"Failed to reorder ACL rules: {e}"}
+    except Exception as e:
+        logger.error("Error reordering ACL rules: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to reorder ACL rules: {type(e).__name__}"}

@@ -18,6 +18,7 @@ from _cross_layer_helpers import compare_pair
 REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     # (server, domain, pydantic_class_name)
     ("network", "acl", "AclRule"),
+    ("network", "acl_ordering", "IntegrationAclRule"),
     ("network", "ap_group", "ApGroup"),
     ("network", "client_group", "ClientGroup"),
     ("network", "client_group", "UserGroup"),

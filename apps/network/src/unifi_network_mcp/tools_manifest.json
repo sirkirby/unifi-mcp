@@ -1,5 +1,5 @@
 {
-  "count": 217,
+  "count": 220,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -53,6 +53,7 @@
     "unifi_force_reconnect_client": "unifi_network_mcp.tools.clients",
     "unifi_forget_client": "unifi_network_mcp.tools.clients",
     "unifi_get_acl_rule_details": "unifi_network_mcp.tools.acl",
+    "unifi_get_acl_rule_ordering": "unifi_network_mcp.tools.acl",
     "unifi_get_alerts": "unifi_network_mcp.tools.stats",
     "unifi_get_anomalies": "unifi_network_mcp.tools.stats",
     "unifi_get_ap_group_details": "unifi_network_mcp.tools.network",
@@ -134,6 +135,7 @@
     "unifi_list_firewall_groups": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_zones": "unifi_network_mcp.tools.firewall",
+    "unifi_list_integration_acl_rules": "unifi_network_mcp.tools.acl",
     "unifi_list_legacy_firewall_rules": "unifi_network_mcp.tools.firewall",
     "unifi_list_nat_rules": "unifi_network_mcp.tools.nat",
     "unifi_list_networks": "unifi_network_mcp.tools.network",
@@ -156,6 +158,7 @@
     "unifi_recent_events": "unifi_network_mcp.tools.events",
     "unifi_rename_client": "unifi_network_mcp.tools.clients",
     "unifi_rename_device": "unifi_network_mcp.tools.devices",
+    "unifi_reorder_acl_rules": "unifi_network_mcp.tools.acl",
     "unifi_reorder_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_revoke_voucher": "unifi_network_mcp.tools.hotspot",
     "unifi_set_client_fixed_ap": "unifi_network_mcp.tools.clients",
@@ -6903,6 +6906,110 @@
         }
       },
       "title": "Get ACL Rule Details"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "api_key_only",
+      "description": "Read the ordering of user-defined ACL rules from the UniFi public Integration API. Returns Integration API ACL rule UUIDs; these IDs are scoped to the ACL-ordering tool family \u2014 pass them ONLY to unifi_reorder_acl_rules. Discover them with unifi_list_integration_acl_rules; they do NOT correspond to the IDs returned by unifi_list_acl_rules, which lists the private V2 MAC ACL rules (Mongo IDs). The controller does not document whether this list must be complete or whether controller-defined rules participate, so it is returned verbatim. Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_get_acl_rule_ordering",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get ACL Rule Ordering"
     },
     {
       "annotations": {
@@ -15784,6 +15891,110 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "api_key_only",
+      "description": "List the site's MAC ACL rules as the UniFi public Integration API sees them. This is the ID source for the ordering endpoints: the returned id values are Integration API UUIDs \u2014 the same family unifi_get_acl_rule_ordering returns and unifi_reorder_acl_rules accepts. They do NOT correspond to the IDs returned by unifi_list_acl_rules, which lists the private V2 MAC ACL rules (Mongo IDs). Requires UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console). These IDs are scoped to the ACL-ordering tool family.",
+      "name": "unifi_list_integration_acl_rules",
+      "schema": {
+        "input": {
+          "properties": {
+            "site_id": {
+              "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Integration ACL Rules"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "auth_method": "local_only",
       "description": "List legacy pre-zone-based firewall rules from the UniFi controller. Use this on sites that still use the legacy firewall engine and return no V2 zone-based firewall policies. Returns ruleset, rule_index, action (lowercase accept/drop/reject), source and destination addresses, ports, networks and firewall groups, protocol, connection-state matching, logging, and enabled state.",
       "name": "unifi_list_legacy_firewall_rules",
@@ -18198,6 +18409,124 @@
         }
       },
       "title": "Rename Device"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "api_key_only",
+      "description": "Reorder user-defined ACL rules for the Integration API ACL rule family. Pass the complete ordered_acl_rule_ids list obtained from unifi_get_acl_rule_ordering, preserving every current ID. These Integration API UUIDs are scoped to the ACL-ordering tool family \u2014 do NOT pass IDs from unifi_list_acl_rules (V2 Mongo IDs). The manager re-reads the current ordering from the controller immediately before applying and refuses a payload that does not preserve the exact current ID set, so a stale preview or partial list cannot drop rules. Requires confirmation, UNIFI_NETWORK_API_KEY (or UNIFI_API_KEY on the UNIFI_HOST console).",
+      "name": "unifi_reorder_acl_rules",
+      "permission_action": "update",
+      "permission_category": "acl_rules",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the reorder. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "ordered_acl_rule_ids": {
+              "description": "Complete ordered list of Integration API ACL rule UUIDs from unifi_get_acl_rule_ordering, in the desired order",
+              "type": "array"
+            },
+            "site_id": {
+              "description": "Optional Integration API site UUID; when omitted, the configured site is resolved automatically \u2014 the same site unifi_get_acl_rule_ordering read unless told otherwise",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ordered_acl_rule_ids"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Reorder ACL Rules"
     },
     {
       "annotations": {

@@ -186,6 +186,13 @@ type AclRule {
   destinationMacMask: String
 }
 
+"""
+User-defined ACL rule ordering. These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here.
+"""
+type AclRuleOrdering {
+  orderedAclRuleIds: [String!]!
+}
+
 """Paginated page of ACL rules."""
 type AclRulePage {
   items: [AclRule!]!
@@ -1495,6 +1502,26 @@ type InnerSpaceWallType {
 }
 
 """
+One MAC ACL rule as the Integration API lists it (read-only). Its id is an Integration API UUID scoped to the ACL-ordering tool family — do not pass it to V2 MAC ACL rule tools or translate between the two families.
+"""
+type IntegrationAclRule {
+  id: ID!
+  name: String
+  index: Int
+  action: String
+  enabled: Boolean
+  type: String
+  networkIdFilter: JSON
+  raw: JSON
+}
+
+"""Paginated page of Integration API ACL rules."""
+type IntegrationAclRulePage {
+  items: [IntegrationAclRule!]!
+  nextCursor: String
+}
+
+"""
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
@@ -2016,6 +2043,16 @@ type NetworkQuery {
 
   """Look up a single ACL rule by id."""
   aclRule(controller: ID!, id: ID!, site: String! = "default"): AclRule
+
+  """
+  List the site's MAC ACL rules as the Integration API sees them (paginated). Their ids are Integration API UUIDs scoped to the ACL-ordering tool family — the ID source for the ordering endpoints, not the V2 MAC ACL rule Mongo _id values.
+  """
+  integrationAclRules(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): IntegrationAclRulePage!
+
+  """
+  Read the ordering of user-defined ACL rules (Integration API UUIDs in controller order). These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here. Discover the IDs with integrationAclRules.
+  """
+  aclRuleOrdering(controller: ID!, site: String! = "default"): AclRuleOrdering!
 
   """List OON (out-of-network) policies (paginated)."""
   oonPolicies(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): OonPolicyPage!
@@ -3729,6 +3766,7 @@ Read-only access to UniFi Network resources.
 **Fields:**
 
 - `aclRule: AclRule`  — Look up a single ACL rule by id.
+- `aclRuleOrdering: AclRuleOrdering!`  — Read the ordering of user-defined ACL rules (Integration API UUIDs in controller order). These IDs are scoped to the ACL-ordering tool family — do not pass V2 MAC ACL rule Mongo _id values here. Discover the IDs with integrationAclRules.
 - `aclRules: AclRulePage!`  — List ACL rules on the given controller/site (paginated).
 - `activeRoutes: ActiveRoutePage!`  — List the gateway's active kernel routing-table entries (paginated).
 - `alarms: AlarmPage!`  — List controller alarms (paginated).
@@ -3775,6 +3813,7 @@ Read-only access to UniFi Network resources.
 - `gatewaySettings: GatewaySettings`  — Get gateway (USG) security / NAT / connection-tracking settings.
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Network event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
+- `integrationAclRules: IntegrationAclRulePage!`  — List the site's MAC ACL rules as the Integration API sees them (paginated). Their ids are Integration API UUIDs scoped to the ACL-ordering tool family — the ID source for the ordering endpoints, not the V2 MAC ACL rule Mongo _id values.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
 - `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.

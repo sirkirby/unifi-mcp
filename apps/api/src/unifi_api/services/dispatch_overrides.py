@@ -150,6 +150,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_get_device_stats": ("stats_manager", "get_device_stats_for_identifier"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats_for_identifier"),
     "unifi_get_top_clients": ("stats_manager", "get_top_clients"),
+    # The reorder tool's first manager call is the stale-check re-fetch, so the
+    # source AST would bind the read method; the mutation applies reorder_acl_rules.
+    "unifi_reorder_acl_rules": ("acl_manager", "reorder_acl_rules"),
     # Event tools obtain their Core manager through a lazy helper rather than
     # importing a runtime singleton, so the source AST has no direct binding.
     "unifi_list_events": ("event_manager", "get_events"),
