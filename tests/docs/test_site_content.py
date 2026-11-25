@@ -1274,13 +1274,21 @@ class ContentReconciliationTests(unittest.TestCase):
         if not INNERSPACE_RELEASED:
             self.skipTest("unifi-innerspace-mcp is not released")
         expected = {
-            Path("README.md"): ("img.shields.io/pypi/v/unifi-innerspace-mcp", "uvx unifi-innerspace-mcp@latest"),
-            Path("QUICKSTART.md"): ("uvx unifi-innerspace-mcp@latest",),
+            Path("README.md"): (
+                "img.shields.io/pypi/v/unifi-innerspace-mcp",
+                "uvx unifi-innerspace-mcp@latest",
+                "/plugin install unifi-innerspace@unifi-plugins",
+            ),
+            Path("QUICKSTART.md"): (
+                "uvx unifi-innerspace-mcp@latest",
+                "/plugin install unifi-innerspace@unifi-plugins",
+            ),
             Path("SECURITY.md"): ("| unifi-innerspace-mcp | Latest release (beta) |",),
             Path("apps/innerspace/README.md"): (
                 "pypi.org/project/unifi-innerspace-mcp",
                 "pip install unifi-innerspace-mcp",
                 "docker pull ghcr.io/sirkirby/unifi-innerspace-mcp",
+                "/plugin install unifi-innerspace@unifi-plugins",
             ),
             Path("docs/index.html"): (
                 'uvx <span class="value">unifi-innerspace-mcp@latest</span>',
@@ -1297,8 +1305,7 @@ class ContentReconciliationTests(unittest.TestCase):
             content = " ".join(path.read_text(encoding="utf-8").split())
             with self.subTest(path=path):
                 self.assertNotRegex(content, r"(?i)innerspace[^.|]*not (?:yet )?(?:published|released)")
-                # No plugin bundle exists yet; drop this check when one ships.
-                self.assertNotIn("unifi-innerspace@unifi-plugins", content)
+                self.assertNotRegex(content, r"(?i)no plugin (?:for it )?yet")
 
     def test_innerspace_is_listed_where_the_products_are_enumerated(self):
         surfaces = {

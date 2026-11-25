@@ -80,8 +80,8 @@ export UNIFI_INNERSPACE_PASSWORD_FILE="$HOME/.config/unifi-mcp/innerspace-passwo
 uvx unifi-innerspace-mcp@latest
 ```
 
-There is no plugin for it yet; add it to your MCP client's config with the same
-command and variables. The container image is
+In Claude Code, `/plugin install unifi-innerspace@unifi-plugins` installs it
+with a setup skill. The container image is
 `ghcr.io/sirkirby/unifi-innerspace-mcp:latest`.
 
 It has nine read tools and 15 write tools for walls, attenuation objects and plan

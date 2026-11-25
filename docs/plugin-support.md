@@ -13,6 +13,7 @@ to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md)
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
 | `unifi-sitemanager` | Listed | Listed | `unifi-sitemanager-mcp==0.1.0` |
 | `unifi-drive` | Listed | Listed | `unifi-drive-mcp==0.1.0` |
+| `unifi-innerspace` | Listed | Listed | `unifi-innerspace-mcp` |
 | `unifi-intelligence` | Listed | Listed | None (skills only) |
 
 Each plugin has its own semantic version for everything it ships. For example,
@@ -229,6 +230,46 @@ operating system, is **not tested** (not yet measured). Run the Drive
 scenarios in the [acceptance procedure](plugin-acceptance.md#drive-scenarios)
 to measure them.
 
+## InnerSpace: console session setup
+
+`unifi-innerspace` starts at plugin 1.0.0 and pins `unifi-innerspace-mcp==0.2.0`.
+Its domain tools read InnerSpace floor plans, plan image metadata
+(the image itself is an MCP resource), placed devices and walls, and its writes edit a plan's layout, each previewed before it
+is applied; meta-tools provide discovery and execution; there is no support-bundle tool. IDs
+belong to InnerSpace and cannot be passed to other products' tools.
+
+The server uses the console's login session only. Setup asks for the console
+host, a local username and exactly one password source (keychain, `_FILE` or
+`_COMMAND`), the HTTPS port (default 443), Verify SSL or a certificate
+fingerprint, the tool registration mode, and the write permissions: the
+create, update and delete gates (off unless the user opts in, as for Access)
+and the permission mode (`confirm` by default, or `bypass`). Codex and OpenClaw
+also take the category gates, `UNIFI_INNERSPACE_READ_ONLY`,
+`UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN`, the operation-gate budgets and the
+MCP content mode, and their first setup saves the server-level gates off and
+the mode as `confirm` unless the user chose otherwise. Setup refuses any API
+key, the MCP HTTP settings, the redaction switch and the shared `UNIFI_HOST`,
+`UNIFI_USERNAME` and `UNIFI_PASSWORD` keys. Setup writes no shared key, but the
+server still falls back to them key by key for an InnerSpace setting left
+unset (the shared username and password only for the `UNIFI_HOST` console),
+and in Claude Code the server inherits the environment that starts it.
+The setup skill pins the certificate before a password is entered: without
+verification or a pin, anyone on the network path can read the password at
+login.
+
+Claude Code uses the inline server and a sensitive keychain option (or provider
+options). Codex and OpenClaw run `.mcp.codex.json`, which points through
+`UNIFI_SETTINGS_FILE` to `~/.config/unifi-mcp/innerspace.env`
+(`%USERPROFILE%\.config\unifi-mcp\innerspace.env` on Windows). Setup
+creates no client MCP entry and refuses a manual shadowing entry. There is no
+earlier InnerSpace setup to migrate. With no host the server answers in setup
+mode without contacting the console.
+
+Real-client acceptance for InnerSpace on Claude Code, Codex and OpenClaw, on
+every operating system, is **not tested** (not yet measured). Run the InnerSpace
+scenarios in the [acceptance procedure](plugin-acceptance.md#innerspace-scenarios)
+to measure them.
+
 ## Codex: tools on the first turn
 
 Codex 0.162.0 waits `mcp_optional_startup_grace_ms` (default 1000 ms) for
@@ -339,6 +380,8 @@ No minimum client version has been established for any client.
   `api.ui.com` and its separate whole-account cloud key (`unifi-sitemanager-setup`).
   Drive needs the NAS itself reachable, with a local account on it
   (`unifi-drive-setup`).
+  InnerSpace needs a console that runs the InnerSpace application and a local
+  console login (`unifi-innerspace-setup`).
 - Claude Code: setup saves the plugin's options with `claude plugin configure`,
   so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
   (Git Bash on Windows).

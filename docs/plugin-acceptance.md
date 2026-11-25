@@ -412,3 +412,28 @@ Confirm that the main and setup skills are discovered, there is no support
 skill, and IDs are scoped to Drive. Record sanitized client versions, OS,
 candidate commit, plugin version and server pin separately from fixture
 results. Do not mark any scenario tested from packaging checks.
+
+## InnerSpace scenarios
+
+Status: **not yet measured** for any real client or OS. The bundle pins
+`unifi-innerspace-mcp==0.2.0`. Use a disposable
+console account and a project you may edit, and run each scenario with Claude
+Code, Codex and OpenClaw in isolated profiles.
+
+| Scenario | Expected result |
+|---|---|
+| No host | MCP handshake completes in setup mode. No console request occurs; guidance names the console login, never an API key. |
+| Certificate pin | The setup skill pins the console certificate before asking for a password source. With a pin set, a different certificate on the console port is refused. |
+| One password source | A masked raw password uses Claude's sensitive keychain option, or stdin JSON for the settings helper; a file or command provider is saved alone. Setup validates a provider without running the command or reading the file. After reconnect, `innerspace_get_status` and a floor plan read succeed; record status and counts only. |
+| Two forms | Raw+file, raw+command and file+command are each refused before publication. Previous settings and options remain byte-identical; no password or command argument appears in argv, output or logs. |
+| Refused input | Any API key, the shared `UNIFI_HOST`, `UNIFI_USERNAME` and `UNIFI_PASSWORD`, the global `UNIFI_POLICY_*` and permission keys, the MCP HTTP settings, the redaction switch and `--migrate` are refused, each refusal naming the key. Category gates and the operation-gate budgets are refused in Claude Code and accepted for Codex and OpenClaw. No credential is copied or forwarded. |
+| Bundled server | Codex and OpenClaw write only `~/.config/unifi-mcp/innerspace.env` (`%USERPROFILE%\.config\unifi-mcp\innerspace.env` on Windows), readable by the user only. `UNIFI_SETTINGS_FILE` points there; no MCP client entry is created. A manual shadowing entry is refused. |
+| Warm-up | Codex starts the pinned package with no `UNIFI_` variables, settings file or credential, completes initialize, and closes it. It makes no console request. |
+| Writes off by default | A first Codex or OpenClaw setup that gives only the login saves the create, update and delete gates as `false` and the permission mode as `confirm`; a write is then refused by policy. Claude Code's options default the same way. |
+| Write preview | A write without `confirm` returns a preview and changes nothing; with `confirm=True` it reports `mutation_applied` from a fresh read-back. Use a disposable plan and restore it afterwards. |
+| Reconnect and upgrade | Claude reload/new session, Codex new session and OpenClaw new session/Gateway restart after initial setup keep the saved settings. Measure upgrade only once a prior InnerSpace release exists. |
+
+Confirm that the main and setup skills are discovered, there is no support
+skill, and IDs are scoped to InnerSpace. Record sanitized client versions, OS, console and
+InnerSpace versions, candidate commit, plugin version and server pin separately
+from fixture results. Do not mark any scenario tested from packaging checks.

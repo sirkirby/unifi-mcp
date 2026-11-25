@@ -49,6 +49,21 @@ def test_released_site_manager_uses_published_package_and_plugin() -> None:
     assert "| Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` |" in guide
 
 
+def test_released_innerspace_uses_published_package_plugin_and_console_login() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    section = guide.split("## InnerSpace (console login)", 1)[1].split("\n## ", 1)[0]
+    normalized = " ".join(section.split())
+
+    assert "/plugin install unifi-innerspace@unifi-plugins" in section
+    assert "-- uvx --python-preference system unifi-innerspace-mcp@latest" in section
+    assert "--env 'UNIFI_INNERSPACE_PASSWORD_FILE=/absolute/path/to/innerspace-password'" in section
+    assert "Never offer `UNIFI_API_KEY` or any API key" in normalized
+    assert "Do not ask for the password in chat" in normalized
+    assert normalized.index("UNIFI_INNERSPACE_SSL_FINGERPRINT") < normalized.index("UNIFI_INNERSPACE_PASSWORD_FILE")
+    assert "| InnerSpace | `unifi-innerspace` | `unifi-innerspace-mcp@latest` |" in guide
+    assert "UNIFI_INNERSPACE_API_KEY" not in guide
+
+
 def test_skills_install_examples_are_scoped_to_public_product_trees() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
 
