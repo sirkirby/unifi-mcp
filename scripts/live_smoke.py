@@ -35,6 +35,10 @@ from unifi_mcp_shared.meta_tools import is_meta_tool
 REPO_ROOT = Path(__file__).resolve().parents[1]
 API_ACTION_CATALOG = REPO_ROOT / "apps/api/src/unifi_api/action_catalog.json"
 RUN_PREFIX = "codex-smoke"
+# Drive write tools whose preview arguments come from Drive reads.
+DRIVE_PREVIEW_TOOLS = frozenset({"drive_set_file_service", "drive_add_nfs_connection", "drive_update_nfs_connection"})
+# A documentation address (TEST-NET-1): no real host can mount with it.
+DRIVE_SMOKE_NFS_CLIENT = "192.0.2.123"
 
 
 SERVER_PACKAGES = {
@@ -931,6 +935,9 @@ class LiveSmokeRunner:
             "protect_update_sensor_settings": {"protect_list_sensors"},
             "protect_update_viewer": {"protect_list_viewers", "protect_list_liveviews"},
             "unifi_update_traffic_route": {"unifi_list_traffic_routes"},
+            "drive_set_file_service": {"drive_get_file_services"},
+            "drive_add_nfs_connection": {"drive_list_shared_drives", "drive_list_nfs_connections"},
+            "drive_update_nfs_connection": {"drive_list_nfs_connections"},
         }
         seed_names: set[str] = set()
         for tool_name, names in dependencies.items():
@@ -1052,6 +1059,8 @@ class LiveSmokeRunner:
             await self.approved_protect_physical()
         elif self.server_key == "access":
             await self.approved_access_physical()
+        elif self.server_key == "drive":
+            await self.lifecycle_drive_nfs_connection()
 
     def skip(self, tool: str, phase: str, reason: str) -> None:
         self.report.records.append(SmokeRecord(tool=tool, phase=phase, status="skipped", error=reason))
@@ -1252,6 +1261,8 @@ class LiveSmokeRunner:
             face_id = first_value(face, ("id", "_id", "face_id", "uuid"))
             current_name = face.get("name") or face.get("matched_name") or f"{RUN_PREFIX}-preview"
             return {"face_id": face_id, "fields": {"name": current_name}}, ""
+        if name in DRIVE_PREVIEW_TOOLS:
+            return self.drive_preview_args(name)
         if name == "protect_merge_known_faces":
             source, target = self.protect_known_face_pair()
             if not source or not target:
@@ -1260,6 +1271,41 @@ class LiveSmokeRunner:
             target_id = first_value(target, ("id", "_id", "face_id", "uuid"))
             return {"source_face_id": source_id, "target_face_id": target_id}, ""
         return self.args_for_tool(name, required_params(next(t for t in self.manifest["tools"] if t["name"] == name)))
+
+    def drive_preview_args(self, name: str) -> tuple[dict[str, Any] | None, str]:
+        """Arguments that preview a real change; run_previews forces confirm=False, so nothing is written."""
+        if name == "drive_set_file_service":
+            payload = self.cache.by_tool.get("drive_get_file_services", {})
+            services = payload.get("data") if isinstance(payload, dict) else None
+            enabled = services.get("nfs_enabled") if isinstance(services, dict) else None
+            if not isinstance(enabled, bool):
+                return None, "drive_get_file_services did not report whether NFS is on"
+            return {"service": "nfs", "enabled": not enabled}, ""
+        if name == "drive_add_nfs_connection":
+            drive_id = self.drive_nfs_drive_id()
+            if not drive_id:
+                return None, "no shared drive to grant"
+            if DRIVE_SMOKE_NFS_CLIENT in self.drive_nfs_clients():
+                return None, f"{DRIVE_SMOKE_NFS_CLIENT} already has an NFS connection"
+            return {"client": DRIVE_SMOKE_NFS_CLIENT, "shared_drives": [{"id": drive_id, "permission": "ro"}]}, ""
+        connection = next(iter(self.cache.items_from_tool("drive_list_nfs_connections", "connections")), None)
+        if not connection or not connection.get("client"):
+            return None, "no NFS connection to preview a change to"
+        return {"client": connection["client"], "async_writes": not bool(connection.get("async_writes"))}, ""
+
+    def drive_nfs_drive_id(self) -> str | None:
+        """A drive NFS can export: a shared drive, not a personal one."""
+        for drive in self.cache.items_from_tool("drive_list_shared_drives", "drives"):
+            if drive.get("id") and drive.get("type") == "shared":
+                return str(drive["id"])
+        return None
+
+    def drive_nfs_clients(self) -> list[str]:
+        return [
+            str(entry.get("client"))
+            for entry in self.cache.items_from_tool("drive_list_nfs_connections", "connections")
+            if entry.get("client")
+        ]
 
     def visitor_args(self, stamp: str) -> dict[str, Any]:
         start = (datetime.now(UTC) + timedelta(minutes=5)).replace(microsecond=0)
@@ -2316,6 +2362,98 @@ class LiveSmokeRunner:
             await self.call("access_reboot_device", {"device_id": device_id, "confirm": True}, "approved:physical")
         else:
             self.skip("access_reboot_device", "approved", "could not discover device_id")
+
+    async def lifecycle_drive_nfs_connection(self) -> None:
+        """Add, change and remove one NFS client on a documentation address, read-only on one shared drive.
+
+        Every other client must read back exactly as before. File services are
+        never toggled here: turning one off disconnects real clients.
+        """
+        tool = "drive_add_nfs_connection"
+        await self.call("drive_list_shared_drives", {}, "lifecycle:seed")
+        drive_id = self.drive_nfs_drive_id()
+        if not drive_id:
+            self.skip(tool, "lifecycle", "no shared drive to grant")
+            return
+        listed = await self.call("drive_list_nfs_connections", {}, "lifecycle:before")
+        if listed.success is not True:
+            self.skip(tool, "lifecycle", "the NFS connection list could not be read")
+            return
+        before = {
+            entry["client"]: entry
+            for entry in self.cache.items_from_tool("drive_list_nfs_connections", "connections")
+            if entry.get("client")
+        }
+        client = DRIVE_SMOKE_NFS_CLIENT
+        if client in before:
+            self.skip(tool, "lifecycle", f"{client} already has an NFS connection; remove it first")
+            return
+        grant = [{"id": drive_id, "permission": "ro"}]
+        add = await self.call(tool, {"client": client, "shared_drives": grant, "confirm": True}, "lifecycle:create")
+        if add.success is not True:
+            return
+        self.report.created_resources.append({"type": "nfs_connection", "id": client, "name": client})
+
+        def others_unchanged() -> bool:
+            now = {
+                entry["client"]: entry
+                for entry in self.cache.items_from_tool("drive_list_nfs_connections", "connections")
+                if entry.get("client") and entry["client"] != client
+            }
+            return now == before
+
+        def connection() -> dict[str, Any] | None:
+            items = self.cache.items_from_tool("drive_list_nfs_connections", "connections")
+            return next((entry for entry in items if entry.get("client") == client), None)
+
+        await self.call("drive_list_nfs_connections", {}, "lifecycle:list")
+        added = connection()
+        self.record_check(
+            tool,
+            "lifecycle:verify-create",
+            added is not None
+            and [(g.get("id"), g.get("permission")) for g in added.get("shared_drives", [])] == [(drive_id, "ro")]
+            and others_unchanged(),
+            "the new client reads back read-only on one shared drive, and every other client is unchanged",
+        )
+        update = await self.call(
+            "drive_update_nfs_connection", {"client": client, "async_writes": True, "confirm": True}, "lifecycle:update"
+        )
+        if update.success is True:
+            await self.call("drive_list_nfs_connections", {}, "lifecycle:list")
+            updated = connection()
+            self.record_check(
+                "drive_update_nfs_connection",
+                "lifecycle:verify-update",
+                updated is not None
+                and updated.get("async_writes") is True
+                and [(g.get("id"), g.get("permission")) for g in updated.get("shared_drives", [])] == [(drive_id, "ro")]
+                and others_unchanged(),
+                "async writes changed, the grant kept its permission, and every other client is unchanged",
+            )
+        preview = await self.call(
+            "drive_remove_nfs_connection", {"client": client, "confirm": False}, "lifecycle:preview-delete"
+        )
+        self.record_check(
+            "drive_remove_nfs_connection",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == client,
+            "delete preview identifies the disposable NFS client",
+        )
+        remove = await self.call("drive_remove_nfs_connection", {"client": client, "confirm": True}, "lifecycle:delete")
+        if remove.success is True:
+            await self.call("drive_list_nfs_connections", {}, "lifecycle:verify-cleanup")
+            gone = connection() is None and others_unchanged()
+            self.record_check(
+                "drive_remove_nfs_connection",
+                "lifecycle:verify-cleanup-list",
+                gone,
+                "the disposable client is gone and every other client is unchanged",
+            )
+            if gone:
+                self.report.cleaned_resources.append({"type": "nfs_connection", "id": client, "name": client})
 
     async def lifecycle_access_visitor(self) -> None:
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")

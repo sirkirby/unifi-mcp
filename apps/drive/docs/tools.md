@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`.
+Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
 Errors never contain the NAS address or credentials. A request that fails names its method, path and HTTP status, plus Drive's own error message when it sends one.
 
@@ -47,8 +47,63 @@ Drive's single-drive endpoint does not return the protection flags or member cou
 
 No parameters. Returns `smb_enabled`, `nfs_enabled`, `time_machine_enabled`, `custom_domain` and `network_interfaces` (name, port type, link state and speed, address, MAC).
 
+### `drive_set_file_service` (write)
+
+| Parameter | Description |
+|-----------|-------------|
+| `service` | `smb`, `nfs` or `time_machine` |
+| `enabled` | `true` to turn it on, `false` to turn it off |
+| `confirm` | `false` (default) previews; `true` applies |
+
+- Sends `PUT /proxy/drive/api/v1/services/<service>/settings` with `{"enable": ...}` and reads the setting back.
+- Time Machine runs over SMB: turning it on while SMB is off is refused.
+- Turning SMB off while Time Machine is on, or NFS off while clients are configured, adds a warning to the preview.
+- Turning NFS on lists the clients that can mount again, with their shared drives and permissions.
+- Turning NFS off keeps the NFS client list. The Drive web app clears it at that point; remove clients with `drive_remove_nfs_connection` if you want the same.
+- Asking for the state the service is already in changes nothing and returns `changed: false`.
+
 ## NFS connections
+
+`GET`/`PATCH /proxy/drive/api/v1/services/nfs/advanced-settings` hold every client in one list, and a `PATCH` of `connections` replaces the whole list while Drive keeps its other NFS settings (Drive refuses a `PUT` here). Each write tool reads the list, changes one client, sends every other client back exactly as it was read (including any setting this server does not know about), and reads the list again to check the result. If another client is missing afterwards, the tool reports it.
+
+NFS writes from one server run one at a time. Just before the `PATCH`, a write reads the list once more and stops without writing if it changed since the change was planned, for example by an edit in the Drive web app. Run the tool again in that case.
 
 ### `drive_list_nfs_connections`
 
 No parameters. Each connection has `client`, `async_writes`, `error_codes` and `shared_drives`; each shared drive has `id`, `name`, `status`, `encryption_status`, `permission` (`rw` or `ro`) and `export_path` (`/var/nfs/shared/<name>`).
+
+### `drive_add_nfs_connection` (write)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `client` | required | Client IP address, hostname, CIDR range or `*` pattern |
+| `shared_drives` | required | `[{"id": "<shared drive id>", "permission": "rw"}]`; `permission` is `rw` (default) or `ro` |
+| `async_writes` | `false` | Async writes: faster, but writes acknowledged before a NAS power loss can be lost |
+| `confirm` | `false` | `true` saves |
+
+- `client` may contain only letters, digits and `. : / * - _`, or be an IP address or range (IPv6 such as `::1` included). Spaces, commas and parentheses are refused so the value cannot carry export options.
+- A client that matches every host (`*`, `0.0.0.0/0`, `::/0`) is allowed but gets a warning in the preview.
+- Unknown shared drive IDs and a client that already has a connection are refused.
+- Only shared drives can be exported over NFS; a personal drive is refused before anything is sent.
+- A `shared_drives` entry copied from `drive_list_nfs_connections` can be passed as is; its read-only fields are ignored.
+- On confirm, the client name goes through Drive's `POST .../nfs/test-hostnames` check first, as in the web app. A client Drive flags is not saved.
+
+### `drive_update_nfs_connection` (write)
+
+| Parameter | Description |
+|-----------|-------------|
+| `client` | The client as listed |
+| `shared_drives` | Replaces the client's whole shared drive list |
+| `async_writes` | New async setting |
+| `confirm` | `true` saves |
+
+Pass only the fields you want to change — current values are automatically preserved. In `shared_drives`, a drive the client already has keeps its current permission when `permission` is left out; only a newly granted drive defaults to `rw`. To change the client address itself, remove the connection and add a new one.
+
+### `drive_remove_nfs_connection` (write, destructive)
+
+| Parameter | Description |
+|-----------|-------------|
+| `client` | The client as listed |
+| `confirm` | `true` removes |
+
+The client can no longer mount anything. No data on the shared drives is touched, and the other clients are kept.

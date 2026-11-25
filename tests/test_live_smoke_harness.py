@@ -1957,7 +1957,21 @@ def test_drive_setup_aborts_when_the_first_read_cannot_log_in(monkeypatch):
     ]
 
 
-def test_drive_safe_phase_calls_only_read_only_tools_and_reads_a_shared_drive_by_its_listed_id():
+_DRIVE_NFS = {"client": "192.0.2.76", "async_writes": False, "shared_drives": [{"id": "drive-1", "permission": "rw"}]}
+
+
+def _drive_reads(tool):
+    if tool == "drive_list_shared_drives":
+        # A personal drive first: NFS can export only the shared one.
+        return _ok({"drives": [{"id": "home-1", "type": "personal"}, {"id": "drive-1", "type": "shared"}], "count": 2})
+    if tool == "drive_get_file_services":
+        return _ok({"smb_enabled": True, "nfs_enabled": True, "time_machine_enabled": False})
+    if tool == "drive_list_nfs_connections":
+        return _ok({"connections": [dict(_DRIVE_NFS)], "count": 1})
+    return _ok({})
+
+
+def test_drive_safe_phase_reads_everything_and_only_previews_writes():
     import live_smoke
 
     runner = live_smoke.LiveSmokeRunner("drive", SimpleNamespace(phase="safe", tool=[], delay=0))
@@ -1966,18 +1980,105 @@ def test_drive_safe_phase_calls_only_read_only_tools_and_reads_a_shared_drive_by
 
     async def call_tool(tool, args):
         calls.append((tool, args))
-        if tool == "drive_list_shared_drives":
-            return _ok({"drives": [{"id": "drive-1"}], "count": 1})
-        return _ok({})
+        return _drive_reads(tool)
 
     runner.server = SimpleNamespace(call_tool=call_tool)
     runner.unwrap_result = lambda raw: raw
 
     asyncio.run(runner.run())
 
-    assert calls
-    assert [name for name, _args in calls if manifest[name]["annotations"].get("readOnlyHint") is not True] == []
-    assert ("drive_get_shared_drive", {"drive_id": "drive-1"}) in calls
-    domain_reads = {name for name, tool in manifest.items() if tool.get("permission_category")}
-    assert domain_reads <= {name for name, _args in calls}
-    assert not [r for r in runner.report.records if r.status in {"failed", "exception", "pending_approval"}]
+    writes = [(name, args) for name, args in calls if manifest[name]["annotations"].get("readOnlyHint") is not True]
+    assert sorted(writes, key=lambda call: call[0]) == [
+        (
+            "drive_add_nfs_connection",
+            {
+                "client": live_smoke.DRIVE_SMOKE_NFS_CLIENT,
+                "shared_drives": [{"id": "drive-1", "permission": "ro"}],
+                "confirm": False,
+            },
+        ),
+        ("drive_set_file_service", {"service": "nfs", "enabled": False, "confirm": False}),
+        ("drive_update_nfs_connection", {"client": "192.0.2.76", "async_writes": True, "confirm": False}),
+    ]
+    # Reads take the first listed drive; NFS previews take the first shared one.
+    assert ("drive_get_shared_drive", {"drive_id": "home-1"}) in calls
+    domain_reads = {
+        name for name, tool in manifest.items() if tool.get("permission_category") and name not in dict(writes)
+    }
+    assert domain_reads - {"drive_remove_nfs_connection"} <= {name for name, _args in calls}
+    assert not [r for r in runner.report.records if r.status in {"failed", "exception"}]
+    # Removing a client is destructive: never previewed unattended, only listed for approval.
+    assert [item["tool"] for item in runner.report.pending_approval] == ["drive_remove_nfs_connection"]
+
+
+def test_drive_approved_phase_adds_changes_and_removes_one_documentation_address_client():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("drive", SimpleNamespace(phase="approved", tool=[], delay=0))
+    client = live_smoke.DRIVE_SMOKE_NFS_CLIENT
+    connections = [dict(_DRIVE_NFS)]
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append((tool, args))
+        confirmed = args.get("confirm") is True
+        if tool == "drive_list_nfs_connections":
+            return _ok({"connections": [dict(entry) for entry in connections], "count": len(connections)})
+        if tool == "drive_add_nfs_connection" and confirmed:
+            connections.append({"client": client, "async_writes": False, "shared_drives": args["shared_drives"]})
+            return _ok({"connection": connections[-1]})
+        if tool == "drive_update_nfs_connection" and confirmed:
+            connections[-1] = {**connections[-1], "async_writes": args["async_writes"]}
+            return _ok({"connection": connections[-1]})
+        if tool == "drive_remove_nfs_connection" and not confirmed:
+            return {
+                "success": True,
+                "requires_confirmation": True,
+                "action": "delete",
+                "resource_type": "nfs_connection",
+                "resource_id": client,
+                "preview": {"will_delete": {"client": client}},
+            }
+        if tool == "drive_remove_nfs_connection":
+            connections[:] = [entry for entry in connections if entry["client"] != client]
+            return _ok({"removed": client})
+        return _drive_reads(tool)
+
+    runner.server = SimpleNamespace(call_tool=call_tool)
+    runner.unwrap_result = lambda raw: raw
+
+    asyncio.run(runner.run())
+
+    confirmed = [(name, args) for name, args in calls if args.get("confirm") is True]
+    assert [name for name, _args in confirmed] == [
+        "drive_add_nfs_connection",
+        "drive_update_nfs_connection",
+        "drive_remove_nfs_connection",
+    ]
+    assert all(args["client"] == client for _name, args in confirmed)
+    assert confirmed[0][1]["shared_drives"] == [{"id": "drive-1", "permission": "ro"}]
+    assert "drive_set_file_service" not in {name for name, _args in calls}
+    assert connections == [_DRIVE_NFS]
+    assert not [r for r in runner.report.records if r.status in {"failed", "exception"}]
+    assert runner.report.cleaned_resources == [{"type": "nfs_connection", "id": client, "name": client}]
+
+
+def test_drive_approved_phase_leaves_an_existing_documentation_address_client_alone():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("drive", SimpleNamespace(phase="approved", tool=[], delay=0))
+    existing = {**_DRIVE_NFS, "client": live_smoke.DRIVE_SMOKE_NFS_CLIENT}
+    calls = []
+
+    async def call_tool(tool, args):
+        calls.append((tool, args))
+        if tool == "drive_list_nfs_connections":
+            return _ok({"connections": [existing], "count": 1})
+        return _drive_reads(tool)
+
+    runner.server = SimpleNamespace(call_tool=call_tool)
+    runner.unwrap_result = lambda raw: raw
+
+    asyncio.run(runner.run())
+
+    assert not [name for name, args in calls if args.get("confirm") is True]

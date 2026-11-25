@@ -11,7 +11,7 @@ dependencies = [
     "unifi-mcp-shared>=0.6.50,<0.7",
     # The UniFi Drive managers and models (unifi_core.drive) require Core 0.4.98.
     # The operation gate and recording a write's hold-budget cut-off on its ticket require Core 0.4.107.
-    "unifi-core>=0.4.107,<0.5",
+    "unifi-core>=0.4.109,<0.5",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

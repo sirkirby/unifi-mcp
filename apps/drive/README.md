@@ -5,7 +5,7 @@
   <img src="../../assets/hero-drive.svg" alt="UniFi Drive MCP Server" width="720">
 </p>
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server for **UniFi Drive**, the storage application on UniFi NAS consoles (UNAS Pro, UNAS Pro 8, and similar). It lets an AI assistant read storage pools, RAID state, disk SMART health and shared drives, which file services (SMB, NFS, Time Machine) are on, and which NFS clients may mount each shared drive.
+A [Model Context Protocol](https://modelcontextprotocol.io) server for **UniFi Drive**, the storage application on UniFi NAS consoles (UNAS Pro, UNAS Pro 8, and similar). It lets an AI assistant read storage pools, RAID state, disk SMART health and shared drives, and manage the NAS's file services: turn SMB, NFS or Time Machine on or off, and add, change or remove NFS client connections.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
@@ -16,7 +16,7 @@ UniFi Drive has no published API. The endpoints this server uses were read from 
 
 ## What it will not do
 
-Every tool is read-only, so nothing here changes the NAS. There are no tools to erase a disk, delete or create a storage pool, or delete a shared drive.
+Nothing here can lose data on the NAS. There are no tools to erase a disk, delete or create a storage pool, or delete a shared drive. The write tools only change who can reach the data (file services and NFS clients), and each one previews the change before it is made.
 
 ## The NAS is its own console
 
@@ -66,6 +66,7 @@ Without a host the server still starts. It answers the client in setup mode, off
 | `UNIFI_DRIVE_VERIFY_SSL` | `false` | Verify the NAS certificate against the system CAs |
 | `UNIFI_DRIVE_SSL_FINGERPRINT` | unset | SHA-256 fingerprint of the NAS certificate; pins it and overrides `UNIFI_DRIVE_VERIFY_SSL`. `UNIFI_SSL_FINGERPRINT` is not used. |
 | `UNIFI_DRIVE_TIMEOUT_SECONDS` | `30` | Seconds to wait for one response |
+| `UNIFI_DRIVE_TOOL_PERMISSION_MODE` | `confirm` | `bypass` skips the previews (falls back to `UNIFI_TOOL_PERMISSION_MODE`) |
 | `UNIFI_DRIVE_MCP_CONTENT_MODE` | `adaptive` | MCP content mode for this server |
 | `UNIFI_DRIVE_REDACT_SENSITIVE_FIELDS` | `true` | Redact secret-named fields in responses |
 
@@ -77,13 +78,15 @@ Every tool call takes a read slot at this server's operation gate for the NAS be
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `UNIFI_DRIVE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | How long one write may hold its turn (10 to 3600). Once it has held longer, calls queued behind it are refused as busy, with nothing sent; a write's own requests to the NAS stop at this budget. |
+| `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a direct tool call waits for its turn before it is refused as busy (1 to 3600). Batch jobs wait as long as the queue keeps moving. |
 | `UNIFI_DRIVE_READ_CONCURRENCY` / `UNIFI_READ_CONCURRENCY` | `8` | Reads that may run at once (1 to 64). |
-| `UNIFI_DRIVE_CALL_WAIT_SECONDS` / `UNIFI_CALL_WAIT_SECONDS` | `25` | How long a call waits for a read slot before it is refused as busy (1 to 3600). |
-| `UNIFI_DRIVE_WRITE_HOLD_SECONDS` / `UNIFI_WRITE_HOLD_SECONDS` | `120` | Checked at startup (10 to 3600). It has no effect yet: this server has no write tools. |
 
-A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, and nothing is sent to the NAS.
+A value that is not a number in range stops the server at startup, naming the variable. A call refused as busy returns `success: false` with the reason, plus `mutation_applied: false` for a confirmed write; nothing is sent to the NAS. A confirmed write whose budget runs out before its change is sent also returns `mutation_applied: false`; one cut off after the change was sent, or never answered, returns `mutation_applied: null`, and the NAS should be read back before retrying.
 
 ## Tools
+
+Read-only:
 
 | Tool | What it returns |
 |------|-----------------|
@@ -95,6 +98,15 @@ A value that is not a number in range stops the server at startup, naming the va
 | `drive_get_file_services` | Whether SMB, NFS and Time Machine are on, and the interfaces clients connect to |
 | `drive_list_nfs_connections` | NFS clients, the shared drives each may mount (rw/ro) and the export path to mount |
 
+Write (preview first; `confirm=true` applies):
+
+| Tool | Permission category | What it changes |
+|------|---------------------|-----------------|
+| `drive_set_file_service` | `file_services` (update) | Turns SMB, NFS or Time Machine on or off |
+| `drive_add_nfs_connection` | `nfs_connections` (create) | Lets a new client mount one or more shared drives |
+| `drive_update_nfs_connection` | `nfs_connections` (update) | Changes a client's shared drives or async writes |
+| `drive_remove_nfs_connection` | `nfs_connections` (delete) | Stops a client from mounting anything |
+
 See [docs/tools.md](docs/tools.md) for parameters and behavior.
 
 ### No support bundle
@@ -103,12 +115,27 @@ The Drive server has no `drive_get_support_bundle` tool. Support bundles are one
 
 ### NFS on UniFi Drive
 
+- Drive keeps every NFS client in one list, and its API replaces that list as a whole. Each NFS tool reads the list, changes one client and writes the list back with every other client exactly as it was read, then reads it back to check. Confirmed writes from one server run one at a time, and a write stops without writing if the list changed since it was planned.
+- Before saving a new or changed client, the tools run Drive's own hostname check, as the web app does.
 - A client mounts `<nas>:/var/nfs/shared/<Shared Drive Name>` over NFSv3. Drive maps every client user to one Drive user; there is no squash option to set.
+- Turning NFS off with `drive_set_file_service` keeps the client list, so it applies again when NFS comes back on. The Drive web app clears the list instead.
+
+### Policy gates
+
+Writes can be switched off per category, for example:
+
+```bash
+UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE=false   # no NFS client removal
+UNIFI_POLICY_DRIVE_FILE_SERVICES_UPDATE=false     # no SMB/NFS/Time Machine toggles
+UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on this server
+```
 
 ## Usage examples
 
 > "How full is the NAS, and is the pool protected yet?"
 
 > "Show me the SMART health of every disk and flag anything with bad sectors."
+
+> "Let 192.168.1.50 mount the Media shared drive read-only over NFS."
 
 > "Which NFS clients can mount Shared_Drive?"

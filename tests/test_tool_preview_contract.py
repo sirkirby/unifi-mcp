@@ -98,7 +98,7 @@ TOOLS = _confirm_tools()
 
 def test_scan_finds_confirm_tools_on_every_server():
     servers = {path.relative_to(ROOT).parts[1] for path, _ in TOOLS.values()}
-    assert servers == {"network", "protect", "access"}
+    assert servers == {"network", "protect", "access", "drive"}
     assert NO_PREVIEW_TOOLS <= TOOLS.keys()
 
 
