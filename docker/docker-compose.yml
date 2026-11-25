@@ -137,6 +137,51 @@ services:
     profiles:
       - innerspace
 
+  # Optional UniFi Drive server: `docker compose --profile drive up`.
+  # It logs in to the NAS (a UNAS is its own UniFi OS console, not the
+  # gateway) with a local account, and its write tools change who can mount
+  # the NAS's shared drives, so it is opt-in, is not in the relay's default
+  # server list, and receives only its own variables -- never the shared
+  # ../.env the other services load. Compose fills the values below from the
+  # shell, from a .env file beside this compose file, or from a file named with
+  # --env-file. An unset port or verify_ssl takes the server's default. Set a
+  # bearer token before starting it: other containers on the Compose network
+  # can reach this service. A _FILE path is read inside the container, so it
+  # needs a read-only mount added in an override file; the password variable
+  # needs none. Policy gates (UNIFI_POLICY_DRIVE_*) go in an override file too.
+  unifi-drive-mcp:
+    build:
+      context: ..
+      dockerfile: apps/drive/Dockerfile
+    environment:
+      - UNIFI_DRIVE_HOST=${UNIFI_DRIVE_HOST:-}
+      - UNIFI_DRIVE_USERNAME=${UNIFI_DRIVE_USERNAME:-}
+      - UNIFI_DRIVE_PASSWORD=${UNIFI_DRIVE_PASSWORD:-}
+      - UNIFI_DRIVE_PASSWORD_FILE=${UNIFI_DRIVE_PASSWORD_FILE:-}
+      - UNIFI_DRIVE_PORT=${UNIFI_DRIVE_PORT:-443}
+      - UNIFI_DRIVE_VERIFY_SSL=${UNIFI_DRIVE_VERIFY_SSL:-false}
+      - UNIFI_DRIVE_SSL_FINGERPRINT=${UNIFI_DRIVE_SSL_FINGERPRINT:-}
+      # Bearer token for the HTTP endpoint, passed through only when set in
+      # the shell.
+      - UNIFI_DRIVE_MCP_HTTP_AUTH_TOKEN
+      - UNIFI_MCP_HTTP_AUTH_TOKEN
+      # The proxy address that skips the token; only this server-level
+      # spelling, so the shared list never reaches the NAS's write tools.
+      - UNIFI_DRIVE_MCP_HTTP_AUTH_TRUSTED_NETWORKS
+      - UNIFI_MCP_HTTP_ENABLED=true
+      - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
+      - UNIFI_MCP_HOST=0.0.0.0
+      - UNIFI_MCP_PORT=3004
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE=${UNIFI_MCP_ALLOWED_HOSTS-}
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET=${UNIFI_MCP_ALLOWED_HOSTS+true}
+      - UNIFI_MCP_INTERNAL_ALLOWED_HOSTS=localhost,localhost:3004,127.0.0.1,127.0.0.1:3004,host.docker.internal,host.docker.internal:3004,unifi-drive-mcp,unifi-drive-mcp:3004
+    ports:
+      - "127.0.0.1:3004:3004"
+    restart: unless-stopped
+    container_name: unifi-drive-mcp
+    profiles:
+      - drive
+
   unifi-mcp-relay:
     build:
       context: ..

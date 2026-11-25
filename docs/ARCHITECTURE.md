@@ -10,6 +10,7 @@ unifi-mcp/
     access/               # UniFi Access MCP server
     sitemanager/          # UniFi Site Manager MCP server (Ubiquiti cloud, read-only)
     innerspace/           # UniFi InnerSpace MCP server (console login, read-only)
+    drive/                # UniFi Drive MCP server (NAS login, preview-first writes)
     api/                  # REST + GraphQL API server
     worker/               # Cloudflare Worker gateway + npm CLI
   packages/
@@ -46,8 +47,9 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `formatting.py` | Standard tool response formatting |
 | `config.py` | Logging setup and YAML config loading |
 | `innerspace/` | InnerSpace client, managers and models; reads and layout writes under `/proxy/innerspace/` with the console session only, lengths in the project unit; the session client is `innerspace/managers/connection_manager.py`, the shared write layer (app check, no replay, read-back) is `innerspace/managers/_writes.py`, and plan-frame conversion for writes is `innerspace/frames.py` |
+| `drive/` | UniFi Drive client, managers and models for a UniFi NAS; the session client (local login, no redirects, write budget) is `drive/managers/connection_manager.py`, and file service and NFS client writes are `drive/managers/file_service_manager.py` |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/api`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/drive`, `apps/api`.
 
 ### unifi-mcp-shared
 
@@ -69,7 +71,7 @@ per connection, so one process can serve clients at either migration state.
 | `setup_required.py` | Setup mode: serve MCP before a controller host is configured |
 | `support_bundle.py` | Sanitized support bundle assembly |
 
-Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`.
+Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, `apps/drive`.
 
 ### apps/network
 
@@ -149,6 +151,21 @@ The UniFi InnerSpace MCP server. 9 read-only domain tools over the InnerSpace ap
 
 It reads through a console login session (`unifi_core.innerspace.managers.connection_manager`), never an API key, and never reads `UNIFI_API_KEY`. The session client does not follow redirects or use proxy environment variables, and builds its error text from fixed strings. Positions come back in the project's unit, in the plan's own frame; each plan carries its scale, image scale and offset so a position can be placed on the image. Its IDs belong to their own tool family. It connects in the background after answering the client, and whether InnerSpace is installed and running is decided at the first read from the console's system endpoint, not probed at startup. Without a host it registers only `innerspace_setup_status`. HTTP is opt-in on port 3005, and the Cloud Relay does not reach it unless an operator adds it. The read-only guarantee covers the nine domain tools; the meta-tools are not counted as read-only tools.
 
+### apps/drive
+
+The UniFi Drive MCP server. 11 domain tools over the UniFi Drive application on a UniFi NAS (UNAS): seven reads (system information, storage pools and RAID groups, disks with SMART counters, shared drives, file services, NFS clients) and four preview-first writes (`drive_set_file_service`, `drive_add_nfs_connection`, `drive_update_nfs_connection`, `drive_remove_nfs_connection`), plus the six shared meta-tools. No tool erases a disk or deletes a pool or shared drive. It has no events and no support-bundle tool.
+
+- `src/unifi_drive_mcp/` -- server code
+  - `main.py` -- entry point, tool registration, transport dispatch
+  - `runtime.py` -- singleton factories for the managers and the NAS operation gate
+  - domain logic lives in `packages/unifi-core/src/unifi_core/drive/managers/`, released in `unifi-core` before the app
+  - `tools/` -- tool wrappers in five category modules (`system`, `storage`, `shared_drives`, `file_services`, `nfs`)
+  - `config/config.yaml` -- NAS connection and runtime settings; no `api_key`
+- `tests/` -- unit tests with fake managers; they never contact a NAS
+- `Dockerfile` -- container build
+
+A UNAS is its own UniFi OS console, so the server reads its host, port and login from `UNIFI_DRIVE_*` only, never from the shared `UNIFI_*` variables that name the gateway. The session client (`unifi_core.drive.managers.connection_manager`) logs in with a local account at the first tool call, not at startup, does not follow redirects or use proxy environment variables, and builds its error text from fixed strings. Confirmed writes run one at a time through the operation gate and are bounded by its write budget; NFS writes replace Drive's whole client list, so each re-reads the list and stops if it changed. Without a host it registers only `drive_setup_status`. HTTP is opt-in on port 3004, and the Cloud Relay does not reach it unless an operator adds it.
+
 ### apps/api
 
 The independent `unifi-api-server` HTTP service for custom applications,
@@ -178,7 +195,7 @@ A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, or `apps/innerspace`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
+The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, `apps/access`, `apps/sitemanager`, `apps/innerspace`, or `apps/drive`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, and declares a `unifi-core` floor for controller credential redaction without importing it. It forwards every tool call, including the incident evidence tools; the worker provides `unifi_location_timeline`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 
@@ -237,7 +254,7 @@ Rules:
 
 ## Adding a New Server
 
-To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/` for a console product, `apps/sitemanager/` for a cloud API, or `apps/innerspace/` for a console application read through a login session with no API key:
+To add a new UniFi application server, follow the pattern established by `apps/protect/` and `apps/access/` for a console product, `apps/sitemanager/` for a cloud API, `apps/innerspace/` for a console application read through a login session with no API key, or `apps/drive/` for a separate console with its own login and preview-first writes:
 
 1. **Create app directory:** `apps/<appname>/`
 2. **Create `pyproject.toml`** depending on `unifi-core` and `unifi-mcp-shared`

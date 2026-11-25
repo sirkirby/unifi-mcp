@@ -1,5 +1,7 @@
 # UniFi Drive MCP tools
 
+The Drive server has 11 domain tools: seven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
 Errors never contain the NAS address or credentials. A request that fails names its method, path and HTTP status, plus Drive's own error message when it sends one.

@@ -9,6 +9,7 @@
 | unifi-access-mcp | Latest release (beta) |
 | unifi-sitemanager-mcp | Latest release (beta) |
 | unifi-innerspace-mcp | Latest release (beta) |
+| unifi-drive-mcp | Latest release (beta) |
 | unifi-mcp-relay | Latest release (beta) |
 | unifi-mcp-worker | Latest release (beta) |
 
@@ -78,11 +79,20 @@ The InnerSpace server (`apps/innerspace/`) is local-first, but it has its own cr
 - Over HTTP, anyone who can reach the endpoint reads the project with the server's login. Keep the loopback bind and set a bearer token. The Cloud Relay does not include this server unless an operator adds it to `UNIFI_RELAY_SERVERS`.
 - `unifi-api-server` never returns plan image bytes on any surface.
 
+### UniFi Drive NAS Login
+
+The Drive server (`apps/drive/`) is local-first and talks only to the NAS you name:
+
+- A UNAS is its own UniFi OS console, so the server takes its host, port, username and password from `UNIFI_DRIVE_*` only and never sends the gateway's `UNIFI_HOST` login to the NAS, or the NAS login anywhere else. It uses a local UniFi OS account on the NAS (a login session, no API key). A rejected login pauses further logins on an escalating cool-down so repeated tool calls cannot lock the account out.
+- Redirects are never followed and proxy environment variables are ignored, so the session cookie cannot be sent elsewhere. Certificate checks are off by default, as for the console servers; pin the NAS certificate with `UNIFI_DRIVE_SSL_FINGERPRINT` (the shared `UNIFI_SSL_FINGERPRINT` is not used for the NAS).
+- Writes change who can reach the data, never the data itself: file services (SMB, NFS, Time Machine) and NFS client access. Each previews first and runs on `confirm=true`, one at a time per server process. No tool erases a disk or deletes a pool or shared drive.
+- Over HTTP, anyone who can reach the endpoint can use those writes with the server's login. Keep the loopback bind and set a bearer token. The Cloud Relay does not include this server unless an operator adds it to `UNIFI_RELAY_SERVERS`.
+
 ### MCP Transport Trust Boundary
 
 - MCP HTTP does not authenticate callers by default. Anyone who can reach it can invoke the enabled tools using the server's controller credentials. Allowed Host/Origin checks protect against DNS rebinding; they do not authenticate a network peer.
 - Setting `UNIFI_MCP_HTTP_AUTH_TOKEN` makes HTTP require one static bearer token on every request ([details](apps/network/docs/transports.md#http-bearer-token)). It has no scopes, expiry or per-client revocation, and it is not encryption: carry it only over TLS or loopback. `UNIFI_MCP_HTTP_AUTH_TRUSTED_NETWORKS` exempts the address an authenticating proxy connects from, matched on the TCP peer address; every process that can connect from a listed address is trusted like the proxy. List the proxy's own pinned address: a Docker network's gateway carries host traffic to published ports, and a loopback address covers every local process. `UNIFI_<SERVER>_MCP_HTTP_AUTH_TRUSTED_NETWORKS` replaces the list for one server, and an empty value turns the exemption off there.
-- Package defaults disable HTTP and use a loopback bind address when enabled. Docker Compose explicitly enables HTTP inside its container network and publishes ports 3000–3002 on host `127.0.0.1` only. The opt-in `sitemanager` profile adds port 3003 and the opt-in `innerspace` profile port 3005, also on `127.0.0.1`.
+- Package defaults disable HTTP and use a loopback bind address when enabled. Docker Compose explicitly enables HTTP inside its container network and publishes ports 3000–3002 on host `127.0.0.1` only. The opt-in `sitemanager` profile adds port 3003, the opt-in `drive` profile port 3004 and the opt-in `innerspace` profile port 3005, also on `127.0.0.1`.
 - Remote MCP clients must use the authenticated Cloud Relay gateway, an authenticated TLS reverse proxy, or a TLS tunnel to a backend with the bearer token set. Restrict direct backend access to that proxy; never publish the backend on a LAN/public interface. Trust every process/container with backend access.
 - Use Docker Engine 28.0.0 or newer with ordinary NAT bridge networking. Older Docker engines can expose localhost-published ports to peers on the same network; direct-routing, host-network, and custom firewall configurations require separate access restrictions. See [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/).
 
@@ -111,7 +121,7 @@ The InnerSpace server (`apps/innerspace/`) is local-first, but it has its own cr
 
 ## Known Controller Vulnerabilities
 
-These are vulnerabilities in Ubiquiti's UniFi controller software, **not in this MCP server**. They apply to the consoles the Network, Protect, Access and InnerSpace servers connect to; the Site Manager server talks only to Ubiquiti's cloud API. We document them here so users can verify their controllers are patched.
+These are vulnerabilities in Ubiquiti's UniFi controller software, **not in this MCP server**. They apply to the consoles the Network, Protect, Access, InnerSpace and Drive servers connect to; the Site Manager server talks only to Ubiquiti's cloud API. We document them here so users can verify their controllers are patched.
 
 | CVE | CVSS | Affected Product | Affected Versions | Fixed In | Notes |
 |-----|------|-----------------|-------------------|----------|-------|
@@ -131,7 +141,7 @@ We recommend running at least these controller versions for security and API com
 
 ### In Scope
 
-- MCP server code (`apps/network/`, `apps/protect/`, `apps/access/`, `apps/sitemanager/`, `apps/innerspace/`)
+- MCP server code (`apps/network/`, `apps/protect/`, `apps/access/`, `apps/sitemanager/`, `apps/innerspace/`, `apps/drive/`)
 - Shared packages (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 - Relay sidecar (`packages/unifi-mcp-relay/`)
 - Cloudflare Worker relay and CLI (`apps/worker/`)

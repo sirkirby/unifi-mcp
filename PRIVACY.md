@@ -4,11 +4,11 @@
 
 ## Summary
 
-UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). The InnerSpace server also talks only to your console, with a console login (see [InnerSpace floor plan data](#innerspace-floor-plan-data)). We have no servers, no analytics, no telemetry, and no tracking.
+UniFi MCP does not collect, store, or transmit your personal data to us. The Network, Protect and Access servers talk only to your local UniFi controller. The Site Manager server is the exception: it sends its requests, and its API key, to Ubiquiti's cloud API at `https://api.ui.com` (see [Site Manager cloud requests](#site-manager-cloud-requests)). The InnerSpace server also talks only to your console, with a console login (see [InnerSpace floor plan data](#innerspace-floor-plan-data)), and the Drive server only to the UniFi NAS you name (see [UniFi Drive storage data](#unifi-drive-storage-data)). We have no servers, no analytics, no telemetry, and no tracking.
 
 ## How UniFi MCP Works
 
-UniFi MCP is a set of [Model Context Protocol](https://modelcontextprotocol.io/) servers that run **locally on your machine**. The Network, Protect, Access and InnerSpace servers connect directly to your UniFi controller on your local network; the Site Manager server connects to Ubiquiti's cloud instead. Your AI agent (Claude Code, Claude Cowork, or other MCP clients) communicates with the MCP server over a local stdio or HTTP connection.
+UniFi MCP is a set of [Model Context Protocol](https://modelcontextprotocol.io/) servers that run **locally on your machine**. The Network, Protect, Access, InnerSpace and Drive servers connect directly to your UniFi controller or NAS on your local network; the Site Manager server connects to Ubiquiti's cloud instead. Your AI agent (Claude Code, Claude Cowork, or other MCP clients) communicates with the MCP server over a local stdio or HTTP connection.
 
 ```
 Your AI Agent <--local--> MCP Server (on your machine) <--your network--> UniFi Controller
@@ -62,6 +62,13 @@ The InnerSpace server is local-first: it logs in to the console you name with a 
 - A floor plan image is returned to your AI agent only by the MCP server, on request, and never by `unifi-api-server`.
 - The server stores nothing. The Cloud Relay does not include it by default; if you add it, a relay token for that location can read the project.
 
+### UniFi Drive storage data
+
+The Drive server is local-first: it logs in to the UniFi NAS you name with a local account and reads and changes UniFi Drive through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
+
+- It reads storage metadata, never file contents: pools, disks with model and serial number, shared drive names and usage, file service settings, NFS client addresses, and the NAS's name, model and MAC address. Response redaction hides secret-looking fields by name; it does not mask serial numbers, MAC addresses, client addresses or drive names, so review results before you share them.
+- The server stores nothing. The Cloud Relay does not include it by default; if you add it, a relay token for that location can read the NAS's storage layout and use its write tools.
+
 ### Relay Mode (optional)
 
 If you choose to enable the [cloud relay](packages/unifi-mcp-relay/), your tool calls are proxied through a Cloudflare Worker:
@@ -90,7 +97,7 @@ If you set an OTLP endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`), the MCP servers sen
 
 | Service | When Used | What It Sees |
 |---------|-----------|-------------|
-| **Your UniFi Controller** | Network, Protect, Access and InnerSpace servers | Tool requests (queries, mutations) over your local network; for InnerSpace, the console login and read requests |
+| **Your UniFi Controller** | Network, Protect, Access, InnerSpace and Drive servers | Tool requests (queries, mutations) over your local network; for InnerSpace, the console login and read requests; for Drive, the NAS login and its requests |
 | **Ubiquiti Site Manager API (`api.ui.com`)** | Only if you run the Site Manager server | Your Site Manager API key and every read request it makes, over HTTPS |
 | **Cloudflare Workers** | Only if you enable relay mode | Tool calls in transit (encrypted, not stored) |
 | **Your OTLP collector** | Only if you set an OTLP endpoint | Trace spans: MCP method, tool name, request ID, timing, error messages of failed requests |

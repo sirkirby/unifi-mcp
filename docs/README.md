@@ -14,6 +14,7 @@ Complete documentation for the UniFi MCP ecosystem.
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
 - **[Site Manager Server](../apps/sitemanager/)** - Read-only, account-wide view from Ubiquiti's cloud API; its own [configuration](../apps/sitemanager/docs/configuration.md), [tools](../apps/sitemanager/docs/tools.md) and [troubleshooting](../apps/sitemanager/docs/troubleshooting.md)
 - **[InnerSpace Server](../apps/innerspace/)** - Read-only floor plans, walls and device placements from a console's InnerSpace application, through a console login; its own [configuration](../apps/innerspace/docs/configuration.md), [tools](../apps/innerspace/docs/tools.md) and [troubleshooting](../apps/innerspace/docs/troubleshooting.md)
+- **[Drive Server](../apps/drive/)** - UniFi Drive on a UniFi NAS: storage, disk health and shared drives, plus preview-first file service and NFS client changes, through a local login on the NAS; its own [configuration](../apps/drive/docs/configuration.md), [permissions](../apps/drive/docs/permissions.md), [tools](../apps/drive/docs/tools.md) and [troubleshooting](../apps/drive/docs/troubleshooting.md)
 - **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
 - **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
@@ -54,11 +55,11 @@ export UNIFI_TOOL_REGISTRATION_MODE=lazy  # default, recommended
 ### Core Guides
 
 #### [Sanitized Support Bundles](support-bundles.md)
-Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe. The Site Manager and InnerSpace servers have no support bundle; see their [Site Manager](../apps/sitemanager/docs/troubleshooting.md) and [InnerSpace](../apps/innerspace/docs/troubleshooting.md) troubleshooting guides.
+Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe. The Site Manager, InnerSpace and Drive servers have no support bundle; see their [Site Manager](../apps/sitemanager/docs/troubleshooting.md), [InnerSpace](../apps/innerspace/docs/troubleshooting.md) and [Drive](../apps/drive/docs/troubleshooting.md) troubleshooting guides.
 
 #### [Checking the Controller's Identity](tls-verification.md)
 
-Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to. This applies to the Network, Protect, Access and InnerSpace servers; Site Manager always verifies Ubiquiti's public certificate.
+Pin the controller's certificate by fingerprint, or turn on verification, so the servers check who they're sending credentials to. This applies to the Network, Protect, Access, InnerSpace and Drive servers; Site Manager always verifies Ubiquiti's public certificate.
 
 #### [Credential Providers](credential-providers.md)
 Keep the controller password and API key out of the MCP client's environment with the `_FILE` and `_COMMAND` spellings, and the contract the command provider runs under: supported platforms, executable resolution, and process lifecycle.
@@ -156,6 +157,16 @@ UNIFI_INNERSPACE_PASSWORD_FILE=/absolute/path/to/innerspace-password  # or UNIFI
 ```
 
 See [InnerSpace configuration](../apps/innerspace/docs/configuration.md).
+
+The Drive server logs in to a UniFi NAS, which is its own console, so it reads its host, port and login from `UNIFI_DRIVE_*` only, never from the shared `UNIFI_HOST`, `UNIFI_USERNAME` or `UNIFI_PASSWORD`:
+
+```bash
+UNIFI_DRIVE_HOST=192.168.1.20
+UNIFI_DRIVE_USERNAME=mcp
+UNIFI_DRIVE_PASSWORD_FILE=/absolute/path/to/drive-password  # or UNIFI_DRIVE_PASSWORD / _COMMAND
+```
+
+See [Drive configuration](../apps/drive/docs/configuration.md).
 
 ### Worker and Relay
 

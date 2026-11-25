@@ -23,6 +23,8 @@ Thanks for helping improve UniFi MCP. Please follow the
   [troubleshooting guide](apps/sitemanager/docs/troubleshooting.md).
   The InnerSpace server has no support bundle either; follow its
   [troubleshooting guide](apps/innerspace/docs/troubleshooting.md).
+  Neither has the Drive server; follow its
+  [troubleshooting guide](apps/drive/docs/troubleshooting.md).
 - Report suspected vulnerabilities privately through
   [GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories),
   not public issues.
@@ -67,6 +69,7 @@ This installs all Python workspace packages in development mode plus the self-co
 | `apps/access/` | Access MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/sitemanager/` | Site Manager MCP server (cloud account, read-only) | `make test`, `make lint`, `make manifest` |
 | `apps/innerspace/` | InnerSpace MCP server (console login, read-only) | `make test`, `make lint`, `make manifest` |
+| `apps/drive/` | Drive MCP server (NAS login, preview-first writes) | `make test`, `make lint`, `make manifest` |
 | `apps/worker/` | Cloudflare Worker gateway + npm CLI | `make check` |
 | `packages/unifi-core/` | Shared connectivity | Tested via root `make core-test` |
 | `packages/unifi-mcp-shared/` | Shared MCP patterns | Tested via root `make shared-test` |
@@ -91,7 +94,7 @@ make relay-test        # Run unifi-mcp-relay tests
 make worker-build      # Install worker deps + typecheck the Worker app
 make worker-check      # Run worker CLI tests + TypeScript checks
 
-# Individual apps (network, protect, access, sitemanager, innerspace) — see "App-Level Makefile" below
+# Individual apps (network, protect, access, sitemanager, innerspace, drive) — see "App-Level Makefile" below
 make -C apps/network test      # Run network server tests
 make -C apps/network lint      # Lint network server
 make -C apps/network manifest  # Regenerate network tools manifest
@@ -158,6 +161,10 @@ The InnerSpace server's targets are the same, from `apps/innerspace`. Its tests
 never contact a console: they use a loopback stub or a fake manager. A live run
 needs a console with InnerSpace installed and a login of your own.
 
+The Drive server's targets are the same, from `apps/drive`. Its tests never
+contact a NAS. A live run needs a UniFi NAS and a local account on it of your
+own: `uv run --all-packages python scripts/live_smoke.py --server drive --phase readonly`.
+
 Site Manager's tests never call `api.ui.com`; they pass a loopback `base_url` to the
 connection manager or mock the transport. A live read-only smoke run needs a
 Site Manager API key of your own and is skipped without one:
@@ -221,6 +228,18 @@ a core writes change first, then the write tools.
 4. If the tool should also be served by `unifi-api-server`, add its REST route and GraphQL field in the same pull request and regenerate the action catalog
 5. Add tests in `apps/innerspace/tests/`
 6. Commit code + manifest + tests together
+
+### Adding a tool to the drive server
+
+UniFi Drive has no published API, and the NAS is its own console with its own
+`UNIFI_DRIVE_*` login. A write must change who can reach the data, never the
+data: no tool erases a disk or deletes a pool or shared drive.
+
+1. Add the manager method under `packages/unifi-core/src/unifi_core/drive/managers/`, with tests in `packages/unifi-core/tests/drive/`
+2. Add the tool function in `apps/drive/src/unifi_drive_mcp/tools/<category>.py`; a write previews with `confirm=false`, reads back after writing, and declares `permission_category` and `permission_action`
+3. Run `make manifest` from `apps/drive/` (or `make manifest` from the repo root to regenerate every app)
+4. Add tests in `apps/drive/tests/`
+5. Commit code + manifest + tests together
 
 ### Adding a shared package feature
 
@@ -371,6 +390,7 @@ cd apps/protect && make test-cov
 cd apps/access && make test-cov
 cd apps/sitemanager && make test-cov
 cd apps/innerspace && make test-cov
+cd apps/drive && make test-cov
 
 # Specific test file
 uv run --package unifi-network-mcp pytest apps/network/tests/unit/test_permissions.py -v
@@ -387,7 +407,7 @@ merge; see [Plugin changes](#plugin-changes). The `monorepo-release-pipeline`
 skill is the full procedure for both.
 
 1. Run `make pre-commit` from root.
-2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `sitemanager/v*`, `innerspace/v*`, `api/v*`, `relay/v*`, `worker/v*`).
+2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `sitemanager/v*`, `innerspace/v*`, `drive/v*`, `api/v*`, `relay/v*`, `worker/v*`).
 3. Build release batches from actual dependency edges. A downstream package must wait when its
    wheel metadata names the new upstream version, its code requires a newly published upstream API,
    or its release workflow installs that new version. Existing compatible bounds alone do not

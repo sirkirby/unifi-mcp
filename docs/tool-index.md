@@ -35,6 +35,7 @@ Each app exposes the following lazy-loading meta-tools:
 | Access | `access_` | `access_tool_index`, `access_execute`, `access_batch`, `access_batch_status`, `access_batch_cancel`, `access_load_tools` in lazy mode |
 | Site Manager | `sitemanager_` | `sitemanager_tool_index`, `sitemanager_execute`, `sitemanager_batch`, `sitemanager_batch_status`, `sitemanager_batch_cancel`, `sitemanager_load_tools` in lazy mode |
 | InnerSpace | `innerspace_` | `innerspace_tool_index`, `innerspace_execute`, `innerspace_batch`, `innerspace_batch_status`, `innerspace_batch_cancel`, `innerspace_load_tools` in lazy mode |
+| Drive | `drive_` | `drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools` in lazy mode |
 
 These tools are not replacements for `tools/list`. They are UniFi-specific
 extensions for clients and models that need a compact, filterable catalog or
@@ -180,6 +181,23 @@ shared model the same way Site Manager does:
 
 See [InnerSpace permissions](../apps/innerspace/docs/permissions.md#meta-tools-and-read-only-clients).
 
+### Drive differences
+
+The Drive server has 11 domain tools: seven reads and four writes that preview
+before they change anything. It follows the shared model, with these points:
+
+- In `lazy` mode it lists only the meta-tools, like Network, Protect and
+  Access. The domain tools are reached through `drive_execute`, `drive_batch`
+  or `drive_load_tools`.
+- Without a host it starts in setup mode and registers only
+  `drive_setup_status`, which explains what to set and makes no request. With
+  a host it still makes no request at startup: the first tool call logs in.
+- Its tool modules are `system`, `storage`, `shared_drives`, `file_services`
+  and `nfs`, for `UNIFI_ENABLED_CATEGORIES` and the `category` filter of
+  `drive_tool_index`.
+
+See [Drive permissions](../apps/drive/docs/permissions.md).
+
 Standard MCP-only clients remain supported in `eager` mode. In `lazy` and
 `meta_only` modes, `tools/list` is still correct: it reports the tools currently
 registered with the server. The UniFi extension path exposes the larger
@@ -221,6 +239,6 @@ When adopting new MCP spec features:
 - map future standard metadata surfaces to the generated manifest before adding
   new bespoke discovery APIs
 - keep OAuth and remote exposure concerns scoped to relay/cloud deployments;
-  the Network, Protect, Access and InnerSpace servers continue to target local
-  console access, and the Site Manager server targets only Ubiquiti's fixed
+  the Network, Protect, Access, InnerSpace and Drive servers continue to target
+  local console access, and the Site Manager server targets only Ubiquiti's fixed
   `api.ui.com` origin

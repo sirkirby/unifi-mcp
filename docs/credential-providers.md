@@ -50,6 +50,14 @@ InnerSpace has no site and takes no API key; see
 bootstrap overlays this rule after loading the bundled YAML, so the YAML variable
 names alone do not define precedence.
 
+The Drive server is the exception among the console servers. A UniFi NAS is its
+own console, so its host, port, username and password come from `UNIFI_DRIVE_*`
+only and never fall back to `UNIFI_HOST`, `UNIFI_PORT`, `UNIFI_USERNAME` or
+`UNIFI_PASSWORD`; its certificate pin comes from `UNIFI_DRIVE_SSL_FINGERPRINT`
+only. The password takes the same `_FILE` and `_COMMAND` providers. Only
+`UNIFI_DRIVE_VERIFY_SSL` falls back to `UNIFI_VERIFY_SSL`. See
+[Drive configuration](../apps/drive/docs/configuration.md).
+
 ### Credentials follow the host
 
 The username, password and API key belong to one console, so they come from the

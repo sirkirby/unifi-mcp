@@ -22,13 +22,17 @@ Offer it when the user wants an account-wide inventory, WAN health or SD-WAN
 status rather than work inside one console; see
 [Site Manager (cloud account)](#site-manager-cloud-account).
 
+Drive is for a UniFi NAS (UNAS). The NAS is its own console, not the gateway, so
+it needs its own host and a local account on the NAS; see
+[Drive (UniFi NAS)](#drive-unifi-nas).
+
 ## Instructions for the installing agent
 
 Before changing anything:
 
 1. Identify the user's operating system and agent client.
-2. Ask whether they need Network, Protect, Access, Site Manager, or more than
-   one product.
+2. Ask whether they need Network, Protect, Access, Site Manager, Drive, or more
+   than one product.
 3. Check that `uvx` is available. If it is missing, explain the official
    [uv installation options](https://docs.astral.sh/uv/getting-started/installation/)
    and wait before installing software globally.
@@ -222,6 +226,8 @@ does not discover contributor-only skills from the repository root:
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-network
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-protect
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-access
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-sitemanager
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-drive
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-intelligence
 ```
 
@@ -373,6 +379,40 @@ through the client's MCP configuration flow. Verify by listing hosts
 server in each client has not been verified yet. See
 [Site Manager configuration](../apps/sitemanager/docs/configuration.md).
 
+## Drive (UniFi NAS)
+
+Install the `unifi-drive` plugin from the same marketplace as the other
+products (`/plugin install unifi-drive@unifi-plugins` in Claude Code) and run
+its setup skill, or register the `unifi-drive-mcp` package manually. Setup
+differs from the other console servers:
+
+- Ask for the NAS's address, not the gateway's. The server never reads
+  `UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD` or `UNIFI_SSL_FINGERPRINT`;
+  give it `UNIFI_DRIVE_HOST`, `UNIFI_DRIVE_USERNAME` and one
+  `UNIFI_DRIVE_PASSWORD*` provider.
+- The account is a local UniFi OS account on the NAS. A UI.com account with
+  MFA cannot log in. There is no API key setting.
+- Its writes preview first by default. Offer policy gates such as
+  `UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE=false` if the user wants a
+  write switched off.
+
+For a manual install, register a local stdio server whose command is `uvx`
+with the arguments `--python-preference`, `system`, and
+`unifi-drive-mcp@latest`. In OpenCode, for example:
+
+```bash
+opencode mcp add unifi-drive \
+  --env 'UNIFI_DRIVE_HOST=192.168.1.20' \
+  --env 'UNIFI_DRIVE_USERNAME=mcp' \
+  --env 'UNIFI_DRIVE_PASSWORD_FILE=/absolute/path/to/drive-password' \
+  -- uvx --python-preference system unifi-drive-mcp@latest
+```
+
+Verify by reading the NAS's system information (`drive_get_system_info`): the
+first tool call logs in. Without a host the server lists only
+`drive_setup_status`, which explains what to set. See
+[Drive configuration](../apps/drive/docs/configuration.md).
+
 ## Server names and variables
 
 | Product | MCP name | Package | Minimum connection variables |
@@ -381,6 +421,7 @@ server in each client has not been verified yet. See
 | Protect | `unifi-protect` | `unifi-protect-mcp@latest` | `UNIFI_PROTECT_HOST`, `UNIFI_PROTECT_USERNAME`, one `UNIFI_PROTECT_PASSWORD*` provider |
 | Access | `unifi-access` | `unifi-access-mcp@latest` | `UNIFI_ACCESS_HOST`, plus a supported local credential or API-key provider |
 | Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` | One `UNIFI_SITEMANAGER_API_KEY*` provider; no host |
+| Drive | `unifi-drive` | `unifi-drive-mcp@latest` | `UNIFI_DRIVE_HOST` (the NAS), `UNIFI_DRIVE_USERNAME`, one `UNIFI_DRIVE_PASSWORD*` provider |
 
 See each product's configuration documentation for ports, sites, API-key
 limitations, TLS verification, and policy gates:
@@ -389,6 +430,7 @@ limitations, TLS verification, and policy gates:
 - [Protect configuration](../apps/protect/docs/configuration.md)
 - [Access configuration](../apps/access/docs/configuration.md)
 - [Site Manager configuration](../apps/sitemanager/docs/configuration.md)
+- [Drive configuration](../apps/drive/docs/configuration.md)
 
 ## Verification checklist
 
