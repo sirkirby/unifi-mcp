@@ -28,6 +28,7 @@ from unifi_core.exceptions import (
 )
 from unifi_core.operation_gate import ControllerBusyError
 
+from unifi_api.services.managers import ControllerInitializationFailed
 from unifi_api.services.operation_gate import RequestAlreadyFinished
 
 _log = logging.getLogger("unifi-api.drive")
@@ -80,7 +81,9 @@ def map_drive_error(exc: BaseException, operation: str) -> BaseException:
     if isinstance(exc, UniFiError):
         # Connection, rejected login, Drive not installed, other HTTP or malformed: fixed core text.
         return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: {exc}")
-    # A connection manager that did not initialize; the factory's text names no address.
+    if isinstance(exc, ControllerInitializationFailed):
+        # The factory's text is fixed and names no address or credential.
+        return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: {exc}")
     return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: could not connect to UniFi Drive.")
 
 

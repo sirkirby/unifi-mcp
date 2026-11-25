@@ -137,6 +137,13 @@ SYSTEM = {
     "hardware": {"name": "UniFi Network Attached Storage Pro 8", "shortname": "UNASPRO8", "firmwareVersion": "5.0.12"},
     "publicIp": "198.51.100.1",
     "devices": {"unifiOS": [{"mac": "00005E005302", "updateAvailable": "5.0.17", "source": "self"}]},
+    # The Drive application reports its own version here, apart from UniFi OS.
+    "apps": {
+        "controllers": [
+            {"name": "network", "version": "10.0.0"},
+            {"name": "drive", "version": "4.4.31", "updateAvailable": "4.5.7", "isRunning": True},
+        ]
+    },
 }
 
 SERVICE_SETTINGS = {

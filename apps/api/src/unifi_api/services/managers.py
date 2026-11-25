@@ -48,6 +48,14 @@ class UnknownManager(Exception):
     """Raised when a requested domain manager attribute is not registered."""
 
 
+# Fixed text for a Drive controller stored without a login; the controller routes
+# refuse to create one, so only a record written some other way can reach it.
+DRIVE_NO_LOGIN = (
+    "Failed to initialize drive controller connection: the controller has no username and password. "
+    "UniFi Drive needs a local UniFi OS account on the NAS; update the controller with one."
+)
+
+
 class ControllerInitializationFailed(ConnectionError):
     """A connection manager did not initialize.
 
@@ -581,11 +589,17 @@ class ManagerFactory:
             # settings. The Drive client has no initialize(): it logs in on its
             # first request and pauses logins on its own escalating cool-down
             # after a rejection, so a cached manager is never re-created to log
-            # in again. The probe proves the login with one read instead.
+            # in again. The probe proves the login with one read instead, and heals
+            # a cached client whose login is paused (reconnect_blocked) once it does.
+            username = creds.get("username") or ""
+            password = creds.get("password") or ""
+            if not (username and password):
+                # Never core's unconfigured text, which names the MCP server's settings.
+                raise ControllerInitializationFailed(DRIVE_NO_LOGIN)
             return DriveConnectionManager(
                 host=host,
-                username=creds.get("username") or "",
-                password=creds.get("password") or "",
+                username=username,
+                password=password,
                 port=port,
                 verify_ssl=controller.verify_tls,
             )

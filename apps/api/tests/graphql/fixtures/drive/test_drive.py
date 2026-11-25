@@ -32,7 +32,7 @@ async def _app(tmp_path, nas):
 async def test_graphql_drive_namespace_reads_every_resource(tmp_path):
     app, _headers, key, cid = await _app(tmp_path, FakeDrive())
     query = f"""{{ drive {{
-        systemInfo(controller: "{cid}") {{ model memoryTotalKb }}
+        systemInfo(controller: "{cid}") {{ model memoryTotalKb driveVersion driveUpdateAvailable }}
         storagePools(controller: "{cid}") {{ id capacityBytes raidGroups {{ currentLevel }} }}
         disks(controller: "{cid}", includeEmpty: true) {{ slotId bayType riskReasons }}
         sharedDrives(controller: "{cid}") {{ id name }}
@@ -46,6 +46,7 @@ async def test_graphql_drive_namespace_reads_every_resource(tmp_path):
     assert "errors" not in body, body
     drive = body["data"]["drive"]
     assert drive["systemInfo"]["model"] == "UniFi Network Attached Storage Pro 8"
+    assert (drive["systemInfo"]["driveVersion"], drive["systemInfo"]["driveUpdateAvailable"]) == ("4.4.31", "4.5.7")
     assert drive["storagePools"][0]["capacityBytes"] == BIG_CAPACITY
     assert drive["storagePools"][0]["raidGroups"] == [{"currentLevel": "raid1"}]
     assert [d["slotId"] for d in drive["disks"]] == ["1", "2", "1"]

@@ -91,6 +91,8 @@ async def test_rest_system_info_keeps_only_the_declared_fields(tmp_path):
     data = response.json()["data"]
     assert data["model"] == "UniFi Network Attached Storage Pro 8"
     assert data["firmware_update_available"] == "5.0.17"
+    # The Drive application's own version, apart from UniFi OS's.
+    assert (data["drive_version"], data["drive_update_available"]) == ("4.4.31", "4.5.7")
     assert data["memory_total_kb"] == 16639296
     # /api/system's public IP is not a declared field and never leaves the API.
     assert "198.51.100.1" not in response.text
@@ -218,9 +220,12 @@ async def test_graphql_maps_a_missing_drive_to_not_found(tmp_path):
 async def test_read_actions_use_the_read_projections(tmp_path):
     app, headers, _key, cid = await _app(tmp_path, FakeDrive())
 
+    system = await _action(app, headers, cid, "drive_get_system_info", {})
     pools = await _action(app, headers, cid, "drive_list_storage_pools", {})
     disks = await _action(app, headers, cid, "drive_list_disks", {"include_cache": False})
 
+    assert (system["data"]["drive_version"], system["data"]["drive_update_available"]) == ("4.4.31", "4.5.7")
+    assert system["data"]["firmware_version"] == "5.0.12"
     assert pools["success"] is True
     assert pools["data"][0]["capacity_bytes"] == BIG_CAPACITY
     assert pools["render_hint"]["kind"] == "list"
@@ -516,3 +521,63 @@ async def test_capabilities_list_drive_as_not_probed(tmp_path):
 
     assert payload["not_probed"] == ["drive"]
     assert payload["products"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_stored_drive_controller_without_a_login_fails_with_api_text(tmp_path):
+    from unifi_api.db.models import Controller
+
+    app, headers, _key, cid = await _app(tmp_path)
+    async with app.state.sessionmaker() as session:
+        row = await session.get(Controller, cid)
+        row.credentials_blob = credentials(api_token="synthetic-key-material")
+        await session.commit()
+
+    response = await _get(app, headers, f"{BASE}/system")
+    probe = await app.state.manager_factory.probe_controller(cid)
+
+    assert response.status_code == 502, response.text
+    message = response.json()["detail"]["message"]
+    assert "has no username and password" in message
+    # Never the MCP server's setup text, which names settings the API does not read.
+    assert "UNIFI_DRIVE" not in message
+    assert probe["products"]["drive"]["ok"] is False
+    assert "has no username and password" in probe["products"]["drive"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_a_successful_probe_heals_a_cached_client_whose_login_is_paused(tmp_path, monkeypatch):
+    refused = FakeDrive(login_status=401)
+    app, headers, _key, cid = await _app(tmp_path, refused)
+    factory = app.state.manager_factory
+    key = (cid, "drive", None)
+    blocked = factory._connection_cache[key]
+
+    first = await _get(app, headers, f"{BASE}/system")
+    paused = await _get(app, headers, f"{BASE}/system")
+    assert (first.status_code, paused.status_code) == (502, 502)
+    assert "paused" in paused.json()["detail"]["message"]
+    assert blocked.reconnect_blocked is True
+
+    # A probe that still fails keeps the paused client.
+    original = DriveConnectionManager.__init__
+    probe_nas = FakeDrive(login_status=401)
+
+    def _init(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self._send = probe_nas.send
+
+    monkeypatch.setattr(DriveConnectionManager, "__init__", _init)
+    assert (await factory.probe_controller(cid))["products"]["drive"]["ok"] is False
+    assert factory._connection_cache[key] is blocked
+
+    # Once the probe logs in, the paused client is dropped and the next read builds a fresh one.
+    probe_nas.login_status = 200
+    assert (await factory.probe_controller(cid))["products"]["drive"]["ok"] is True
+    assert key not in factory._connection_cache
+
+    healthy = FakeDrive()
+    monkeypatch.setattr(probe_nas, "send", healthy.send)
+    recovered = await _get(app, headers, f"{BASE}/system")
+    assert recovered.status_code == 200, recovered.text
+    assert factory._connection_cache[key] is not blocked

@@ -1127,6 +1127,12 @@ type DriveSystemInfo {
   """Firmware version available as an update, if any"""
   firmwareUpdateAvailable: String
 
+  """UniFi Drive application version"""
+  driveVersion: String
+
+  """UniFi Drive application version available as an update, if any"""
+  driveUpdateAvailable: String
+
   """Console state, such as setup or updateAvailable"""
   deviceState: String
 

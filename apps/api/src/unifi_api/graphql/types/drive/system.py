@@ -19,6 +19,10 @@ class DriveSystemInfo(Projection):
     firmware_update_available: str | None = strawberry.field(
         description="Firmware version available as an update, if any"
     )
+    drive_version: str | None = strawberry.field(description="UniFi Drive application version")
+    drive_update_available: str | None = strawberry.field(
+        description="UniFi Drive application version available as an update, if any"
+    )
     device_state: str | None = strawberry.field(description="Console state, such as setup or updateAvailable")
     is_setup: bool | None = strawberry.field(description="Whether initial setup is complete")
     uptime_seconds: float | None = strawberry.field(description="Seconds since the console started")
@@ -28,4 +32,4 @@ class DriveSystemInfo(Projection):
     memory_total_kb: BigInt | None = strawberry.field(description="Total memory in KiB")
     memory_available_kb: BigInt | None = strawberry.field(description="Available memory in KiB")
 
-    _columns = ["name", "model", "firmware_version", "device_state"]
+    _columns = ["name", "model", "firmware_version", "drive_version", "device_state"]
