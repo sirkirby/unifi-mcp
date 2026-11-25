@@ -16,7 +16,7 @@ import pytest
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="the fake uvx is a POSIX script")
 
 PLUGINS = Path(__file__).resolve().parents[1] / "plugins"
-PRODUCTS = ("network", "protect", "access", "sitemanager", "drive")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "drive", "innerspace")
 MARKER = "FAKE-SERVER-OUTPUT-MARKER"
 
 # A stand-in for uvx: records how it was started, then behaves as the mode file in its cwd says.

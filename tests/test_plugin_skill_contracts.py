@@ -23,10 +23,10 @@ if "plugin_tool_refs" not in sys.modules:
     sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_spec.name])
 refs = sys.modules["plugin_tool_refs"]
-TOOL = r"(?:unifi|protect|access|sitemanager|drive)_[a-z][a-z0-9_]+"
+TOOL = r"(?:unifi|protect|access|sitemanager|drive|innerspace)_[a-z][a-z0-9_]+"
 # These are event/response field names and contract values, not tools (including in generated prose).
 DATA_NAMES = {"access_denied", "access_granted", "access_end", "access_denial", "protect_camera_id"}
-SERVERS = {"network", "protect", "access", "sitemanager", "drive", "worker"}
+SERVERS = {"network", "protect", "access", "sitemanager", "drive", "innerspace", "worker"}
 TIMELINE_TOOL = "apps/worker/worker/src/location-timeline-tool.json"
 
 
@@ -34,7 +34,7 @@ def catalog(*, pinned: bool = True) -> dict[str, tuple[str, dict]]:
     """Tool input schemas: the server releases plugins pin, or with ``pinned=False`` the workspace servers."""
     result = {}
     # Plugin skills call the server release their plugin pins; repository docs describe the workspace server.
-    for product in ("network", "protect", "access", "sitemanager", "drive"):
+    for product in ("network", "protect", "access", "sitemanager", "drive", "innerspace"):
         manifest = (
             refs.pinned_manifest(ROOT, product)[1]
             if pinned
@@ -207,7 +207,7 @@ OFFER_RULES = (
     "product's own list tool in eager mode.",
 )
 LISTING_TOOL = re.compile(
-    r"\b(?:unifi|protect|access|sitemanager|drive)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
+    r"\b(?:unifi|protect|access|sitemanager|drive|innerspace)_(?:list_(?:devices|clients|cameras|doors|users|visitors)|load_tools)\b"
 )
 LISTING_OFFER = re.compile(r"\b(?:offer|offers|I can|let me|show)\b[^.]{0,60}\blist\b", re.IGNORECASE)
 
@@ -396,4 +396,65 @@ def test_drive_skill_keeps_the_nas_boundary_and_write_caveats() -> None:
     reference = (root / "unifi-drive/references/drive-tools.md").read_text()
     assert len(manifest["module_map"]) == refs.tool_count(manifest, "drive")
     assert names == set(re.findall(r"\bdrive_[a-z_]+\b", reference))
+    assert not reference_errors(setup, catalog())
+
+
+INNERSPACE_SKILLS = ROOT / "plugins/unifi-innerspace/skills"
+
+
+def test_innerspace_skills_keep_the_session_boundary_and_previews() -> None:
+    main = " ".join((INNERSPACE_SKILLS / "unifi-innerspace/SKILL.md").read_text().split())
+    setup_text = (INNERSPACE_SKILLS / "unifi-innerspace-setup/SKILL.md").read_text()
+    setup = " ".join(setup_text.split())
+    for phrase in (
+        "login session",
+        "never uses an API key",
+        "InnerSpace tool family",
+        "do not translate between them",
+        "`errors.api.access`",
+        "comes only from `innerspace_get_status`",
+        "innerspace://plans/{plan_id}/image",
+        "`confirm=True` only after the user agrees",
+        "read before retrying",
+        "not installed or not running",
+        "not that coverage changed",
+    ):
+        assert phrase in main, phrase
+    for phrase in (
+        "UNIFI_INNERSPACE_PASSWORD_FILE",
+        "UNIFI_INNERSPACE_PASSWORD_COMMAND",
+        "UNIFI_INNERSPACE_SSL_FINGERPRINT",
+        "can read the password",
+        "keychain",
+        "innerspace.env",
+        "It never uses an API key",
+        "Never reuse or offer a console API key",
+        "Port 3005 is the MCP server's own HTTP port",
+        "do not print a password command",
+        "There is no earlier InnerSpace setup to migrate",
+        "not yet measured",
+    ):
+        assert phrase in setup, phrase
+    # The certificate is pinned before any password is entered.
+    assert setup_text.index("## Step 2: Certificate Fingerprint") < setup_text.index("## Step 3: Console Login")
+    assert "UNIFI_INNERSPACE_API_KEY" not in setup_text
+    # Writes are off unless the user opts in, as in the Access bundle, and previews stay on.
+    for phrase in (
+        "UNIFI_POLICY_INNERSPACE_CREATE",
+        "UNIFI_POLICY_INNERSPACE_UPDATE",
+        "UNIFI_POLICY_INNERSPACE_DELETE",
+        "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE=confirm",
+        "Setup also accepts `bypass`",
+        "key by key",
+    ):
+        assert phrase in setup, phrase
+
+
+def test_innerspace_reference_lists_the_pinned_release() -> None:
+    # The reference documents the release the plugin pins, not the workspace server.
+    manifest = refs.pinned_manifest(ROOT, "innerspace")[1]
+    names = {tool["name"] for tool in manifest["tools"]}
+    reference = (INNERSPACE_SKILLS / "unifi-innerspace/references/innerspace-tools.md").read_text()
+    assert names == set(re.findall(r"\binnerspace_[a-z_]+\b", reference))
+    setup = (INNERSPACE_SKILLS / "unifi-innerspace-setup/SKILL.md").read_text()
     assert not reference_errors(setup, catalog())

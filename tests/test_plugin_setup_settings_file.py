@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 PLUGINS = Path(__file__).resolve().parents[1] / "plugins"
-PRODUCTS = ("network", "protect", "access", "sitemanager", "drive")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "drive", "innerspace")
 NON_ASCII = "é中 😀﻿\U0010ffff"
 
 

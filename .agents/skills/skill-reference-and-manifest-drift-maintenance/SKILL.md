@@ -157,26 +157,28 @@ Site Manager releases trigger the same plugin writeback as those three; its firs
 tag may precede the bundle, in which case only its server manifest is updated.
 Use the release-pipeline skill for the package map and key-only smoke target.
 
-### InnerSpace count contract
+### InnerSpace reference and count contract
 
 The fifth MCP app is `apps/innerspace` (`unifi-innerspace-mcp`, tag namespace
-`innerspace/v*`, hatch-vcs `--match innerspace/v*`). It has no plugin bundle yet, so there
-is no plugin reference to regenerate. Like Site Manager, it states its domain tools only:
-the published count is `len(module_map)` (24: nine reads, `innerspace_get_status`,
-`innerspace_get_project`, `innerspace_list_floor_plans`, `innerspace_list_walls`,
-`innerspace_list_placed_devices`, `innerspace_list_access_points`,
-`innerspace_list_switches`, `innerspace_list_inventory` and `innerspace_get_plan_asset`;
-and 15 layout writes),
-without the six shared meta-tools. `scripts/plugin_tool_refs.py` `tool_count` carries that
-convention, and `tests/docs/test_site_content.py` checks the count in the root README,
-`docs/ARCHITECTURE.md` and `apps/innerspace/docs/tools.md`. A change to a tool signature
-regenerates the manifest (`make -C apps/innerspace manifest`) and moves that count and the
-tool catalog together.
+`innerspace/v*`, hatch-vcs `--match innerspace/v*`). Its plugin reference is
+`plugins/unifi-innerspace/skills/unifi-innerspace/references/innerspace-tools.md`, with the
+H1 title `# InnerSpace Server Tool Reference (N domain tools, plus M meta-tools)`. InnerSpace
+has write tools, so its phrase says "domain tools", not "read-only domain tools". Like Site
+Manager it states its domain tools apart: N is `len(module_map)` of the pinned manifest (24:
+nine reads and 15 layout writes) and M is the six shared meta-tools.
+The main `skills/unifi-innerspace/SKILL.md` uses the same phrase after `It provides`. Supply
+paired AUTO markers for every category in the pinned `module_map` (`status`, `project`,
+`floor_plans`, `devices`, `walls`, `wall_types`, `attenuation`); a missing one fails `--check`.
 
-Until InnerSpace ships a plugin bundle, no page may offer a plugin marketplace id for it;
-add the plugin install text in the same change that adds the bundle.
+`scripts/plugin_tool_refs.py` checks `innerspace_*` names against the pinned release
+(`PREFIXES`, `TOOL_NAME`), and `tool_count` carries the domain-only count, which
+`tests/docs/test_site_content.py` checks in the root README, `docs/ARCHITECTURE.md` and
+`apps/innerspace/docs/tools.md`. A change to a tool signature regenerates the manifest
+(`make -C apps/innerspace manifest`) and moves that count and the tool catalog together; the
+plugin reference moves only when the pin moves.
+
 `generate_support_skills.py` stays limited to Network, Protect and Access: InnerSpace has no
-support-bundle tool.
+support-bundle tool, so its plugin ships no support skill.
 
 ### Drive reference and count contract
 

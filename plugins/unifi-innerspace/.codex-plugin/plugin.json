@@ -1,0 +1,42 @@
+{
+  "name": "unifi-innerspace",
+  "version": "1.0.0",
+  "description": "UniFi InnerSpace MCP server \u2014 read floor plans, placed devices and walls, and edit a plan's layout with previews",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "innerspace",
+    "floor-plans",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.codex.json",
+  "interface": {
+    "displayName": "UniFi InnerSpace",
+    "shortDescription": "Read and edit UniFi InnerSpace floor plans",
+    "longDescription": "Read InnerSpace floor plans, plan images, placed devices, walls and attenuation on a UniFi console, and edit a plan's layout with a preview before every change. Uses the console login session only, never an API key.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi InnerSpace MCP",
+      "List my InnerSpace floor plans",
+      "Show the access points placed on a floor plan"
+    ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
+    "brandColor": "#0E8CA0",
+    "screenshots": []
+  }
+}

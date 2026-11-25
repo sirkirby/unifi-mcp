@@ -32,10 +32,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_tool_refs import pinned_manifest, tool_count  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PRODUCTS = ("network", "protect", "access", "sitemanager", "drive")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "drive", "innerspace")
 # Products whose counts name their domain tools and meta-tools separately, and how they name the domain tools.
-DOMAIN_LABELS = {"sitemanager": "read-only domain tools", "drive": "domain tools"}
-TITLES = {"sitemanager": "Site Manager"}
+DOMAIN_LABELS = {"sitemanager": "read-only domain tools", "drive": "domain tools", "innerspace": "domain tools"}
+TITLES = {"sitemanager": "Site Manager", "innerspace": "InnerSpace"}
 
 
 # Tool-count phrases in each product plugin's main SKILL.md, kept at the pinned count.
@@ -227,7 +227,7 @@ def run(root: Path, check_mode: bool) -> int:
             print(f"  SKIP: Reference not found for {product}: {path}")
             continue
 
-        print(f"\n  {product.title()} Server:")
+        print(f"\n  {TITLES.get(product, product.title())} Server:")
         tag, manifest = pinned_manifest(root, product)
         categories = group_by_category(manifest, f"unifi_{product}_mcp.tools.")
         count = tool_count(manifest, product)

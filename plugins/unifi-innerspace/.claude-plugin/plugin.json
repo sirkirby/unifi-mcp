@@ -1,0 +1,142 @@
+{
+  "name": "unifi-innerspace",
+  "version": "1.0.0",
+  "description": "UniFi InnerSpace MCP server \u2014 read floor plans, placed devices and walls, and edit a plan's layout with previews",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "license": "MIT",
+  "icon": "./assets/icon.png",
+  "keywords": [
+    "unifi",
+    "innerspace",
+    "floor-plans",
+    "mcp"
+  ],
+  "mcpServers": {
+    "unifi-innerspace": {
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-innerspace-mcp==0.2.0"
+      ],
+      "env": {
+        "UNIFI_INNERSPACE_HOST": "${user_config.host}",
+        "UNIFI_INNERSPACE_USERNAME": "${user_config.username}",
+        "UNIFI_INNERSPACE_PASSWORD_FILE": "${user_config.password_file}",
+        "UNIFI_INNERSPACE_PASSWORD_COMMAND": "${user_config.password_command}",
+        "UNIFI_INNERSPACE_PASSWORD": "${user_config.password}",
+        "UNIFI_INNERSPACE_PORT": "${user_config.port}",
+        "UNIFI_INNERSPACE_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_INNERSPACE_SSL_FINGERPRINT": "${user_config.ssl_fingerprint}",
+        "UNIFI_POLICY_INNERSPACE_CREATE": "${user_config.policy_create}",
+        "UNIFI_POLICY_INNERSPACE_UPDATE": "${user_config.policy_update}",
+        "UNIFI_POLICY_INNERSPACE_DELETE": "${user_config.policy_delete}",
+        "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
+        "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
+      }
+    }
+  },
+  "userConfig": {
+    "host": {
+      "type": "string",
+      "title": "Host",
+      "description": "UniFi console IP address or hostname that runs InnerSpace"
+    },
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Local console account for the login session. InnerSpace never uses an API key"
+    },
+    "password_file": {
+      "type": "string",
+      "title": "Password file",
+      "description": "Absolute path to a file that holds the password. Set one password source only"
+    },
+    "password_command": {
+      "type": "string",
+      "title": "Password command",
+      "description": "Absolute argv, run without a shell, that prints the password. Set one password source only"
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password stored in the system keychain. Prefer a password file or command. Set one password source only",
+      "sensitive": true
+    },
+    "port": {
+      "type": "number",
+      "title": "Port",
+      "description": "Console HTTPS port",
+      "default": 443,
+      "min": 1,
+      "max": 65535
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "title": "Verify SSL",
+      "description": "Verify the TLS certificate. Without verification or a fingerprint, anyone on the network path can read the password",
+      "default": false
+    },
+    "ssl_fingerprint": {
+      "type": "string",
+      "title": "Certificate fingerprint",
+      "description": "SHA-256 fingerprint of the console's certificate on the HTTPS port, as openssl prints it. When set, only that certificate is accepted, whatever Verify SSL says"
+    },
+    "policy_create": {
+      "type": "boolean",
+      "title": "Allow create",
+      "description": "Allow tools that create walls, wall types, attenuation objects and their types. Off keeps them disabled",
+      "default": false
+    },
+    "policy_update": {
+      "type": "boolean",
+      "title": "Allow update",
+      "description": "Allow tools that change walls, attenuation objects, their types, floor plan settings and the project unit. Off keeps them disabled",
+      "default": false
+    },
+    "policy_delete": {
+      "type": "boolean",
+      "title": "Allow delete",
+      "description": "Allow tools that remove walls and attenuation objects or replace a plan's scale. Off keeps them disabled",
+      "default": false
+    },
+    "permission_mode": {
+      "type": "string",
+      "title": "Permission mode",
+      "description": "confirm previews every mutation before it runs; bypass runs it immediately",
+      "options": [
+        "confirm",
+        "bypass"
+      ],
+      "default": "confirm"
+    },
+    "registration_mode": {
+      "type": "string",
+      "title": "Tool registration",
+      "description": "lazy loads tools on demand; eager registers every tool; meta_only exposes only discovery tools",
+      "options": [
+        "lazy",
+        "eager",
+        "meta_only"
+      ],
+      "default": "lazy"
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/claude-session-check.sh\" innerspace",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -507,3 +507,39 @@ def test_innerspace_present_but_malformed_bundle_is_not_skipped(repo: Path) -> N
     script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
     with pytest.raises(ValueError, match="unifi-innerspace: at least one plugin manifest"):
         versions.sync(repo, "innerspace/v0.1.0")
+
+
+def innerspace_bundle(root: Path, pin: str) -> Path:
+    bundle = root / "plugins/unifi-innerspace"
+    for filename in versions.MANIFESTS:
+        write(bundle, filename, {"name": bundle.name, "version": "1.0.0"})
+    servers = {bundle.name: {"command": "uvx", "args": [f"unifi-innerspace-mcp=={pin}"]}}
+    for filename in (versions.MANIFESTS[0], versions.CODEX_MCP):
+        edit(bundle, filename, mcpServers=servers)
+    return bundle
+
+
+def test_innerspace_pin_requires_its_own_release_tag(repo: Path) -> None:
+    bundle = innerspace_bundle(repo, "0.1.0")
+    assert versions.plugin_state(bundle) == ("1.0.0", {"unifi-innerspace-mcp": "0.1.0"})
+    assert versions.pin_tag("unifi-innerspace-mcp", "0.1.0") == "innerspace/v0.1.0"
+    log(repo, "unifi-innerspace 1.0.0")
+    with pytest.raises(ValueError, match=r"unifi-innerspace: pin unifi-innerspace-mcp==0\.1\.0 has no release tag"):
+        versions.check(repo, "base")
+    versions.check(repo, "base", "innerspace/v0.1.0")
+    versions.git(repo, "tag", "innerspace/v0.1.0")
+    versions.check(repo, "base")
+
+
+def test_innerspace_first_tag_keeps_a_bundle_that_already_pins_it(repo: Path) -> None:
+    script = repo / "scripts/generate_server_manifest.py"
+    script.parent.mkdir()
+    script.write_text((ROOT / "scripts/generate_server_manifest.py").read_text())
+    bundle = innerspace_bundle(repo, "0.1.0")
+    log(repo, "unifi-innerspace 1.0.0")
+    versions.git(repo, "add", ".")
+    versions.git(repo, "commit", "-qm", "initial bundle")
+    versions.sync(repo, "innerspace/v0.1.0")
+    assert versions.plugin_state(bundle) == ("1.0.0", {"unifi-innerspace-mcp": "0.1.0"})
+    versions.sync(repo, "innerspace/v0.1.1")
+    assert versions.plugin_state(bundle) == ("1.0.1", {"unifi-innerspace-mcp": "0.1.1"})

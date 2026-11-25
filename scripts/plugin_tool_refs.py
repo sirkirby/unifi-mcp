@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check that tool names in shipped plugin files exist in the releases plugins pin.
 
-Every ``unifi_``/``protect_``/``access_``/``sitemanager_``/``drive_`` name in a plugin's files must exist in
+Every ``unifi_``/``protect_``/``access_``/``sitemanager_``/``drive_``/``innerspace_`` name in a plugin's
+files must exist in
 the ``tools_manifest.json`` of the server release that the product's plugin pins,
 read from that release tag in git. That is what users actually run. The same
 pinned manifest (:func:`pinned_manifest`) drives the generated plugin tool
@@ -30,15 +31,18 @@ PREFIXES = {
     "access": "access",
     "sitemanager": "sitemanager",
     "drive": "drive",
+    "innerspace": "innerspace",
 }
-TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access|sitemanager|drive)_[a-z0-9_]*[a-z0-9](?![\w-])")
+TOOL_NAME = re.compile(r"(?<![\w./-])(unifi|protect|access|sitemanager|drive|innerspace)_[a-z0-9_]*[a-z0-9](?![\w-])")
 # Every server registers these meta-tools, whatever its manifest lists.
 META_TOOLS = ("tool_index", "execute", "batch", "batch_status", "load_tools")
 # Prefixed identifiers that are not tools: Access event types and topics, and field names.
 NOT_TOOLS = frozenset({"access_granted", "access_denied", "access_denial", "access_end", "protect_camera_id"})
 WORKER_SOURCE = "apps/worker/worker/src/"
 # A tool definition's name, in a TypeScript object literal or a JSON definition file.
-WORKER_TOOL = re.compile(r'^\s*"?name"?: "((?:unifi|protect|access|sitemanager|drive)_[a-z0-9_]+)",?$', re.MULTILINE)
+WORKER_TOOL = re.compile(
+    r'^\s*"?name"?: "((?:unifi|protect|access|sitemanager|drive|innerspace)_[a-z0-9_]+)",?$', re.MULTILINE
+)
 
 
 @dataclass

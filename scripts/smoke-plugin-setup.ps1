@@ -195,6 +195,7 @@ $protectDir = Join-Path $RepositoryRoot 'plugins/unifi-protect/scripts'
 $accessDir = Join-Path $RepositoryRoot 'plugins/unifi-access/scripts'
 $sitemanagerDir = Join-Path $RepositoryRoot 'plugins/unifi-sitemanager/scripts'
 $driveDir = Join-Path $RepositoryRoot 'plugins/unifi-drive/scripts'
+$innerspaceDir = Join-Path $RepositoryRoot 'plugins/unifi-innerspace/scripts'
 $networkScript = Join-Path $networkDir 'set-env.ps1'
 $testRoot = Join-Path $RepositoryRoot ('.setup-powershell-smoke space-' + [Guid]::NewGuid().ToString('N'))
 $priorHome = $env:HOME
@@ -243,6 +244,7 @@ try {
         Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $accessDir $name)).Hash $expected "Access $name matches Network"
         Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $sitemanagerDir $name)).Hash $expected "Site Manager $name matches Network"
         Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $driveDir $name)).Hash $expected "Drive $name matches Network"
+        Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $innerspaceDir $name)).Hash $expected "InnerSpace $name matches Network"
     }
 
     Write-Host '== Claude Code options and secret input =='

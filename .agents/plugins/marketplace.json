@@ -65,6 +65,18 @@
       "category": "Engineering"
     },
     {
+      "name": "unifi-innerspace",
+      "source": {
+        "source": "local",
+        "path": "./plugins/unifi-innerspace"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
       "name": "unifi-intelligence",
       "source": {
         "source": "local",

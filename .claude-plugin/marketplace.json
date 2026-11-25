@@ -54,6 +54,15 @@
       "repository": "https://github.com/sirkirby/unifi-mcp"
     },
     {
+      "name": "unifi-innerspace",
+      "source": "./plugins/unifi-innerspace",
+      "description": "UniFi InnerSpace MCP server — read floor plans, placed devices and walls, and edit a plan's layout with previews",
+      "license": "MIT",
+      "keywords": ["unifi", "innerspace", "floor-plans", "mcp"],
+      "category": "networking",
+      "repository": "https://github.com/sirkirby/unifi-mcp"
+    },
+    {
       "name": "unifi-intelligence",
       "source": "./plugins/unifi-intelligence",
       "description": "UniFi Intelligence skills — investigate Network device incidents with Protect camera context; requires the unifi-network and unifi-protect plugins",

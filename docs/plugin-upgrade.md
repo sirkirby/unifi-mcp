@@ -5,6 +5,28 @@ lands. Install steps are in the [agent install guide](agent-install.md);
 prerequisites and verification status are in the
 [plugin support matrix](plugin-support.md).
 
+## unifi-innerspace 1.0.0
+
+The new `unifi-innerspace` bundle pins `unifi-innerspace-mcp==0.2.0` and
+supports the same Claude Code, Codex and OpenClaw bundle mechanisms. Real-client
+acceptance is not yet measured.
+
+Setup takes the console login: `UNIFI_INNERSPACE_HOST`,
+`UNIFI_INNERSPACE_USERNAME`, one of `UNIFI_INNERSPACE_PASSWORD`, `_PASSWORD_FILE`
+or `_PASSWORD_COMMAND`, the port, Verify SSL or a certificate fingerprint, and
+the tool registration mode. It also takes the write gates
+`UNIFI_POLICY_INNERSPACE_CREATE`, `_UPDATE` and `_DELETE` (off unless you opt
+in) and `UNIFI_INNERSPACE_TOOL_PERMISSION_MODE` (`confirm` by default, or
+`bypass`), plus, for Codex and OpenClaw, the category gates,
+`UNIFI_INNERSPACE_READ_ONLY`, `UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN`, the
+operation-gate budgets and the MCP content mode. A first Codex or OpenClaw
+setup saves the create, update and delete gates off and the mode as `confirm`
+unless you choose otherwise. API keys, the MCP HTTP settings, the redaction
+switch and the shared `UNIFI_*` login keys are refused. Codex and OpenClaw read
+`~/.config/unifi-mcp/innerspace.env` through the bundled `.mcp.codex.json`;
+Claude Code keeps a raw password in its keychain. There is no earlier InnerSpace
+setup to migrate.
+
 ## unifi-network 1.17.1, unifi-protect 1.8.4, unifi-access 1.5.5, unifi-sitemanager 1.1.4, unifi-drive 1.1.2
 
 These releases ship the shared setup helper with an InnerSpace mode. In these

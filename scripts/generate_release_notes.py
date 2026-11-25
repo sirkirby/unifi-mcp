@@ -167,7 +167,7 @@ APP_CONFIGS = {
         pypi_package="unifi-innerspace-mcp",
         install_command="uvx unifi-innerspace-mcp=={version}",
         path_groups=(
-            PathGroup("InnerSpace MCP", ("apps/innerspace/",)),
+            PathGroup("InnerSpace MCP", ("apps/innerspace/", "plugins/unifi-innerspace/")),
             PathGroup("Shared Libraries", ("packages/unifi-core/", "packages/unifi-mcp-shared/")),
             PathGroup(
                 "Release Infrastructure",
