@@ -388,3 +388,27 @@ skill or Write capability, and IDs are scoped to Site Manager. Cloud dependency
 or partial pages must appear as limitations, not an all-clear. Record sanitized
 client versions, OS, candidate commit, plugin version and server pin separately
 from fixture results. Do not mark any scenario tested from packaging checks.
+
+## Drive scenarios
+
+Status: **not yet measured** for any real client or OS. The bundle pins the
+first server release, `unifi-drive-mcp==0.1.0`, which is published. Run each
+scenario with Claude Code, Codex and OpenClaw in isolated profiles, against a
+UniFi NAS with a dedicated local account. Use the existing isolation procedure.
+
+| Scenario | Expected result |
+|---|---|
+| No host | MCP handshake completes in setup mode, offering only the setup-status tool. No request reaches any NAS; the Claude Code session-start notice names `unifi-drive-setup`. |
+| Host, account and one password source | Setup saves `UNIFI_DRIVE_HOST`, `UNIFI_DRIVE_USERNAME` and one password form (masked keychain option, stdin JSON, file or command). After reconnect the server still makes no request until the first call; `drive_get_system_info` then logs in and returns the console's name, model and firmware. Record only those. |
+| Wrong password | The server starts and lists its tools; the first read fails to log in and the setup skill points at the host, account or password source. |
+| Two forms | Raw+file, raw+command and file+command are each refused before publication. Previous settings and options remain byte-identical; no password appears in argv, output or logs. |
+| Shared console input | `UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PORT`, `UNIFI_PASSWORD` (any form), `UNIFI_SSL_FINGERPRINT`, any API key and `--migrate` are refused. Shared gateway settings in the launch environment never reach the NAS. |
+| Writes | With default options a write is refused by policy. With update allowed, `drive_set_file_service` previews first, warns that SMB off stops Time Machine, and applies only with `confirm=true`. Restore the original state afterwards. |
+| Bundled server | Codex and OpenClaw write only `~/.config/unifi-mcp/drive.env` (`%USERPROFILE%\.config\unifi-mcp\drive.env` on Windows). `UNIFI_SETTINGS_FILE` points there; no MCP client entry is created. A manual shadowing entry is refused. |
+| Warm-up | Codex starts the pinned package with no `UNIFI_` variables, settings file or credential, completes initialize, and closes it. |
+| Reconnect and upgrade | Claude reload/new session, Codex new session and OpenClaw new session/Gateway restart after initial setup keep the settings. For this first release, record initial install; measure upgrade once a prior Drive release exists. |
+
+Confirm that the main and setup skills are discovered, there is no support
+skill, and IDs are scoped to Drive. Record sanitized client versions, OS,
+candidate commit, plugin version and server pin separately from fixture
+results. Do not mark any scenario tested from packaging checks.

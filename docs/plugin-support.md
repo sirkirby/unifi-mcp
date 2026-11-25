@@ -12,6 +12,7 @@ to update an existing install, see the [plugin upgrade guide](plugin-upgrade.md)
 | `unifi-protect` | Listed | Listed | `unifi-protect-mcp` |
 | `unifi-access` | Listed | Listed | `unifi-access-mcp` |
 | `unifi-sitemanager` | Listed | Listed | `unifi-sitemanager-mcp==0.1.0` |
+| `unifi-drive` | Listed | Listed | `unifi-drive-mcp==0.1.0` |
 | `unifi-intelligence` | Listed | Listed | None (skills only) |
 
 Each plugin has its own semantic version for everything it ships. For example,
@@ -198,6 +199,36 @@ has been made for them either. Run the Site Manager scenarios in the
 [acceptance procedure](plugin-acceptance.md#site-manager-scenarios) to
 measure them.
 
+## Drive: NAS setup
+
+`unifi-drive` starts at plugin 1.0.0 and pins server 0.1.0. Seven domain tools
+read storage pools, RAID state, disk SMART health, shared drives, file services
+and NFS clients; four preview-first writes turn SMB, NFS or Time Machine on or
+off and add, change or remove NFS clients; six meta-tools provide discovery and
+execution. It has no support-bundle tool, so the bundle has no support skill.
+
+The NAS is its own UniFi OS console, not part of the gateway. Setup asks for
+the NAS host, a local UniFi OS username on it, and exactly one of
+`UNIFI_DRIVE_PASSWORD`, `UNIFI_DRIVE_PASSWORD_FILE` or
+`UNIFI_DRIVE_PASSWORD_COMMAND`, plus optional port, TLS and permission
+settings. It refuses the shared `UNIFI_HOST`, `UNIFI_PORT`, `UNIFI_USERNAME`,
+`UNIFI_PASSWORD` and `UNIFI_SSL_FINGERPRINT` and any API key, which the server
+never reads for the NAS. Every write stays off until the user allows it, and
+each one is previewed first. There is no earlier Drive setup to migrate.
+
+Claude Code uses the inline server with a sensitive keychain password option
+(or provider options). Codex and OpenClaw run `.mcp.codex.json`, which points
+through `UNIFI_SETTINGS_FILE` to `~/.config/unifi-mcp/drive.env`
+(`%USERPROFILE%\.config\unifi-mcp\drive.env` on Windows). Setup creates no
+client MCP entry, and a manual shadowing entry is refused. Drive has no startup
+login: the server starts without contacting the NAS and logs in on the first
+tool call, so the setup skill verifies with one read.
+
+Real-client acceptance for Drive on Claude Code, Codex and OpenClaw, on every
+operating system, is **not tested** (not yet measured). Run the Drive
+scenarios in the [acceptance procedure](plugin-acceptance.md#drive-scenarios)
+to measure them.
+
 ## Codex: tools on the first turn
 
 Codex 0.162.0 waits `mcp_optional_startup_grace_ms` (default 1000 ms) for
@@ -306,6 +337,8 @@ No minimum client version has been established for any client.
   in each plugin's setup skill (`unifi-network-setup`, `unifi-protect-setup`,
   `unifi-access-setup`). Site Manager instead needs internet access to
   `api.ui.com` and its separate whole-account cloud key (`unifi-sitemanager-setup`).
+  Drive needs the NAS itself reachable, with a local account on it
+  (`unifi-drive-setup`).
 - Claude Code: setup saves the plugin's options with `claude plugin configure`,
   so the `claude` CLI must be on `PATH`. Its session-start notice runs `sh`
   (Git Bash on Windows).

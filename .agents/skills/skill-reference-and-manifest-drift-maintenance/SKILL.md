@@ -177,6 +177,18 @@ add the plugin install text in the same change that adds the bundle.
 `generate_support_skills.py` stays limited to Network, Protect and Access: InnerSpace has no
 support-bundle tool.
 
+### Drive reference and count contract
+
+`apps/drive` (`unifi-drive-mcp`, tag namespace `drive/v*`) ships the `unifi-drive` bundle.
+Like Site Manager it states domain tools (`len(module_map)`) and meta-tools separately, but
+it has writes, so its phrase drops "read-only": the reference H1 is
+`# Drive Server Tool Reference (11 domain tools, plus 6 meta-tools)` and the main SKILL.md says
+`It provides 11 domain tools, plus 6 meta-tools`. `DOMAIN_LABELS` in
+`generate_skill_references.py` holds each product's phrase; never let one product's phrase
+rewrite another's. Its AUTO categories are `system`, `storage`, `shared_drives`,
+`file_services` and `nfs`; reference tables list domain tools only, meta-tools are hand-written.
+Drive has no support-bundle tool, so no support skill and no `generate_support_skills.py` entry.
+
 ## Procedure C: Resolve generated-manifest merge conflicts by regeneration
 
 When merging `main` into a working branch (fork-edit, rebase, or a

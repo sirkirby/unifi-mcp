@@ -32,7 +32,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from plugin_tool_refs import pinned_manifest, tool_count  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PRODUCTS = ("network", "protect", "access", "sitemanager")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "drive")
+# Products whose counts name their domain tools and meta-tools separately, and how they name the domain tools.
+DOMAIN_LABELS = {"sitemanager": "read-only domain tools", "drive": "domain tools"}
+TITLES = {"sitemanager": "Site Manager"}
 
 
 # Tool-count phrases in each product plugin's main SKILL.md, kept at the pinned count.
@@ -52,11 +55,13 @@ def reference_path(root: Path, product: str) -> Path:
     return skill_dir(root, product) / "references" / f"{product}-tools.md"
 
 
-def update_skill_counts(content: str, total_tools: int, meta_tools: int | None = None) -> str:
+def update_skill_counts(
+    content: str, total_tools: int, meta_tools: int | None = None, label: str = "read-only domain tools"
+) -> str:
     """Update the tool counts the main SKILL.md states."""
     if meta_tools is not None:
-        phrase = f"{total_tools} read-only domain tools, plus {meta_tools} meta-tools"
-        content = re.sub(r"\d+ read-only domain tools, plus \d+ meta-tools", phrase, content)
+        phrase = f"{total_tools} {label}, plus {meta_tools} meta-tools"
+        content = re.sub(rf"\d+ {re.escape(label)}, plus \d+ meta-tools", phrase, content)
         for pattern in SKILL_COUNT_PATTERNS:
             content = pattern.sub(rf"\g<1>{phrase}", content)
         return content
@@ -189,13 +194,19 @@ def update_reference_content(content: str, categories: dict[str, list[dict]]) ->
     return content, updated, len(missing_cats), missing_cats
 
 
-def update_header_count(content: str, total_tools: int, server_name: str, meta_tools: int | None = None) -> str:
+def update_header_count(
+    content: str,
+    total_tools: int,
+    server_name: str,
+    meta_tools: int | None = None,
+    label: str = "read-only domain tools",
+) -> str:
     """Update the tool count in the product's H1 header, including multiword titles."""
-    title = "Site Manager" if server_name == "sitemanager" else server_name.title()
+    title = TITLES.get(server_name, server_name.title())
     pattern = re.compile(rf"(^# {re.escape(title)} Server Tool Reference )\([^\n)]+\)", re.MULTILINE)
     count = f"{total_tools} tools"
     if meta_tools is not None:
-        count = f"{total_tools} read-only domain tools, plus {meta_tools} meta-tools"
+        count = f"{total_tools} {label}, plus {meta_tools} meta-tools"
     return pattern.sub(rf"\g<1>({count})", content)
 
 
@@ -220,13 +231,14 @@ def run(root: Path, check_mode: bool) -> int:
         tag, manifest = pinned_manifest(root, product)
         categories = group_by_category(manifest, f"unifi_{product}_mcp.tools.")
         count = tool_count(manifest, product)
-        meta_count = len(manifest["tools"]) - count if product == "sitemanager" else None
+        label = DOMAIN_LABELS.get(product)
+        meta_count = len(manifest["tools"]) - count if label else None
 
         print(f"    Pinned release {tag}: {count} tools in {len(categories)} categories")
 
         content = path.read_text(encoding="utf-8")
         new_content, updated, missing, missing_cats = update_reference_content(content, categories)
-        new_content = update_header_count(new_content, count, product, meta_count)
+        new_content = update_header_count(new_content, count, product, meta_count, label or "")
 
         if new_content != content:
             has_drift = True
@@ -236,7 +248,7 @@ def run(root: Path, check_mode: bool) -> int:
         skill = skill_dir(root, product) / "SKILL.md"
         if skill.exists():
             skill_content = skill.read_text(encoding="utf-8")
-            new_skill_content = update_skill_counts(skill_content, count, meta_count)
+            new_skill_content = update_skill_counts(skill_content, count, meta_count, label or "")
             if new_skill_content != skill_content:
                 has_drift = True
                 if not check_mode:

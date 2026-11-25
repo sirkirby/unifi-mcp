@@ -1,7 +1,7 @@
 # Changelog
 
 User-visible changes to the UniFi MCP plugins (`unifi-network`, `unifi-protect`,
-`unifi-access`, `unifi-sitemanager` and `unifi-intelligence`), newest first. Each plugin has its own
+`unifi-access`, `unifi-sitemanager`, `unifi-drive` and `unifi-intelligence`), newest first. Each plugin has its own
 version. A release that only moves a plugin's server pin links to that server's
 release notes. Every server, the API, the relay and the worker publish their own
 notes on [GitHub Releases](https://github.com/sirkirby/unifi-mcp/releases).
@@ -10,6 +10,17 @@ Read the [plugin upgrade guide](docs/plugin-upgrade.md) before updating an
 existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
+
+## 2026-11-25 — unifi-drive 1.0.0
+
+- New plugin for the UniFi Drive server on a UniFi NAS: storage pools, RAID state, disk SMART health and shared drives, plus preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. It pins `unifi-drive-mcp` [0.1.0](https://github.com/sirkirby/unifi-mcp/releases/tag/drive/v0.1.0).
+- Setup takes the NAS's own host, a local account on the NAS and one password source. It never reuses the gateway's host or shared console credentials, and every write stays off until you allow it.
+
+
+## 2026-11-25 — unifi-network 1.14.6, unifi-protect 1.8.3, unifi-access 1.5.3, unifi-sitemanager 1.1.3
+
+- Setup treats UniFi Drive settings found in an older project settings file as another plugin's settings. They are never copied into this plugin's settings or offered for migration. Nothing else about setup changes.
+
 
 ## 2026-11-24 — unifi-network 1.14.5, unifi-protect 1.8.2, unifi-access 1.5.2, unifi-sitemanager 1.1.2
 

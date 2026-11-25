@@ -163,18 +163,18 @@ Use `dynamic = ["version"]` with hatch-vcs. Version is derived from the git tag 
 
 **`unifi-api-server` is a library package**, not an app package. It publishes to PyPI only and has no plugin manifest assets. Expect no writeback on `api/v*` tags.
 
-### App packages (network, protect, access, sitemanager, innerspace)
+### App packages (network, protect, access, sitemanager, innerspace, drive)
 
 These have writable manifest assets updated on tag:
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
 - Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
-- `plugins/unifi-sitemanager/.claude-plugin/plugin.json` (once the bundle exists)
+- `plugins/unifi-sitemanager/.claude-plugin/plugin.json` and `plugins/unifi-drive/.claude-plugin/plugin.json`
 - InnerSpace has no plugin bundle yet; only `apps/innerspace/server.json` is written back
 - `apps/*/server.json` (server package version)
 
-**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager, innerspace).
+**Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager, innerspace, drive).
 
 Site Manager may receive its first `sitemanager/v0.1.0` tag before its plugin bundle exists.
 The sync still regenerates `apps/sitemanager/server.json` and succeeds, skipping only that
@@ -290,7 +290,7 @@ packages and the Worker still release only by tag.
 ### Triggers
 
 - **Plugin-only release:** a PR that bumps the plugin version merges to `main`.
-- **Server release:** a Network, Protect, Access, Site Manager or InnerSpace tag runs `bump-plugin-versions.yml`,
+- **Server release:** a Network, Protect, Access, Site Manager, Drive or InnerSpace tag runs `bump-plugin-versions.yml`,
   which moves the server pin and bumps the plugin in one writeback commit.
 
 The writeback is tag-triggered, not gated on the separate PyPI publish job. Verify exact

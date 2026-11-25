@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 PLUGINS = Path(__file__).resolve().parents[1] / "plugins"
-PRODUCTS = ("network", "protect", "access", "sitemanager")
+PRODUCTS = ("network", "protect", "access", "sitemanager", "drive")
 NON_ASCII = "é中 😀﻿\U0010ffff"
 
 
@@ -79,7 +79,7 @@ def test_settings_file_follows_the_server_contract_path(product: str) -> None:
     assert module.settings_path(product.upper()) == Path.home() / ".config" / "unifi-mcp" / f"{product}.env"
 
 
-def test_the_four_plugin_copies_are_identical() -> None:
+def test_the_plugin_copies_are_identical() -> None:
     copies = {(PLUGINS / f"unifi-{product}" / "scripts" / "setup_config.py").read_bytes() for product in PRODUCTS}
     assert len(copies) == 1
 
@@ -383,3 +383,145 @@ def test_original_shared_key_shadow_case_preserves_differing_saved_settings(tmp_
             client,
         )
     assert (config.read_bytes(), settings.read_bytes()) == original
+
+
+DRIVE_PASSWORD = "UNIFI_DRIVE_PASSWORD"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "UNIFI_HOST",
+        "UNIFI_PORT",
+        "UNIFI_USERNAME",
+        "UNIFI_SITE",
+        "UNIFI_SSL_FINGERPRINT",
+        "UNIFI_PASSWORD",
+        "UNIFI_PASSWORD_FILE",
+        "UNIFI_PASSWORD_COMMAND",
+        "UNIFI_API_KEY",
+        "UNIFI_API_KEY_FILE",
+        "UNIFI_API_KEY_COMMAND",
+        "UNIFI_DRIVE_API_KEY",
+        "UNIFI_DRIVE_API_KEY_FILE",
+        "UNIFI_DRIVE_API_KEY_COMMAND",
+    ],
+)
+def test_drive_setup_refuses_shared_console_settings_and_api_keys(key: str) -> None:
+    # The NAS is its own console: the server never reads these, so setup never saves them.
+    module = load_setup_config("drive")
+    for value in ("FAKE-input", "", None):
+        with pytest.raises(module.SetupError, match="UniFi Drive reads only its own"):
+            module.merge_env({}, {key: value}, "DRIVE", inherited={})
+    with pytest.raises(module.SetupError, match="UniFi Drive reads only its own"):
+        module.merge_env({key: "FAKE-existing"}, {}, "DRIVE", inherited={})
+
+
+def test_drive_setup_saves_its_own_connection_policy_and_process_settings(tmp_path) -> None:
+    module = load_setup_config("drive")
+    password = tmp_path / "password"
+    password.write_text("FAKE-password", encoding="utf-8")
+    patch = {
+        "UNIFI_DRIVE_HOST": "192.0.2.20",
+        "UNIFI_DRIVE_USERNAME": "mcp",
+        "UNIFI_DRIVE_PASSWORD_FILE": str(password),
+        "UNIFI_DRIVE_PORT": "443",
+        "UNIFI_DRIVE_VERIFY_SSL": "false",
+        "UNIFI_DRIVE_SSL_FINGERPRINT": "AA:BB",
+        "UNIFI_DRIVE_TOOL_PERMISSION_MODE": "confirm",
+        "UNIFI_POLICY_DRIVE_UPDATE": "false",
+        "UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE": "true",
+        "UNIFI_TOOL_REGISTRATION_MODE": "lazy",
+    }
+    assert module.merge_env({}, patch, "DRIVE", inherited={}) == patch
+
+
+@pytest.mark.parametrize("suffixes", [("", "_FILE"), ("", "_COMMAND"), ("_FILE", "_COMMAND")])
+def test_drive_setup_refuses_two_password_forms(tmp_path, suffixes) -> None:
+    import sys
+
+    module = load_setup_config("drive")
+    path = tmp_path / "password"
+    path.write_text("FAKE-password", encoding="utf-8")
+    values = {"": "FAKE-password", "_FILE": str(path), "_COMMAND": sys.executable}
+    patch = {DRIVE_PASSWORD + suffix: values[suffix] for suffix in suffixes}
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, patch, "DRIVE", inherited={})
+    with pytest.raises(module.SetupError):
+        module.merge_env({}, {}, "DRIVE", inherited=patch)
+
+
+def test_drive_password_switch_replaces_siblings_and_ignores_shared_providers(tmp_path) -> None:
+    module = load_setup_config("drive")
+    path = tmp_path / "password"
+    path.write_text("FAKE-password", encoding="utf-8")
+    # The server never falls back to the shared password, so a conflicting shared pair cannot stop it.
+    shared = {"UNIFI_PASSWORD": "FAKE-shared", "UNIFI_PASSWORD_FILE": str(tmp_path / "missing")}
+    assert module.merge_env(
+        {DRIVE_PASSWORD: "FAKE-old"}, {DRIVE_PASSWORD + "_FILE": str(path)}, "DRIVE", inherited=shared
+    ) == {DRIVE_PASSWORD + "_FILE": str(path)}
+
+
+def test_drive_has_nothing_to_migrate() -> None:
+    module = load_setup_config("drive")
+    mapping = {"UNIFI_DRIVE_HOST": "host", "UNIFI_DRIVE_USERNAME": "username"}
+    with pytest.raises(module.SetupError, match="UniFi Drive has no settings from an earlier plugin version"):
+        module.legacy_patch({"UNIFI_DRIVE_HOST": "192.0.2.20"}, {"UNIFI_HOST": "192.0.2.1"}, mapping, "DRIVE")
+
+
+@pytest.mark.parametrize("product", ["NETWORK", "PROTECT", "ACCESS"])
+def test_console_legacy_settings_classify_drive_settings_as_another_product(tmp_path, monkeypatch, product) -> None:
+    import json
+
+    module = load_setup_config(product.lower())
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    env = {
+        f"UNIFI_{product}_HOST": "192.0.2.1",
+        "UNIFI_DRIVE_HOST": "192.0.2.20",
+        "UNIFI_DRIVE_PASSWORD_FILE": "FAKE-drive-provider",
+        "UNIFI_POLICY_DRIVE_UPDATE": "true",
+        "UNIFI_HOST": "192.0.2.1",
+    }
+    (tmp_path / ".claude/settings.local.json").write_text(json.dumps({"env": env}))
+    _, _, owned, shared = module.legacy_settings(product)
+    assert owned == {f"UNIFI_{product}_HOST": "192.0.2.1"}
+    assert shared == {"UNIFI_HOST": "192.0.2.1"}
+    assert {"UNIFI_DRIVE_", "UNIFI_POLICY_DRIVE_"} <= set(module.other_prefixes(product))
+
+
+@pytest.mark.parametrize("target", ["codex", "openclaw"])
+def test_drive_refuses_a_shadowing_client_entry(tmp_path, monkeypatch, target) -> None:
+    import json
+    from types import SimpleNamespace
+
+    module = load_setup_config("drive")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    config = tmp_path / "openclaw.json"
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config))
+    if target == "codex":
+        config = tmp_path / "codex/config.toml"
+        config.parent.mkdir()
+        config.write_text(
+            '[mcp_servers."unifi-drive"]\ncommand="fixture"\n'
+            '[mcp_servers."unifi-drive".env]\nUNIFI_DRIVE_HOST="192.0.2.20"\n'
+        )
+        client = module.CodexClient()
+    else:
+        entry = {"command": "fixture", "env": {"UNIFI_DRIVE_HOST": "192.0.2.20"}}
+        config.write_text(json.dumps({"mcp": {"servers": {"unifi-drive": entry}}}))
+        client = module.OpenClawClient()
+    original = config.read_bytes()
+    with pytest.raises(module.SetupError, match="A client entry shadows the bundled UniFi Drive server"):
+        module.bundled_main(
+            SimpleNamespace(check=False, refresh=False, dry_run=False),
+            PLUGINS / "unifi-drive",
+            "unifi-drive",
+            "DRIVE",
+            {"UNIFI_DRIVE_USERNAME": "mcp"},
+            client,
+        )
+    assert config.read_bytes() == original
+    assert not module.settings_path("DRIVE").exists()
