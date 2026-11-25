@@ -2,7 +2,7 @@
 
 import pytest
 from unifi_core.drive.managers import connection_manager as cm
-from unifi_core.drive.managers.connection_manager import DriveConnectionManager
+from unifi_core.drive.managers.connection_manager import DriveConnectionManager, DriveWriteOutcomeUnknown
 from unifi_core.exceptions import (
     UniFiAuthError,
     UniFiConnectionError,
@@ -193,3 +193,41 @@ async def test_write_rejected_twice_is_not_sent_a_third_time(connection, console
         await connection.put(SMB, {"enable": False})
 
     assert len(console.calls("PUT", SMB)) == 2
+
+
+@pytest.fixture
+async def impatient(console):
+    """A client whose own request timeout is far shorter than the console's slow replies."""
+    manager = DriveConnectionManager(HOST, USERNAME, PASSWORD, base_url=console.base_url, timeout_seconds=0.2)
+    yield manager
+    await manager.close()
+
+
+async def test_a_change_sent_and_never_answered_has_an_unknown_outcome(impatient, console):
+    console.reply("PUT", SMB, service(False), delay=1)
+
+    with pytest.raises(DriveWriteOutcomeUnknown, match="whether it was applied is unknown") as raised:
+        await impatient.put(SMB, {"enable": False})
+
+    assert isinstance(raised.value, UniFiConnectionError)
+    assert len(console.calls("PUT", SMB)) == 1
+    assert "127.0.0.1" not in str(raised.value) and HOST not in str(raised.value)
+
+
+async def test_a_read_that_is_never_answered_is_a_plain_connection_error(impatient, console):
+    console.reply("GET", SMB, service(True), delay=1)
+
+    with pytest.raises(UniFiConnectionError, match="timed out") as raised:
+        await impatient.get(SMB)
+
+    assert not isinstance(raised.value, DriveWriteOutcomeUnknown)
+
+
+async def test_a_change_whose_login_fails_is_not_of_unknown_outcome():
+    manager = DriveConnectionManager("192.0.2.1", USERNAME, PASSWORD, base_url="http://127.0.0.1:9")
+
+    with pytest.raises(UniFiConnectionError) as raised:
+        await manager.put(SMB, {"enable": False})
+
+    assert not isinstance(raised.value, DriveWriteOutcomeUnknown)
+    await manager.close()

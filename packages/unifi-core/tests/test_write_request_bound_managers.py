@@ -1,8 +1,8 @@
 """Controller requests inside a held write are bounded by the write's hold budget.
 
-Network sends through aiounifi, Access through its proxy session and InnerSpace
-through its console session; none of them has a request timeout as short as a
-write's hold budget. Inside
+Network sends through aiounifi, Access through its proxy session, and InnerSpace
+and Drive through their console sessions; none of them has a request timeout as
+short as a write's hold budget. Inside
 a held write each request is cut off when the write's budget runs out, and the
 caller is told the change may or may not have been applied. Outside a write
 nothing changes.
@@ -19,10 +19,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 from aiounifi.models.api import ApiRequest
 from innerspace_stub import HOST, PASSWORD, USERNAME, console  # noqa: F401  (console: a fixture, by name)
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.auth import UniFiAuth
+from unifi_core.drive.managers.connection_manager import DriveConnectionManager, DriveWriteNotSent
+from unifi_core.drive.managers.file_service_manager import FileServiceManager
+from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.innerspace.managers.connection_manager import (
     INTERNAL_PROJECT_PATH,
     SHAPE_CHANGE_PATH,
@@ -34,6 +39,12 @@ from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.firewall_manager import FirewallManager
 from unifi_core.network.managers.system_manager import SystemManager
 from unifi_core.operation_gate import GateSettings, OperationGate, WriteRequestTimeout
+
+from tests.drive import fixtures as drive_fx
+from tests.drive.conftest import HOST as DRIVE_HOST
+from tests.drive.conftest import PASSWORD as DRIVE_PASSWORD
+from tests.drive.conftest import USERNAME as DRIVE_USERNAME
+from tests.drive.conftest import StubConsole
 
 
 class _Clock:
@@ -403,3 +414,116 @@ async def test_an_innerspace_request_outside_a_write_is_not_bounded(innerspace, 
     async with gate.read():
         clock.value = 9.999
         assert await innerspace.request("GET", INTERNAL_PROJECT_PATH, operation="read") == {"data": {"ok": True}}
+
+
+# Drive: its session client bounds every request but the login and logout. A
+# change request the budget stopped before sending is not sent, even when the
+# write's earlier reads went out.
+
+_NFS = "/proxy/drive/api/v1/services/nfs/advanced-settings"
+_NFS_BODY = {"connections": []}
+
+
+@pytest.fixture
+async def drive_console():
+    """A Drive console stub on loopback."""
+    stub = StubConsole()
+    app = web.Application()
+    app.router.add_route("*", "/{tail:.*}", stub.handle)
+    server = TestServer(app, host="127.0.0.1")
+    await server.start_server()
+    stub.base_url = str(server.make_url("")).rstrip("/")
+    yield stub
+    await server.close()
+
+
+@pytest.fixture
+async def drive(drive_console):
+    cm = DriveConnectionManager(DRIVE_HOST, DRIVE_USERNAME, DRIVE_PASSWORD, base_url=drive_console.base_url)
+    yield cm
+    await cm.close()
+
+
+def _drive_logins(stub: StubConsole) -> int:
+    return len(stub.calls("POST", "/api/auth/login"))
+
+
+async def test_a_drive_change_with_no_budget_left_is_not_sent(drive, drive_console) -> None:
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        clock.value = 11
+        with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
+            await drive.put(_NFS, _NFS_BODY)
+    assert drive_console.writes == []
+    assert ticket.request_sent is False
+
+
+async def test_a_drive_change_after_its_reads_with_no_budget_left_is_still_not_sent(drive, drive_console) -> None:
+    drive_console.reply("GET", _NFS, drive_fx.nfs_advanced())
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        await drive.get(_NFS)
+        clock.value = 11
+        with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
+            await drive.put(_NFS, _NFS_BODY)
+    assert drive_console.writes == []
+    # The ticket counts the read as sent; the change itself was not.
+    assert ticket.request_sent is True
+
+
+async def test_a_drive_change_cut_off_after_sending_is_unknown(drive, drive_console) -> None:
+    drive_console.reply("PUT", _NFS, {"err": None, "type": "single", "data": {}}, delay=1)
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        clock.value = 9.99
+        with pytest.raises(WriteRequestTimeout, match="may or may not have been applied") as cut:
+            await drive.put(_NFS, _NFS_BODY)
+    assert not isinstance(cut.value, DriveWriteNotSent)
+    assert len(drive_console.calls("PUT", _NFS)) == 1
+    assert ticket.request_sent is True
+    assert ticket.cut_off is not None and ticket.cut_off.request_sent is True
+
+
+async def test_a_drive_re_login_runs_outside_the_write_budget(drive, drive_console) -> None:
+    """The budget runs out while the session is renewed: the login still goes out, the retry does not."""
+    drive_console.reply("GET", _NFS, drive_fx.nfs_advanced())
+    drive_console.reply("PUT", _NFS, {"err": {"msg": "expired"}}, status=401)
+    gate, clock = _nearly_spent_gate()
+    login = drive._login
+
+    async def login_after_the_budget() -> None:
+        await login()
+        clock.value = 11
+
+    async with gate.write():
+        await drive.get(_NFS)
+        drive._login = login_after_the_budget
+        clock.value = 5
+        # The console refused the session without acting on the PUT, and the retry was never sent.
+        with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
+            await drive.put(_NFS, _NFS_BODY)
+    assert _drive_logins(drive_console) == 2
+    assert len(drive_console.calls("PUT", _NFS)) == 1
+
+
+async def test_a_drive_nfs_change_whose_last_re_read_runs_out_of_budget_is_not_sent(drive, drive_console) -> None:
+    files = FileServiceManager(drive, SharedDriveManager(drive))
+    drive_console.reply("GET", _NFS, drive_fx.nfs_advanced())
+    # The re-read just before the PUT outlasts the budget.
+    drive_console.reply("GET", _NFS, drive_fx.nfs_advanced(), delay=1)
+    gate, clock = _nearly_spent_gate()
+    async with gate.write() as ticket:
+        change = await files.plan_remove_nfs_connection(drive_fx.CLIENT)
+        clock.value = 9.99
+        with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
+            await files.apply_nfs_change(change)
+    assert drive_console.calls("PUT", _NFS) == []
+    assert ticket.request_sent is True
+
+
+async def test_a_drive_request_outside_a_write_is_not_bounded(drive, drive_console) -> None:
+    drive_console.reply("GET", _NFS, drive_fx.nfs_advanced(), delay=0.02)
+    gate, clock = _nearly_spent_gate()
+    async with gate.read():
+        clock.value = 9.999
+        assert await drive.get(_NFS) == drive_fx.nfs_advanced()["data"]
