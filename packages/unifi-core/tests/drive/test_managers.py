@@ -144,6 +144,22 @@ async def test_plan_does_not_write(files, console):
     assert console.writes == []
 
 
+async def test_turning_smb_off_warns_that_time_machine_stays_off(files, console):
+    _script_services(console)
+
+    change = await files.plan_set_file_service("smb", False)
+
+    assert any("turning SMB back on leaves it off" in w for w in change.warnings)
+
+
+async def test_turning_smb_on_says_time_machine_is_still_off(files, console):
+    _script_services(console, smb=False, time_machine=False)
+
+    change = await files.plan_set_file_service("smb", True)
+
+    assert any("Time Machine stays off" in w for w in change.warnings)
+
+
 async def test_time_machine_needs_smb(files, console):
     _script_services(console, smb=False, time_machine=False)
 

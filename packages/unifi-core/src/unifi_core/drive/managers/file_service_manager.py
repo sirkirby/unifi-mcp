@@ -228,7 +228,12 @@ class FileServiceManager:
         if service == "time_machine" and enabled and current.smb_enabled is False:
             raise UniFiValidationError("Time Machine runs over SMB. Enable SMB first.")
         if service == "smb" and not enabled and current.time_machine_enabled:
-            warnings.append("Time Machine runs over SMB, so Time Machine backups stop while SMB is off.")
+            warnings.append(
+                "Time Machine runs over SMB: turning SMB off turns Time Machine off too, and turning SMB back on "
+                "leaves it off. Turn Time Machine on again afterwards (drive_set_file_service)."
+            )
+        if service == "smb" and enabled and current.time_machine_enabled is False:
+            warnings.append("Time Machine stays off; turn it on with drive_set_file_service if it should run.")
         if service == "nfs" and not enabled:
             connections = await self.list_nfs_connections()
             if connections:
