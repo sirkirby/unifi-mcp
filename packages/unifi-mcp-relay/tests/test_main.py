@@ -133,6 +133,51 @@ async def test_sidecar_never_advertises_support_tools_from_stale_discovery(confi
 
 
 @pytest.mark.asyncio
+async def test_sidecar_never_advertises_lazy_loaders_but_keeps_loading_through_them(config):
+    sidecar = RelaySidecar(config)
+    from unifi_mcp_relay.discovery import ServerInfo
+    from unifi_mcp_relay.protocol import ToolInfo
+
+    mock_info = ServerInfo(
+        name="unifi-protect-mcp",
+        url="http://localhost:3000",
+        lazy_load_tool_name="protect_load_tools",
+        tools=[
+            ToolInfo(name="protect_load_tools", description="Load", server_origin="unifi-protect-mcp"),
+            ToolInfo(name="protect_batch", description="Batch", server_origin="unifi-protect-mcp"),
+            ToolInfo(name="protect_list_cameras", description="List", server_origin="unifi-protect-mcp"),
+        ],
+    )
+    with patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock, return_value=[mock_info]):
+        catalog = await sidecar._discover_catalog()
+
+    assert [tool.name for tool in catalog] == ["protect_batch", "protect_list_cameras"]
+    forwarder = sidecar._forwarder
+    assert forwarder is not None
+    assert forwarder.get_server_url("protect_load_tools") is None
+
+    client = AsyncMock()
+    client.request = AsyncMock(
+        side_effect=[
+            {"structuredContent": {"loaded": ["protect_list_cameras"]}},
+            {"structuredContent": {"success": True, "data": []}},
+        ]
+    )
+    forwarder._clients["http://localhost:3000"] = client
+    result, error = await sidecar._handle_tool_call("protect_list_cameras", {})
+
+    assert (result, error) == ({"success": True, "data": []}, None)
+    assert [call.args[1]["name"] for call in client.request.await_args_list] == [
+        "protect_load_tools",
+        "protect_list_cameras",
+    ]
+    assert await sidecar._handle_tool_call("protect_load_tools", {"tools": []}) == (
+        None,
+        "Unknown tool: protect_load_tools",
+    )
+
+
+@pytest.mark.asyncio
 async def test_sidecar_discovery_requires_all_configured_servers(config):
     sidecar = RelaySidecar(config)
 

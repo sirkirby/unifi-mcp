@@ -1,4 +1,5 @@
-"""Relay-specific exclusions for support data that must stay direct-to-server."""
+"""Relay-specific exclusions: support data that must stay direct-to-server, and
+server plumbing the relay handles itself."""
 
 from __future__ import annotations
 
@@ -8,6 +9,11 @@ from typing import Any, TypeVar
 from unifi_mcp_shared.meta_tools import is_meta_tool
 
 RELAY_EXCLUDED_TOOL_SUFFIXES: tuple[str, ...] = ("_get_support_bundle",)
+# The forwarder loads a lazy server's tools on demand with the loader the
+# server advertises, so the loader is relay plumbing, not a capability for the
+# worker to list or route. It stays out of the catalog; the forwarder calls it
+# by the name discovery recorded.
+RELAY_UNADVERTISED_TOOL_SUFFIXES: tuple[str, ...] = ("_load_tools",)
 RELAY_EXCLUDED_ERROR = "Support bundle tools are unavailable through the relay; call the direct product MCP server."
 RELAY_NESTED_META_ERROR = "Relay execute and batch wrappers may target domain tools only."
 # Meta tools a wrapper must not target even when the installed shared package
@@ -24,9 +30,18 @@ def is_relay_excluded_tool(name: object) -> bool:
     return isinstance(name, str) and name.endswith(RELAY_EXCLUDED_TOOL_SUFFIXES)
 
 
+def is_relay_unadvertised_tool(name: object) -> bool:
+    """Return whether an exact tool name is relay plumbing kept out of the catalog."""
+    return isinstance(name, str) and name.endswith(RELAY_UNADVERTISED_TOOL_SUFFIXES)
+
+
 def filter_relay_tools(tools: Iterable[_Tool]) -> list[_Tool]:
-    """Remove excluded tool objects or mappings from an advertised catalog."""
-    return [tool for tool in tools if not is_relay_excluded_tool(_tool_name(tool))]
+    """Remove excluded and unadvertised tool objects or mappings from an advertised catalog."""
+    return [
+        tool
+        for tool in tools
+        if not is_relay_excluded_tool(_tool_name(tool)) and not is_relay_unadvertised_tool(_tool_name(tool))
+    ]
 
 
 def filter_tool_index_result(result: Any) -> Any:
