@@ -42,7 +42,8 @@ dependencies = [
     # Reading and setting the V2 firewall policy order requires Core 0.4.100.
     # Reading one firewall policy per update requires Core 0.4.101.
     # Manual IPv6 DNS servers on network updates, and InnerSpace reads, require Core 0.4.105.
-    "unifi-core[network,protect,access]>=0.4.107,<0.5",
+    # InnerSpace writes, and healing a login-blocked InnerSpace connection, require Core 0.4.108.
+    "unifi-core[network,protect,access]>=0.4.108,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.

@@ -9,7 +9,7 @@ unifi-mcp/
     protect/              # UniFi Protect MCP server
     access/               # UniFi Access MCP server
     sitemanager/          # UniFi Site Manager MCP server (Ubiquiti cloud, read-only)
-    innerspace/           # UniFi InnerSpace MCP server (console login, read-only)
+    innerspace/           # UniFi InnerSpace MCP server (console login, layout reads and writes)
     drive/                # UniFi Drive MCP server (NAS login, preview-first writes)
     api/                  # REST + GraphQL API server
     worker/               # Cloudflare Worker gateway + npm CLI
@@ -136,20 +136,20 @@ Unlike the console servers, it has no controller: every request goes to the fixe
 
 ### apps/innerspace
 
-The UniFi InnerSpace MCP server. 9 read-only domain tools over the InnerSpace application on a UniFi OS console: its status, the project, floor plans, walls, placed devices, access points, switches, unplaced inventory and a plan's image metadata, plus the six shared meta-tools. It has no writes, no policy gates in this version, no events, and no support-bundle tool. It registers two MCP resource templates for a plan's image, `innerspace://plans/{plan_id}/image` (PNG) and `innerspace://plans/{plan_id}/image.jpg` (JPEG).
+The UniFi InnerSpace MCP server. 24 domain tools over the InnerSpace application on a UniFi OS console, plus the six shared meta-tools. Nine read: its status, the project, floor plans, walls, placed devices, access points, switches, unplaced inventory and a plan's image metadata. Fifteen write, each previewing first and applying on `confirm=true`: walls, wall types, attenuation objects and their types, a plan's title, floor attenuation and scale, the plan order, and the project unit. The writes carry policy gates (`UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>`) and honour `UNIFI_INNERSPACE_READ_ONLY`. It has no events and no support-bundle tool. It registers two MCP resources, one per plan image type: `innerspace://plans/{plan_id}/image` (PNG) and `innerspace://plans/{plan_id}/image.jpg` (JPEG).
 
 - `src/unifi_innerspace_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
   - `runtime.py` -- singleton factories for the managers
   - domain logic lives in `packages/unifi-core/src/unifi_core/innerspace/managers/`, released in `unifi-core` before the app
-  - `tools/` -- tool wrappers in four category modules (`status`, `project`, `floor_plans`, `devices`); the managers live in `unifi_core.innerspace`
+  - `tools/` -- tool wrappers in seven category modules (`status`, `project`, `floor_plans`, `devices`, `walls`, `wall_types`, `attenuation`); the managers live in `unifi_core.innerspace`
   - `arguments.py` -- shared argument types, kept outside `tools/` so importing them registers no tool
   - `resources/` -- the plan image resources (one per image type) and their URI templates
   - `config/config.yaml` -- console connection and runtime settings; no `api_key`
 - `tests/` -- unit tests with a fake or loopback console; they never contact a real one
 - `Dockerfile` -- container build
 
-It reads through a console login session (`unifi_core.innerspace.managers.connection_manager`), never an API key, and never reads `UNIFI_API_KEY`. The session client does not follow redirects or use proxy environment variables, and builds its error text from fixed strings. Positions come back in the project's unit, in the plan's own frame; each plan carries its scale, image scale and offset so a position can be placed on the image. Its IDs belong to their own tool family. It connects in the background after answering the client, and whether InnerSpace is installed and running is decided at the first read from the console's system endpoint, not probed at startup. Without a host it registers only `innerspace_setup_status`. HTTP is opt-in on port 3005, and the Cloud Relay does not reach it unless an operator adds it. The read-only guarantee covers the nine domain tools; the meta-tools are not counted as read-only tools.
+It reads through a console login session (`unifi_core.innerspace.managers.connection_manager`), never an API key, and never reads `UNIFI_API_KEY`. The session client does not follow redirects or use proxy environment variables, and builds its error text from fixed strings. Positions come back in the project's unit, in the plan's own frame; each plan carries its scale, image scale and offset so a position can be placed on the image. Its IDs belong to their own tool family. It connects in the background after answering the client, and whether InnerSpace is installed and running is decided at the first read from the console's system endpoint, not probed at startup. Without a host it registers only `innerspace_setup_status`. HTTP is opt-in on port 3005, and the Cloud Relay does not reach it unless an operator adds it. The read-only annotation covers the nine read tools; the meta-tools are not counted as read-only tools. Writes go through the shared write layer in `unifi_core.innerspace.managers._writes`: one `apply_*` per operation re-reads, sends one request without replay and reads back, so `success` follows the read-back; they are refused while InnerSpace is not installed or not running, by read-only mode and the policy gates, and when a shape they change moved or is gone, never by version or site layout. Lazy mode lists only the read tools directly; the writes are reached through `innerspace_execute`.
 
 ### apps/drive
 
@@ -179,7 +179,7 @@ The API app and the MCP apps independently consume the manager layer from `unifi
 
 The API also serves the nine Site Manager reads. The cloud account is one account-level connection, separate from controller records: an administrator adds it, its key is stored encrypted in the API database, and a separate factory builds the Site Manager managers from it. It never reads the MCP server's environment or imports the MCP app. See [Site Manager cloud connection](../apps/api/README.md#site-manager-cloud-connection).
 
-It serves the nine InnerSpace reads for a controller that declares the `innerspace` product, through the same `unifi-core` managers: REST routes, a GraphQL `innerspace` namespace and catalog actions share one error mapping with fixed text. A stored controller needs a username and password for InnerSpace, and its API token is never passed to the InnerSpace connection. No API surface returns plan image bytes. See [InnerSpace console product](../apps/api/README.md#innerspace-console-product).
+It serves the nine InnerSpace reads and the 15 InnerSpace write actions for a controller that declares the `innerspace` product, through the same `unifi-core` managers: REST routes, a GraphQL `innerspace` namespace and catalog actions share one error mapping with fixed text. Writes are catalog actions only (no REST write route, no GraphQL mutation); a confirmed action calls the manager's `apply_*` method, the same one the MCP tool calls on confirm. A stored controller needs a username and password for InnerSpace, and its API token is never passed to the InnerSpace connection. No API surface returns plan image bytes. See [InnerSpace console product](../apps/api/README.md#innerspace-console-product).
 
 ### packages/unifi-mcp-relay
 
@@ -282,7 +282,7 @@ To add a new UniFi application server, follow the pattern established by `apps/p
 10. **Use one lowercase token for the app name** (as in `sitemanager`). Scripts derive the directory, Python module, env prefix and plugin name from it, and a hyphen or underscore breaks several of them.
 11. **Commit a placeholder `tools_manifest.json` before the first `make manifest`:** the wheel force-includes it, so the package cannot be installed to generate it otherwise.
 
-`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle. `apps/innerspace/` is the reference for a read-only console application that uses the console login session only: category modules with `Annotated` argument types outside `tools/`, a background connection, and setup mode without a host.
+`apps/sitemanager/` is the reference for a server with no controller: an API key as its only credential, no startup connection, and no support bundle. `apps/innerspace/` is the reference for a console application that uses the console login session only: category modules with `Annotated` argument types outside `tools/`, a background connection, setup mode without a host, and write tools that wrap a core `preview_*`/`apply_*` pair.
 
 ## Shared Patterns
 

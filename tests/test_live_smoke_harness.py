@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -1766,13 +1767,18 @@ def _innerspace_runner(status_result):
     [({"installed": False, "running": False}, "not installed"), ({"installed": True, "running": False}, "not running")],
 )
 def test_innerspace_reads_are_skipped_when_the_app_is_absent(status, state):
+    import live_smoke
+
     runner, calls = _innerspace_runner({"success": True, "data": status})
 
     asyncio.run(runner.run())
 
     assert calls == ["innerspace_get_status"]
     skipped = [r for r in runner.report.records if r.status == "skipped"]
-    assert len(skipped) == 8
+    domain = {t["name"] for t in live_smoke.load_manifest("innerspace")["tools"] if t.get("permission_category")}
+    # Every domain tool but the status read, the writes included: more than the 8 other reads.
+    assert len(skipped) == len(domain) - 1 > 8
+    assert {r.tool for r in skipped} == domain - {"innerspace_get_status"}
     assert {r.error for r in skipped} == {f"InnerSpace is {state} on this console"}
 
 
@@ -2082,3 +2088,846 @@ def test_drive_approved_phase_leaves_an_existing_documentation_address_client_al
     asyncio.run(runner.run())
 
     assert not [name for name, args in calls if args.get("confirm") is True]
+
+
+PLAN_ROW = {"id": "plan-1", "image_scale": 1.0, "image_offset": [0, 0], "width_px": 1000, "height_px": 800}
+
+
+def _innerspace_wall_runner(
+    *,
+    plans=(PLAN_ROW,),
+    fail_update=False,
+    create_applied=True,
+    created_ids=("wall-1",),
+    fail_remove=False,
+    create_tool_failure=False,
+    fail_cleanup_list=False,
+    truncated_cleanup_list=False,
+):
+    """A runner whose console keeps walls in a dict and answers the wall tools the way the server does."""
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": list(plans)}})
+    runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[], records=[])
+    runner.server_key = "innerspace"
+    walls: dict[str, dict] = {}
+    calls: list[tuple[str, dict]] = []
+
+    async def call(tool: str, args: dict, _phase: str):
+        calls.append((tool, args))
+        confirm = args.get("confirm")
+        if tool == "innerspace_create_walls" and not confirm:
+            raw = {"success": True, "requires_confirmation": True, "preview": {"count": 1}}
+        elif tool == "innerspace_create_walls" and create_tool_failure:
+            # A failure before anything was sent (gate busy, app stopped): no outcome, no ids.
+            raw = {"success": False, "error": "Failed to create InnerSpace walls: the console is busy"}
+        elif tool == "innerspace_create_walls":
+            if create_applied is not False:
+                walls["wall-1"] = {"id": "wall-1", "plan_id": args["plan_id"], **args["walls"][0]}
+            raw = {
+                "success": create_applied is True,
+                "mutation_applied": create_applied,
+                "created_ids": list(created_ids),
+            }
+        elif tool == "innerspace_update_walls" and fail_update:
+            raw = {"success": False, "mutation_applied": None, "error": "Failed to update: read before retrying."}
+        elif tool == "innerspace_update_walls":
+            change = args["walls"][0]
+            walls[change["id"]]["variant"] = change["variant"]
+            raw = {"success": True, "mutation_applied": True}
+        elif tool == "innerspace_remove_walls" and fail_remove:
+            raw = {"success": False, "mutation_applied": None, "error": "Failed to remove: read before retrying."}
+        elif tool == "innerspace_remove_walls":
+            for wall_id in args["wall_ids"]:
+                walls.pop(wall_id, None)
+            raw = {"success": True, "mutation_applied": True}
+        elif tool == "innerspace_list_walls" and fail_cleanup_list and _phase == "lifecycle:verify-cleanup":
+            raw = {"success": False, "error": "Failed to list InnerSpace walls: the console did not answer"}
+        elif tool == "innerspace_list_walls" and truncated_cleanup_list and _phase == "lifecycle:verify-cleanup":
+            # The list stopped at its limit before the wall, which is still on the plan.
+            raw = {"success": True, "data": {"walls": [], "truncated": True}}
+        else:
+            raw = {"success": True, "data": {"walls": [dict(wall) for wall in walls.values()], "truncated": False}}
+        runner.cache.remember(tool, raw)
+        status = "ok" if raw["success"] else "failed"
+        return SimpleNamespace(success=raw["success"], status=status, summary=live_smoke.summarize_payload(raw))
+
+    runner.call = call
+    runner.skip = lambda tool, phase, reason: runner.report.records.append(
+        SimpleNamespace(tool=tool, phase=phase, status="skipped", error=reason)
+    )
+    return runner, calls, walls
+
+
+def test_innerspace_wall_lifecycle_creates_updates_and_removes_one_wall() -> None:
+    runner, calls, walls = _innerspace_wall_runner()
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert [(tool, args.get("confirm")) for tool, args in calls] == [
+        ("innerspace_create_walls", False),
+        ("innerspace_create_walls", True),
+        ("innerspace_list_walls", None),
+        ("innerspace_update_walls", True),
+        ("innerspace_list_walls", None),
+        ("innerspace_remove_walls", True),
+        ("innerspace_list_walls", None),
+    ]
+    assert calls[1][1] == {
+        "plan_id": "plan-1",
+        "walls": [{"x1": 0.1, "y1": 0.1, "x2": 0.6, "y2": 0.1, "variant": "drywall"}],
+        "unit": "metric",
+        "confirm": True,
+    }
+    assert calls[3][1]["walls"] == [{"id": "wall-1", "variant": "glass"}]
+    assert walls == {}
+    checks = [r for r in runner.report.records if r.phase.startswith("lifecycle:verify")]
+    assert len(checks) == 4 and all(r.status == "ok" for r in checks), checks
+    assert (
+        runner.report.cleaned_resources
+        == runner.report.created_resources
+        == [{"type": "innerspace_wall", "id": "wall-1", "plan_id": "plan-1"}]
+    )
+
+
+def test_innerspace_wall_lifecycle_removes_the_wall_after_a_failed_update() -> None:
+    runner, calls, walls = _innerspace_wall_runner(fail_update=True)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert calls[-2][0] == "innerspace_remove_walls" and walls == {}
+    failed = [r.phase for r in runner.report.records if r.status == "failed"]
+    assert failed == ["lifecycle:verify-update"]
+    assert len(runner.report.cleaned_resources) == 1
+
+
+def test_innerspace_wall_lifecycle_removes_the_wall_after_a_create_with_an_unknown_outcome() -> None:
+    runner, calls, walls = _innerspace_wall_runner(create_applied=None)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert [tool for tool, _args in calls] == [
+        "innerspace_create_walls",
+        "innerspace_create_walls",
+        "innerspace_remove_walls",
+        "innerspace_list_walls",
+    ]
+    assert walls == {}
+    assert (
+        runner.report.cleaned_resources
+        == runner.report.created_resources
+        == [{"type": "innerspace_wall", "id": "wall-1", "plan_id": "plan-1"}]
+    )
+
+
+def test_innerspace_wall_lifecycle_still_removes_after_a_create_reported_not_applied_that_named_an_id() -> None:
+    """ "Not applied" rests on a read-back; the create named its id, so the remove runs anyway, at no cost."""
+    runner, calls, walls = _innerspace_wall_runner(create_applied=False)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert [tool for tool, _args in calls] == [
+        "innerspace_create_walls",
+        "innerspace_create_walls",
+        "innerspace_remove_walls",
+        "innerspace_list_walls",
+    ]
+    assert walls == {}
+    assert runner.report.cleaned_resources == runner.report.created_resources
+
+
+def test_a_create_that_failed_before_sending_and_named_no_id_is_a_skip_not_an_orphan() -> None:
+    runner, calls, _walls = _innerspace_wall_runner(create_tool_failure=True, created_ids=())
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert [tool for tool, _args in calls] == ["innerspace_create_walls", "innerspace_create_walls"]
+    last = runner.report.records[-1]
+    assert (last.tool, last.status) == ("innerspace_remove_walls", "skipped")
+
+
+def test_a_wall_is_not_counted_gone_when_the_cleanup_list_failed() -> None:
+    runner, _calls, _walls = _innerspace_wall_runner(fail_cleanup_list=True)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    cleanup = [r for r in runner.report.records if r.phase == "lifecycle:verify-cleanup"]
+    assert [r.status for r in cleanup] == ["failed"]
+    assert runner.report.cleaned_resources == []
+
+
+def test_an_unknown_create_that_names_no_wall_is_a_failure_not_a_skip() -> None:
+    """A wall may be on the plan with no id to remove it by: that is reported for a person to check."""
+    runner, calls, _walls = _innerspace_wall_runner(create_applied=None, created_ids=())
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert [tool for tool, _args in calls] == ["innerspace_create_walls", "innerspace_create_walls"]
+    last = runner.report.records[-1]
+    assert (last.tool, last.status) == ("innerspace_remove_walls", "failed")
+    assert "may be left on the plan" in last.summary["check"]
+
+
+def test_a_cleanup_remove_that_fails_is_recorded_failed_and_not_cleaned() -> None:
+    runner, calls, walls = _innerspace_wall_runner(fail_remove=True)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert calls[-2][0] == "innerspace_remove_walls" and walls
+    cleanup = [r for r in runner.report.records if r.phase == "lifecycle:verify-cleanup"]
+    assert [r.status for r in cleanup] == ["failed"]
+    assert runner.report.created_resources and runner.report.cleaned_resources == []
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        pytest.param({**PLAN_ROW, "image_offset": [10, 0]}, id="shifted"),
+        pytest.param({**PLAN_ROW, "image_scale": 2.0}, id="scaled"),
+        # Since the reads report a map whose y scale differs from x as no scale, None is never plain.
+        pytest.param({**PLAN_ROW, "image_scale": None}, id="no-uniform-scale"),
+        pytest.param({**PLAN_ROW, "image_offset": None}, id="no-offset"),
+        pytest.param({**PLAN_ROW, "image_scale": True}, id="boolean-scale"),
+    ],
+)
+def test_innerspace_wall_lifecycle_needs_a_plan_that_takes_frame_coordinates(plan) -> None:
+    runner, calls, _walls = _innerspace_wall_runner(plans=(plan,))
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    assert calls == []
+    (record,) = runner.report.records
+    assert (record.tool, record.status) == ("innerspace_create_walls", "skipped")
+
+
+def test_innerspace_scratch_plan_passes_over_a_map_without_a_uniform_scale() -> None:
+    uneven = {**PLAN_ROW, "id": "plan-uneven", "image_scale": None}
+    plain = {**PLAN_ROW, "id": "plan-plain", "image_scale": 1, "image_offset": (0, 0)}
+    runner, _calls, _walls = _innerspace_wall_runner(plans=(uneven, plain))
+
+    assert runner.innerspace_scratch_plan() == "plan-plain"
+
+
+class FakeInnerSpace:
+    """An InnerSpace project in memory behind the server's tool names and response shapes.
+
+    A preview (``confirm`` False) changes nothing; a confirmed write changes the project. A tool in
+    ``land_and_fail`` changes the project on its first confirmed call and then reports an unknown outcome,
+    as a write whose read-back failed does, with the ids it would have created.
+    """
+
+    def __init__(
+        self,
+        *,
+        unit="metric",
+        plans=None,
+        wall_types=(),
+        object_types=(),
+        land_and_fail=(),
+        preview_round=None,
+        created_ids=None,
+    ):
+        self.preview_round = preview_round
+        # Overrides the ids a confirmed create reports (``None``: the ids it made).
+        self.created_ids = created_ids
+        self.unit = unit
+        # Each plan's scale line: two points in plan units and its length in metres.
+        self.plans = {p["id"]: {**SCALE_LINE, **p} for p in (INNERSPACE_PLANS if plans is None else plans)}
+        self.wall_types = {t["id"]: dict(t) for t in wall_types}
+        self.object_types = {t["id"]: dict(t) for t in object_types}
+        self.objects: dict[str, dict] = {}
+        self.land_and_fail = set(land_and_fail)
+        self.calls: list[tuple[str, dict]] = []
+
+    async def call_tool(self, tool, args):
+        self.calls.append((tool, dict(args)))
+        name = tool.removeprefix("innerspace_")
+        if "confirm" not in args:
+            return {"success": True, "data": getattr(self, f"read_{name}")(args)}
+        if not args["confirm"]:
+            return {"success": True, "requires_confirmation": True, "preview": getattr(self, f"preview_{name}")(args)}
+        created = getattr(self, f"write_{name}")(args) or []
+        if self.created_ids is not None and name.startswith("create_"):
+            created = list(self.created_ids)
+        if tool in self.land_and_fail:
+            self.land_and_fail.discard(tool)
+            return {
+                "success": False,
+                "mutation_applied": None,
+                "error": "Failed: read before retrying.",
+                "created_ids": created,
+            }
+        return {"success": True, "mutation_applied": True, "created_ids": created}
+
+    def ordered(self):
+        return sorted(self.plans.values(), key=lambda plan: plan["ordering"])
+
+    def scale_per_unit(self, plan):
+        ppm = math.dist(plan["line"][:2], plan["line"][2:]) / plan["metres"]
+        return ppm * FOOT if self.unit == "imperial" else ppm
+
+    def read_list_floor_plans(self, _args):
+        return {
+            "floor_plans": [
+                {"id": plan["id"], "name": plan["title"], "scale_per_unit": self.scale_per_unit(plan)}
+                for plan in self.plans.values()
+            ]
+        }
+
+    def read_get_project(self, args):
+        return {
+            "unit": self.unit,
+            "plans": [{key: plan[key] for key in ("id", "title", "ordering", "site_id")} for plan in self.ordered()],
+            "attenuation_object_types": [dict(t) for t in self.object_types.values()],
+            "shapes": (
+                [{"id": i, "type": "attenuationObject", "plan_id": o["plan_id"]} for i, o in self.objects.items()]
+                if args.get("include_shapes")
+                else None
+            ),
+            "wall_types": [{**t, "overrides_variant": t.get("overrides_variant")} for t in self.wall_types.values()],
+        }
+
+    def preview_create_wall_type(self, args):
+        return {"name": args["name"], "no_op": False}
+
+    def preview_update_wall_type(self, args):
+        return {"current": {"attenuation_db": self.wall_types[args["wall_type_id"]]["attenuation_db"]}}
+
+    def write_update_wall_type(self, args):
+        self.wall_types[args["wall_type_id"]]["attenuation_db"] = args["attenuation_db"]
+
+    def preview_rename_floor_plan(self, args):
+        return {"current": {"title": self.plans[args["plan_id"]]["title"]}}
+
+    def write_rename_floor_plan(self, args):
+        self.plans[args["plan_id"]]["title"] = args["title"].strip()
+
+    def preview_reorder_floor_plans(self, args):
+        return {"count": len(args["plan_ids"])}
+
+    def write_reorder_floor_plans(self, args):
+        assert sorted(args["plan_ids"]) == sorted(self.plans)
+        for ordering, plan_id in enumerate(args["plan_ids"], start=1):
+            self.plans[plan_id]["ordering"] = ordering
+
+    def preview_set_floor_attenuation(self, args):
+        current = self.plans[args["plan_id"]]["attenuation"]
+        return {"current": {"attenuation_db": current}, "no_op": current == args["attenuation_db"]}
+
+    def write_set_floor_attenuation(self, args):
+        self.plans[args["plan_id"]]["attenuation"] = args["attenuation_db"]
+
+    def preview_create_attenuation_objects(self, args):
+        return {"count": len(args["objects"]), "no_op": False}
+
+    def write_create_attenuation_objects(self, args):
+        self.objects["object-1"] = {"plan_id": args["plan_id"], **args["objects"][0]}
+        return ["object-1"]
+
+    def preview_update_attenuation_objects(self, args):
+        (change,) = args["objects"]
+        return {"no_op": self.objects[change["id"]]["variant"] == change["variant"]}
+
+    def write_update_attenuation_objects(self, args):
+        (change,) = args["objects"]
+        self.objects[change["id"]]["variant"] = change["variant"]
+
+    def preview_remove_attenuation_objects(self, args):
+        return {"count": len(args["object_ids"])}
+
+    def write_remove_attenuation_objects(self, args):
+        for object_id in args["object_ids"]:
+            self.objects.pop(object_id, None)
+
+    def preview_create_attenuation_object_type(self, args):
+        return {"name": args["name"], "no_op": False}
+
+    def preview_update_attenuation_object_type(self, args):
+        return {"current": {"attenuation_db": self.object_types[args["attenuation_object_type_id"]]["attenuation"]}}
+
+    def write_update_attenuation_object_type(self, args):
+        self.object_types[args["attenuation_object_type_id"]]["attenuation"] = args["attenuation_db"]
+
+    def preview_set_project_unit(self, args):
+        return {"current": {"unit": self.unit}, "proposed": {"unit": args["unit"]}}
+
+    def write_set_project_unit(self, args):
+        self.unit = args["unit"]
+
+    def preview_set_plan_scale(self, args):
+        assert args["coordinates"] == "plan_units"
+        plan = self.plans[args["plan_id"]]
+        x1, y1, x2, y2 = plan["line"]
+        length = plan["metres"] / FOOT if args["unit"] == "imperial" else plan["metres"]
+        if self.preview_round is not None:
+            length = round(length, self.preview_round)
+        return {"current": {"line": {"x1": x1, "y1": y1, "x2": x2, "y2": y2}, "length": length}}
+
+    def write_set_plan_scale(self, args):
+        assert args["coordinates"] == "plan_units"
+        plan = self.plans[args["plan_id"]]
+        plan["line"] = tuple(args[key] for key in ("x1", "y1", "x2", "y2"))
+        plan["metres"] = args["length"] * FOOT if args["unit"] == "imperial" else args["length"]
+
+
+FOOT = 0.3048
+SCALE_LINE = {"line": (-200.0, 0.0, 300.0, 0.0), "metres": 7.3}
+INNERSPACE_PLANS = (
+    {"id": "plan-a", "title": "Private ground", "ordering": 10, "site_id": "site-1", "attenuation": None},
+    {"id": "plan-x", "title": "Private shed", "ordering": 20, "site_id": "site-2", "attenuation": 18},
+    {"id": "plan-b", "title": "Private upper", "ordering": 30, "site_id": "site-1", "attenuation": 12},
+)
+
+
+def _innerspace_lifecycle_runner(console):
+    """A runner whose real ``call`` reaches the fake console, with no delay."""
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase="lifecycle", tool=[], delay=0))
+    runner.server = console
+    runner.unwrap_result = lambda raw: raw
+    return runner
+
+
+def _statuses(runner, status):
+    return [(r.tool, r.phase) for r in runner.report.records if r.status == status]
+
+
+USER_WALL_TYPE = {"id": "type-1", "name": "Private material", "attenuation_db": 13.0, "color": "#123456"}
+BUILT_IN_OVERRIDE = {**USER_WALL_TYPE, "id": "type-0", "attenuation_db": 7.0, "overrides_variant": "brick"}
+
+
+def test_innerspace_wall_type_lifecycle_previews_the_create_and_restores_the_update() -> None:
+    console = FakeInnerSpace(wall_types=(BUILT_IN_OVERRIDE, USER_WALL_TYPE))
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_wall_types())
+
+    writes = [(tool, args.get("confirm")) for tool, args in console.calls if "confirm" in args]
+    assert writes == [
+        ("innerspace_create_wall_type", False),
+        ("innerspace_update_wall_type", False),
+        ("innerspace_update_wall_type", True),
+        ("innerspace_update_wall_type", True),
+    ]
+    changed, restored = [args for tool, args in console.calls if args.get("confirm") is True]
+    assert (changed["wall_type_id"], changed["attenuation_db"]) == ("type-1", 14.0)
+    assert (restored["wall_type_id"], restored["attenuation_db"]) == ("type-1", 13.0)
+    assert console.wall_types["type-1"]["attenuation_db"] == 13.0 and console.wall_types["type-0"] == BUILT_IN_OVERRIDE
+    assert _statuses(runner, "failed") == []
+    assert ("innerspace_create_wall_type", "approved") in _statuses(runner, "skipped")
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+    # The console's own values are not in the report: only ids and whether they came back.
+    reported = json.dumps([r.args for r in runner.report.records])
+    assert "13" not in reported and "14" not in reported and "Private" not in reported
+
+
+def test_innerspace_wall_type_lifecycle_restores_after_an_update_with_an_unknown_outcome() -> None:
+    console = FakeInnerSpace(wall_types=(USER_WALL_TYPE,), land_and_fail={"innerspace_update_wall_type"})
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_wall_types())
+
+    assert console.wall_types["type-1"]["attenuation_db"] == 13.0
+    assert _statuses(runner, "failed") == [
+        ("innerspace_update_wall_type", "approved:update"),
+        ("innerspace_update_wall_type", "approved:verify-update"),
+    ]
+    assert ("innerspace_update_wall_type", "approved:verify-restore") in _statuses(runner, "ok")
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+
+
+def test_innerspace_wall_type_update_is_skipped_without_a_user_defined_type() -> None:
+    console = FakeInnerSpace(wall_types=(BUILT_IN_OVERRIDE,))
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_wall_types())
+
+    assert [args.get("confirm") for _tool, args in console.calls if "confirm" in args] == [False]
+    assert ("innerspace_update_wall_type", "approved") in _statuses(runner, "skipped")
+    assert runner.report.created_resources == []
+
+
+def test_innerspace_rename_lifecycle_renames_and_restores_without_reporting_the_title() -> None:
+    import live_smoke
+
+    console = FakeInnerSpace()
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_rename_plan())
+
+    titles = [args["title"] for tool, args in console.calls if tool == "innerspace_rename_floor_plan"]
+    assert titles == ["Private ground smoke", "Private ground smoke", "Private ground"]
+    assert console.plans["plan-a"]["title"] == "Private ground"
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+    assert "Private" not in json.dumps(live_smoke.asdict(runner.report))
+
+
+def test_innerspace_rename_lifecycle_restores_after_a_rename_with_an_unknown_outcome() -> None:
+    console = FakeInnerSpace(land_and_fail={"innerspace_rename_floor_plan"})
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_rename_plan())
+
+    assert console.plans["plan-a"]["title"] == "Private ground"
+    assert ("innerspace_rename_floor_plan", "approved:verify-update") in _statuses(runner, "failed")
+    assert ("innerspace_rename_floor_plan", "approved:verify-restore") in _statuses(runner, "ok")
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+
+
+def test_innerspace_rename_keeps_the_title_within_32_characters() -> None:
+    long_title = {**INNERSPACE_PLANS[0], "title": "P" * 32}
+    console = FakeInnerSpace(plans=(long_title,))
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_rename_plan())
+
+    renamed = next(args["title"] for tool, args in console.calls if tool == "innerspace_rename_floor_plan")
+    assert len(renamed) == 32 and renamed.endswith(" smoke")
+    assert console.plans["plan-a"]["title"] == "P" * 32
+
+
+def _plan_order(console):
+    return [plan["id"] for plan in console.ordered()]
+
+
+# The stored order values 1 to N in plan order: the only values the restore brings back exactly.
+NUMBERED_PLANS = tuple({**plan, "ordering": index} for index, plan in enumerate(INNERSPACE_PLANS, start=1))
+
+
+def test_innerspace_reorder_lifecycle_swaps_two_plans_of_one_site_and_restores_the_order() -> None:
+    console = FakeInnerSpace(plans=NUMBERED_PLANS)
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
+
+    orders = [args["plan_ids"] for tool, args in console.calls if tool == "innerspace_reorder_floor_plans"]
+    swapped, original = ["plan-b", "plan-x", "plan-a"], ["plan-a", "plan-x", "plan-b"]
+    assert orders == [swapped, swapped, original]
+    assert _plan_order(console) == original
+    assert [plan["ordering"] for plan in console.ordered()] == [1, 2, 3]
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+    assert "left_changed" not in runner.report.created_resources[0]
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param((0, 0, 0), id="tied"),
+        pytest.param((10, 20, 30), id="spaced"),
+        pytest.param((0, 1, 2), id="from-zero"),
+        pytest.param((1, 3, 4), id="gap"),
+    ],
+)
+def test_innerspace_reorder_only_previews_unless_stored_orders_are_1_to_n(values) -> None:
+    """The restore renumbers the plans 1, 2, 3 ...: on any other stored values it would leave the console changed,
+    and a closed gap would stack two floors as neighbours for coverage."""
+    plans = tuple({**plan, "ordering": value} for plan, value in zip(INNERSPACE_PLANS, values))
+    console = FakeInnerSpace(plans=plans)
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
+
+    confirms = [a for tool, a in console.calls if tool == "innerspace_reorder_floor_plans" and a.get("confirm")]
+    assert confirms == []
+    assert [plan["ordering"] for plan in console.ordered()] == list(values)
+    assert ("innerspace_reorder_floor_plans", "approved:verify-preview") in _statuses(runner, "ok")
+    assert ("innerspace_reorder_floor_plans", "approved") in _statuses(runner, "skipped")
+    assert runner.report.created_resources == []
+
+
+def test_innerspace_reorder_lifecycle_restores_after_a_reorder_with_an_unknown_outcome() -> None:
+    console = FakeInnerSpace(plans=NUMBERED_PLANS, land_and_fail={"innerspace_reorder_floor_plans"})
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
+
+    assert _plan_order(console) == ["plan-a", "plan-x", "plan-b"]
+    assert [plan["ordering"] for plan in console.ordered()] == [1, 2, 3]
+    assert ("innerspace_reorder_floor_plans", "approved:verify-update") in _statuses(runner, "failed")
+    assert ("innerspace_reorder_floor_plans", "approved:verify-restore") in _statuses(runner, "ok")
+
+
+def test_innerspace_reorder_is_skipped_without_two_plans_on_one_site() -> None:
+    console = FakeInnerSpace(plans=INNERSPACE_PLANS[:2])
+    runner = _innerspace_lifecycle_runner(console)
+
+    asyncio.run(runner.lifecycle_innerspace_reorder_plans())
+
+    assert [tool for tool, _args in console.calls] == ["innerspace_get_project"]
+    assert _statuses(runner, "skipped") == [("innerspace_reorder_floor_plans", "approved")]
+
+
+@pytest.mark.parametrize(("original", "changed"), [(None, 25.0), (12, 25.0), (25.0, 30.0)])
+def test_innerspace_floor_attenuation_lifecycle_sets_another_value_and_restores_it(original, changed) -> None:
+    plan = {**INNERSPACE_PLANS[0], "attenuation": original}
+    console = FakeInnerSpace(plans=(plan,))
+    runner = _innerspace_lifecycle_runner(console)
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [plan]}})
+
+    asyncio.run(runner.lifecycle_innerspace_floor_attenuation())
+
+    sent = [args["attenuation_db"] for tool, args in console.calls if args.get("confirm") is True]
+    assert sent == [changed, original]
+    assert console.plans["plan-a"]["attenuation"] == original
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+    if original is not None:
+        assert str(original) not in json.dumps([r.args for r in runner.report.records])
+
+
+def test_innerspace_floor_attenuation_lifecycle_restores_after_a_change_with_an_unknown_outcome() -> None:
+    console = FakeInnerSpace(land_and_fail={"innerspace_set_floor_attenuation"})
+    runner = _innerspace_lifecycle_runner(console)
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{"id": "plan-x"}]}})
+
+    asyncio.run(runner.lifecycle_innerspace_floor_attenuation())
+
+    assert console.plans["plan-x"]["attenuation"] == 18
+    assert ("innerspace_set_floor_attenuation", "approved:update") in _statuses(runner, "failed")
+    assert ("innerspace_set_floor_attenuation", "approved:verify-restore") in _statuses(runner, "ok")
+
+
+SCRATCH_PLAN = {"id": "plan-a", "image_scale": 1.0, "image_offset": [0, 0], "width_px": 1000, "height_px": 800}
+
+
+def _attenuation_runner(**console_args):
+    console = FakeInnerSpace(**console_args)
+    runner = _innerspace_lifecycle_runner(console)
+    runner.cache.remember("innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [SCRATCH_PLAN]}})
+    return console, runner
+
+
+def test_innerspace_attenuation_object_lifecycle_creates_updates_and_removes_one_object() -> None:
+    console, runner = _attenuation_runner()
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_objects())
+
+    writes = [(tool, args["confirm"]) for tool, args in console.calls if "confirm" in args]
+    assert writes == [
+        ("innerspace_create_attenuation_objects", False),
+        ("innerspace_create_attenuation_objects", True),
+        ("innerspace_update_attenuation_objects", False),
+        ("innerspace_update_attenuation_objects", True),
+        ("innerspace_update_attenuation_objects", False),
+        ("innerspace_remove_attenuation_objects", True),
+    ]
+    created = next(args for tool, args in console.calls if args.get("confirm") is True)
+    assert created["plan_id"] == "plan-a" and created["unit"] == "metric"
+    assert created["objects"][0]["variant"] == "shelf_small"
+    assert console.objects == {}
+    assert _statuses(runner, "failed") == []
+    assert (
+        runner.report.cleaned_resources
+        == runner.report.created_resources
+        == [{"type": "innerspace_attenuation_object", "id": "object-1", "plan_id": "plan-a"}]
+    )
+
+
+def test_innerspace_attenuation_object_lifecycle_removes_the_object_after_a_failed_update() -> None:
+    console, runner = _attenuation_runner(land_and_fail={"innerspace_update_attenuation_objects"})
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_objects())
+
+    assert console.calls[-2][0] == "innerspace_remove_attenuation_objects" and console.objects == {}
+    assert ("innerspace_update_attenuation_objects", "lifecycle:update") in _statuses(runner, "failed")
+    assert runner.report.cleaned_resources == runner.report.created_resources != []
+
+
+def test_innerspace_attenuation_object_lifecycle_removes_the_object_after_a_create_with_an_unknown_outcome() -> None:
+    console, runner = _attenuation_runner(land_and_fail={"innerspace_create_attenuation_objects"})
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_objects())
+
+    writes = [(tool, args["confirm"]) for tool, args in console.calls if "confirm" in args]
+    assert writes == [
+        ("innerspace_create_attenuation_objects", False),
+        ("innerspace_create_attenuation_objects", True),
+        ("innerspace_remove_attenuation_objects", True),
+    ]
+    assert console.objects == {}
+    assert (
+        runner.report.cleaned_resources
+        == runner.report.created_resources
+        == [{"type": "innerspace_attenuation_object", "id": "object-1", "plan_id": "plan-a"}]
+    )
+
+
+USER_OBJECT_TYPE = {"id": "otype-1", "name": "Private rack", "attenuation": 99, "overridesVariant": None}
+
+
+def test_innerspace_attenuation_object_type_lifecycle_previews_the_create_and_restores_the_update() -> None:
+    builtin = {**USER_OBJECT_TYPE, "id": "otype-0", "overridesVariant": "car"}
+    console, runner = _attenuation_runner(object_types=(builtin, USER_OBJECT_TYPE))
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_object_types())
+
+    sent = [
+        (tool, args["attenuation_object_type_id"], args["attenuation_db"])
+        for tool, args in console.calls
+        if args.get("confirm") is True
+    ]
+    tool = "innerspace_update_attenuation_object_type"
+    # 99 dB is the top of the range, so the change goes down.
+    assert sent == [(tool, "otype-1", 98), (tool, "otype-1", 99)]
+    assert console.object_types["otype-1"]["attenuation"] == 99 and console.object_types["otype-0"] == builtin
+    assert ("innerspace_create_attenuation_object_type", "approved") in _statuses(runner, "skipped")
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+
+
+def test_innerspace_attenuation_object_type_lifecycle_restores_after_an_update_with_an_unknown_outcome() -> None:
+    console, runner = _attenuation_runner(
+        object_types=(USER_OBJECT_TYPE,), land_and_fail={"innerspace_update_attenuation_object_type"}
+    )
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_object_types())
+
+    assert console.object_types["otype-1"]["attenuation"] == 99
+    assert ("innerspace_update_attenuation_object_type", "approved:verify-update") in _statuses(runner, "failed")
+    assert ("innerspace_update_attenuation_object_type", "approved:verify-restore") in _statuses(runner, "ok")
+
+
+def _unit_and_scale_runner(**console_args):
+    console, runner = _attenuation_runner(**console_args)
+    runner.cache.remember(
+        "innerspace_list_floor_plans", {"success": True, "data": {"floor_plans": [{**SCRATCH_PLAN, "id": "plan-x"}]}}
+    )
+    return console, runner
+
+
+def _confirmed(console):
+    return [(tool, args.get("unit")) for tool, args in console.calls if args.get("confirm") is True]
+
+
+def test_innerspace_unit_and_scale_lifecycle_proves_the_imperial_scale_and_restores_both() -> None:
+    import live_smoke
+
+    console, runner = _unit_and_scale_runner()
+
+    asyncio.run(runner.lifecycle_innerspace_unit_and_scale())
+
+    assert _confirmed(console) == [
+        ("innerspace_set_project_unit", "imperial"),
+        ("innerspace_set_plan_scale", "imperial"),
+        ("innerspace_set_plan_scale", "imperial"),
+        ("innerspace_set_project_unit", "metric"),
+    ]
+    replace = next(args for tool, args in console.calls if tool == "innerspace_set_plan_scale" and args["confirm"])
+    assert {k: replace[k] for k in ("x1", "y1", "x2", "y2", "length")} == {
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 100.0,
+        "y2": 0.0,
+        "length": 10.0,
+    }
+    plan = console.plans["plan-x"]
+    assert console.unit == "metric"
+    assert plan["line"] == SCALE_LINE["line"] and plan["metres"] == pytest.approx(7.3, rel=1e-12)
+    assert ("innerspace_set_plan_scale", "approved:verify-imperial-scale") in _statuses(runner, "ok")
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources
+    assert len(runner.report.created_resources) == 2
+    # The restore carries the plan's own line and length: stand-ins in the report.
+    reported = json.dumps(live_smoke.asdict(runner.report))
+    assert "23.95" not in reported and "-200" not in reported and "300.0" not in reported
+
+
+def test_a_scale_restore_that_is_only_close_is_not_reported_restored() -> None:
+    """The restore sends the stored length exactly, so a restore even 0.004 % off is a failure, not noise."""
+    console, runner = _unit_and_scale_runner(preview_round=2)
+
+    asyncio.run(runner.lifecycle_innerspace_unit_and_scale())
+
+    assert ("innerspace_set_plan_scale", "approved:verify-restore") in _statuses(runner, "failed")
+
+
+def test_innerspace_unit_and_scale_lifecycle_keeps_an_imperial_project_imperial() -> None:
+    console, runner = _unit_and_scale_runner(unit="imperial")
+
+    asyncio.run(runner.lifecycle_innerspace_unit_and_scale())
+
+    assert [tool for tool, _unit in _confirmed(console)] == ["innerspace_set_plan_scale", "innerspace_set_plan_scale"]
+    assert console.unit == "imperial" and console.plans["plan-x"]["line"] == SCALE_LINE["line"]
+    assert ("innerspace_set_plan_scale", "approved:verify-imperial-scale") in _statuses(runner, "ok")
+    assert _statuses(runner, "failed") == []
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+
+
+@pytest.mark.parametrize("failing", ["innerspace_set_plan_scale", "innerspace_set_project_unit"])
+def test_innerspace_unit_and_scale_lifecycle_restores_after_a_write_with_an_unknown_outcome(failing) -> None:
+    console, runner = _unit_and_scale_runner(land_and_fail={failing})
+
+    asyncio.run(runner.lifecycle_innerspace_unit_and_scale())
+
+    plan = console.plans["plan-x"]
+    assert console.unit == "metric"
+    assert plan["line"] == SCALE_LINE["line"] and plan["metres"] == pytest.approx(7.3, rel=1e-5)
+    assert (failing, "approved:update") in _statuses(runner, "failed")
+    assert {phase for _tool, phase in _statuses(runner, "failed")} <= {
+        "approved:update",
+        "approved:verify-update",
+        "approved:verify-imperial-scale",
+    }
+    assert runner.report.created_resources == runner.report.cleaned_resources != []
+    if failing == "innerspace_set_project_unit":
+        # The unit never read back imperial, so the scale was not replaced.
+        assert "innerspace_set_plan_scale" not in {tool for tool, _unit in _confirmed(console)}
+
+
+def test_innerspace_lifecycles_that_change_the_projects_own_objects_run_only_in_the_approved_phase() -> None:
+    """``lifecycle`` and ``safe`` only create, change and remove objects of their own; the rest is ``approved``."""
+    import live_smoke
+
+    names = [
+        "lifecycle_innerspace_wall",
+        "lifecycle_innerspace_wall_types",
+        "lifecycle_innerspace_rename_plan",
+        "lifecycle_innerspace_reorder_plans",
+        "lifecycle_innerspace_floor_attenuation",
+        "lifecycle_innerspace_attenuation_objects",
+        "lifecycle_innerspace_attenuation_object_types",
+        "lifecycle_innerspace_unit_and_scale",
+    ]
+    own = ["lifecycle_innerspace_wall", "lifecycle_innerspace_attenuation_objects"]
+    for phase, expected in (("lifecycle", own), ("approved", names)):
+        runner = live_smoke.LiveSmokeRunner("innerspace", SimpleNamespace(phase=phase, tool=[], delay=0))
+        mocks = {name: AsyncMock() for name in names}
+        for name, mock in mocks.items():
+            setattr(runner, name, mock)
+        asyncio.run(runner.run_approved() if phase == "approved" else runner.run_lifecycles())
+        assert [name for name in names if mocks[name].await_count] == expected
+
+
+def test_a_wall_is_not_counted_gone_when_the_cleanup_list_was_cut_short() -> None:
+    runner, _calls, walls = _innerspace_wall_runner(truncated_cleanup_list=True)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    cleanup = [r for r in runner.report.records if r.phase == "lifecycle:verify-cleanup"]
+    assert [r.status for r in cleanup] == ["failed"]
+    assert runner.report.cleaned_resources == []
+
+
+@pytest.mark.parametrize("created_ids", [(), ("wall-1", "wall-2")])
+def test_an_applied_wall_create_that_names_no_single_id_is_a_failure(created_ids) -> None:
+    runner, calls, _walls = _innerspace_wall_runner(create_applied=True, created_ids=created_ids)
+
+    asyncio.run(runner.lifecycle_innerspace_wall())
+
+    last = runner.report.records[-1]
+    assert (last.tool, last.status) == ("innerspace_remove_walls", "failed")
+    assert [tool for tool, _args in calls] == ["innerspace_create_walls", "innerspace_create_walls"]
+
+
+@pytest.mark.parametrize("created_ids", [(), ("object-1", "object-2")])
+def test_an_applied_object_create_that_names_no_single_id_is_a_failure(created_ids) -> None:
+    console, runner = _attenuation_runner(created_ids=created_ids)
+
+    asyncio.run(runner.lifecycle_innerspace_attenuation_objects())
+
+    assert ("innerspace_remove_attenuation_objects", "lifecycle") in _statuses(runner, "failed")

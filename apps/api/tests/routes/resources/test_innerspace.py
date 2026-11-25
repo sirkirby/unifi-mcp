@@ -9,6 +9,7 @@ audited, and GraphQL codes. No surface returns image bytes.
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -534,7 +535,9 @@ async def test_catalog_endpoints_agree_on_innerspace_render_hints(tmp_path):
         resources = (await c.get("/v1/catalog/resources", headers=headers)).json()["items"]
 
     expected = {tool: kind for tool, (_resource, _projection, kind) in REGISTRATIONS.items()}
-    assert {t["name"]: t["render_hint"]["kind"] for t in tools if t["product"] == "innerspace"} == expected
+    assert {t["name"]: t["render_hint"]["kind"] for t in tools if t["name"] in expected} == expected
+    # The writes have no projection: they are listed with their serializer's hint, not dropped.
+    assert len([t for t in tools if t["product"] == "innerspace"]) > len(expected)
     hinted = {r["path"]: h["kind"] for h in hints for r in h["resources"] if r["product"] == "innerspace"}
     assert hinted == {resource: kind for resource, _projection, kind in REGISTRATIONS.values()}
     listed = {
@@ -555,3 +558,33 @@ def test_openapi_states_the_innerspace_limit_and_unit_bounds():
     params = {p["name"]: p["schema"] for p in walls}
     assert (params["limit"]["minimum"], params["limit"]["maximum"]) == (1, 2000)
     assert params["unit"]["enum"] == ["metric", "imperial"]
+
+
+@pytest.mark.asyncio
+async def test_a_probe_heals_a_login_blocked_cached_connection(tmp_path, monkeypatch):
+    """After the password is fixed, a probe that logs in drops the kept manager instead of waiting out its cool-down."""
+    state = {"refuse": True}
+    logins = []
+
+    async def connect(self):
+        logins.append(self)
+        if state["refuse"]:
+            raise UniFiAuthError("synthetic refusal")
+        self._auth = SimpleNamespace(token="t", csrf="c")
+
+    monkeypatch.setattr(InnerSpaceConnectionManager, "_connect_once", connect)
+    app, headers, key, cid = await _app(tmp_path)
+    factory = app.state.manager_factory
+
+    assert (await _get(app, headers, f"{BASE}/status")).status_code == 502
+    (kept,) = factory._connection_cache.values()
+    assert kept.reconnect_blocked is True
+
+    state["refuse"] = False  # the password is fixed
+    result = await factory.probe_controller(cid)
+
+    assert result["products"]["innerspace"]["ok"] is True, result["products"]["innerspace"]
+    assert kept not in factory._connection_cache.values()
+    async with app.state.sessionmaker() as session:
+        fresh = await factory.get_connection_manager(session, cid, "innerspace")
+    assert fresh is not kept and fresh.reconnect_blocked is False

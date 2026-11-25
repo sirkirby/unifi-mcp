@@ -56,7 +56,7 @@ Your AI Agent <--local--> Site Manager server (on your machine) <--internet--> U
 
 ### InnerSpace floor plan data
 
-The InnerSpace server is local-first: it logs in to the console you name with a username and password and reads InnerSpace through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
+The InnerSpace server is local-first: it logs in to the console you name with a username and password and reads InnerSpace, and on a confirmed write changes it, through that session. It sends nothing to Ubiquiti's cloud and has no API key path.
 
 - The data it returns describes a building: floor plans, wall positions, device placements, MAC addresses and serial numbers. Response redaction hides secret-looking fields by name; it does not mask MAC addresses, serial numbers or plan geometry, so review results before you share them.
 - A floor plan image is returned to your AI agent only by the MCP server, on request, and never by `unifi-api-server`.
@@ -97,7 +97,7 @@ If you set an OTLP endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`), the MCP servers sen
 
 | Service | When Used | What It Sees |
 |---------|-----------|-------------|
-| **Your UniFi Controller** | Network, Protect, Access, InnerSpace and Drive servers | Tool requests (queries, mutations) over your local network; for InnerSpace, the console login and read requests; for Drive, the NAS login and its requests |
+| **Your UniFi Controller** | Network, Protect, Access, InnerSpace and Drive servers | Tool requests (queries, mutations) over your local network; for InnerSpace, the console login, read requests and confirmed layout writes; for Drive, the NAS login and its requests |
 | **Ubiquiti Site Manager API (`api.ui.com`)** | Only if you run the Site Manager server | Your Site Manager API key and every read request it makes, over HTTPS |
 | **Cloudflare Workers** | Only if you enable relay mode | Tool calls in transit (encrypted, not stored) |
 | **Your OTLP collector** | Only if you set an OTLP endpoint | Trace spans: MCP method, tool name, request ID, timing, error messages of failed requests |

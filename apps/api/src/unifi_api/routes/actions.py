@@ -276,6 +276,16 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             error_kind="read_only_mode",
         )
         raise HTTPException(status_code=403, detail=str(e))
+    except actions_svc.PolicyGateDenied as e:
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="denied",
+            error_kind="policy_gate",
+        )
+        raise HTTPException(status_code=403, detail=str(e))
     except ControllerBusyError as e:
         await _write_audit_row(
             sm,

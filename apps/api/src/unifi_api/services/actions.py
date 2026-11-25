@@ -47,6 +47,17 @@ class ReadOnlyModeDenied(Exception):
     """Raised when read-only mode is on for the action's product and the action is a mutation."""
 
 
+class PolicyGateDenied(Exception):
+    """Raised when a ``UNIFI_POLICY_*`` gate disables a mutation of a policy-gated product."""
+
+
+# Products whose catalog categories are their MCP server's policy-gate categories
+# unchanged, so the API applies the ``UNIFI_POLICY_*`` gates exactly as that
+# server does. The other products map categories through their own server's
+# category map, which the API does not carry; they get read-only mode only.
+POLICY_GATED_PRODUCTS = frozenset({"innerspace"})
+
+
 @dataclass(frozen=True)
 class MutationPreview:
     """Validated, non-executed mutation intent for the API response layer."""
@@ -287,10 +298,15 @@ async def dispatch_action(
     action_kind = _classify_action(entry)
 
     # Read-only mode is resolved per product, exactly as the MCP server for that
-    # product resolves it, and refuses previews as well as confirmed calls.
+    # product resolves it, and refuses previews as well as confirmed calls; so do
+    # the policy gates of a policy-gated product.
     if action_kind == "mutation" and resolve_read_only(entry.product):
         message = PolicyGateChecker(entry.product).denial_message(entry.category, entry.permission_action)
         raise ReadOnlyModeDenied(message)
+    if action_kind == "mutation" and entry.product in POLICY_GATED_PRODUCTS:
+        gate = PolicyGateChecker(entry.product)
+        if not gate.check(entry.category, entry.permission_action):
+            raise PolicyGateDenied(gate.denial_message(entry.category, entry.permission_action))
 
     if dispatch_table is None:
         binding = DispatchEntry(entry.manager_attr, entry.manager_method)

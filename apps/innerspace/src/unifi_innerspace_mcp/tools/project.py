@@ -1,12 +1,26 @@
-"""Project tools: the project, and the walls of one plan."""
+"""Project tools: the project and the walls of one plan; the project's display unit.
+
+Remaining race: the operation gate runs one write at a time per server process, so a unit that another server
+process or the browser editor sets between the fresh read and the write is overwritten silently.
+"""
 
 import logging
-from typing import Any, Dict
+from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
-from unifi_innerspace_mcp.arguments import IncludeShapes, Limit, PlanId, Unit
-from unifi_innerspace_mcp.runtime import project_manager, server, tool_failure, tool_success
+from unifi_innerspace_mcp.arguments import CONFIRM_FLOW, Confirm, IncludeShapes, Limit, PlanId, Unit, input_schema
+from unifi_innerspace_mcp.runtime import (
+    project_manager,
+    project_settings_manager,
+    server,
+    tool_failure,
+    tool_success,
+    write_failure,
+    write_preview,
+    write_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,3 +69,37 @@ async def innerspace_list_walls(plan_id: PlanId, limit: Limit = 500, unit: Unit 
         return tool_success(page.model_dump())
     except Exception as e:
         return tool_failure("list InnerSpace walls", e)
+
+
+ProjectUnit = Annotated[
+    str,
+    Field(
+        description="The unit to display: 'metric' (metres) or 'imperial' (feet).",
+        json_schema_extra={"enum": ["metric", "imperial"]},
+    ),
+]
+
+
+@server.tool(
+    name="innerspace_set_project_unit",
+    input_schema=input_schema(unit=ProjectUnit, confirm=(Confirm, False)),
+    title="Set InnerSpace Project Unit",
+    description=(
+        "Sets the unit the InnerSpace app displays lengths in: metric or imperial. Display only: stored "
+        "positions do not change, but reads without a unit argument then answer in the new unit. " + CONFIRM_FLOW
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="project",
+    permission_action="update",
+    auth="local_only",
+)
+async def innerspace_set_project_unit(unit: ProjectUnit, confirm: Confirm = False) -> Dict[str, Any]:
+    """Preview or set the project unit."""
+    logger.info("innerspace_set_project_unit tool called (confirm=%s)", confirm)
+    try:
+        if not confirm:
+            return write_preview(await project_settings_manager.preview_set_project_unit(unit))
+        result = await project_settings_manager.apply_set_project_unit(unit)
+        return write_result(result, applied="Project unit set and read back.")
+    except Exception as e:
+        return write_failure("set InnerSpace project unit", e)

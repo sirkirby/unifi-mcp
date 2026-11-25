@@ -21,6 +21,10 @@ def test_runtime_exposes_the_singletons_tool_modules_import():
         "floor_plan_manager",
         "inventory_manager",
         "system_manager",
+        "wall_manager",
+        "wall_type_manager",
+        "attenuation_manager",
+        "project_settings_manager",
         "tool_registry",
     ):
         assert getattr(runtime, name) is not None, name
@@ -28,16 +32,25 @@ def test_runtime_exposes_the_singletons_tool_modules_import():
     assert runtime.floor_plan_manager._cm is runtime.connection_manager
     assert runtime.inventory_manager._cm is runtime.connection_manager
     assert runtime.system_manager._cm is runtime.connection_manager
+    assert runtime.wall_manager._cm is runtime.connection_manager
+    assert runtime.wall_type_manager._cm is runtime.connection_manager
+    assert runtime.attenuation_manager._cm is runtime.connection_manager
+    assert runtime.project_settings_manager._cm is runtime.connection_manager
 
 
-def test_category_map_is_the_four_tool_modules():
+def test_category_map_is_the_seven_tool_modules():
     assert INNERSPACE_CATEGORY_MAP == {
         "status": "status",
         "project": "project",
         "floor_plans": "floor_plans",
         "devices": "devices",
+        "walls": "walls",
+        "wall_types": "wall_types",
+        "attenuation": "attenuation",
     }
-    assert set(LAZY_DIRECT_TOOLS) == set(TOOL_MODULE_MAP)
+    # Lazy mode lists only the read tools directly; every write is reached through innerspace_execute.
+    assert set(LAZY_DIRECT_TOOLS) < set(TOOL_MODULE_MAP)
+    assert len(TOOL_MODULE_MAP) - len(LAZY_DIRECT_TOOLS) == 15
 
 
 def test_bundled_config_is_session_only():

@@ -97,7 +97,10 @@ APP_CONFIGS = {
     },
     "innerspace": {
         "title": "UniFi InnerSpace MCP",
-        "description": "Read UniFi InnerSpace projects, floor plans, walls, and placed devices via MCP.",
+        "description": (
+            "Read UniFi InnerSpace floor plans, walls and placed devices, and edit plan layouts with a preview "
+            "first, via MCP."
+        ),
         # No bare "v" fallback: plain v* tags are Network's legacy releases.
         "tag_prefixes": ["innerspace/v"],
         # InnerSpace uses the console login session only, so it must never be

@@ -12,18 +12,34 @@ from unifi_innerspace_mcp.tool_index import TOOL_REGISTRY
 
 BY_CATEGORY = {
     "status": {"innerspace_get_status"},
-    "project": {"innerspace_get_project", "innerspace_list_walls"},
-    "floor_plans": {"innerspace_list_floor_plans", "innerspace_get_plan_asset"},
+    "project": {"innerspace_get_project", "innerspace_list_walls", "innerspace_set_project_unit"},
+    "floor_plans": {
+        "innerspace_list_floor_plans",
+        "innerspace_get_plan_asset",
+        "innerspace_rename_floor_plan",
+        "innerspace_set_floor_attenuation",
+        "innerspace_reorder_floor_plans",
+        "innerspace_set_plan_scale",
+    },
     "devices": {
         "innerspace_list_placed_devices",
         "innerspace_list_access_points",
         "innerspace_list_switches",
         "innerspace_list_inventory",
     },
+    "walls": {"innerspace_create_walls", "innerspace_update_walls", "innerspace_remove_walls"},
+    "wall_types": {"innerspace_create_wall_type", "innerspace_update_wall_type"},
+    "attenuation": {
+        "innerspace_create_attenuation_objects",
+        "innerspace_update_attenuation_objects",
+        "innerspace_remove_attenuation_objects",
+        "innerspace_create_attenuation_object_type",
+        "innerspace_update_attenuation_object_type",
+    },
 }
 
 
-def test_the_categories_partition_the_nine_tools():
+def test_the_categories_partition_the_tools():
     assert set(BY_CATEGORY) == set(INNERSPACE_CATEGORY_MAP)
     assert set().union(*BY_CATEGORY.values()) == DOMAIN_TOOLS
     assert sum(len(tools) for tools in BY_CATEGORY.values()) == len(DOMAIN_TOOLS)

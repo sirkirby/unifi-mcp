@@ -1,9 +1,11 @@
 """InnerSpace server category mappings and tool module map.
 
 Maps each tool's ``permission_category`` to the config key (and module name)
-that ``enabled_categories`` uses. ``TOOL_MODULE_MAP`` drives lazy loading.
+that ``enabled_categories`` and the ``UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>``
+gates use. ``TOOL_MODULE_MAP`` drives lazy loading.
 """
 
+from functools import cache
 from pathlib import Path
 from typing import Callable, Dict
 
@@ -14,6 +16,7 @@ from unifi_mcp_shared.lazy_tools import (
 from unifi_mcp_shared.lazy_tools import (
     setup_lazy_loading as _shared_setup_lazy_loading,
 )
+from unifi_mcp_shared.tool_index import policy_gates_from_manifest
 
 # Mapping from tool category shorthand to config key
 INNERSPACE_CATEGORY_MAP = {
@@ -21,6 +24,9 @@ INNERSPACE_CATEGORY_MAP = {
     "project": "project",
     "floor_plans": "floor_plans",
     "devices": "devices",
+    "walls": "walls",
+    "wall_types": "wall_types",
+    "attenuation": "attenuation",
 }
 
 _MANIFEST_PATH = Path(__file__).parent / "tools_manifest.json"
@@ -55,6 +61,12 @@ LAZY_DIRECT_TOOLS: tuple[str, ...] = (
     "innerspace_list_switches",
     "innerspace_list_walls",
 )
+
+
+@cache
+def policy_gates() -> frozenset[tuple[str, str]]:
+    """(permission_category, permission_action) pairs the manifest's tools gate on."""
+    return policy_gates_from_manifest(_manifest_path())
 
 
 def setup_lazy_loading(server, tool_decorator: Callable) -> LazyToolLoader:

@@ -22,7 +22,7 @@ server:
   tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
 
   # Tool filtering (optional, for eager mode)
-  # enabled_categories: status, project, floor_plans, devices
+  # enabled_categories: status, project, floor_plans, devices, walls, wall_types, attenuation
   # enabled_tools: specific tool names, e.g. "innerspace_get_status,innerspace_list_floor_plans"
   enabled_categories: ${oc.env:UNIFI_ENABLED_CATEGORIES,null}
   enabled_tools: ${oc.env:UNIFI_ENABLED_TOOLS,null}

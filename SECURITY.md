@@ -73,10 +73,10 @@ The Site Manager server (`apps/sitemanager/`) is not local-first. It has a diffe
 
 The InnerSpace server (`apps/innerspace/`) is local-first, but it has its own credential rule:
 
-- It reads InnerSpace on a console with a login session (username and password), never an API key. A console's local `UNIFI_API_KEY` is never read or sent to InnerSpace, and an InnerSpace controller on `unifi-api-server` is refused without a username and password; a stored API token is never passed to its connection.
+- It reads and writes InnerSpace on a console with a login session (username and password), never an API key. A console's local `UNIFI_API_KEY` is never read or sent to InnerSpace, and an InnerSpace controller on `unifi-api-server` is refused without a username and password; a stored API token is never passed to its connection.
 - The destination is the console you name. Redirects are never followed and proxy environment variables are ignored, so the session cookie cannot be sent elsewhere. Certificate checks follow the same fingerprint and verification settings as the console servers.
-- The nine domain tools only read. Floor plans describe a building, so the results are sensitive even though response redaction hides secret-looking fields: MAC addresses and plan geometry are not redacted.
-- Over HTTP, anyone who can reach the endpoint reads the project with the server's login. Keep the loopback bind and set a bearer token. The Cloud Relay does not include this server unless an operator adds it to `UNIFI_RELAY_SERVERS`.
+- Nine tools read and 15 write the layout. The writes preview first, apply only on `confirm=true`, and honour `UNIFI_INNERSPACE_READ_ONLY` and the `UNIFI_POLICY_INNERSPACE_*` gates. Floor plans describe a building, so the results are sensitive even though response redaction hides secret-looking fields: MAC addresses and plan geometry are not redacted.
+- Over HTTP, anyone who can reach the endpoint reads, and with confirmation changes, the project with the server's login. Keep the loopback bind and set a bearer token. The Cloud Relay does not include this server unless an operator adds it to `UNIFI_RELAY_SERVERS`.
 - `unifi-api-server` never returns plan image bytes on any surface.
 
 ### UniFi Drive NAS Login

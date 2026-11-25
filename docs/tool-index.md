@@ -162,20 +162,24 @@ See [Site Manager permissions](../apps/sitemanager/docs/permissions.md#meta-tool
 
 ### InnerSpace differences
 
-The InnerSpace server has nine domain tools, all read-only, and it adjusts the
-shared model the same way Site Manager does:
+The InnerSpace server has 24 domain tools: nine reads and 15 writes. It adjusts the shared model this way:
 
-- In `lazy` mode it lists all nine domain tools directly. `innerspace_tool_index`
-  and `innerspace_batch_status` are marked read-only, while `innerspace_execute`,
-  `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools` are not, so the read-only
-  guarantee covers the nine domain tools and not the meta-tools.
-- In `meta_only` mode the nine tools are reachable only through
+- In `lazy` mode it lists the nine read tools directly. The 15 write tools are
+  not listed directly; reach them through `innerspace_execute`, or list them
+  with `innerspace_load_tools`. `innerspace_tool_index` and
+  `innerspace_batch_status` are marked read-only, while `innerspace_execute`,
+  `innerspace_batch`, `innerspace_batch_cancel` and `innerspace_load_tools`
+  are not, so the read-only
+  annotation covers the nine read tools and not the meta-tools.
+- In `meta_only` mode the domain tools are reachable only through
   `innerspace_execute`, so a client that allows only read-only tools reaches
   none of them.
 - Without a host it starts in setup mode and registers only
   `innerspace_setup_status`, which explains what to set and makes no request.
-- Its categories are `status`, `project`, `floor_plans` and `devices`, for
-  `UNIFI_ENABLED_CATEGORIES` and the `category` filter of `innerspace_tool_index`.
+- Its categories are `status`, `project`, `floor_plans`, `devices`, `walls`,
+  `wall_types` and `attenuation`, for `UNIFI_ENABLED_CATEGORIES`, the
+  `category` filter of `innerspace_tool_index` and the
+  `UNIFI_POLICY_INNERSPACE_<CATEGORY>_<ACTION>` gates.
 - Its tool descriptions say that InnerSpace ids are scoped to the InnerSpace
   tool family and must not be passed to the other servers.
 

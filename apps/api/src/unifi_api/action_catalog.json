@@ -724,6 +724,290 @@
       }
     },
     {
+      "name": "innerspace_create_attenuation_object_type",
+      "product": "innerspace",
+      "category": "attenuation",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "attenuation_manager",
+      "manager_method": "apply_create_attenuation_object_type",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "attenuation_db": {
+            "description": "Signal loss in dB, 0 to 99.",
+            "type": "number"
+          },
+          "color": {
+            "description": "Display color as #RRGGBB.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name, 1 to 32 characters.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "attenuation_db",
+          "color"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_create_attenuation_objects",
+      "product": "innerspace",
+      "category": "attenuation",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "attenuation_manager",
+      "manager_method": "apply_create_attenuation_objects",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "default": "frame",
+            "description": "'frame' (default): the frame the reads return, from the plan's top-left, y down, in unit; refused on a plan whose image is shifted or scaled. 'plan_units': the console's own stored values.",
+            "enum": [
+              "frame",
+              "plan_units"
+            ],
+            "type": "string"
+          },
+          "objects": {
+            "description": "Attenuation objects to create, at most 100: each a closed polygon (points x, y in unit, 4 to 100 points, the last repeating the first) and a variant; variant \"custom\" takes an attenuation_object_type_id.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "attenuation_object_type_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "points": {
+                  "description": "Corners of a closed polygon: the last point repeats the first",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 100,
+                  "minItems": 4,
+                  "type": "array"
+                },
+                "variant": {
+                  "enum": [
+                    "car",
+                    "cubicles",
+                    "elevator",
+                    "foliage_heavy",
+                    "foliage_light",
+                    "human_crowd",
+                    "machinery",
+                    "server_rack",
+                    "shelf_small",
+                    "shelf_medium",
+                    "shelf_warehouse",
+                    "truck",
+                    "custom"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "points",
+                "variant"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of every length and coordinate in this call: 'metric' (metres) or 'imperial' (feet). Required, so a change of the project's unit cannot rescale a call.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "objects",
+          "unit"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_create_wall_type",
+      "product": "innerspace",
+      "category": "wall_types",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "wall_type_manager",
+      "manager_method": "apply_create_wall_type",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "attenuation_db": {
+            "description": "Signal loss in dB, 0 to 99.",
+            "type": "number"
+          },
+          "color": {
+            "description": "Display color as #RRGGBB.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name, 1 to 32 characters.",
+            "type": "string"
+          },
+          "transparent": {
+            "default": false,
+            "description": "Whether the wall is drawn see-through.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "attenuation_db",
+          "color"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_create_walls",
+      "product": "innerspace",
+      "category": "walls",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "wall_manager",
+      "manager_method": "apply_create_walls",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "default": "frame",
+            "description": "'frame' (default): the frame the reads return, from the plan's top-left, y down, in unit; refused on a plan whose image is shifted or scaled. 'plan_units': the console's own stored values.",
+            "enum": [
+              "frame",
+              "plan_units"
+            ],
+            "type": "string"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of every length and coordinate in this call: 'metric' (metres) or 'imperial' (feet). Required, so a change of the project's unit cannot rescale a call.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          },
+          "walls": {
+            "description": "Walls to create, at most 100: end points x1, y1, x2, y2 in unit and a variant (material); variant \"custom\" takes the wall_type_id of a project wall type.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "variant": {
+                  "enum": [
+                    "concrete",
+                    "drywall",
+                    "drywall_heavy",
+                    "glass",
+                    "glass_thin",
+                    "brick",
+                    "metal",
+                    "wood",
+                    "door_wood",
+                    "door_metal",
+                    "door_glass",
+                    "window_1_pane",
+                    "window_2_pane",
+                    "window_3_pane",
+                    "custom"
+                  ],
+                  "type": "string"
+                },
+                "wall_type_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "x1": {
+                  "type": "number"
+                },
+                "x2": {
+                  "type": "number"
+                },
+                "y1": {
+                  "type": "number"
+                },
+                "y2": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "x1",
+                "y1",
+                "x2",
+                "y2",
+                "variant"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "walls",
+          "unit"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "innerspace_get_plan_asset",
       "product": "innerspace",
       "category": "floor_plans",
@@ -957,6 +1241,655 @@
         ],
         "type": "object",
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "innerspace_remove_attenuation_objects",
+      "product": "innerspace",
+      "category": "attenuation",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "attenuation_manager",
+      "manager_method": "apply_remove_attenuation_objects",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "object_ids": {
+            "description": "Ids of the attenuation objects to remove, at most 50 per call. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "object_ids"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_remove_walls",
+      "product": "innerspace",
+      "category": "walls",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "wall_manager",
+      "manager_method": "apply_remove_walls",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "wall_ids": {
+            "description": "Ids of the walls to remove, at most 50 per call. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "wall_ids"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_rename_floor_plan",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "apply_rename_floor_plan",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "title": {
+            "description": "New plan title, 1 to 32 characters.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "title"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_reorder_floor_plans",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "apply_reorder_floor_plans",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_ids": {
+            "description": "Every floor plan id once, lowest floor first. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_ids"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_set_floor_attenuation",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "apply_set_floor_attenuation",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "attenuation_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signal loss through this floor in dB, 1 to 99, or null for the app default (20 dB)."
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "attenuation_db"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_set_plan_scale",
+      "product": "innerspace",
+      "category": "floor_plans",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "floor_plan_manager",
+      "manager_method": "apply_set_plan_scale",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "default": "frame",
+            "description": "'frame' (default): the frame the reads return, from the plan's top-left, y down, in unit; refused on a plan whose image is shifted or scaled. 'plan_units': the console's own stored values.",
+            "enum": [
+              "frame",
+              "plan_units"
+            ],
+            "type": "string"
+          },
+          "length": {
+            "description": "The real length of the scale line, in unit; above 0.",
+            "type": "number"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of every length and coordinate in this call: 'metric' (metres) or 'imperial' (feet). Required, so a change of the project's unit cannot rescale a call.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          },
+          "x1": {
+            "description": "End of the scale line, in unit.",
+            "type": "number"
+          },
+          "x2": {
+            "description": "End of the scale line, in unit.",
+            "type": "number"
+          },
+          "y1": {
+            "description": "End of the scale line, in unit.",
+            "type": "number"
+          },
+          "y2": {
+            "description": "End of the scale line, in unit.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "plan_id",
+          "x1",
+          "y1",
+          "x2",
+          "y2",
+          "length",
+          "unit"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_set_project_unit",
+      "product": "innerspace",
+      "category": "project",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "project_settings_manager",
+      "manager_method": "apply_set_project_unit",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "unit": {
+            "description": "The unit to display: 'metric' (metres) or 'imperial' (feet).",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_update_attenuation_object_type",
+      "product": "innerspace",
+      "category": "attenuation",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "attenuation_manager",
+      "manager_method": "apply_update_attenuation_object_type",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "attenuation_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New signal loss in dB, 0 to 99. Omit to keep."
+          },
+          "attenuation_object_type_id": {
+            "description": "Attenuation-object type id, from innerspace_get_project. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New display color as #RRGGBB. Omit to keep."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New name, 1 to 32 characters. Omit to keep."
+          }
+        },
+        "required": [
+          "attenuation_object_type_id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_update_attenuation_objects",
+      "product": "innerspace",
+      "category": "attenuation",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "attenuation_manager",
+      "manager_method": "apply_update_attenuation_objects",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "default": "frame",
+            "description": "'frame' (default): the frame the reads return, from the plan's top-left, y down, in unit; refused on a plan whose image is shifted or scaled. 'plan_units': the console's own stored values.",
+            "enum": [
+              "frame",
+              "plan_units"
+            ],
+            "type": "string"
+          },
+          "objects": {
+            "description": "Attenuation objects to update, at most 100: each names its id and only the fields to change. points replaces the whole polygon; variant \"custom\" takes an attenuation_object_type_id. Each object is sent whole from a fresh read, so an edit made elsewhere to the same object after that read is overwritten; an object that is gone or moved to another plan is refused and nothing is sent.",
+            "items": {
+              "additionalProperties": false,
+              "description": "An attenuation object's new polygon (all corners), kind, or both.",
+              "properties": {
+                "attenuation_object_type_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "id": {
+                  "type": "string"
+                },
+                "points": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 100,
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "variant": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "car",
+                        "cubicles",
+                        "elevator",
+                        "foliage_heavy",
+                        "foliage_light",
+                        "human_crowd",
+                        "machinery",
+                        "server_rack",
+                        "shelf_small",
+                        "shelf_medium",
+                        "shelf_warehouse",
+                        "truck",
+                        "custom"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of every length and coordinate in this call: 'metric' (metres) or 'imperial' (feet). Required, so a change of the project's unit cannot rescale a call.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "objects",
+          "unit"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_update_wall_type",
+      "product": "innerspace",
+      "category": "wall_types",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "wall_type_manager",
+      "manager_method": "apply_update_wall_type",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "attenuation_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New signal loss in dB, 0 to 99. Omit to keep."
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New display color as #RRGGBB. Omit to keep."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New name, 1 to 32 characters. Omit to keep."
+          },
+          "transparent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Whether the wall is drawn see-through. Omit to keep."
+          },
+          "wall_type_id": {
+            "description": "Wall type id, from innerspace_get_project. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "wall_type_id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "innerspace_update_walls",
+      "product": "innerspace",
+      "category": "walls",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "wall_manager",
+      "manager_method": "apply_update_walls",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "default": "frame",
+            "description": "'frame' (default): the frame the reads return, from the plan's top-left, y down, in unit; refused on a plan whose image is shifted or scaled. 'plan_units': the console's own stored values.",
+            "enum": [
+              "frame",
+              "plan_units"
+            ],
+            "type": "string"
+          },
+          "plan_id": {
+            "description": "InnerSpace floor plan id, from innerspace_list_floor_plans. These IDs are scoped to the InnerSpace tool family \u2014 do not pass them to other products' tools.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of every length and coordinate in this call: 'metric' (metres) or 'imperial' (feet). Required, so a change of the project's unit cannot rescale a call.",
+            "enum": [
+              "metric",
+              "imperial"
+            ],
+            "type": "string"
+          },
+          "walls": {
+            "description": "Walls to update, at most 100: each names its id and only the fields to change. End points go together (all four of x1, y1, x2, y2); variant \"custom\" takes a wall_type_id. Each wall is sent whole from a fresh read, so an edit made elsewhere to the same wall after that read is overwritten; a wall that is gone or moved to another plan is refused and nothing is sent.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A wall's new end points (all four together), material, or both.",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "variant": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "concrete",
+                        "drywall",
+                        "drywall_heavy",
+                        "glass",
+                        "glass_thin",
+                        "brick",
+                        "metal",
+                        "wood",
+                        "door_wood",
+                        "door_metal",
+                        "door_glass",
+                        "window_1_pane",
+                        "window_2_pane",
+                        "window_3_pane",
+                        "custom"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "wall_type_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "x1": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "x2": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "y1": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "y2": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "walls",
+          "unit"
+        ],
+        "type": "object"
       }
     },
     {

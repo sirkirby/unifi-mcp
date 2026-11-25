@@ -68,7 +68,7 @@ This installs all Python workspace packages in development mode plus the self-co
 | `apps/protect/` | Protect MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/access/` | Access MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/sitemanager/` | Site Manager MCP server (cloud account, read-only) | `make test`, `make lint`, `make manifest` |
-| `apps/innerspace/` | InnerSpace MCP server (console login, read-only) | `make test`, `make lint`, `make manifest` |
+| `apps/innerspace/` | InnerSpace MCP server (console login, layout reads and writes) | `make test`, `make lint`, `make manifest` |
 | `apps/drive/` | Drive MCP server (NAS login, preview-first writes) | `make test`, `make lint`, `make manifest` |
 | `apps/worker/` | Cloudflare Worker gateway + npm CLI | `make check` |
 | `packages/unifi-core/` | Shared connectivity | Tested via root `make core-test` |
@@ -217,13 +217,13 @@ in [AGENTS.md](AGENTS.md) before adding a tool.
 
 ### Adding a tool to the innerspace server
 
-The InnerSpace server is read-only in this version, and it reads through a
-console login session only. Follow the "InnerSpace session isolation" rules in
-[AGENTS.md](AGENTS.md) before adding a tool. Writes are planned: they land as
-a core writes change first, then the write tools.
+The InnerSpace server reads and writes through a console login session only.
+Follow the "InnerSpace session isolation" and "InnerSpace writes" rules in
+[AGENTS.md](AGENTS.md) before adding a tool. A write to a route or object type
+not yet listed there needs a live test on the console first: open an issue.
 
-1. Add the manager method under `packages/unifi-core/src/unifi_core/innerspace/managers/`
-2. Add the tool function in `apps/innerspace/src/unifi_innerspace_mcp/tools/<category>.py`, with the `ToolAnnotations(readOnlyHint=True, ...)`, `permission_category`, `permission_action="read"` and `auth="local_only"` the other tools carry
+1. Add the manager method under `packages/unifi-core/src/unifi_core/innerspace/managers/`; a write adds a `preview_*`/`apply_*` pair on the shared write layer (`_writes.py`, `_layout.py`)
+2. Add the tool function in `apps/innerspace/src/unifi_innerspace_mcp/tools/<category>.py` with `auth="local_only"`. A read carries `ToolAnnotations(readOnlyHint=True, ...)` and `permission_action="read"`. A write takes `confirm`, returns `write_preview` without it and `write_result` with it, passes `input_schema=input_schema(...)`, and carries `permission_action` `create`, `update` or `delete`, `readOnlyHint=False` and `destructiveHint=True` for a removal
 3. Run `make manifest` from `apps/innerspace/` (or `make manifest` from the repo root to regenerate every app)
 4. If the tool should also be served by `unifi-api-server`, add its REST route and GraphQL field in the same pull request and regenerate the action catalog
 5. Add tests in `apps/innerspace/tests/`

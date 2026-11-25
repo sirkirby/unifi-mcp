@@ -14,17 +14,23 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from unifi_core.exceptions import UniFiError
+from unifi_core.innerspace.managers.attenuation_manager import InnerSpaceAttenuationManager
 from unifi_core.innerspace.managers.connection_manager import InnerSpaceConnectionManager
 from unifi_core.innerspace.managers.floor_plan_manager import InnerSpaceFloorPlanManager
 from unifi_core.innerspace.managers.inventory_manager import InnerSpaceInventoryManager
 from unifi_core.innerspace.managers.project_manager import InnerSpaceProjectManager
+from unifi_core.innerspace.managers.project_settings_manager import InnerSpaceProjectSettingsManager
 from unifi_core.innerspace.managers.system_manager import InnerSpaceSystemManager
+from unifi_core.innerspace.managers.wall_manager import InnerSpaceWallManager
+from unifi_core.innerspace.managers.wall_type_manager import InnerSpaceWallTypeManager
+from unifi_core.innerspace.models import writes as write_models
 from unifi_core.operation_gate import GateKey, GateSettings, OperationGate, gate_registry
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.tls import ssl_setting
+from unifi_core.write_verification import WriteVerificationResult, format_tool_payload
 from unifi_innerspace_mcp.bootstrap import load_config, logger
 from unifi_innerspace_mcp.tool_index import TOOL_REGISTRY
 from unifi_mcp_shared.bootstrap import credential_cut_hint, resolve_env
@@ -176,6 +182,26 @@ def get_operation_gate() -> OperationGate | None:
 
 
 @lru_cache
+def get_wall_manager() -> InnerSpaceWallManager:
+    return InnerSpaceWallManager(get_connection_manager())
+
+
+@lru_cache
+def get_wall_type_manager() -> InnerSpaceWallTypeManager:
+    return InnerSpaceWallTypeManager(get_connection_manager())
+
+
+@lru_cache
+def get_attenuation_manager() -> InnerSpaceAttenuationManager:
+    return InnerSpaceAttenuationManager(get_connection_manager())
+
+
+@lru_cache
+def get_project_settings_manager() -> InnerSpaceProjectSettingsManager:
+    return InnerSpaceProjectSettingsManager(get_connection_manager())
+
+
+@lru_cache
 def get_tool_registry() -> dict[str, Any]:
     """Return the global tool registry for runtime access."""
     return TOOL_REGISTRY
@@ -188,6 +214,10 @@ project_manager = get_project_manager()
 floor_plan_manager = get_floor_plan_manager()
 inventory_manager = get_inventory_manager()
 system_manager = get_system_manager()
+wall_manager = get_wall_manager()
+wall_type_manager = get_wall_type_manager()
+attenuation_manager = get_attenuation_manager()
+project_settings_manager = get_project_settings_manager()
 tool_registry = get_tool_registry()
 # Read now, so a bad gate setting refuses startup instead of the first tool call.
 gate_settings = get_gate_settings()
@@ -221,6 +251,77 @@ def tool_failure(operation: str, error: BaseException) -> dict[str, Any]:
     if isinstance(error, ValidationError):
         return {"success": False, "error": f"Failed to {operation}: invalid arguments"}
     return {"success": False, "error": f"Failed to {operation}: unexpected {type(error).__name__}"}
+
+
+# Field names of the write arguments: the only parts of a validation error's location a reply may name.
+_WRITE_FIELDS = frozenset(
+    name
+    for model in vars(write_models).values()
+    if isinstance(model, type) and issubclass(model, BaseModel)
+    for name in model.model_fields
+)
+_MAX_REPORTED_ERRORS = 3
+NO_CHANGE = "No change: the console already holds the requested values, so nothing was sent."
+ALREADY_APPLIED = "Already applied: an earlier call with the same arguments created these objects, so nothing was sent."
+NONE_FOUND = (
+    "Nothing to remove: none of these ids is in the project (already removed, or never existed), so nothing was sent."
+)
+# The one message for each reason a confirmed write sent nothing (the core's ``noop``).
+_NOOP_MESSAGES = {"already_applied": ALREADY_APPLIED, "none_found": NONE_FOUND}
+
+
+def _invalid_arguments(error: ValidationError) -> str:
+    """Pydantic's fixed messages, located by known field names and indexes only; never a value or a caller's key."""
+    parts = []
+    for item in error.errors(include_url=False, include_input=False, include_context=False)[:_MAX_REPORTED_ERRORS]:
+        where = ".".join(str(p) for p in item["loc"] if isinstance(p, int) or p in _WRITE_FIELDS)
+        parts.append(f"{where}: {item['msg']}" if where else item["msg"])
+    return "; ".join(parts)
+
+
+def write_failure(operation: str, error: BaseException) -> dict[str, Any]:
+    """A write tool's error response; invalid arguments name the field and the rule, never the value."""
+    if isinstance(error, ValidationError):
+        logger.error("Failed to %s: %s", operation, type(error).__name__)
+        return {"success": False, "error": f"Failed to {operation}: invalid arguments: {_invalid_arguments(error)}"}
+    return tool_failure(operation, error)
+
+
+def write_preview(preview: dict[str, Any]) -> dict[str, Any]:
+    """A preview response: nothing was sent, and confirming with the same arguments applies it."""
+    message = (
+        "Nothing to change: confirming sends nothing."
+        if preview.get("no_op")
+        else "Review the preview, then call again with the same arguments and confirm=true to apply."
+    )
+    return redact_sensitive_fields(
+        {"success": True, "requires_confirmation": True, "preview": preview, "message": message},
+        redact_sensitive=should_redact_sensitive_fields(),
+    )
+
+
+def write_result(result: WriteVerificationResult, *, applied: str) -> dict[str, Any]:
+    """A confirmed write's response: ``success`` follows the read-back, so a write not applied is a failure.
+
+    ``mutation_applied`` False after a send is a failure; ``None`` is a failure whose outcome is unknown.
+    A success that sent nothing says whether the values were already there or an earlier identical
+    create made them.
+    """
+    payload = format_tool_payload(result, site="", success_message=applied)
+    # InnerSpace writes take a plan id, not a site, so the payload names none.
+    payload.pop("site", None)
+    if result.success and result.mutation_applied is False:
+        payload["message"] = _NOOP_MESSAGES.get(result.metadata.get("noop"), NO_CHANGE)
+    elif not result.success or result.mutation_applied is None:
+        # An unknown outcome is never a success, whatever the result says.
+        payload["success"] = False
+        payload.pop("message", None)
+        error = result.error or f"{result.operation}: the change was not applied."
+        if result.mutation_applied is None and "read before retrying" not in error.lower():
+            error += " Whether it was applied is unknown; read before retrying."
+        payload["error"] = f"Failed to {error}"
+        logger.warning("Failed to %s: mutation_applied=%s", result.operation, result.mutation_applied)
+    return redact_sensitive_fields(payload, redact_sensitive=should_redact_sensitive_fields())
 
 
 logger.debug("runtime.py: shared singletons initialised")

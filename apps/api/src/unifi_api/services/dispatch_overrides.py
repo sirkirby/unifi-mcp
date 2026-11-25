@@ -197,6 +197,26 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_update_policy": ("policy_manager", "apply_update_policy"),
     "access_create_visitor": ("visitor_manager", "apply_create_visitor"),
     "access_delete_visitor": ("visitor_manager", "apply_delete_visitor"),
+    # =========================================================================
+    # InnerSpace — preview/execute split (preview_X + apply_X)
+    # =========================================================================
+    # The API preview is request-only, so only apply_X is ever dispatched. It
+    # runs in the controller's write turn, re-reads the project and reads back after one send.
+    "innerspace_create_walls": ("wall_manager", "apply_create_walls"),
+    "innerspace_update_walls": ("wall_manager", "apply_update_walls"),
+    "innerspace_remove_walls": ("wall_manager", "apply_remove_walls"),
+    "innerspace_create_wall_type": ("wall_type_manager", "apply_create_wall_type"),
+    "innerspace_update_wall_type": ("wall_type_manager", "apply_update_wall_type"),
+    "innerspace_create_attenuation_objects": ("attenuation_manager", "apply_create_attenuation_objects"),
+    "innerspace_update_attenuation_objects": ("attenuation_manager", "apply_update_attenuation_objects"),
+    "innerspace_remove_attenuation_objects": ("attenuation_manager", "apply_remove_attenuation_objects"),
+    "innerspace_create_attenuation_object_type": ("attenuation_manager", "apply_create_attenuation_object_type"),
+    "innerspace_update_attenuation_object_type": ("attenuation_manager", "apply_update_attenuation_object_type"),
+    "innerspace_rename_floor_plan": ("floor_plan_manager", "apply_rename_floor_plan"),
+    "innerspace_set_floor_attenuation": ("floor_plan_manager", "apply_set_floor_attenuation"),
+    "innerspace_reorder_floor_plans": ("floor_plan_manager", "apply_reorder_floor_plans"),
+    "innerspace_set_plan_scale": ("floor_plan_manager", "apply_set_plan_scale"),
+    "innerspace_set_project_unit": ("project_settings_manager", "apply_set_project_unit"),
 }
 
 
