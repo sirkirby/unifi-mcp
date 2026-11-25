@@ -517,7 +517,7 @@ async def test_a_drive_nfs_change_whose_last_re_read_runs_out_of_budget_is_not_s
         clock.value = 9.99
         with pytest.raises(DriveWriteNotSent, match="nothing was changed"):
             await files.apply_nfs_change(change)
-    assert drive_console.calls("PUT", _NFS) == []
+    assert drive_console.calls("PATCH", _NFS) == []
     assert ticket.request_sent is True
 
 

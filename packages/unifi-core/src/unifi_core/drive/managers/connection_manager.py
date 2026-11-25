@@ -192,6 +192,9 @@ class DriveConnectionManager:
     async def post(self, path: str, json_body: Any, *, resource: tuple[str, str] | None = None) -> Any:
         return await self.request("POST", path, json_body=json_body, resource=resource)
 
+    async def patch(self, path: str, json_body: Any, *, resource: tuple[str, str] | None = None) -> Any:
+        return await self.request("PATCH", path, json_body=json_body, resource=resource)
+
     async def request(
         self,
         method: str,

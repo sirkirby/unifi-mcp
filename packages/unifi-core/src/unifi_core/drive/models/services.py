@@ -4,9 +4,12 @@ Read from ``/proxy/drive/api/v1/services/...``:
 
 * ``{smb|nfs|time-machine}/settings`` -- ``{"enable": bool}``
 * ``settings`` -- the console's network interfaces, i.e. where clients connect
-* ``nfs/advanced-settings`` -- the NFS connection list. Its ``PUT`` replaces
-  the whole list, so a change to one client is a read-modify-write of all of
-  them; :func:`connections_for_put` builds that body from what was read.
+* ``nfs/advanced-settings`` -- the NFS connection list, next to other NFS
+  settings (``domainName``, ``maxProtocolVersion``, ``security``). A ``PATCH``
+  carrying ``connections`` replaces the whole list and leaves the other
+  settings as they are; the Drive web app writes it the same way. A change to one
+  client is a read-modify-write of all of them; :func:`connections_for_put`
+  builds that list from what was read (the name is kept for compatibility).
 
 NFS on this firmware is NFSv3 and maps every client uid to one Drive user, so
 there is no squash option to set. A client mounts ``<nas>:/var/nfs/shared/<name>``.
@@ -42,10 +45,10 @@ _CLIENT = re.compile(r"[A-Za-z0-9*][A-Za-z0-9.:*/_\-\[\]]*")
 _MAX_CLIENT_LENGTH = 253
 _IP_CHARS = re.compile(r"[0-9A-Fa-f.:/]+")
 
-# Keys Drive adds to a connection when it is read back; they are not part of
-# what the PUT body sends.
+# Keys Drive adds to a connection and its shared drives when they are read
+# back; they are not part of what the write body sends.
 _CONNECTION_READ_ONLY_KEYS = frozenset({"errorCodes"})
-_GRANT_READ_ONLY_KEYS = frozenset({"name", "status", "encryptionStatus"})
+_GRANT_READ_ONLY_KEYS = frozenset({"name", "status", "encryptionStatus", "errorCodes"})
 
 
 class NetworkInterface(BaseModel):
@@ -271,7 +274,7 @@ def nfs_connections_from_api(raw: Any) -> list[NfsConnection]:
 
 
 def connection_to_controller(connection: NfsConnectionInput) -> dict[str, Any]:
-    """The ``PUT`` shape of one connection."""
+    """The write shape of one connection."""
     return {
         "client": connection.client,
         "async": connection.async_writes,
@@ -280,7 +283,7 @@ def connection_to_controller(connection: NfsConnectionInput) -> dict[str, Any]:
 
 
 def connection_for_put(raw: Any) -> dict[str, Any]:
-    """An existing connection, as read, reduced to the ``PUT`` shape.
+    """An existing connection, as read, reduced to the write shape.
 
     Read-only keys Drive adds on read are dropped; any other key is kept, so a
     setting this module does not know about survives the round trip.
@@ -294,5 +297,5 @@ def connection_for_put(raw: Any) -> dict[str, Any]:
 
 
 def connections_for_put(raw: Any) -> list[dict[str, Any]]:
-    """Every existing connection from an ``nfs/advanced-settings`` body, in ``PUT`` shape."""
+    """Every existing connection from an ``nfs/advanced-settings`` body, in write shape."""
     return [connection_for_put(entry) for entry in as_list(as_dict(raw).get("connections")) if isinstance(entry, dict)]
