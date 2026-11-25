@@ -26,6 +26,7 @@ DOMAIN_TOOLS = {
     "drive_add_nfs_connection",
     "drive_update_nfs_connection",
     "drive_remove_nfs_connection",
+    "drive_list_logs",
 }
 META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status", "drive_batch_cancel"}
 

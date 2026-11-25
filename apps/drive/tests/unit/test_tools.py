@@ -9,11 +9,12 @@ import pytest
 from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, DriveWriteOutcomeUnknown
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
+from unifi_core.drive.models.logs import DriveLogPage, DriveLogQuery, log_entry_from_api
 from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
 from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api
 from unifi_core.drive.models.system import system_info_from_api
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiValidationError
-from unifi_drive_mcp.tools import file_services, nfs, shared_drives, storage, system
+from unifi_drive_mcp.tools import file_services, logs, nfs, shared_drives, storage, system
 
 DRIVE_ID = "22222222-2222-4222-8222-222222222222"
 CLIENT = "192.0.2.76"
@@ -113,6 +114,79 @@ async def test_list_nfs_connections(files):
 
     grant = result["data"]["connections"][0]["shared_drives"][0]
     assert grant["export_path"] == "/var/nfs/shared/Shared_Drive" and result["data"]["count"] == 1
+
+
+async def test_list_logs_passes_filters_and_returns_the_cursor(monkeypatch):
+    manager = AsyncMock()
+    entry = log_entry_from_api(
+        {
+            "name": "DriveInsertedV1",
+            "severity": "low",
+            "category": "storage",
+            "type": "drive",
+            "data": {"drive": "Bay 1"},
+        },
+        {"DriveInsertedV1": {"title": "Drive Inserted", "description": "{drive} was inserted."}},
+    )
+    manager.list_logs.return_value = DriveLogPage(entries=[entry], next_cursor="next")
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(
+        limit=10, severities=["low"], category="storage", types=["drive"], after="2026-11-01T00:00:00Z", cursor="c"
+    )
+
+    assert result["data"] == {
+        "entries": [
+            {
+                "severity": "low",
+                "category": "storage",
+                "type": "drive",
+                "event": "DriveInserted",
+                "title": "Drive Inserted",
+                "message": "Bay 1 was inserted.",
+            }
+        ],
+        "count": 1,
+        "next_cursor": "next",
+    }
+    (query,) = manager.list_logs.await_args.args
+    assert query == DriveLogQuery(
+        limit=10, severities=["low"], category="storage", types=["drive"], after="2026-11-01T00:00:00Z", cursor="c"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "where"),
+    [
+        ({"after": "2026-11-01T00:00:00"}, "after"),
+        ({"after": "yesterday"}, "after"),
+        ({"limit": 0}, "limit"),
+        ({"after": "2026-11-02T00:00:00Z", "before": "2026-11-01T00:00:00Z"}, None),
+    ],
+)
+async def test_list_logs_refuses_bad_input_before_reading(monkeypatch, kwargs, where):
+    manager = AsyncMock()
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(**kwargs)
+
+    assert result["success"] is False and result["error"].startswith("Invalid input")
+    if where:
+        assert f"({where})" in result["error"]
+    manager.list_logs.assert_not_awaited()
+
+
+async def test_list_logs_unknown_type_is_an_error(monkeypatch):
+    manager = AsyncMock()
+    manager.list_logs.side_effect = UniFiValidationError("Unknown log type 'bogus'. UniFi Drive defines: drive.")
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(types=["bogus"])
+
+    assert result == {
+        "success": False,
+        "error": "Failed to list logs: Unknown log type 'bogus'. UniFi Drive defines: drive.",
+    }
 
 
 # --- file service toggle -----------------------------------------------------------

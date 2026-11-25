@@ -21,6 +21,7 @@ from unifi_core.drive.managers.connection_manager import (
     DriveWriteOutcomeUnknown,
 )
 from unifi_core.drive.managers.file_service_manager import FileServiceManager
+from unifi_core.drive.managers.log_manager import DriveLogManager
 from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
 from unifi_core.drive.managers.storage_manager import StorageManager
 from unifi_core.drive.managers.system_manager import DriveSystemManager
@@ -152,6 +153,11 @@ def get_file_service_manager() -> FileServiceManager:
 
 
 @lru_cache
+def get_log_manager() -> DriveLogManager:
+    return DriveLogManager(get_connection_manager())
+
+
+@lru_cache
 def get_gate_settings() -> GateSettings:
     """Operation-gate limits from UNIFI_DRIVE_* or the shared UNIFI_*; a bad value refuses startup."""
     return gate_settings_from_env("DRIVE", logger=logger)
@@ -182,6 +188,7 @@ system_manager = get_system_manager()
 storage_manager = get_storage_manager()
 shared_drive_manager = get_shared_drive_manager()
 file_service_manager = get_file_service_manager()
+log_manager = get_log_manager()
 tool_registry = get_tool_registry()
 # Read now, so a bad gate setting refuses startup instead of the first tool call.
 gate_settings = get_gate_settings()
