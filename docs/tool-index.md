@@ -187,7 +187,7 @@ See [InnerSpace permissions](../apps/innerspace/docs/permissions.md#meta-tools-a
 
 ### Drive differences
 
-The Drive server has 12 domain tools: eight reads and four writes that preview
+The Drive server has 13 domain tools: nine reads and four writes that preview
 before they change anything. It follows the shared model, with these points:
 
 - In `lazy` mode it lists only the meta-tools, like Network, Protect and

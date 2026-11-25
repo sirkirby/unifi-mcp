@@ -116,6 +116,7 @@ Read-only:
 |------|-----------------|
 | `drive_get_system_info` | Console name, model, MAC, firmware and available update, state, uptime, CPU, memory |
 | `drive_list_storage_pools` | Pools with capacity and usage, and RAID groups: level in effect vs. configured, protection, rebuild/expansion progress |
+| `drive_get_storage_usage` | Per pool capacity, used and free space, split into personal drives, shared drives, Microsoft 365 backups, snapshots and system |
 | `drive_list_disks` | Drive bays and cache slots with model, serial, size, temperature, pool, hot-spare flags and SMART counters |
 | `drive_list_shared_drives` | Shared drives with pool, usage, quota, encryption, snapshot and remote-backup flags |
 | `drive_get_shared_drive` | One shared drive |

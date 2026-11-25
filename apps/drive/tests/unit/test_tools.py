@@ -11,7 +11,7 @@ from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceCha
 from unifi_core.drive.models.drives import shared_drive_from_api
 from unifi_core.drive.models.logs import DriveLogPage, DriveLogQuery, log_entry_from_api
 from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
-from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api
+from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api, storage_pool_usage_from_api
 from unifi_core.drive.models.system import system_info_from_api
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiValidationError
 from unifi_drive_mcp.tools import file_services, logs, nfs, shared_drives, storage, system
@@ -69,6 +69,56 @@ async def test_storage_tools_pass_filters(monkeypatch):
     assert pools["data"]["pools"][0]["used_percent"] == 25.0 and pools["data"]["count"] == 1
     manager.list_disks.assert_awaited_once_with(include_empty=True, include_cache=False)
     assert disks["data"]["disks"][0]["temperature_c"] == 30
+
+
+async def test_storage_usage(monkeypatch):
+    manager = AsyncMock()
+    manager.get_usage.return_value = [
+        storage_pool_usage_from_api(
+            {
+                "poolId": "p1",
+                "used": 50,
+                "available": 150,
+                "capacity": 200,
+                "usedByPersonalDrives": 10,
+                "usedBySharedDrives": 30,
+                "usedByM365": 0,
+            }
+        )
+    ]
+    monkeypatch.setattr(storage, "storage_manager", manager)
+
+    result = await storage.drive_get_storage_usage()
+
+    assert result == {
+        "success": True,
+        "data": {
+            "pools": [
+                {
+                    "pool_id": "p1",
+                    "capacity_bytes": 200,
+                    "used_bytes": 50,
+                    "available_bytes": 150,
+                    "used_percent": 25.0,
+                    "personal_drives_bytes": 10,
+                    "shared_drives_bytes": 30,
+                    "m365_bytes": 0,
+                    "system_bytes": 10,
+                }
+            ],
+            "count": 1,
+        },
+    }
+
+
+async def test_storage_usage_failure_names_the_operation(monkeypatch):
+    manager = AsyncMock()
+    manager.get_usage.side_effect = UniFiConnectionError("UniFi Drive request GET /x timed out.")
+    monkeypatch.setattr(storage, "storage_manager", manager)
+
+    result = await storage.drive_get_storage_usage()
+
+    assert result == {"success": False, "error": "Failed to get storage usage: UniFi Drive request GET /x timed out."}
 
 
 async def test_shared_drive_not_found_is_a_plain_error(monkeypatch):

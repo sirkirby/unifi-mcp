@@ -33,7 +33,7 @@ Network, Protect, Access, InnerSpace and Drive each connect to a console you nam
 
 InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and edits walls, attenuation objects and plan settings with confirmation. It has 24 domain tools (nine reads, 15 writes), counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
 
-Drive reads and manages UniFi Drive, the storage application on a UniFi NAS (UNAS). The NAS is its own console, so Drive logs in to the NAS itself with a local account and never uses the gateway's `UNIFI_HOST` or login. It has 12 domain tools, counted the same way: eight reads (system, storage pools, disks, shared drives, file services, NFS clients, system log) and four preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. None of them can erase a disk or delete a pool or shared drive. See [Drive](#drive).
+Drive reads and manages UniFi Drive, the storage application on a UniFi NAS (UNAS). The NAS is its own console, so Drive logs in to the NAS itself with a local account and never uses the gateway's `UNIFI_HOST` or login. It has 13 domain tools, counted the same way: nine reads (system, storage pools, pool usage, disks, shared drives, file services, NFS clients, system log) and four preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. None of them can erase a disk or delete a pool or shared drive. See [Drive](#drive).
 
 ## Plugins
 

@@ -154,7 +154,7 @@ For `UNIFI_ENABLED_CATEGORIES` in eager mode, and the `category` filter of `driv
 | Category | Tools |
 |---|---|
 | `system` | `drive_get_system_info` |
-| `storage` | `drive_list_storage_pools`, `drive_list_disks` |
+| `storage` | `drive_list_storage_pools`, `drive_get_storage_usage`, `drive_list_disks` |
 | `shared_drives` | `drive_list_shared_drives`, `drive_get_shared_drive` |
 | `file_services` | `drive_get_file_services`, `drive_set_file_service` |
 | `nfs` | `drive_list_nfs_connections`, `drive_add_nfs_connection`, `drive_update_nfs_connection`, `drive_remove_nfs_connection` |

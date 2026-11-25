@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 12 domain tools: eight reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 13 domain tools: nine reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -14,11 +14,15 @@ No parameters. Reads `GET /api/system` and keeps only: `name`, `hostname`, `mode
 
 ## Storage
 
-Both tools read `GET /proxy/drive/api/v2/storage`.
+`drive_list_storage_pools` and `drive_list_disks` read `GET /proxy/drive/api/v2/storage`; `drive_get_storage_usage` reads `GET /proxy/drive/api/v2/storage/usage`.
 
 ### `drive_list_storage_pools`
 
 No parameters. Each pool has `id`, `number`, `status` (for example `noDataProtectionYet` while a RAID 5 pool has a single disk), `prefer_level`, `capacity_bytes`, `used_bytes`, `used_percent`, `initializing_status` and `raid_groups`. Each RAID group has `current_level` and `config_level` (they differ until the pool has enough disks or while it migrates), `current_protection` and `expected_protection` (disk failures survived), `recommended_disk_size`, and Drive's `progress` and `estimate` for a rebuild or expansion.
+
+### `drive_get_storage_usage`
+
+No parameters. Each pool has `pool_id` (the `id` from `drive_list_storage_pools`), `capacity_bytes`, `used_bytes`, `available_bytes`, `used_percent`, and the used space split into `personal_drives_bytes`, `shared_drives_bytes` and `m365_bytes` (Microsoft 365 backups), plus `snapshots_bytes` when Drive reports it. `system_bytes` is the rest (system and other data), worked out the way the Drive web app does; it is left out for a pool with iSCSI or deduplicated data, which the web app counts differently.
 
 ### `drive_list_disks`
 
