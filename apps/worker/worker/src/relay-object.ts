@@ -190,6 +190,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
         input_schema TEXT,
         annotations TEXT,
         server_origin TEXT,
+        category TEXT,
         PRIMARY KEY (location_id, tool_name),
         FOREIGN KEY (location_id) REFERENCES locations(location_id)
       );
@@ -204,14 +205,16 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
         created_at INTEGER NOT NULL
       );
     `);
-    this.ensureLocationToolsTitleColumn();
+    this.ensureLocationToolsColumns();
   }
 
-  private ensureLocationToolsTitleColumn(): void {
+  /** Add columns that tables created by an earlier release lack */
+  private ensureLocationToolsColumns(): void {
     const columns = this.ctx.storage.sql.exec(`PRAGMA table_info(location_tools)`).toArray();
-    const hasTitle = columns.some((column) => column.name === "title");
-    if (!hasTitle) {
-      this.ctx.storage.sql.exec(`ALTER TABLE location_tools ADD COLUMN title TEXT`);
+    for (const name of ["title", "category"]) {
+      if (!columns.some((column) => column.name === name)) {
+        this.ctx.storage.sql.exec(`ALTER TABLE location_tools ADD COLUMN ${name} TEXT`);
+      }
     }
   }
 
@@ -240,7 +243,8 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
     // Load all tools grouped by location
     const rows = this.ctx.storage.sql.exec(
-      `SELECT lt.location_id, lt.tool_name, lt.title, lt.description, lt.input_schema, lt.annotations, lt.server_origin
+      `SELECT lt.location_id, lt.tool_name, lt.title, lt.description, lt.input_schema, lt.annotations, lt.server_origin,
+              lt.category
        FROM location_tools lt
        JOIN locations l ON lt.location_id = l.location_id`,
     ).toArray();
@@ -274,6 +278,9 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       }
       if (row.server_origin) {
         tool.serverOrigin = row.server_origin as string;
+      }
+      if (row.category) {
+        tool.category = row.category as string;
       }
 
       // Add to locationTools
@@ -800,22 +807,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       locationId,
     );
 
-    // Replace tools for this location
-    this.ctx.storage.sql.exec(`DELETE FROM location_tools WHERE location_id = ?`, locationId);
-
-    for (const tool of msg.tools) {
-      this.ctx.storage.sql.exec(
-        `INSERT INTO location_tools (location_id, tool_name, title, description, input_schema, annotations, server_origin)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        locationId,
-        tool.name,
-        tool.title || null,
-        tool.description || "",
-        toolInputSchema(tool) ? JSON.stringify(toolInputSchema(tool)) : null,
-        tool.annotations ? JSON.stringify(tool.annotations) : null,
-        toolServerOrigin(tool) || null,
-      );
-    }
+    this.storeLocationTools(locationId, msg.tools);
 
     // Attach location_id to the WebSocket before rebuilding so this socket is
     // identifiable and can be preferred over any superseded connection.
@@ -838,6 +830,25 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
       location_name: msg.location_name || locationName,
     };
     this.sendWs(ws, response);
+  }
+
+  /** Replace a location's stored catalog with the tools its relay client sent */
+  private storeLocationTools(locationId: string, tools: ToolInfo[]): void {
+    this.ctx.storage.sql.exec(`DELETE FROM location_tools WHERE location_id = ?`, locationId);
+    for (const tool of tools) {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO location_tools (location_id, tool_name, title, description, input_schema, annotations, server_origin, category)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        locationId,
+        tool.name,
+        tool.title || null,
+        tool.description || "",
+        toolInputSchema(tool) ? JSON.stringify(toolInputSchema(tool)) : null,
+        tool.annotations ? JSON.stringify(tool.annotations) : null,
+        toolServerOrigin(tool) || null,
+        typeof tool.category === "string" && tool.category ? tool.category : null,
+      );
+    }
   }
 
   private handleToolResult(ws: WebSocket, msg: ToolCallResponse): void {
@@ -882,22 +893,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
 
     const locationId = attachment.locationId;
 
-    // Replace tools for this location
-    this.ctx.storage.sql.exec(`DELETE FROM location_tools WHERE location_id = ?`, locationId);
-
-    for (const tool of msg.tools) {
-      this.ctx.storage.sql.exec(
-        `INSERT INTO location_tools (location_id, tool_name, title, description, input_schema, annotations, server_origin)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        locationId,
-        tool.name,
-        tool.title || null,
-        tool.description || "",
-        toolInputSchema(tool) ? JSON.stringify(toolInputSchema(tool)) : null,
-        tool.annotations ? JSON.stringify(tool.annotations) : null,
-        toolServerOrigin(tool) || null,
-      );
-    }
+    this.storeLocationTools(locationId, msg.tools);
 
     // Rebuild in-memory state
     this.rebuildInMemoryState();
