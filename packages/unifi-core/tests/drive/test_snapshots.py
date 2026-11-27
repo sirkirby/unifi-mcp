@@ -150,15 +150,27 @@ async def test_overview_that_is_not_a_drive_split_is_malformed(snapshots, consol
 
 async def test_list_snapshots_by_name(snapshots, console):
     listed = [
-        {"id": "snap-2", "name": "", "createdAt": "2026-01-02T03:00:00Z", "locked": True},
+        {
+            "id": "snap-2",
+            "name": "",
+            "description": "Scheduled Snapshot",
+            "createdAt": "2026-01-02T03:00:00Z",
+            "locked": True,
+        },
         {"id": "snap-1", "name": "before upgrade", "createdAt": "2026-01-01T03:00:00Z", "locked": False},
     ]
     console.reply("GET", f"{SNAPSHOTS}/Media", _v1(copy.deepcopy(listed)))
 
     newest, oldest = await snapshots.list_snapshots("Media")
 
-    assert newest.model_dump() == {"id": "snap-2", "name": None, "created_at": "2026-01-02T03:00:00Z", "locked": True}
-    assert (oldest.id, oldest.name, oldest.locked) == ("snap-1", "before upgrade", False)
+    assert newest.model_dump() == {
+        "id": "snap-2",
+        "name": None,
+        "description": "Scheduled Snapshot",
+        "created_at": "2026-01-02T03:00:00Z",
+        "locked": True,
+    }
+    assert (oldest.id, oldest.name, oldest.description, oldest.locked) == ("snap-1", "before upgrade", None, False)
     assert console.writes == []
 
 
@@ -166,6 +178,12 @@ async def test_a_drive_without_snapshots_lists_none(snapshots, console):
     console.reply("GET", f"{SNAPSHOTS}/Media", _v1([]))
 
     assert await snapshots.list_snapshots("Media") == []
+
+
+async def test_a_name_with_a_hyphen_is_one_segment(snapshots, console):
+    console.reply("GET", f"{SNAPSHOTS}/team-docs", _v1([]))
+
+    assert await snapshots.list_snapshots("team-docs") == []
 
 
 async def test_a_name_with_a_single_dot_is_one_segment(snapshots, console):

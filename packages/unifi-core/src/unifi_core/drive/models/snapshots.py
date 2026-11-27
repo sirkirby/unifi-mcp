@@ -119,6 +119,9 @@ class Snapshot(BaseModel):
         description="Snapshot id. These IDs are scoped to one shared drive's snapshots in the UniFi Drive tool family.",
     )
     name: str | None = Field(default=None, description="Snapshot name; Drive leaves it empty unless one was given")
+    description: str | None = Field(
+        default=None, description="Drive's label for the snapshot, e.g. Scheduled Snapshot for one the schedule took"
+    )
     created_at: str | None = Field(default=None, description="When the snapshot was taken")
     locked: bool | None = Field(
         default=None, description="Whether the snapshot is locked, so Drive never removes it to make room"
@@ -209,6 +212,7 @@ def snapshot_from_api(raw: Any) -> Snapshot:
     return Snapshot(
         id=text(snapshot.get("id")),
         name=text(snapshot.get("name")),
+        description=text(snapshot.get("description")),
         created_at=text(snapshot.get("createdAt")),
         locked=flag(snapshot.get("locked")),
     )

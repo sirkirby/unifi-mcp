@@ -19,7 +19,7 @@ from unifi_core.request_paths import InvalidRequestPathError, check_request_path
 # row, or holds whitespace or any of `~!@#$%^&*()-=+[{]}\|;:'",<>/?. Of ASCII
 # that leaves letters, digits, `_` and single dots, which keep the name one
 # path segment. Anything else is refused before a request is sent.
-_SHARED_DRIVE_NAME = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*\.?")
+_SHARED_DRIVE_NAME = re.compile(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?")
 
 
 def _snapshots_path(shared_drive_name: str) -> str:
