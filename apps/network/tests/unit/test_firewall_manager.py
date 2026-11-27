@@ -473,7 +473,7 @@ class TestFirewallPolicyOrdering:
     async def test_get_policy_ordering_uses_integration_endpoint(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
-                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]},
                 {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
             ]
@@ -496,7 +496,7 @@ class TestFirewallPolicyOrdering:
     async def test_reorder_policy_ordering_sends_complete_payload(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
-                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]},
                 {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
@@ -537,7 +537,7 @@ class TestFirewallPolicyOrdering:
         firewall_manager._connection.get_cached.side_effect = fake_get_cached
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
-                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]},
                 {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
@@ -577,7 +577,7 @@ class TestFirewallPolicyOrdering:
     async def test_reorder_rejects_payload_that_drops_current_policy(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
-                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]},
                 {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {
                     "orderedFirewallPolicyIds": {
@@ -599,7 +599,7 @@ class TestFirewallPolicyOrdering:
     async def test_policy_ordering_translates_v2_zone_ids_to_integration_ids(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
-                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "site-uuid", "internalReference": "default", "name": "Default"}]},
                 {
                     "data": [
                         {"id": "integration-internal", "name": "Internal"},

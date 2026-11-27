@@ -279,37 +279,35 @@ class FirewallManager:
             )
 
     async def _get_integration_site_id(self) -> str:
-        """Resolve the configured site name/key to the integration API site ID."""
+        """Resolve the configured site to its Integration API site UUID.
+
+        The configured site is the internal site key (``default``). Integration site
+        rows carry it as ``internalReference``; ``name`` is the display name. Exactly
+        one site must match the key or the UUID itself, as in the public inventory.
+        """
         cache_key = f"integrations_site_id_{self._connection.site}"
         cached = self._connection.get_cached(cache_key)
         if isinstance(cached, str) and cached:
             return cached
 
-        result = await self._request_integration_api("get", "/v1/sites")
-        sites = result.get("data", []) if isinstance(result, dict) else []
-        if not isinstance(sites, list) or not sites:
-            return self._connection.site
+        result = await self._request_integration_api("get", "/v1/sites", params={"limit": "200"})
+        sites = result.get("data") if isinstance(result, dict) else None
+        if not isinstance(sites, list) or not sites or not all(isinstance(site, dict) for site in sites):
+            raise UniFiOperationError("The controller returned no usable Integration site list.")
 
         configured = self._connection.site
-        match = next(
-            (
-                s
-                for s in sites
-                if isinstance(s, dict)
-                and configured
-                in {
-                    str(s.get("id", "")),
-                    str(s.get("name", "")),
-                    str(s.get("key", "")),
-                    str(s.get("siteId", "")),
-                }
-            ),
-            None,
-        )
-        if match is None and len(sites) == 1 and isinstance(sites[0], dict):
-            match = sites[0]
+        matches = [
+            site
+            for site in sites
+            if configured and configured in {site.get("internalReference"), site.get("id")} and site.get("id")
+        ]
+        if len(matches) != 1:
+            raise UniFiOperationError(
+                "Cannot resolve the Network site for the Integration API: "
+                "use its internal site key or Integration UUID, not a display name."
+            )
 
-        site_id = str((match or {}).get("id") or configured)
+        site_id = str(matches[0]["id"])
         self._connection._update_cache(cache_key, site_id)
         return site_id
 
