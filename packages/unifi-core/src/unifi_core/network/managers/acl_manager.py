@@ -9,11 +9,12 @@ API endpoint: /proxy/network/v2/api/site/{site}/acl-rules
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
 
 from aiounifi.models.api import ApiRequestV2
 
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.request_paths import object_id
@@ -21,6 +22,33 @@ from unifi_core.request_paths import object_id
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_ACL_RULES = "acl_rules"
+
+
+def _distinct_positions(indices: List[int]) -> List[int]:
+    """Keep the chain's sorted ``acl_index`` values, bumping a repeated one past its predecessor.
+
+    The controller stores ``acl_index`` as sent and accepts two rules with the same
+    value, whose relative order it does not define. Each position in a rewritten
+    chain needs its own value for the read-back to show the requested order.
+    """
+    positions: List[int] = []
+    for index in indices:
+        positions.append(index if not positions or index > positions[-1] else positions[-1] + 1)
+    return positions
+
+
+def _chain_records(rules: List[Dict[str, Any]]) -> List[Tuple[str, int, Dict[str, Any]]]:
+    """Return ``(rule_id, acl_index, rule)`` for each rule, refusing malformed entries."""
+    records: List[Tuple[str, int, Dict[str, Any]]] = []
+    for rule in rules:
+        rule_id = rule.get("_id")
+        index = rule.get("acl_index")
+        if not isinstance(rule_id, str) or not rule_id:
+            raise UniFiMalformedResponseError("The controller returned an ACL rule without an id.")
+        if isinstance(index, bool) or not isinstance(index, int):
+            raise UniFiMalformedResponseError("The controller returned an ACL rule without a numeric acl_index.")
+        records.append((rule_id, index, rule))
+    return records
 
 
 class AclManager:
@@ -189,6 +217,109 @@ class AclManager:
         except Exception as e:
             logger.error("Error deleting ACL rule %s: %s", rule_id, e, exc_info=True)
             raise
+
+    async def preview_acl_rule_order(self, network_id: str, ordered_rule_ids: List[str]) -> Dict[str, Any]:
+        """Check a chain reorder against a fresh read without writing.
+
+        ``ordered_rule_ids`` must list exactly the IDs currently in the network's
+        chain, in the intended order. The chain is read fresh; a stale list or a
+        partial one is refused rather than written.
+
+        Raises:
+            ValueError: the list does not match the chain read from the controller.
+            UniFiMalformedResponseError: a rule has no id or numeric ``acl_index``.
+        """
+        records = _chain_records(await self._read_acl_rules_fresh(network_id))
+        self._check_acl_rule_id_set(ordered_rule_ids, records)
+        by_id = {rule_id: rule for rule_id, _index, rule in records}
+        current = sorted(records, key=lambda record: (record[1], record[0]))
+        return {
+            "network_id": network_id,
+            "current": [
+                {"rule_id": rule_id, "name": rule.get("name", ""), "acl_index": index}
+                for rule_id, index, rule in current
+            ],
+            "requested": [{"rule_id": rule_id, "name": by_id[rule_id].get("name", "")} for rule_id in ordered_rule_ids],
+        }
+
+    async def set_acl_rule_order(self, network_id: str, ordered_rule_ids: List[str]) -> Dict[str, Any]:
+        """Rewrite a network's ACL rule chain to ``ordered_rule_ids``.
+
+        The list must hold exactly the IDs currently in the chain, in the intended
+        order. The chain is read fresh before the write, each rule is sent with
+        its full current payload and one of the chain's existing ``acl_index``
+        values assigned to its new position, and the order is read back
+        afterwards.
+
+        Rewriting a chain takes one PUT per rule, so a controller that rejects an
+        intermediate write leaves the earlier rules in their new positions. The
+        read-back still runs; the caller should re-read the chain after such a
+        failure before retrying.
+
+        Raises:
+            ValueError: the list does not match the chain read from the controller.
+            UniFiMalformedResponseError: a rule has no id or numeric ``acl_index``.
+            UniFiOperationError: the controller reports a different order after
+                the write.
+        """
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        records = _chain_records(await self._read_acl_rules_fresh(network_id))
+        self._check_acl_rule_id_set(ordered_rule_ids, records)
+        if not ordered_rule_ids:
+            return {"network_id": network_id, "ordered_rule_ids": [], "acl_indices": {}}
+
+        by_id = {rule_id: rule for rule_id, _index, rule in records}
+        indices = _distinct_positions(sorted(index for _rule_id, index, _rule in records))
+        try:
+            for rule_id, index in zip(ordered_rule_ids, indices):
+                if by_id[rule_id].get("acl_index") == index:
+                    continue
+                await self._connection.request(
+                    ApiRequestV2(
+                        method="put",
+                        path=f"/acl-rules/{object_id(rule_id, 'ACL rule')}",
+                        data=deep_merge(by_id[rule_id], {"acl_index": index}),
+                    )
+                )
+        except Exception as exc:
+            self._invalidate_cache()
+            logger.error("Error rewriting the ACL rule chain: %s", type(exc).__name__)
+            raise
+        self._invalidate_cache()
+
+        applied = await self._read_acl_rules_fresh(network_id)
+        applied_records = sorted(_chain_records(applied), key=lambda record: (record[1], record[0]))
+        actual = [rule_id for rule_id, _index, _rule in applied_records]
+        if actual != list(ordered_rule_ids):
+            raise UniFiOperationError(
+                "The controller accepted the ACL rule order but reports a different chain. "
+                "Re-read the current chain before retrying."
+            )
+        return {
+            "network_id": network_id,
+            "ordered_rule_ids": actual,
+            "acl_indices": {rule_id: index for rule_id, index, _rule in applied_records},
+        }
+
+    async def _read_acl_rules_fresh(self, network_id: str) -> List[Dict[str, Any]]:
+        """Read the chain straight from the controller, bypassing the cached list."""
+        self._invalidate_cache()
+        return await self.get_acl_rules(network_id)
+
+    @staticmethod
+    def _check_acl_rule_id_set(requested_ids: List[str], records: List[Tuple[str, int, Dict[str, Any]]]) -> None:
+        """Refuse a requested order that is not exactly the chain read from the controller."""
+        requested = Counter(requested_ids)
+        current = Counter(rule_id for rule_id, _index, _rule in records)
+        if requested != current:
+            raise ValueError(
+                "Reorder payload must preserve the exact current ACL rule ID set. Missing: %s; unexpected: %s"
+                % (
+                    ", ".join(sorted((current - requested).elements())) or "none",
+                    ", ".join(sorted((requested - current).elements())) or "none",
+                )
+            )
 
     def _invalidate_cache(self):
         """Invalidate all ACL rule caches."""
