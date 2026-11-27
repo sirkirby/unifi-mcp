@@ -93,7 +93,11 @@ class DiskActivity(BaseModel):
     temperature_c_max: float | None = Field(default=None, description="Highest temperature in the window")
     bad_sector_count_latest: int | None = Field(default=None, description="Most recent SMART bad sector count")
     bad_sector_count_increase: int | None = Field(
-        default=None, description="How much the bad sector count rose between the first and last bucket with data"
+        default=None,
+        description=(
+            "Change in the bad sector count from the first to the last bucket with data; "
+            "negative when the counter reset or the disk in the bay was replaced"
+        ),
     )
     samples: list[DiskStatsSample] = Field(default_factory=list, description="Per-bucket values, oldest first")
 

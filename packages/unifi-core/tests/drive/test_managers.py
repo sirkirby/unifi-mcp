@@ -254,6 +254,8 @@ async def test_disk_stats_refuses_a_bad_window_without_a_request(connection, con
         {"window": {"start": 1767225600, "interval": 900}},
         {"series": {"disks": []}, "window": {"interval": 900}},
         {"series": {"disks": []}, "window": {"start": 1767225600, "interval": 0}},
+        {"series": {}, "window": {"start": 1767225600, "interval": 900}},
+        {"series": {"disks": None}, "window": {"start": 1767225600, "interval": 900}},
     ],
 )
 async def test_unreadable_disk_stats_are_an_error(connection, console, body):

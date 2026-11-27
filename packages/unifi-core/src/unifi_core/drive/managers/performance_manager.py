@@ -68,6 +68,7 @@ class PerformanceManager:
         if (
             not isinstance(raw, dict)
             or not isinstance(raw.get("series"), dict)
+            or not isinstance(raw["series"].get("disks"), list)
             or number(window.get("start")) is None
             or not number(window.get("interval"))
         ):
