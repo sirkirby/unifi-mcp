@@ -18,8 +18,8 @@ async def test_access_users_list(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("access", "system_manager", "list_users"): [
-                {"id": "user1", "name": "Alice"},
-                {"id": "user2", "name": "Bob"},
+                {"unique_id": "user1", "full_name": "Alice"},
+                {"unique_id": "user2", "full_name": "Bob"},
             ],
         },
     )
@@ -36,3 +36,4 @@ async def test_access_users_list(tmp_path, monkeypatch):
     items = body["data"]["access"]["users"]["items"]
     assert len(items) == 2
     assert {it["name"] for it in items} == {"Alice", "Bob"}
+    assert {it["id"] for it in items} == {"user1", "user2"}

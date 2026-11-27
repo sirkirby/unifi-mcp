@@ -11,9 +11,10 @@ There are no user mutation tools in the access manifest today, so the
 serializer module ``serializers/access/users.py`` is removed entirely
 once this migration lands.
 
-Name handling: prefer the explicit ``name`` field, otherwise stitch
-``first_name`` + ``last_name`` together (mirrors the prior serializer's
-``_name`` helper).
+Field mapping is the core ``User`` model's (``unique_id``, ``full_name``,
+``employee_number``, ``roles``, ``create_time`` from the UniFi OS Users
+application). When a row has no ``full_name``, the name is stitched from
+``first_name`` + ``last_name``.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.access.models.users import from_controller as user_from_controller
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.access.credentials import Credential
@@ -37,10 +39,12 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-def _name(obj: Any) -> str | None:
-    name = _get(obj, "name")
-    if name:
-        return name
+def _row(obj: Any) -> Any:
+    raw = getattr(obj, "raw", None)
+    return raw if not isinstance(obj, dict) and isinstance(raw, dict) else obj
+
+
+def _stitched_name(obj: Any) -> str | None:
     first = _get(obj, "first_name") or ""
     last = _get(obj, "last_name") or ""
     full = f"{first} {last}".strip()
@@ -71,13 +75,14 @@ class User:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "User":
+        user = user_from_controller(_row(obj))
         return cls(
-            id=_get(obj, "id"),
-            name=_name(obj),
-            employee_id=_get(obj, "employee_id"),
-            status=_get(obj, "status"),
-            role=_get(obj, "role"),
-            created_at=_get(obj, "created_at"),
+            id=user.id,
+            name=user.name or _stitched_name(obj),
+            employee_id=user.employee_id,
+            status=user.status,
+            role=user.role,
+            created_at=user.created_at,
         )
 
     def to_dict(self) -> dict:

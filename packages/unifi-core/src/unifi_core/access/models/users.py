@@ -1,12 +1,15 @@
 """Shared field model for Access users (read-only).
 
 All fields are read-only: there are no user mutation tools in the Access
-manifest. The ``created_at`` field is coerced to an ISO 8601 string via
-``_stringify_dt`` to handle datetime objects from the controller layer.
+manifest. Users come from the UniFi OS Users application, whose rows name
+these fields ``unique_id``, ``full_name``, ``employee_number``, ``roles`` and
+``create_time`` (epoch seconds). ``created_at`` is coerced to an ISO 8601 string.
 """
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -41,12 +44,45 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _first(obj: Any, key: str) -> Any:
+    """Return ``key``'s value, treating an empty string as absent."""
+    value = _get(obj, key)
+    return None if value == "" else value
+
+
+_UUID_SUFFIX = re.compile(r"_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def _role_name(roles: Any) -> Optional[str]:
+    """Name of the user's first role, from the Users application's ``roles`` list.
+
+    A private (custom) role's ``name`` is generated (``role_private_<ms>``), so it is
+    labelled by its ``system_key`` without the trailing UUID, e.g. ``custom_administrator``.
+    """
+    if not isinstance(roles, list):
+        return None
+    for role in roles:
+        if _get(role, "is_private") is True:
+            key = _get(role, "system_key")
+            if isinstance(key, str) and key:
+                return _UUID_SUFFIX.sub("", key)
+        name = _get(role, "name")
+        if isinstance(name, str) and name:
+            return name
+    return None
+
+
 def _stringify_dt(value: Any) -> Optional[str]:
-    """Coerce a datetime-ish value to ISO 8601 string for serialization."""
+    """Coerce a datetime-ish value or epoch seconds to an ISO 8601 string."""
     if value is None:
         return None
     if isinstance(value, str):
         return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        except (OverflowError, OSError, ValueError):
+            return None
     iso = getattr(value, "isoformat", None)
     if callable(iso):
         try:
@@ -59,10 +95,10 @@ def _stringify_dt(value: Any) -> Optional[str]:
 def from_controller(raw: Any) -> User:
     """Build a User from a manager dict or object."""
     return User(
-        id=_get(raw, "id"),
-        name=_get(raw, "name"),
-        employee_id=_get(raw, "employee_id"),
-        status=_get(raw, "status"),
-        role=_get(raw, "role"),
-        created_at=_stringify_dt(_get(raw, "created_at")),
+        id=_first(raw, "unique_id"),
+        name=_first(raw, "full_name"),
+        employee_id=_first(raw, "employee_number"),
+        status=_first(raw, "status"),
+        role=_role_name(_get(raw, "roles")),
+        created_at=_stringify_dt(_first(raw, "create_time")),
     )
