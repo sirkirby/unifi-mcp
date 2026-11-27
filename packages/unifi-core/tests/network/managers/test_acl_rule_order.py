@@ -190,3 +190,37 @@ async def test_set_invalidates_the_acl_cache():
     await manager.set_acl_rule_order(NETWORK, ["rule-a", "rule-b", "rule-c"])
 
     assert connection._invalidate_cache.called
+
+
+@pytest.mark.asyncio
+async def test_set_gives_rules_sharing_an_index_their_own_positions():
+    """The controller accepts two rules at one acl_index; a rewrite must still land the requested order."""
+    controller = FakeController(rules=[_rule("rule-a", 20), _rule("rule-b", 20), _rule("rule-c", 30)])
+    manager, _ = _manager(controller)
+
+    result = await manager.set_acl_rule_order(NETWORK, ["rule-c", "rule-b", "rule-a"])
+
+    assert result["ordered_rule_ids"] == ["rule-c", "rule-b", "rule-a"]
+    assert result["acl_indices"] == {"rule-c": 20, "rule-b": 21, "rule-a": 30}
+
+
+@pytest.mark.asyncio
+async def test_set_skips_rules_already_at_their_position():
+    controller = FakeController()
+    manager, _ = _manager(controller)
+
+    result = await manager.set_acl_rule_order(NETWORK, ["rule-a", "rule-c", "rule-b"])
+
+    assert result["ordered_rule_ids"] == ["rule-a", "rule-c", "rule-b"]
+    assert [path for path, _payload in controller.puts] == ["/acl-rules/rule-c", "/acl-rules/rule-b"]
+
+
+@pytest.mark.asyncio
+async def test_set_with_the_current_order_writes_nothing():
+    controller = FakeController()
+    manager, _ = _manager(controller)
+
+    result = await manager.set_acl_rule_order(NETWORK, ["rule-a", "rule-b", "rule-c"])
+
+    assert result["ordered_rule_ids"] == ["rule-a", "rule-b", "rule-c"]
+    assert controller.puts == []

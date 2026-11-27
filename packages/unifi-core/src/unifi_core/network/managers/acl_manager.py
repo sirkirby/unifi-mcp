@@ -24,6 +24,19 @@ logger = logging.getLogger("unifi-network-mcp")
 CACHE_PREFIX_ACL_RULES = "acl_rules"
 
 
+def _distinct_positions(indices: List[int]) -> List[int]:
+    """Keep the chain's sorted ``acl_index`` values, bumping a repeated one past its predecessor.
+
+    The controller stores ``acl_index`` as sent and accepts two rules with the same
+    value, whose relative order it does not define. Each position in a rewritten
+    chain needs its own value for the read-back to show the requested order.
+    """
+    positions: List[int] = []
+    for index in indices:
+        positions.append(index if not positions or index > positions[-1] else positions[-1] + 1)
+    return positions
+
+
 def _chain_records(rules: List[Dict[str, Any]]) -> List[Tuple[str, int, Dict[str, Any]]]:
     """Return ``(rule_id, acl_index, rule)`` for each rule, refusing malformed entries."""
     records: List[Tuple[str, int, Dict[str, Any]]] = []
@@ -257,9 +270,11 @@ class AclManager:
             return {"network_id": network_id, "ordered_rule_ids": [], "acl_indices": {}}
 
         by_id = {rule_id: rule for rule_id, _index, rule in records}
-        indices = sorted(index for _rule_id, index, _rule in records)
+        indices = _distinct_positions(sorted(index for _rule_id, index, _rule in records))
         try:
             for rule_id, index in zip(ordered_rule_ids, indices):
+                if by_id[rule_id].get("acl_index") == index:
+                    continue
                 await self._connection.request(
                     ApiRequestV2(
                         method="put",
