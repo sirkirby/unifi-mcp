@@ -13,6 +13,7 @@ from typing import Any, Dict, Protocol
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiAuthError
+from unifi_core.mac import canonical_mac, looks_like_mac
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.traffic_flows import (
     DPI_NAMES_API_KEY_REQUIRED,
@@ -44,6 +45,12 @@ class DpiCatalogProvider(Protocol):
     """Narrow dependency used for read-only traffic-flow DPI annotation."""
 
     async def get_full_dpi_catalog(self) -> Dict[str, list[dict[str, Any]]]: ...
+
+
+class ClientListProvider(Protocol):
+    """Narrow dependency used to resolve names the flow filter-data omits."""
+
+    async def get_clients(self, include_offline: bool = False) -> list[Any]: ...
 
 
 def validate_statistics_period(period: str) -> str:
@@ -93,9 +100,15 @@ _ALL_ARRAY_FIELDS = _FILTER_FIELDS + (
 class TrafficFlowManager:
     """Reads completed traffic flows from the controller's private v2 API."""
 
-    def __init__(self, connection_manager: ConnectionManager, dpi_manager: DpiCatalogProvider | None = None):
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        dpi_manager: DpiCatalogProvider | None = None,
+        client_manager: ClientListProvider | None = None,
+    ):
         self._connection = connection_manager
         self._dpi_manager = dpi_manager
+        self._client_manager = client_manager
 
     def _build_body(self, query: TrafficFlowQuery) -> Dict[str, Any]:
         if query.time_from is None or query.time_to is None:
@@ -113,6 +126,100 @@ class TrafficFlowManager:
         body["skip_count"] = False
         return body
 
+    async def _get_flow_filter_data(self) -> Dict[str, Any]:
+        """Fetch /traffic-flows/filter-data, cached with the flows TTL.
+
+        The response lists the host objects that source_host/destination_host
+        filter elements must carry; Network 11 rejects plain strings there.
+        """
+        cache_key = f"traffic_flow_filter_data_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key, timeout=_FLOWS_CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        api_request = ApiRequestV2(method="get", path="/traffic-flows/filter-data")
+        response = await self._connection.request(api_request)
+
+        if isinstance(response, list):
+            response = response[0] if response else {}
+        if not isinstance(response, dict):
+            response = {}
+
+        self._connection._update_cache(cache_key, response, timeout=_FLOWS_CACHE_TTL)
+        return response
+
+    @staticmethod
+    def _client_raw(client: Any) -> Dict[str, Any]:
+        """Raw payload of a client-list entry, whether dict or model object."""
+        if isinstance(client, dict):
+            return client
+        raw = getattr(client, "raw", None)
+        return raw if isinstance(raw, dict) else {}
+
+    async def _resolve_source_hosts(self, names: list[str]) -> list[Dict[str, Any]]:
+        """Resolve source host/client names to minimal {"mac": ...} objects.
+
+        Filter-data hosts are tried first; names it omits fall back to the
+        client list including offline clients. A MAC-shaped entry passes
+        through directly, covering devices that only carry a generated
+        display name. The controller accepts a bare {"mac": ...} element,
+        which keeps the POST body minimal.
+        """
+        resolved: list[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def add(mac: Any) -> None:
+            canonical = canonical_mac(mac)
+            if canonical is not None and canonical not in seen:
+                seen.add(canonical)
+                resolved.append({"mac": canonical})
+
+        hosts: list[Any] | None = None
+        clients: list[Any] | None = None
+        for name in names:
+            if looks_like_mac(name):
+                add(name)
+                continue
+            if hosts is None:
+                # Lazy: filter-data is only needed once a real name shows up,
+                # and the fetch is cached across names and queries.
+                filter_data = await self._get_flow_filter_data()
+                source = filter_data.get("source")
+                hosts = (source.get("hosts") or []) if isinstance(source, dict) else []
+            folded = name.casefold()
+            matches = [
+                host
+                for host in hosts
+                if isinstance(host, dict)
+                and folded
+                in {
+                    str(host.get("client_name") or "").casefold(),
+                    str(host.get("host_name") or "").casefold(),
+                }
+            ]
+            if matches:
+                for host in matches:
+                    add(host.get("mac"))
+                continue
+            if self._client_manager is not None:
+                if clients is None:
+                    clients = await self._client_manager.get_clients(include_offline=True)
+                client_matches = [
+                    client
+                    for client in clients
+                    if folded
+                    in {
+                        str(self._client_raw(client).get("name") or "").casefold(),
+                        str(self._client_raw(client).get("hostname") or "").casefold(),
+                    }
+                ]
+                if client_matches:
+                    for client in client_matches:
+                        add(self._client_raw(client).get("mac"))
+                    continue
+            raise ValueError(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
+        return resolved
+
     async def get_traffic_flows(self, query: TrafficFlowQuery) -> Dict[str, Any]:
         """POST the query and return the full pagination envelope.
 
@@ -120,6 +227,8 @@ class TrafficFlowManager:
         Errors propagate to the caller; the tool layer logs and maps them.
         """
         body = self._build_body(query)
+        if query.source_host:
+            body["source_host"] = await self._resolve_source_hosts(query.source_host)
         cache_key = "traffic_flows_" + json.dumps(body, sort_keys=True) + f"_{self._connection.site}"
         cached = self._connection.get_cached(cache_key, timeout=_FLOWS_CACHE_TTL)
         if cached is not None:
