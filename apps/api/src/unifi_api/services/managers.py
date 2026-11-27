@@ -133,7 +133,6 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
         "traffic_flow_manager": lambda cm: TrafficFlowManager(
             cm,
             DpiManager(cm, getattr(cm, "unifi_auth", None)),
-            ClientManager(cm),
         ),
         "traffic_route_manager": lambda cm, *, network_manager=None: TrafficRouteManager(cm, network_manager),
         "usergroup_manager": lambda cm: UsergroupManager(cm),
