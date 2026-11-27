@@ -70,6 +70,11 @@ _V2_POLICY_ORDER_LOCKS: "weakref.WeakKeyDictionary[Any, Dict[tuple[str, str, str
 )
 
 
+# Integration site lists page; one complete read is bounded by these.
+_INTEGRATION_SITE_PAGE_SIZE = 200
+_INTEGRATION_SITE_MAX_PAGES = 50
+
+
 class FirewallManager:
     """Manages Firewall Policies, Traffic Routes, and Port Forwards on the Unifi Controller."""
 
@@ -279,37 +284,47 @@ class FirewallManager:
             )
 
     async def _get_integration_site_id(self) -> str:
-        """Resolve the configured site name/key to the integration API site ID."""
+        """Resolve the configured site to its Integration API site UUID.
+
+        The configured site is the internal site key (``default``). Integration site
+        rows carry it as ``internalReference``; ``name`` is the display name. Exactly
+        one site must match the key or the UUID itself, as in the public inventory.
+        """
         cache_key = f"integrations_site_id_{self._connection.site}"
         cached = self._connection.get_cached(cache_key)
         if isinstance(cached, str) and cached:
             return cached
 
-        result = await self._request_integration_api("get", "/v1/sites")
-        sites = result.get("data", []) if isinstance(result, dict) else []
-        if not isinstance(sites, list) or not sites:
-            return self._connection.site
+        sites: List[Dict[str, Any]] = []
+        for _page in range(_INTEGRATION_SITE_MAX_PAGES):
+            result = await self._request_integration_api(
+                "get", "/v1/sites", params={"limit": str(_INTEGRATION_SITE_PAGE_SIZE), "offset": str(len(sites))}
+            )
+            page = result.get("data") if isinstance(result, dict) else None
+            if not isinstance(page, list) or not all(isinstance(site, dict) for site in page):
+                raise UniFiOperationError("The controller returned no usable Integration site list.")
+            sites.extend(page)
+            total = result.get("totalCount")
+            if not page or len(page) < _INTEGRATION_SITE_PAGE_SIZE or (isinstance(total, int) and len(sites) >= total):
+                break
+        if not sites:
+            raise UniFiOperationError("The controller returned no usable Integration site list.")
 
         configured = self._connection.site
-        match = next(
-            (
-                s
-                for s in sites
-                if isinstance(s, dict)
-                and configured
-                in {
-                    str(s.get("id", "")),
-                    str(s.get("name", "")),
-                    str(s.get("key", "")),
-                    str(s.get("siteId", "")),
-                }
-            ),
-            None,
+        matches = list(
+            {
+                str(site["id"]): site
+                for site in sites
+                if configured and configured in {site.get("internalReference"), site.get("id")} and site.get("id")
+            }.values()
         )
-        if match is None and len(sites) == 1 and isinstance(sites[0], dict):
-            match = sites[0]
+        if len(matches) != 1:
+            raise UniFiOperationError(
+                "Cannot resolve the Network site for the Integration API: "
+                "use its internal site key or Integration UUID, not a display name."
+            )
 
-        site_id = str((match or {}).get("id") or configured)
+        site_id = str(matches[0]["id"])
         self._connection._update_cache(cache_key, site_id)
         return site_id
 
