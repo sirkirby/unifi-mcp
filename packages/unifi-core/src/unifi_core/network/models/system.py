@@ -434,6 +434,56 @@ def system_info_from_controller(raw: Any) -> SystemInfo:
 # ---------------------------------------------------------------------------
 
 
+class WanMonitor(BaseModel):
+    """One WAN connectivity monitor from a wan subsystem's ``uptime_stats`` (read-only)."""
+
+    id: Optional[str] = Field(default=None, description="Monitor identifier", json_schema_extra={"mutable": False})
+    target: Optional[str] = Field(
+        default=None, description="Host or address the monitor probes", json_schema_extra={"mutable": False}
+    )
+    type: Optional[str] = Field(
+        default=None, description="Probe type (e.g., 'icmp', 'dns')", json_schema_extra={"mutable": False}
+    )
+    availability: Optional[float] = Field(
+        default=None,
+        description="Percentage of this monitor's probes that succeeded over the stats period",
+        json_schema_extra={"mutable": False},
+    )
+    latency_average: Optional[float] = Field(
+        default=None, description="Average probe latency in milliseconds", json_schema_extra={"mutable": False}
+    )
+    health: Optional[str] = Field(
+        default=None,
+        description="Monitor health, reported for alerting monitors (e.g., 'good')",
+        json_schema_extra={"mutable": False},
+    )
+
+
+class WanUptimeStats(BaseModel):
+    """Connectivity-monitor summary for one WAN interface (read-only)."""
+
+    availability: Optional[float] = Field(
+        default=None,
+        description="Percentage of monitor probes that succeeded over time_period",
+        json_schema_extra={"mutable": False},
+    )
+    latency_average: Optional[float] = Field(
+        default=None, description="Average monitor latency in milliseconds", json_schema_extra={"mutable": False}
+    )
+    time_period: Optional[int] = Field(
+        default=None, description="Seconds these stats cover", json_schema_extra={"mutable": False}
+    )
+    uptime: Optional[int] = Field(
+        default=None, description="WAN uptime in seconds within time_period", json_schema_extra={"mutable": False}
+    )
+    monitors: Optional[List[WanMonitor]] = Field(
+        default=None, description="Per-target connectivity monitors", json_schema_extra={"mutable": False}
+    )
+    alerting_monitors: Optional[List[WanMonitor]] = Field(
+        default=None, description="Monitors that drive WAN health alerts", json_schema_extra={"mutable": False}
+    )
+
+
 class NetworkHealth(BaseModel):
     """A network-health subsystem entry (read-only)."""
 
@@ -557,6 +607,11 @@ class NetworkHealth(BaseModel):
         description="Download throughput of the last speed test in Mbps (www)",
         json_schema_extra={"mutable": False},
     )
+    uptime_stats: Optional[Dict[str, WanUptimeStats]] = Field(
+        default=None,
+        description="Connectivity-monitor availability and latency keyed by WAN interface, e.g. 'WAN', 'WAN2' (wan)",
+        json_schema_extra={"mutable": False},
+    )
     site_to_site_enabled: Optional[bool] = Field(
         default=None,
         description="Whether site-to-site VPN is enabled; false explains absent site-to-site counters",
@@ -645,6 +700,7 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         drops=_get(raw, "drops"),
         xput_up=_get(raw, "xput_up"),
         xput_down=_get(raw, "xput_down"),
+        uptime_stats=_wan_uptime_stats(raw.get("uptime_stats")),
         site_to_site_enabled=_as_bool(raw.get("site_to_site_enabled")),
         site_to_site_num_active=_get(raw, "site_to_site_num_active"),
         site_to_site_num_inactive=_get(raw, "site_to_site_num_inactive"),
@@ -656,6 +712,40 @@ def network_health_from_controller(raw: Any) -> NetworkHealth:
         remote_user_rx_bytes=_get(raw, "remote_user_rx_bytes"),
         remote_user_tx_bytes=_get(raw, "remote_user_tx_bytes"),
     )
+
+
+def _wan_monitors(raw: Any) -> Optional[List[WanMonitor]]:
+    if not isinstance(raw, list):
+        return None
+    return [
+        WanMonitor(
+            id=m.get("id"),
+            target=m.get("target"),
+            type=m.get("type"),
+            availability=m.get("availability"),
+            latency_average=m.get("latency_average"),
+            health=m.get("health"),
+        )
+        for m in raw
+        if isinstance(m, dict)
+    ]
+
+
+def _wan_uptime_stats(raw: Any) -> Optional[Dict[str, WanUptimeStats]]:
+    if not isinstance(raw, dict):
+        return None
+    return {
+        wan: WanUptimeStats(
+            availability=stats.get("availability"),
+            latency_average=stats.get("latency_average"),
+            time_period=stats.get("time_period"),
+            uptime=stats.get("uptime"),
+            monitors=_wan_monitors(stats.get("monitors")),
+            alerting_monitors=_wan_monitors(stats.get("alerting_monitors")),
+        )
+        for wan, stats in raw.items()
+        if isinstance(stats, dict)
+    }
 
 
 # ---------------------------------------------------------------------------

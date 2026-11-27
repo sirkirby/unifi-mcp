@@ -120,3 +120,23 @@ async def test_network_health_reports_device_counts_and_wan_details(monkeypatch)
     assert (by_name["lan"]["num_sw"], by_name["lan"]["num_disconnected"]) == (4, 1)
     assert (by_name["wlan"]["num_ap"], by_name["wlan"]["num_pending"]) == (6, 1)
     assert by_name["vpn"] == {"subsystem": "vpn", "status": "error"}
+
+
+@pytest.mark.asyncio
+async def test_network_health_reports_wan_monitor_stats(monkeypatch):
+    from unifi_network_mcp.tools import system
+
+    monitor = {"id": "eth8-3", "target": "1.1.1.1", "type": "icmp", "availability": 96.5, "latency_average": 18}
+    wan = {
+        "subsystem": "wan",
+        "status": "ok",
+        "uptime_stats": {"WAN": {"availability": 96.5, "latency_average": 18, "monitors": [monitor]}},
+    }
+    mgr = MagicMock()
+    mgr._connection.site = "default"
+    mgr.get_network_health = AsyncMock(return_value=[wan])
+    monkeypatch.setattr(system, "system_manager", mgr)
+
+    result = await system.get_network_health()
+
+    assert result["health_summary"] == [wan]
