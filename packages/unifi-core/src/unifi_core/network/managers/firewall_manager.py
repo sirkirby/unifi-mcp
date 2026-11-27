@@ -70,6 +70,11 @@ _V2_POLICY_ORDER_LOCKS: "weakref.WeakKeyDictionary[Any, Dict[tuple[str, str, str
 )
 
 
+# Integration site lists page; one complete read is bounded by these.
+_INTEGRATION_SITE_PAGE_SIZE = 200
+_INTEGRATION_SITE_MAX_PAGES = 50
+
+
 class FirewallManager:
     """Manages Firewall Policies, Traffic Routes, and Port Forwards on the Unifi Controller."""
 
@@ -290,17 +295,29 @@ class FirewallManager:
         if isinstance(cached, str) and cached:
             return cached
 
-        result = await self._request_integration_api("get", "/v1/sites", params={"limit": "200"})
-        sites = result.get("data") if isinstance(result, dict) else None
-        if not isinstance(sites, list) or not sites or not all(isinstance(site, dict) for site in sites):
+        sites: List[Dict[str, Any]] = []
+        for _page in range(_INTEGRATION_SITE_MAX_PAGES):
+            result = await self._request_integration_api(
+                "get", "/v1/sites", params={"limit": str(_INTEGRATION_SITE_PAGE_SIZE), "offset": str(len(sites))}
+            )
+            page = result.get("data") if isinstance(result, dict) else None
+            if not isinstance(page, list) or not all(isinstance(site, dict) for site in page):
+                raise UniFiOperationError("The controller returned no usable Integration site list.")
+            sites.extend(page)
+            total = result.get("totalCount")
+            if not page or len(page) < _INTEGRATION_SITE_PAGE_SIZE or (isinstance(total, int) and len(sites) >= total):
+                break
+        if not sites:
             raise UniFiOperationError("The controller returned no usable Integration site list.")
 
         configured = self._connection.site
-        matches = [
-            site
-            for site in sites
-            if configured and configured in {site.get("internalReference"), site.get("id")} and site.get("id")
-        ]
+        matches = list(
+            {
+                str(site["id"]): site
+                for site in sites
+                if configured and configured in {site.get("internalReference"), site.get("id")} and site.get("id")
+            }.values()
+        )
         if len(matches) != 1:
             raise UniFiOperationError(
                 "Cannot resolve the Network site for the Integration API: "

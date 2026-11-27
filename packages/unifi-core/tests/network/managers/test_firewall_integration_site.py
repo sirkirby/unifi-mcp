@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from unifi_core.exceptions import UniFiOperationError
+from unifi_core.network.managers import firewall_manager as firewall_module
 from unifi_core.network.managers.firewall_manager import FirewallManager
 
 DEFAULT_SITE = {"id": "88f7af54-98f8-306a-a1c7-c9349722b1f6", "internalReference": "default", "name": "Default"}
@@ -91,9 +92,46 @@ async def test_cached_site_id_skips_the_site_list():
 
 
 @pytest.mark.asyncio
-async def test_the_site_list_is_read_in_one_large_page():
-    manager = _manager("default", {"data": [DEFAULT_SITE]})
+async def test_a_small_site_list_is_read_in_one_page():
+    manager = _manager("default", {"data": [DEFAULT_SITE], "totalCount": 1})
 
     await manager._get_integration_site_id()
 
-    manager._request_integration_api.assert_awaited_once_with("get", "/v1/sites", params={"limit": "200"})
+    manager._request_integration_api.assert_awaited_once_with(
+        "get", "/v1/sites", params={"limit": "200", "offset": "0"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_site_on_a_later_page_resolves(monkeypatch):
+    monkeypatch.setattr(firewall_module, "_INTEGRATION_SITE_PAGE_SIZE", 1)
+    manager = _manager("x7k2p9qa", None)
+    manager._request_integration_api = AsyncMock(
+        side_effect=[{"data": [DEFAULT_SITE], "totalCount": 2}, {"data": [OFFICE_SITE], "totalCount": 2}]
+    )
+
+    assert await manager._get_integration_site_id() == OFFICE_SITE["id"]
+    offsets = [call.kwargs["params"]["offset"] for call in manager._request_integration_api.await_args_list]
+    assert offsets == ["0", "1"]
+
+
+@pytest.mark.asyncio
+async def test_site_paging_is_bounded(monkeypatch):
+    monkeypatch.setattr(firewall_module, "_INTEGRATION_SITE_PAGE_SIZE", 1)
+    monkeypatch.setattr(firewall_module, "_INTEGRATION_SITE_MAX_PAGES", 3)
+    manager = _manager("nowhere", {"data": [DEFAULT_SITE]})
+
+    with pytest.raises(UniFiOperationError):
+        await manager._get_integration_site_id()
+    assert manager._request_integration_api.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_a_site_repeated_across_pages_still_resolves(monkeypatch):
+    monkeypatch.setattr(firewall_module, "_INTEGRATION_SITE_PAGE_SIZE", 1)
+    manager = _manager("default", None)
+    manager._request_integration_api = AsyncMock(
+        side_effect=[{"data": [DEFAULT_SITE], "totalCount": 3}, {"data": [DEFAULT_SITE], "totalCount": 3}, {"data": []}]
+    )
+
+    assert await manager._get_integration_site_id() == DEFAULT_SITE["id"]
