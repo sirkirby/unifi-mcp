@@ -7995,6 +7995,34 @@
       }
     },
     {
+      "name": "unifi_set_acl_rule_order",
+      "product": "network",
+      "category": "acl_rules",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "acl_manager",
+      "manager_method": "set_acl_rule_order",
+      "input_schema": {
+        "properties": {
+          "network_id": {
+            "description": "Network/VLAN ID whose rule chain is reordered (from unifi_list_networks)",
+            "type": "string"
+          },
+          "ordered_rule_ids": {
+            "description": "Every current ACL rule ID for that network, in the new order (first match first), from unifi_list_acl_rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "network_id",
+          "ordered_rule_ids"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_set_client_fixed_ap",
       "product": "network",
       "category": "clients",

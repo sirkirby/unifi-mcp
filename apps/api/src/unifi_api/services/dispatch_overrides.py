@@ -68,6 +68,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_nat_rule": ("nat_manager", "update_nat_rule_verified"),
     "unifi_delete_nat_rule": ("nat_manager", "delete_nat_rule_verified"),
     "unifi_toggle_nat_rule": ("nat_manager", "toggle_nat_rule_verified"),
+    # ACL ordering previews against the live chain, so the AST walker binds the
+    # read call; dispatch must point at the write.
+    "unifi_set_acl_rule_order": ("acl_manager", "set_acl_rule_order"),
     # =========================================================================
     # Network — lookup-then-act tools whose preview needs current state
     # =========================================================================

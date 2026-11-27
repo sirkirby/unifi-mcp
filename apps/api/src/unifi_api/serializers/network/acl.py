@@ -24,6 +24,7 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
         "unifi_create_acl_rule": {"kind": RenderKind.DETAIL},
         "unifi_update_acl_rule": {"kind": RenderKind.DETAIL},
         "unifi_delete_acl_rule": {"kind": RenderKind.DETAIL},
+        "unifi_set_acl_rule_order": {"kind": RenderKind.DETAIL},
     },
 )
 class AclMutationAckSerializer(Serializer):
