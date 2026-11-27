@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 # Fields to keep in compact mode.  The stripped fields (scopes at 74%,
 # permissions, groups, roles, resources, SSO fields, empty strings)
 # account for ~85% of per-user payload size.
+# The Users application pages its user search; this many rows per page, and at
+# most this many pages, bound one complete read.
+_USER_PAGE_SIZE = 200
+_USER_MAX_PAGES = 100
+
 _COMPACT_USER_KEYS = frozenset(
     {
         "unique_id",
@@ -191,3 +196,41 @@ class SystemManager:
                 raise
 
         raise self._cm.unavailable_error("No auth path available for list_users (proxy session required)")
+
+    async def list_all_users(self, compact: bool = False, limit: int | None = None) -> list[Dict[str, Any]]:
+        """List every user, paging the Users application until its ``total``.
+
+        ``list_users`` reads one page; this reads them all, or the first ``limit``
+        users when one is given. Each page reports ``total``, so the read stops when
+        that many users are in hand or a page comes back empty.
+        """
+        if not self._cm.has_proxy:
+            raise self._cm.unavailable_error("No auth path available for list_users (proxy session required)")
+        users: list[Dict[str, Any]] = []
+        seen: set[str] = set()
+        page_size = min(limit, _USER_PAGE_SIZE) if limit and limit > 0 else _USER_PAGE_SIZE
+        for page_num in range(1, _USER_MAX_PAGES + 1):
+            path = (
+                f"users/search?including_resource=true"
+                f"&page_num={page_num}&page_size={page_size}"
+                f"&expand=with_last_activity,with_assignments"
+            )
+            envelope = await self._cm.proxy_request_users("GET", path)
+            page = self._cm.extract_data(envelope)
+            if not isinstance(page, list):
+                page = [page] if page else []
+            for user in page:
+                key = user.get("unique_id") if isinstance(user, dict) else None
+                if isinstance(key, str) and key in seen:
+                    continue
+                if isinstance(key, str):
+                    seen.add(key)
+                users.append(self._compact_user(user) if compact else user)
+            total = envelope.get("total") if isinstance(envelope, dict) else None
+            done = not page or (isinstance(total, int) and len(users) >= total)
+            if limit and limit > 0 and len(users) >= limit:
+                return users[:limit]
+            if done:
+                return users
+        logger.warning("[system] Stopped listing users after %s pages of %s", _USER_MAX_PAGES, page_size)
+        return users
