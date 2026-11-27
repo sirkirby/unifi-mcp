@@ -306,7 +306,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 ## System (12 tools)
 
 - `unifi_get_system_info` — Controller version, uptime, resource usage
-- `unifi_get_network_health` — Per-subsystem health (WAN, LAN, WLAN, VPN)
+- `unifi_get_network_health` — Per-subsystem health (WAN, WWW, LAN, WLAN, VPN), including WAN connectivity-monitor availability and latency
 - `unifi_get_site_settings` — Site identity, country, timezone, connectivity monitor and NTP servers
 - `unifi_get_mgmt_settings` — Device management settings (device SSH, debug tools, auto-upgrade); stored credentials reported as present/absent
 - `unifi_get_snmp_settings` — SNMP v1/v2c and SNMPv3 state (secrets redacted)

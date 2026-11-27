@@ -352,6 +352,52 @@ class TestNetworkHealthFromController:
     def test_device_counts_and_wan_details(self, raw, expected) -> None:
         assert_fields(network_health_from_controller(raw), expected)
 
+    def test_wan_monitor_stats_survive_serialization(self) -> None:
+        monitor = {"id": "eth8-3", "target": "1.1.1.1", "type": "icmp", "availability": 96.5, "latency_average": 18}
+        alerting = {**monitor, "id": "eth8-0", "health": "good", "availability": 100.0}
+        raw = {
+            "subsystem": "wan",
+            "uptime_stats": {
+                "WAN": {
+                    "availability": 96.5,
+                    "latency_average": 18,
+                    "time_period": 44094,
+                    "uptime": 29186,
+                    "monitors": [monitor],
+                    "alerting_monitors": [alerting],
+                },
+                "WAN2": {"availability": 100.0, "latency_average": 30},
+            },
+        }
+        result = network_health_from_controller(raw).model_dump(exclude_none=True)
+        assert result["uptime_stats"] == {
+            "WAN": {
+                "availability": 96.5,
+                "latency_average": 18,
+                "time_period": 44094,
+                "uptime": 29186,
+                "monitors": [monitor],
+                "alerting_monitors": [alerting],
+            },
+            "WAN2": {"availability": 100.0, "latency_average": 30},
+        }
+
+    @pytest.mark.parametrize(
+        "uptime_stats, expected",
+        [
+            (None, None),
+            ("WAN", None),
+            ({"WAN": "down"}, {}),
+            ({"WAN": {"monitors": "eth8-0"}}, {"WAN": {}}),
+            ({"WAN": {"monitors": [{"id": "eth8-0"}, "eth8-1"]}}, {"WAN": {"monitors": [{"id": "eth8-0"}]}}),
+        ],
+        ids=["absent", "not_a_dict", "wan_not_a_dict", "monitors_not_a_list", "monitor_not_a_dict"],
+    )
+    def test_malformed_wan_monitor_stats_are_skipped(self, uptime_stats, expected) -> None:
+        raw = {"subsystem": "wan", "uptime_stats": uptime_stats}
+        result = network_health_from_controller(raw).model_dump(exclude_none=True)
+        assert result.get("uptime_stats") == expected
+
     def test_missing_vpn_diagnostics_remain_unknown(self) -> None:
         result = network_health_from_controller({"subsystem": "vpn"}).model_dump(exclude_none=False)
         assert result["site_to_site_num_active"] is None
