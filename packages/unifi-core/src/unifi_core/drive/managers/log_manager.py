@@ -69,6 +69,8 @@ def _resolve_types(query: DriveLogQuery, definitions: dict[str, Any]) -> list[st
             raise UniFiValidationError(
                 f"Unknown log category {query.category!r}. UniFi Drive defines: {', '.join(sorted(category_types))}."
             )
+        if not isinstance(category_types[query.category], list):
+            raise UniFiMalformedResponseError("UniFi Drive returned unreadable log definitions.")
         in_category = strings(category_types[query.category])
     if query.types is None:
         return in_category

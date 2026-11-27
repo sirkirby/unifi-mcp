@@ -118,6 +118,17 @@ async def test_category_without_types_reads_nothing(log_manager, console):
     assert page.entries == [] and console.calls("GET", LOGS) == []
 
 
+@pytest.mark.parametrize("types", [{"settingsChange": True}, "settingsChange", None])
+async def test_category_types_that_are_not_a_list_are_malformed(log_manager, console, types):
+    definitions = fx.log_definitions()
+    definitions["categoryTypes"]["settings"] = types
+    console.reply("GET", DEFINITIONS, definitions)
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await log_manager.list_logs(DriveLogQuery(category="settings"))
+    assert console.calls("GET", LOGS) == []
+
+
 async def test_missing_endpoint_is_an_error(log_manager, console):
     console.reply("GET", DEFINITIONS, fx.log_definitions())
     console.reply("GET", LOGS, {"err": {"msg": "not found"}}, status=404)
