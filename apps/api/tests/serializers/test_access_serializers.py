@@ -52,22 +52,24 @@ def test_user_serializer_shape() -> None:
     from unifi_api.graphql.types.access.users import User
 
     sample = {
-        "id": "user1",
+        "unique_id": "user1",
         "first_name": "Ada",
         "last_name": "Lovelace",
-        "name": "Ada Lovelace",
-        "employee_id": "E-1815",
-        "status": "active",
-        "role": "admin",
-        "created_at": "2026-01-01T00:00:00+00:00",
+        "full_name": "Ada Lovelace",
+        "employee_number": "E-1815",
+        "status": "ACTIVE",
+        "roles": [{"name": "Super Admin", "system_key": "super_administrator"}],
+        "create_time": 1767225600,
     }
     out = User.from_manager_output(sample).to_dict()
     assert out["id"] == "user1"
     assert out["name"] == "Ada Lovelace"
     assert out["employee_id"] == "E-1815"
-    assert out["status"] == "active"
-    assert out["role"] == "admin"
-    assert out["created_at"] == "2026-01-01T00:00:00+00:00"
+    assert out["status"] == "ACTIVE"
+    assert out["role"] == "Super Admin"
+    assert out["created_at"] == "2026-01-01T00:00:00Z"
+    # A row without full_name stitches the name from its parts.
+    assert User.from_manager_output({**sample, "full_name": ""}).to_dict()["name"] == "Ada Lovelace"
 
 
 def test_credential_serializer_shape() -> None:

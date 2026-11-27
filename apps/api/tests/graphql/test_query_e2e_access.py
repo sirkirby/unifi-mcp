@@ -290,7 +290,7 @@ async def test_e2e_cross_resource_query(tmp_path: Path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
 
     fixture_doors = [{"id": "door1", "name": "Front Door"}]
-    fixture_users = [{"id": "user1", "name": "Alice"}]
+    fixture_users = [{"unique_id": "user1", "full_name": "Alice"}]
     fixture_visitors = [{"id": "vis1", "name": "Bob"}]
     _stub_access_managers(
         monkeypatch,

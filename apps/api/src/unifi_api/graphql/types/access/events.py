@@ -153,7 +153,8 @@ class Event:
             return None
         all_users = await _fetch_users(info.context, self._controller_id)
         for u in all_users:
-            u_id = u.get("id") if isinstance(u, dict) else getattr(u, "id", None)
+            raw = u if isinstance(u, dict) else getattr(u, "raw", None)
+            u_id = raw.get("unique_id") if isinstance(raw, dict) else getattr(u, "unique_id", None)
             if u_id == self._user_id:
                 inst = User.from_manager_output(u)
                 inst._controller_id = self._controller_id

@@ -67,6 +67,12 @@ def _id_of(obj: Any) -> Any:
     return getattr(raw, "id", None) or getattr(raw, "_id", None)
 
 
+def _user_key(obj: Any) -> tuple:
+    """Sort users by ``unique_id``, the key the REST users route pages on."""
+    raw = _raw(obj)
+    return (0, str(raw.get("unique_id") or "") if isinstance(raw, dict) else "")
+
+
 def _decode_cursor(cursor: str | None):
     """Translate an opaque cursor string to a Cursor (or raise InvalidCursor)."""
     from unifi_api.services.pagination import Cursor, InvalidCursor
@@ -711,7 +717,7 @@ class AccessQuery:
             list(raw),
             limit=limit,
             cursor=cursor_obj,
-            key_fn=_id_key,
+            key_fn=_user_key,
         )
         items: list[User] = []
         for u in page:

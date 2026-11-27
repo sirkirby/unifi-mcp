@@ -168,7 +168,7 @@ async def test_list_users_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_users = [
-        {"id": f"user-{i}", "first_name": "F", "last_name": f"L{i}", "email": f"u{i}@x.com", "status": "active"}
+        {"unique_id": f"user-{i}", "first_name": "F", "last_name": f"L{i}", "email": f"u{i}@x.com", "status": "ACTIVE"}
         for i in range(3)
     ]
 
@@ -198,7 +198,7 @@ async def test_get_user_filter_404(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_users = [
-        {"id": "user-1", "first_name": "Ada", "last_name": "L", "email": "ada@x.com", "status": "active"},
+        {"unique_id": "user-1", "first_name": "Ada", "last_name": "L", "email": "ada@x.com", "status": "ACTIVE"},
     ]
 
     async def fake_list(self, *a, **kw):
@@ -220,6 +220,7 @@ async def test_get_user_filter_404(tmp_path, monkeypatch) -> None:
 
     assert ok.status_code == 200, ok.text
     assert ok.json()["data"]["id"] == "user-1"
+    assert ok.json()["data"]["name"] == "Ada L"
     assert miss.status_code == 404
 
 

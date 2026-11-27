@@ -416,7 +416,7 @@ async def test_edge_user_credentials(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("access", "system_manager", "list_users"): [
-                {"id": "user-1", "name": "Alice Smith", "status": "active"},
+                {"unique_id": "user-1", "full_name": "Alice Smith", "status": "ACTIVE"},
             ],
             ("access", "credential_manager", "list_credentials"): [
                 {"id": "cred-1", "user_id": "user-1", "type": "nfc", "status": "active"},
@@ -513,7 +513,7 @@ async def test_edge_access_event_user(tmp_path, monkeypatch):
                 },
             ],
             ("access", "system_manager", "list_users"): [
-                {"id": "user-42", "name": "Bob Jones", "status": "active", "role": "employee"},
+                {"unique_id": "user-42", "full_name": "Bob Jones", "status": "ACTIVE", "roles": [{"name": "employee"}]},
             ],
         },
     )

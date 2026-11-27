@@ -26,9 +26,9 @@ router = APIRouter()
 
 
 def _user_key(obj) -> tuple:
-    """Sort by (0, id) — id-stable order, no time component."""
+    """Sort by (0, unique_id) — id-stable order, no time component."""
     raw = obj if isinstance(obj, dict) else getattr(obj, "raw", {})
-    return (0, raw.get("id") or "")
+    return (0, raw.get("unique_id") or "")
 
 
 async def _maybe_set_site(cm, site_id: str) -> None:
@@ -121,7 +121,7 @@ async def get_user(
     match = None
     for user in all_users or []:
         raw = user if isinstance(user, dict) else getattr(user, "raw", {})
-        if raw.get("id") == user_id:
+        if raw.get("unique_id") == user_id:
             match = user
             break
     if match is None:
