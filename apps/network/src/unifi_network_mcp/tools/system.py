@@ -255,9 +255,8 @@ async def get_system_info() -> Dict[str, Any]:
     description=(
         "Returns per-subsystem health for WAN, WWW, LAN, WLAN, and VPN: status, device counts "
         "(gateways/switches/APs, adopted, disconnected, pending), active user counts, and "
-        "WAN/WWW details (WAN IP, ISP, latency, drops, last speed test). WAN also includes "
-        "uptime_stats per WAN interface: connectivity-monitor availability (percentage of probes "
-        "that succeeded) and average latency, overall and per monitor target. Use to check WAN "
+        "WAN/WWW details (WAN IP, ISP, latency, drops, last speed test, per-WAN "
+        "connectivity-monitor availability and latency). Use to check WAN "
         "connectivity or find which segment is degraded. Fields the controller does not "
         "report are omitted; a limited admin role may get no VPN details. "
         "For controller-level info (version, uptime), use unifi_get_system_info."
