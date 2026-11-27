@@ -116,6 +116,16 @@ async def test_avatar_sso_and_employee_fields_are_dropped(users, console):
         assert value not in dumped
 
 
+async def test_a_role_without_a_system_key_still_makes_an_admin(users, console):
+    member = _user(MEMBER_ID, "custom")
+    member["roles"] = [{"level": 3, "systemKey": None}]
+    console.reply("GET", USERS, _v1([member]))
+
+    (user,) = await users.list_users()
+
+    assert user.access_level == "admin"
+
+
 async def test_a_user_without_role_fields_has_no_access_level(users, console):
     console.reply("GET", USERS, _v1([{"id": MEMBER_ID, "username": "brief"}]))
 

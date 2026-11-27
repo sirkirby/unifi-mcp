@@ -69,7 +69,9 @@ def _access_level(user: dict[str, Any], roles: list[str]) -> str | None:
         return "owner"
     if owner is None and "roles" not in user:
         return None
-    return "admin" if roles else "user"
+    # Any role makes the account an admin, as in the Drive web app, including a role
+    # without a system key (a custom UniFi OS role).
+    return "admin" if roles or as_list(user.get("roles")) else "user"
 
 
 def drive_user_from_api(raw: Any) -> DriveUser:
