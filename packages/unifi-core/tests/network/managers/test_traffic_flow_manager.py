@@ -424,3 +424,41 @@ async def test_statistics_single_name_match_is_partial_not_resolved(catalog, exp
             "The controller's public DPI catalogue does not list these applications; IDs and byte counts are complete."
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Truncation: the controller serves at most 5,000 rows per query
+# ---------------------------------------------------------------------------
+
+
+def _envelope(total, or_more=False, has_next=False):
+    return {**_EMPTY_RESPONSE, "total_element_count": total, "or_more": or_more, "has_next": has_next}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("envelope", "truncated"),
+    [
+        (_envelope(4999), False),
+        # Network 11.0.104 stops at 5,000 rows, reports the count as 5,000 (or a few over) and leaves or_more false
+        (_envelope(5000), True),
+        (_envelope(5016), True),
+        (_envelope(5099), True),
+        # newer firmware serves every row of a window above 5,000, so a count past the cap is complete
+        (_envelope(5100), False),
+        (_envelope(5953), False),
+        # or_more: the count is only a lower bound, so the pages cannot be shown complete
+        (_envelope(10000, or_more=True, has_next=True), True),
+        (_envelope(12, or_more=True), True),
+        # a count that is not a number cannot show the cap was reached
+        (_envelope(None), False),
+        (_envelope("5000"), False),
+    ],
+)
+async def test_result_reports_a_capped_query_as_truncated(envelope, truncated):
+    mgr = TrafficFlowManager(_make_connection(envelope))
+    q = TrafficFlowQuery(time_from=1, time_to=2, page_number=0, page_size=100)
+
+    result = await mgr.get_traffic_flows(q)
+
+    assert result["truncated"] is truncated
