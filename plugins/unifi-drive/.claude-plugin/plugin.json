@@ -1,6 +1,6 @@
 {
   "name": "unifi-drive",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "UniFi Drive MCP server \u2014 read NAS storage pools, disk health and shared drives, and manage file services and NFS clients",
   "author": {
     "name": "sirkirby",
@@ -23,7 +23,7 @@
       "args": [
         "--python-preference",
         "system",
-        "unifi-drive-mcp==0.1.0"
+        "unifi-drive-mcp==0.2.0"
       ],
       "env": {
         "UNIFI_DRIVE_HOST": "${user_config.host}",

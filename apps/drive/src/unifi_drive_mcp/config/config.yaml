@@ -22,7 +22,7 @@ server:
   tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
 
   # Tool filtering (optional, for eager mode)
-  # enabled_categories: system, storage, shared_drives, file_services, nfs, logs, performance
+  # enabled_categories: system, storage, shared_drives, file_services, nfs, logs, performance, snapshots, users
   # enabled_tools: specific tool names, e.g. "drive_list_disks,drive_list_storage_pools"
   enabled_categories: ${oc.env:UNIFI_ENABLED_CATEGORIES,null}
   enabled_tools: ${oc.env:UNIFI_ENABLED_TOOLS,null}

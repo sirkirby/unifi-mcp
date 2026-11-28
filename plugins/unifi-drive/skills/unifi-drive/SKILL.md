@@ -25,7 +25,7 @@ configured.
 
 ## Discover and read
 
-It provides 11 domain tools, plus 6 meta-tools.
+It provides 22 domain tools, plus 6 meta-tools.
 Seven domain tools read and four write. In default lazy mode, start with
 `drive_tool_index`, filtered by name or search, and request
 `include_schemas=True` for the intended tool. Use `drive_execute` with its

@@ -1129,6 +1129,8 @@ class LiveSmokeRunner:
             return self.cache.id_from_tool("innerspace_list_floor_plans", "floor_plans", ("id",))
         if param == "drive_id":
             return self.cache.id_from_tool("drive_list_shared_drives", "drives", ("id",))
+        if param == "shared_drive_name":
+            return self.drive_shared_drive_name()
         if param == "camera_id":
             return self.cache.id_from(("cameras",), ("id", "_id"))
         if param == "face_id":
@@ -1319,6 +1321,13 @@ class LiveSmokeRunner:
         for drive in self.cache.items_from_tool("drive_list_shared_drives", "drives"):
             if drive.get("id") and drive.get("type") == "shared":
                 return str(drive["id"])
+        return None
+
+    def drive_shared_drive_name(self) -> str | None:
+        """The name of a shared drive, not a personal one: Drive lists snapshots by it."""
+        for drive in self.cache.items_from_tool("drive_list_shared_drives", "drives"):
+            if drive.get("name") and drive.get("type") == "shared":
+                return str(drive["name"])
         return None
 
     def drive_nfs_clients(self) -> list[str]:
