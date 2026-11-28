@@ -1,0 +1,1 @@
+"""UniFi Drive resolver fixtures."""

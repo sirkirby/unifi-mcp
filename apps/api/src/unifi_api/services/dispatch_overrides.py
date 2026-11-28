@@ -1790,7 +1790,16 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
     "protect_get_snapshot": _snapshot_direct_result,
 }
 
+
+def _drive_disk_stats_result(result: Any, args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    """Disk stats without each disk's samples unless include_samples asks for them, as REST answers them."""
+    from unifi_api.services.drive import disk_stats_view
+
+    return disk_stats_view(result, include_samples=args.get("include_samples") is True)
+
+
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
+    "drive_get_disk_stats": _drive_disk_stats_result,
     "innerspace_list_walls": _innerspace_page_result,
     "innerspace_list_placed_devices": _innerspace_page_result,
     "protect_get_snapshot": _snapshot_result,
@@ -1872,7 +1881,54 @@ def _translate_sitemanager_query(args):
     return (), SiteManagerMetricsQueryInput.model_validate(args).model_dump(exclude_none=True)
 
 
+def _translate_drive_add_nfs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate the new client as the Drive MCP tool does, into the manager's connection input."""
+    from unifi_core.drive.models.services import NfsConnectionInput
+
+    connection = NfsConnectionInput(
+        client=args.get("client"),
+        shared_drives=args.get("shared_drives"),
+        async_writes=args.get("async_writes", False),
+    )
+    return (), {"connection": connection}
+
+
+def _translate_drive_update_nfs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate a replacement grant list as the Drive MCP tool does; omitted fields stay unset.
+
+    A grant passed without ``permission`` keeps the drive's current permission:
+    the manager reads that from the fields the caller set, which validation keeps.
+    """
+    from pydantic import TypeAdapter
+    from unifi_core.drive.models.services import NfsSharedDriveAccess
+
+    shared_drives = args.get("shared_drives")
+    grants = (
+        TypeAdapter(list[NfsSharedDriveAccess]).validate_python(shared_drives) if shared_drives is not None else None
+    )
+    return (), {"client": args.get("client"), "shared_drives": grants, "async_writes": args.get("async_writes")}
+
+
+def _translate_drive_list_logs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate the filters into the manager's log query, as the Drive MCP tool does."""
+    from unifi_core.drive.models.logs import DriveLogQuery
+
+    return (), {"query": DriveLogQuery(**args)}
+
+
+def _translate_drive_disk_stats(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """The window goes to the manager; include_samples only shapes the result."""
+    return (), {"hours": args["hours"]} if "hours" in args else {}
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    "drive_list_logs": _spec(_translate_drive_list_logs, "query"),
+    "drive_get_disk_stats": _spec(_translate_drive_disk_stats, "hours"),
+    # Drive NFS writes: the preview echoes the caller's request, not the validated models.
+    "drive_add_nfs_connection": _spec(_translate_drive_add_nfs, "connection", preserve_public_preview=True),
+    "drive_update_nfs_connection": _spec(
+        _translate_drive_update_nfs, "client", "shared_drives", "async_writes", preserve_public_preview=True
+    ),
     "sitemanager_list_hosts": _spec(_translate_sitemanager_page, "page_size", "next_token"),
     "sitemanager_list_sites": _spec(_translate_sitemanager_page, "page_size", "next_token"),
     "sitemanager_list_devices": _spec(

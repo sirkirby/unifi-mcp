@@ -181,6 +181,8 @@ The API also serves the nine Site Manager reads. The cloud account is one accoun
 
 It serves the nine InnerSpace reads and the 15 InnerSpace write actions for a controller that declares the `innerspace` product, through the same `unifi-core` managers: REST routes, a GraphQL `innerspace` namespace and catalog actions share one error mapping with fixed text. Writes are catalog actions only (no REST write route, no GraphQL mutation); a confirmed action calls the manager's `apply_*` method, the same one the MCP tool calls on confirm. A stored controller needs a username and password for InnerSpace, and its API token is never passed to the InnerSpace connection. No API surface returns plan image bytes. See [InnerSpace console product](../apps/api/README.md#innerspace-console-product).
 
+It serves every Drive read (eighteen) and the four Drive writes for a NAS controller that declares the `drive` product, through the same `unifi-core` managers: REST routes, a GraphQL `drive` namespace and catalog actions for the reads, and preview-first catalog actions for the writes. A write's API preview is request-only; a confirmed write plans from fresh NAS state, applies and reads back in one manager call, and reports `mutation_applied` false (not sent) or null (sent, no answer) on failure. The Drive connection logs in on its first request, and its API token, if any, is never used. See [UniFi Drive console product](../apps/api/README.md#unifi-drive-console-product).
+
 ### packages/unifi-mcp-relay
 
 A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It discovers configured local MCP servers over HTTP and maintains an outbound authenticated WebSocket to the Worker gateway, enabling remote MCP access without exposing inbound local ports.
