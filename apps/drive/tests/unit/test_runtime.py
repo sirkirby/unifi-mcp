@@ -19,6 +19,7 @@ READ_TOOLS = {
     "drive_get_shared_drive",
     "drive_get_file_services",
     "drive_list_nfs_connections",
+    "drive_list_logs",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",

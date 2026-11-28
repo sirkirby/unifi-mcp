@@ -1,6 +1,6 @@
 # Permission System — Drive Server
 
-The Drive server has 11 domain tools: seven reads and four writes. The writes change who can reach the data on the NAS, never the data itself. There is no tool that erases a disk, creates or deletes a storage pool, or creates or deletes a shared drive.
+The Drive server has 12 domain tools: eight reads and four writes. The writes change who can reach the data on the NAS, never the data itself. There is no tool that erases a disk, creates or deletes a storage pool, or creates or deletes a shared drive.
 
 | Tool | Policy category | Action |
 |---|---|---|
@@ -13,6 +13,7 @@ The Drive server has 11 domain tools: seven reads and four writes. The writes ch
 | `drive_add_nfs_connection` | `nfs_connections` | create |
 | `drive_update_nfs_connection` | `nfs_connections` | update |
 | `drive_remove_nfs_connection` | `nfs_connections` | delete |
+| `drive_list_logs` | `logs` | read |
 
 The reads are annotated `readOnlyHint: true` and need no confirmation. The writes follow the shared [permission system](../../../docs/permissions.md): a preview first, then the change on `confirm=true`.
 

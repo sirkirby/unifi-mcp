@@ -187,7 +187,7 @@ See [InnerSpace permissions](../apps/innerspace/docs/permissions.md#meta-tools-a
 
 ### Drive differences
 
-The Drive server has 11 domain tools: seven reads and four writes that preview
+The Drive server has 12 domain tools: eight reads and four writes that preview
 before they change anything. It follows the shared model, with these points:
 
 - In `lazy` mode it lists only the meta-tools, like Network, Protect and
@@ -196,8 +196,8 @@ before they change anything. It follows the shared model, with these points:
 - Without a host it starts in setup mode and registers only
   `drive_setup_status`, which explains what to set and makes no request. With
   a host it still makes no request at startup: the first tool call logs in.
-- Its tool modules are `system`, `storage`, `shared_drives`, `file_services`
-  and `nfs`, for `UNIFI_ENABLED_CATEGORIES` and the `category` filter of
+- Its tool modules are `system`, `storage`, `shared_drives`, `file_services`,
+  `nfs` and `logs`, for `UNIFI_ENABLED_CATEGORIES` and the `category` filter of
   `drive_tool_index`.
 
 See [Drive permissions](../apps/drive/docs/permissions.md).

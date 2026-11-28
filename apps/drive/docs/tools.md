@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 11 domain tools: seven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 12 domain tools: eight reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -109,3 +109,26 @@ Pass only the fields you want to change — current values are automatically pre
 | `confirm` | `true` removes |
 
 The client can no longer mount anything. No data on the shared drives is touched, and the other clients are kept.
+
+## Logs
+
+### `drive_list_logs`
+
+Reads the system log the Drive web app shows under System Log, newest first, from `GET /proxy/drive/api/v2/systems/logs`. A log entry holds an event name and the values to fill in, so the tool also reads `GET /proxy/drive/api/v2/systems/log-definitions` for each event's title and text.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `limit` | `50` | Most entries per page, 1 to 500 |
+| `severities` | all | Any of `low`, `medium`, `high`, `very_high` |
+| `category` | all | A category such as `activity`, `storage` or `settings` |
+| `types` | all | Types such as `storagePool`, `drive`, `hotSpare`, `userAccess`, `fanMode` |
+| `keyword` | none | Only entries whose text matches it |
+| `scope` | `all` | `audit` for user and admin actions, `flow` for file activity |
+| `after`, `before` | none | ISO 8601 times with an offset, such as `2026-11-20T00:00:00Z` |
+| `cursor` | none | `next_cursor` from the previous page |
+
+Each entry has `time` (ISO 8601 with the NAS's UTC offset), `severity`, `category`, `type`, `event` (such as `DriveInserted`), `title` and `message`. `message` is the sentence the web app shows, so it names the users, client addresses, drives and pools involved. Entry ids and the ids behind the web app's detail panels are left out.
+
+`next_cursor` is set when there are more entries. Pass it back as `cursor` with the same filters: Drive ties a cursor to the filters it was returned with.
+
+A category is sent to Drive as its list of types, because Drive ignores a category filter. Drive answers an unknown category or type with an empty list, so the tool checks both against the firmware's own definitions first and returns an error listing the valid values instead.
