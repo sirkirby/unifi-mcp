@@ -153,13 +153,13 @@ It reads through a console login session (`unifi_core.innerspace.managers.connec
 
 ### apps/drive
 
-The UniFi Drive MCP server. 15 domain tools over the UniFi Drive application on a UniFi NAS (UNAS): eleven reads (system information, storage pools and RAID groups, per-pool storage usage, disks with SMART counters, shared drives, file services, NFS clients, the system log, SMB advanced settings, rsync settings) and four preview-first writes (`drive_set_file_service`, `drive_add_nfs_connection`, `drive_update_nfs_connection`, `drive_remove_nfs_connection`), plus the six shared meta-tools. No tool erases a disk or deletes a pool or shared drive. It has no events and no support-bundle tool.
+The UniFi Drive MCP server. 18 domain tools over the UniFi Drive application on a UniFi NAS (UNAS): fourteen reads (system information, storage pools and RAID groups, per-pool storage usage, disks with SMART counters, shared drives, file services, NFS clients, the system log, SMB advanced settings, rsync settings, network throughput, fan mode, per-disk activity history) and four preview-first writes (`drive_set_file_service`, `drive_add_nfs_connection`, `drive_update_nfs_connection`, `drive_remove_nfs_connection`), plus the six shared meta-tools. No tool erases a disk or deletes a pool or shared drive. It has no events and no support-bundle tool.
 
 - `src/unifi_drive_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
   - `runtime.py` -- singleton factories for the managers and the NAS operation gate
   - domain logic lives in `packages/unifi-core/src/unifi_core/drive/managers/`, released in `unifi-core` before the app
-  - `tools/` -- tool wrappers in six category modules (`system`, `storage`, `shared_drives`, `file_services`, `nfs`, `logs`)
+  - `tools/` -- tool wrappers in seven category modules (`system`, `storage`, `shared_drives`, `file_services`, `nfs`, `logs`, `performance`)
   - `config/config.yaml` -- NAS connection and runtime settings; no `api_key`
 - `tests/` -- unit tests with fake managers; they never contact a NAS
 - `Dockerfile` -- container build

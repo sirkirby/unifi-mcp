@@ -116,7 +116,7 @@ One request waits up to `UNIFI_DRIVE_TIMEOUT_SECONDS` (30 by default). Check tha
 
 1. If only `drive_setup_status` is listed, no host is set (see above).
 2. In the default `lazy` mode and in `meta_only` mode the domain tools are not listed; reach them through `drive_execute`, load them with `drive_load_tools`, or switch to `eager` mode.
-3. In `eager` mode, `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` may be filtering them out. The categories are the tool modules: `system`, `storage`, `shared_drives`, `file_services`, `nfs`.
+3. In `eager` mode, `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` may be filtering them out. The categories are the tool modules: `system`, `storage`, `shared_drives`, `file_services`, `nfs`, `performance`.
 4. Some clients cache the tool list. Start a new session after changing the registration mode.
 
 `drive_tool_index` lists every tool the server has, with `category`, `search` and `include_schemas` filters. See [MCP discovery and meta-tools](../../../docs/tool-index.md).

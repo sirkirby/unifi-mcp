@@ -125,6 +125,9 @@ Read-only:
 | `drive_get_rsync_settings` | Whether rsync is on, whether an rsync account is set (username only), and whether SSH is on |
 | `drive_list_nfs_connections` | NFS clients, the shared drives each may mount (rw/ro) and the export path to mount |
 | `drive_list_logs` | The system log, newest first: time, severity, category, type, event and message, with filters and paging |
+| `drive_get_network_throughput` | Network data received and sent right now, in KB/s |
+| `drive_get_fan_profile` | Fan mode in effect (Cooling, Balanced or Quiet) and the modes offered |
+| `drive_get_disk_stats` | Each disk's temperature, read/write throughput and bad sectors over the last hours or days |
 
 Write (preview first; `confirm=true` applies):
 
@@ -170,11 +173,13 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 > "Which NFS clients can mount Shared_Drive?"
 
+> "Which disk was busiest over the last day, and how hot did it get?"
+
 ## Documentation
 
 - [Configuration](docs/configuration.md): the NAS login, TLS, settings, operation gate, HTTP, Docker Compose, registration modes
 - [Permissions](docs/permissions.md): previews, permission mode, policy gates, read-only mode, redaction
-- [Tool catalog](docs/tools.md): the 15 tools, parameters, NFS behavior and write previews
+- [Tool catalog](docs/tools.md): the 18 tools, parameters, NFS behavior and write previews
 - [Troubleshooting](docs/troubleshooting.md): setup mode, login and access errors, file services and NFS, TLS, Docker
 - [MCP discovery and meta-tools](../../docs/tool-index.md): `tools/list`, `drive_tool_index` and `drive_execute`
 
