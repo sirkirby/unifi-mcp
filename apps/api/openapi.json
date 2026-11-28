@@ -10539,6 +10539,18 @@
             ],
             "title": "Port"
           },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Region (uppercase country code) the controller records for the address; null if none.",
+            "title": "Region"
+          },
           "zone_name": {
             "anyOf": [
               {
@@ -10670,6 +10682,13 @@
             ],
             "title": "Id"
           },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowPolicyModel"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
           "protocol": {
             "anyOf": [
               {
@@ -10719,6 +10738,71 @@
           }
         },
         "title": "TrafficFlowModel",
+        "type": "object"
+      },
+      "TrafficFlowPolicyModel": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "internal_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Policy subtype, such as SIGNATURE or CONNTRACK.",
+            "title": "Internal Type"
+          },
+          "ips_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IPS category; null unless the policy is an IPS match.",
+            "title": "Ips Category"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Policy type, such as FIREWALL or INTRUSION_PREVENTION.",
+            "title": "Type"
+          }
+        },
+        "title": "TrafficFlowPolicyModel",
         "type": "object"
       },
       "TrafficFlowStatisticsModel": {
@@ -27180,6 +27264,283 @@
                 }
               ],
               "title": "Search Text"
+            }
+          },
+          {
+            "description": "Filter by risk (low/medium/high)",
+            "in": "query",
+            "name": "risk",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by risk (low/medium/high)",
+              "title": "Risk"
+            }
+          },
+          {
+            "description": "Filter by action (allowed/blocked)",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by action (allowed/blocked)",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Filter by direction",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by direction",
+              "title": "Direction"
+            }
+          },
+          {
+            "description": "Filter by protocol",
+            "in": "query",
+            "name": "protocol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by protocol",
+              "title": "Protocol"
+            }
+          },
+          {
+            "description": "Filter by service",
+            "in": "query",
+            "name": "service",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by service",
+              "title": "Service"
+            }
+          },
+          {
+            "description": "Filter by source MAC",
+            "in": "query",
+            "name": "source_mac",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source MAC",
+              "title": "Source Mac"
+            }
+          },
+          {
+            "description": "Filter by source IP",
+            "in": "query",
+            "name": "source_ip",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source IP",
+              "title": "Source Ip"
+            }
+          },
+          {
+            "description": "Filter by source network ID",
+            "in": "query",
+            "name": "source_network_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source network ID",
+              "title": "Source Network Id"
+            }
+          },
+          {
+            "description": "Filter by source port",
+            "in": "query",
+            "name": "source_port",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maximum": 65535,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source port",
+              "title": "Source Port"
+            }
+          },
+          {
+            "description": "Filter by destination domain",
+            "in": "query",
+            "name": "destination_domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by destination domain",
+              "title": "Destination Domain"
+            }
+          },
+          {
+            "description": "Filter by destination IP",
+            "in": "query",
+            "name": "destination_ip",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by destination IP",
+              "title": "Destination Ip"
+            }
+          },
+          {
+            "description": "Filter by destination port",
+            "in": "query",
+            "name": "destination_port",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maximum": 65535,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by destination port",
+              "title": "Destination Port"
+            }
+          },
+          {
+            "description": "Filter by destination region, e.g. NL",
+            "in": "query",
+            "name": "destination_region",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by destination region, e.g. NL",
+              "title": "Destination Region"
             }
           },
           {

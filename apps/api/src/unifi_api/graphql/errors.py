@@ -20,6 +20,7 @@ from unifi_api.services.controllers import ControllerNotFound
 from unifi_api.services.incident_evidence import ControllerCapabilityError, IncidentRequestError
 from unifi_api.services.pagination import InvalidCursor
 from unifi_api.services.sitemanager_errors import SiteManagerAPIError
+from unifi_api.services.traffic_flow_query import InvalidTrafficFlowFilter, TrafficFlowQueryRejected
 
 # Client errors a resolver raises on purpose; their messages are fixed or
 # already sanitized, so they are logged without traceback or query source.
@@ -32,6 +33,8 @@ EXPECTED_ERRORS = (
     InvalidAccessEventCursor,
     InvalidAccessEventTopic,
     InvalidCursor,
+    InvalidTrafficFlowFilter,
+    TrafficFlowQueryRejected,
     ScopeDenied,
     ControllerBusyError,
 )
@@ -77,7 +80,17 @@ def _classify(error: GraphQLError) -> str:
         return "NOT_FOUND"
     if isinstance(orig, ControllerCapabilityError):
         return "CAPABILITY_MISMATCH"
-    if isinstance(orig, (InvalidAccessEventCursor, InvalidAccessEventTopic, InvalidCursor, IncidentRequestError)):
+    if isinstance(
+        orig,
+        (
+            InvalidAccessEventCursor,
+            InvalidAccessEventTopic,
+            InvalidCursor,
+            IncidentRequestError,
+            InvalidTrafficFlowFilter,
+            TrafficFlowQueryRejected,
+        ),
+    ):
         return "BAD_REQUEST"
     if isinstance(orig, ScopeDenied):
         return "FORBIDDEN"

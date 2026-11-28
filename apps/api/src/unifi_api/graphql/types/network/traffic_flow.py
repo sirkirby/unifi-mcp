@@ -12,9 +12,8 @@ endpoint sub-objects.
 Each type's ``from_manager_output(raw)`` classmethod shapes the manager dict
 into the type; ``to_dict()`` exposes the dict contract the REST routes return.
 
-The manager's ``policies`` field is intentionally not projected here: its shape
-is firmware-variable, so it is omitted from the GraphQL type and REST rows for
-now and can be added later without a breaking change.
+The controller's policy dicts vary by firmware, so ``TrafficFlowPolicy`` projects
+only the stable string keys and reports anything else as null.
 """
 
 from __future__ import annotations
@@ -23,6 +22,8 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+
+from unifi_api.graphql.scalars import BigInt
 
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
@@ -48,6 +49,9 @@ class TrafficFlowEndpoint:
     port: int | None
     network_name: str | None
     zone_name: str | None
+    region: str | None = strawberry.field(
+        description="Region (uppercase country code) the controller records for the address; null if none."
+    )
     domains: list[str]
 
     @classmethod
@@ -59,7 +63,31 @@ class TrafficFlowEndpoint:
             port=_get(obj, "port"),
             network_name=_get(obj, "network_name"),
             zone_name=_get(obj, "zone_name"),
+            region=_get(obj, "region"),
             domains=_get(obj, "domains", default=[]),
+        )
+
+
+@strawberry.type(description="A policy that matched a traffic flow.")
+class TrafficFlowPolicy:
+    id: str | None
+    type: str | None = strawberry.field(description="Policy type, such as FIREWALL or INTRUSION_PREVENTION.")
+    internal_type: str | None = strawberry.field(description="Policy subtype, such as SIGNATURE or CONNTRACK.")
+    name: str | None
+    ips_category: str | None = strawberry.field(description="IPS category; null unless the policy is an IPS match.")
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowPolicy":
+        def text(key: str) -> str | None:
+            value = _get(obj, key)
+            return value if isinstance(value, str) else None
+
+        return cls(
+            id=text("id"),
+            type=text("type"),
+            internal_type=text("internal_type"),
+            name=text("name"),
+            ips_category=text("ips_category"),
         )
 
 
@@ -73,14 +101,15 @@ class TrafficFlow:
     direction: str | None
     count: int | None
     duration_milliseconds: int | None
-    time: int | None
-    flow_start_time: int | None
-    flow_end_time: int | None
-    bytes_total: int | None
-    bytes_rx: int | None
-    bytes_tx: int | None
+    time: BigInt | None
+    flow_start_time: BigInt | None
+    flow_end_time: BigInt | None
+    bytes_total: BigInt | None
+    bytes_rx: BigInt | None
+    bytes_tx: BigInt | None
     source: TrafficFlowEndpoint
     destination: TrafficFlowEndpoint
+    policies: list[TrafficFlowPolicy]
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -117,6 +146,7 @@ class TrafficFlow:
             bytes_tx=_get(record, "bytes_tx"),
             source=TrafficFlowEndpoint.from_manager_output(_get(record, "source")),
             destination=TrafficFlowEndpoint.from_manager_output(_get(record, "destination")),
+            policies=[TrafficFlowPolicy.from_manager_output(p) for p in _get(record, "policies", default=[])],
         )
 
     def to_dict(self) -> dict:
@@ -182,7 +212,7 @@ class TrafficFlowTopApplication:
             "traffic-flow tool family; do not pass it to Integration API DPI tools."
         )
     )
-    bytes: int | None
+    bytes: BigInt | None
     application_name: str | None
     category_name: str | None
 
