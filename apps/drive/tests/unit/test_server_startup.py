@@ -30,6 +30,9 @@ DOMAIN_TOOLS = {
     "drive_get_storage_usage",
     "drive_get_smb_advanced_settings",
     "drive_get_rsync_settings",
+    "drive_get_network_throughput",
+    "drive_get_fan_profile",
+    "drive_get_disk_stats",
 }
 META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status", "drive_batch_cancel"}
 

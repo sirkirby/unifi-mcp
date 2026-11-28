@@ -25,7 +25,7 @@ The InnerSpace server has 24 domain tools. Its nine read tools only read and are
 
 ### Drive: four writes, gated like the console servers
 
-The Drive server's eleven reads need no confirmation. Its four writes follow the rest of this page: they preview with `confirm=false`, apply with `confirm=true`, honor `UNIFI_DRIVE_TOOL_PERMISSION_MODE` (falling back to `UNIFI_TOOL_PERMISSION_MODE`), and can be switched off with policy gates in the `file_services` and `nfs_connections` categories, for example `UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE=false`. None of them changes stored data: they turn SMB, NFS or Time Machine on or off and change which hosts may mount shared drives over NFS. See [Drive permissions](../apps/drive/docs/permissions.md).
+The Drive server's fourteen reads need no confirmation. Its four writes follow the rest of this page: they preview with `confirm=false`, apply with `confirm=true`, honor `UNIFI_DRIVE_TOOL_PERMISSION_MODE` (falling back to `UNIFI_TOOL_PERMISSION_MODE`), and can be switched off with policy gates in the `file_services` and `nfs_connections` categories, for example `UNIFI_POLICY_DRIVE_NFS_CONNECTIONS_DELETE=false`. None of them changes stored data: they turn SMB, NFS or Time Machine on or off and change which hosts may mount shared drives over NFS. See [Drive permissions](../apps/drive/docs/permissions.md).
 
 The rest of this page applies to the Network, Protect, Access, InnerSpace and Drive servers and, where stated, the API server.
 
