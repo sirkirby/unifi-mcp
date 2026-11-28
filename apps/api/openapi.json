@@ -27692,6 +27692,27 @@
             }
           },
           {
+            "description": "Filter by source client or host name, case-insensitive; a MAC also works",
+            "in": "query",
+            "name": "source_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source client or host name, case-insensitive; a MAC also works",
+              "title": "Source Name"
+            }
+          },
+          {
             "description": "Filter by source network ID",
             "in": "query",
             "name": "source_network_id",

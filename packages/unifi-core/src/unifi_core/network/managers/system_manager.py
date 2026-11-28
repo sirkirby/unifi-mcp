@@ -10,7 +10,15 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.site import Site  # Import Site model
 
 from unifi_core.network.managers.connection_manager import ConnectionManager, SettingsControllerRejection
-from unifi_core.network.models.ips_suppression import IpsSuppressions, ips_suppressions_from_controller
+from unifi_core.network.models.ips_suppression import (
+    IpsSuppressionCreate,
+    IpsSuppressionDelete,
+    IpsSuppressions,
+    apply_suppression_create,
+    apply_suppression_delete,
+    ips_suppressions_from_controller,
+    signature_suppressions,
+)
 from unifi_core.network.models.mdns import (
     MdnsSettings,
     mdns_from_controller,
@@ -424,9 +432,99 @@ class SystemManager:
             logger.error("Failed to read IPS suppressions: %s", type(exc).__name__)
             raise RuntimeError("Failed to read IPS suppressions; check controller compatibility") from None
 
+    async def preview_ips_suppression_change(
+        self, request: IpsSuppressionCreate | IpsSuppressionDelete
+    ) -> Dict[str, Any]:
+        """The signature's entries now and after the change; never writes."""
+        await self._require_ips_suppression_session()
+        before = await self._fresh_threat_record("ips_suppression")
+        after = self._apply_suppression_change(before, request)
+        return {
+            "current": self._signature_entries(before, request),
+            "after": self._signature_entries(after, request),
+        }
+
+    async def create_ips_suppression(self, request: IpsSuppressionCreate) -> WriteVerificationResult:
+        """Suppress a signature for all traffic or for one target, save the section once, then verify."""
+        return await self._write_ips_suppressions("create_ips_suppression", request)
+
+    async def delete_ips_suppression(self, request: IpsSuppressionDelete) -> WriteVerificationResult:
+        """Remove a signature's suppression or one of its targets, save the section once, then verify."""
+        return await self._write_ips_suppressions("delete_ips_suppression", request)
+
+    async def _require_ips_suppression_session(self) -> None:
+        """Writing the section needs a Network session; an API key alone reads it but cannot save it."""
+        message = "Changing IPS suppressions requires Network session authentication"
+        try:
+            ready = await self._connection.ensure_session_connected()
+        except Exception as exc:
+            logger.error("Failed to prepare IPS suppression session: %s", type(exc).__name__)
+            raise RuntimeError(message) from None
+        if not ready:
+            raise RuntimeError(message)
+
+    @staticmethod
+    def _apply_suppression_change(
+        record: Dict[str, Any], request: IpsSuppressionCreate | IpsSuppressionDelete
+    ) -> Dict[str, Any]:
+        if isinstance(request, IpsSuppressionCreate):
+            return apply_suppression_create(record, request)
+        return apply_suppression_delete(record, request)
+
+    @staticmethod
+    def _signature_entries(
+        record: Dict[str, Any], request: IpsSuppressionCreate | IpsSuppressionDelete
+    ) -> List[Dict[str, Any]]:
+        return signature_suppressions(ips_suppressions_from_controller(record), request.signature_id, request.gid)
+
+    async def _write_ips_suppressions(
+        self, operation: str, request: IpsSuppressionCreate | IpsSuppressionDelete
+    ) -> WriteVerificationResult:
+        """Change one fresh copy of the section, post it whole, and verify the signature's entries read back."""
+        await self._require_ips_suppression_session()
+        before = await self._fresh_threat_record("ips_suppression")
+        merged = self._apply_suppression_change(before, request)
+        public_before = self._signature_entries(before, request)
+        if merged == before:
+            return noop_write(operation=operation, resource={"suppressions": public_before})
+        wanted = self._signature_entries(merged, request)
+        try:
+            await self._connection.request(ApiRequest(method="post", path="/set/setting/ips_suppression", data=merged))
+        except Exception as exc:
+            logger.error("Failed to change IPS suppressions: %s", type(exc).__name__)
+            if isinstance(exc, SettingsControllerRejection):
+                return failed_write(
+                    f"Controller rejected the IPS suppression change ({exc.code})",
+                    operation=operation,
+                )
+            return failed_write(
+                "IPS suppression write outcome uncertain; list suppressions before another change",
+                operation=operation,
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+        finally:
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_SETTINGS}_ips_suppression_{self._connection.site}")
+        try:
+            after = await self._fresh_threat_record("ips_suppression")
+            public_after = self._signature_entries(after, request)
+        except Exception:
+            return failed_write(
+                "IPS suppression write outcome uncertain; readback failed",
+                operation=operation,
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+        return verify_write(
+            operation=operation,
+            requested={"suppressions": wanted},
+            before={"suppressions": public_before},
+            after={"suppressions": public_after},
+        )
+
     async def _fresh_threat_record(self, section: str) -> Dict[str, Any]:
         """Read a known singleton without trusting cached settings for a write."""
-        if section not in {"ips", "dpi"}:
+        if section not in {"ips", "dpi", "ips_suppression"}:
             raise ValueError("Unsupported threat management section")
         try:
             response = await self._connection.request(ApiRequest(method="get", path=f"/get/setting/{section}"))

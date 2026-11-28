@@ -41,6 +41,19 @@ _RESULT_LIMIT_MARGIN = 100
 _STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
 
 
+class UnknownSourceHost(ValueError):
+    """A ``source_host`` filter name that matched no host in filter data or the client list.
+
+    A ``ValueError``, so callers that already catch one keep working. ``name`` is
+    the caller's own value; a surface that answers with fixed text names only
+    the filter.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
+        self.name = name
+
+
 class DpiCatalogProvider(Protocol):
     """Narrow dependency used for read-only traffic-flow DPI annotation."""
 
@@ -168,11 +181,15 @@ class TrafficFlowManager:
         resolved: list[Dict[str, Any]] = []
         seen: set[str] = set()
 
-        def add(mac: Any) -> None:
+        def add(mac: Any) -> bool:
+            """Add a usable MAC; False when the record carries none."""
             canonical = canonical_mac(mac)
-            if canonical is not None and canonical not in seen:
+            if canonical is None:
+                return False
+            if canonical not in seen:
                 seen.add(canonical)
                 resolved.append({"mac": canonical})
+            return True
 
         hosts: list[Any] | None = None
         clients: list[Any] | None = None
@@ -197,9 +214,9 @@ class TrafficFlowManager:
                     str(host.get("host_name") or "").casefold(),
                 }
             ]
-            if matches:
-                for host in matches:
-                    add(host.get("mac"))
+            # A name resolves only to a usable MAC: matching records without one fall through to the
+            # client list, then fail, because an empty host filter would match every client's flows.
+            if any([add(host.get("mac")) for host in matches]):
                 continue
             if self._client_manager is not None:
                 if clients is None:
@@ -213,11 +230,9 @@ class TrafficFlowManager:
                         str(self._client_raw(client).get("hostname") or "").casefold(),
                     }
                 ]
-                if client_matches:
-                    for client in client_matches:
-                        add(self._client_raw(client).get("mac"))
+                if any([add(self._client_raw(client).get("mac")) for client in client_matches]):
                     continue
-            raise ValueError(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
+            raise UnknownSourceHost(name)
         return resolved
 
     async def get_traffic_flows(self, query: TrafficFlowQuery) -> Dict[str, Any]:

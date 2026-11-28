@@ -1995,6 +1995,7 @@ The controller serves at most 5,000 flows per query and may leave rarer records 
 - `service` (query)
 - `source_mac` (query)
 - `source_ip` (query)
+- `source_name` (query)
 - `source_network_id` (query)
 - `source_port` (query)
 - `destination_domain` (query)

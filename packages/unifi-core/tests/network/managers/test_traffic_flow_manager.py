@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_core.exceptions import UniFiAuthError
-from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
+from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager, UnknownSourceHost
 from unifi_core.network.models.traffic_flows import TrafficFlowQuery
 
 _EMPTY_RESPONSE = {
@@ -523,9 +523,11 @@ async def test_source_name_with_no_matching_host_raises():
     conn = _make_connection_with_filter_data()
     mgr = TrafficFlowManager(conn)
 
-    with pytest.raises(ValueError, match="No-Such-Host"):
+    with pytest.raises(UnknownSourceHost, match="No-Such-Host") as caught:
         await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["No-Such-Host"]))
 
+    assert caught.value.name == "No-Such-Host"
+    assert isinstance(caught.value, ValueError)
     assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
 
 
@@ -648,6 +650,46 @@ async def test_name_in_neither_source_is_refused_without_post():
         await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Ghost-Device"]))
 
     assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mac", [None, "", "not-a-mac"])
+async def test_a_name_whose_records_carry_no_usable_mac_is_refused_without_post(mac):
+    """An empty host filter would match every client's flows, so a name must resolve to a MAC."""
+    host = {**_HOST_OBJECT, "mac": mac}
+    client_manager = _StubClientManager([{"name": "Lab-Laptop", "hostname": "lab-laptop.local", "mac": mac}])
+    conn = _make_connection_with_filter_data(filter_data={"source": {"hosts": [host]}})
+    mgr = TrafficFlowManager(conn, client_manager=client_manager)
+
+    with pytest.raises(UnknownSourceHost, match="Lab-Laptop"):
+        await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+
+    assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_a_filter_data_match_without_a_mac_falls_back_to_the_client_list():
+    host = {**_HOST_OBJECT, "mac": None}
+    client_manager = _StubClientManager([{"name": "Lab-Laptop", "hostname": "x", "mac": "bb:bb:bb:bb:bb:bb"}])
+    conn = _make_connection_with_filter_data(filter_data={"source": {"hosts": [host]}})
+    mgr = TrafficFlowManager(conn, client_manager=client_manager)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": "bb:bb:bb:bb:bb:bb"}]
+
+
+@pytest.mark.asyncio
+async def test_a_usable_mac_among_matches_is_enough():
+    hosts = [{**_HOST_OBJECT, "mac": None}, _SECOND_HOST_OBJECT]
+    conn = _make_connection_with_filter_data(filter_data={"source": {"hosts": hosts}})
+    mgr = TrafficFlowManager(conn)
+
+    await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["Lab-Laptop"]))
+
+    post = next(call for call in conn.request.await_args_list if call.args[0].method == "post")
+    assert post.args[0].data["source_host"] == [{"mac": _SECOND_HOST_OBJECT["mac"]}]
 
 
 @pytest.mark.asyncio

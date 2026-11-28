@@ -3085,7 +3085,7 @@ type NetworkQuery {
   """
   Query historical traffic flows (Insights > Flows), paginated. The controller serves at most 5,000 per query (see truncated), and a broad query can omit medium/high-risk and blocked flows that a single-value query returns: query those on their own.
   """
-  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: BigInt = null, timeTo: BigInt = null, searchText: String = null, risk: [String!] = null, action: [String!] = null, direction: [String!] = null, protocol: [String!] = null, service: [String!] = null, sourceMac: [String!] = null, sourceIp: [String!] = null, sourceNetworkId: [String!] = null, sourcePort: [Int!] = null, destinationDomain: [String!] = null, destinationIp: [String!] = null, destinationPort: [Int!] = null, destinationRegion: [String!] = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
+  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: BigInt = null, timeTo: BigInt = null, searchText: String = null, risk: [String!] = null, action: [String!] = null, direction: [String!] = null, protocol: [String!] = null, service: [String!] = null, sourceMac: [String!] = null, sourceIp: [String!] = null, sourceName: [String!] = null, sourceNetworkId: [String!] = null, sourcePort: [Int!] = null, destinationDomain: [String!] = null, destinationIp: [String!] = null, destinationPort: [Int!] = null, destinationRegion: [String!] = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
 
   """
   Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).

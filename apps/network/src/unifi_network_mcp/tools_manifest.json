@@ -1,5 +1,5 @@
 {
-  "count": 219,
+  "count": 221,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -19,6 +19,7 @@
     "unifi_create_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_create_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_create_firewall_zone": "unifi_network_mcp.tools.firewall",
+    "unifi_create_ips_suppression": "unifi_network_mcp.tools.system",
     "unifi_create_nat_rule": "unifi_network_mcp.tools.nat",
     "unifi_create_network": "unifi_network_mcp.tools.network",
     "unifi_create_oon_policy": "unifi_network_mcp.tools.oon",
@@ -42,6 +43,7 @@
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_zone": "unifi_network_mcp.tools.firewall",
+    "unifi_delete_ips_suppression": "unifi_network_mcp.tools.system",
     "unifi_delete_nat_rule": "unifi_network_mcp.tools.nat",
     "unifi_delete_network": "unifi_network_mcp.tools.network",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
@@ -2444,6 +2446,149 @@
         }
       },
       "title": "Create Firewall Zone"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Suppress an IPS signature for all traffic, or for one address or CIDR subnet in one direction, and verify persistence. Adds to the signature's existing suppression. Suppressing hides real detections and requires confirmation; the preview shows the signature's live before/after entries.",
+      "name": "unifi_create_ips_suppression",
+      "permission_action": "create",
+      "permission_category": "system",
+      "schema": {
+        "input": {
+          "properties": {
+            "category": {
+              "description": "IPS category code to store with a new suppression, such as emerging-webapps; the controller refuses an unknown code",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "Apply when true; return a live preview when false",
+              "type": "boolean"
+            },
+            "gid": {
+              "description": "Signature generator ID; 1 for most signatures",
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            "scope": {
+              "description": "global suppresses the signature for all traffic; the others only for target in that direction",
+              "enum": [
+                "global",
+                "source",
+                "destination",
+                "both"
+              ],
+              "type": "string"
+            },
+            "signature": {
+              "description": "Signature name to store with a new suppression",
+              "type": "string"
+            },
+            "signature_id": {
+              "description": "Signature ID, as an IPS event reports it",
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            "target": {
+              "description": "IPv4 or IPv6 address, or a CIDR subnet such as 192.0.2.0/24; required unless scope is global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "signature_id",
+            "scope"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Create IPS Suppression"
     },
     {
       "annotations": {
@@ -5622,6 +5767,139 @@
         }
       },
       "title": "Delete Firewall Zone"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Remove an IPS signature's suppression, or one of its targets, and verify persistence. Removing the last target removes the suppression. Requires confirmation; the preview shows the signature's live before/after entries.",
+      "name": "unifi_delete_ips_suppression",
+      "permission_action": "delete",
+      "permission_category": "system",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "Apply when true; return a live preview when false",
+              "type": "boolean"
+            },
+            "gid": {
+              "description": "Signature generator ID; 1 for most signatures",
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            "scope": {
+              "description": "With target: only the entry in this direction; omit for any direction",
+              "enum": [
+                "source",
+                "destination",
+                "both"
+              ],
+              "type": "string"
+            },
+            "signature_id": {
+              "description": "Signature ID of the suppression",
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            "target": {
+              "description": "IPv4 or IPv6 address, or a CIDR subnet such as 192.0.2.0/24 to stop suppressing; omit to remove the signature's whole suppression",
+              "type": "string"
+            }
+          },
+          "required": [
+            "signature_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete IPS Suppression"
     },
     {
       "annotations": {

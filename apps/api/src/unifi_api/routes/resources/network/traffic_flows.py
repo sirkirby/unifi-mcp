@@ -28,7 +28,14 @@ from unifi_api.routes.resources._common import (
     resolve_controller,
 )
 from unifi_api.services.pydantic_models import Detail, Page
-from unifi_api.services.traffic_flow_query import REJECTED, InvalidTrafficFlowFilter, build_query, is_rejection
+from unifi_api.services.traffic_flow_query import (
+    REJECTED,
+    UNKNOWN_SOURCE_NAME,
+    InvalidTrafficFlowFilter,
+    build_query,
+    is_rejection,
+    is_unknown_source_name,
+)
 
 router = APIRouter()
 
@@ -81,6 +88,10 @@ async def get_traffic_flows(
     service: Annotated[list[str] | None, Query(description="Filter by service")] = None,
     source_mac: Annotated[list[str] | None, Query(description="Filter by source MAC")] = None,
     source_ip: Annotated[list[str] | None, Query(description="Filter by source IP")] = None,
+    source_name: Annotated[
+        list[str] | None,
+        Query(description="Filter by source client or host name, case-insensitive; a MAC also works"),
+    ] = None,
     source_network_id: Annotated[list[str] | None, Query(description="Filter by source network ID")] = None,
     source_port: Annotated[list[Port] | None, Query(description="Filter by source port")] = None,
     destination_domain: Annotated[list[str] | None, Query(description="Filter by destination domain")] = None,
@@ -121,6 +132,7 @@ async def get_traffic_flows(
             service=service,
             source_mac=source_mac,
             source_ip=source_ip,
+            source_host=source_name,
             source_network_id=source_network_id,
             source_port=source_port,
             destination_domain=destination_domain,
@@ -143,6 +155,8 @@ async def get_traffic_flows(
         try:
             result = await mgr.get_traffic_flows(query)
         except Exception as exc:
+            if is_unknown_source_name(exc):
+                raise HTTPException(status_code=422, detail=UNKNOWN_SOURCE_NAME) from None
             if is_rejection(exc):
                 raise HTTPException(status_code=400, detail=REJECTED) from None
             raise

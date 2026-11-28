@@ -124,10 +124,12 @@ from unifi_api.services.incident_evidence import (
     require_product,
 )
 from unifi_api.services.traffic_flow_query import (
+    UNKNOWN_SOURCE_NAME,
     InvalidTrafficFlowFilter,
     TrafficFlowQueryRejected,
     build_query,
     is_rejection,
+    is_unknown_source_name,
 )
 
 # ---------------------------------------------------------------------------
@@ -4079,6 +4081,7 @@ class NetworkQuery:
         service: list[str] | None = None,
         source_mac: list[str] | None = None,
         source_ip: list[str] | None = None,
+        source_name: list[str] | None = None,
         source_network_id: list[str] | None = None,
         source_port: list[int] | None = None,
         destination_domain: list[str] | None = None,
@@ -4110,6 +4113,7 @@ class NetworkQuery:
             service=service,
             source_mac=source_mac,
             source_ip=source_ip,
+            source_host=source_name,
             source_network_id=source_network_id,
             source_port=source_port,
             destination_domain=destination_domain,
@@ -4120,6 +4124,8 @@ class NetworkQuery:
         try:
             result = await _fetch_traffic_flows(ctx, controller, site, query)
         except Exception as exc:
+            if is_unknown_source_name(exc):
+                raise InvalidTrafficFlowFilter(UNKNOWN_SOURCE_NAME) from None
             if is_rejection(exc):
                 raise TrafficFlowQueryRejected() from None
             raise
