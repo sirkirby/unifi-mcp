@@ -106,7 +106,7 @@ uvx unifi-drive-mcp@latest
 In Claude Code, `/plugin install unifi-drive@unifi-plugins` installs it with
 guided setup. The container image is `ghcr.io/sirkirby/unifi-drive-mcp:latest`.
 
-It has 12 domain tools: eight reads, and four writes that preview before they
+It has 13 domain tools: nine reads, and four writes that preview before they
 change anything: SMB, NFS and Time Machine on or off, and NFS client access to
 shared drives. Turning SMB off also turns Time Machine off, because Time Machine
 runs over SMB. Stdio is the default; HTTP is opt-in and listens on port 3004.

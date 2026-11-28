@@ -172,7 +172,7 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 - [Configuration](docs/configuration.md): the NAS login, TLS, settings, operation gate, HTTP, Docker Compose, registration modes
 - [Permissions](docs/permissions.md): previews, permission mode, policy gates, read-only mode, redaction
-- [Tool catalog](docs/tools.md): the 12 tools, parameters, NFS behavior and write previews
+- [Tool catalog](docs/tools.md): the 13 tools, parameters, NFS behavior and write previews
 - [Troubleshooting](docs/troubleshooting.md): setup mode, login and access errors, file services and NFS, TLS, Docker
 - [MCP discovery and meta-tools](../../docs/tool-index.md): `tools/list`, `drive_tool_index` and `drive_execute`
 

@@ -1,5 +1,5 @@
 {
-  "count": 18,
+  "count": 19,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",

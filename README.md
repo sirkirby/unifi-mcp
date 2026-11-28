@@ -27,7 +27,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Access](apps/access/) | Stable | 38 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 | [Site Manager](apps/sitemanager/) | Beta | 9 | [`unifi-sitemanager-mcp`](https://pypi.org/project/unifi-sitemanager-mcp/) |
 | [InnerSpace](apps/innerspace/) | Beta | 24 | [`unifi-innerspace-mcp`](https://pypi.org/project/unifi-innerspace-mcp/) |
-| [Drive](apps/drive/) | Beta | 12 | [`unifi-drive-mcp`](https://pypi.org/project/unifi-drive-mcp/) |
+| [Drive](apps/drive/) | Beta | 13 | [`unifi-drive-mcp`](https://pypi.org/project/unifi-drive-mcp/) |
 
 Network, Protect, Access, InnerSpace and Drive each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
