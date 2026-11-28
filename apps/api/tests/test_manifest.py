@@ -65,7 +65,7 @@ def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 352
+    assert len(registry) == 353
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")

@@ -2370,6 +2370,60 @@ type InnerSpaceWallType {
   overridesVariant: String
 }
 
+"""An address excluded from all IPS detection."""
+type IpsExclusion {
+  """source, destination, or both; null if unknown."""
+  scope: String
+
+  """Raw controller direction."""
+  direction: String
+
+  """Raw controller target kind, such as ip or subnet."""
+  mode: String
+
+  """Excluded address, subnet, or network."""
+  target: String
+}
+
+"""One suppressed IPS signature for one target, or for all traffic."""
+type IpsSuppression {
+  """Signature ID."""
+  signatureId: BigInt!
+
+  """Signature generator ID."""
+  gid: BigInt
+
+  """Signature name."""
+  signature: String
+
+  """Signature category."""
+  category: String
+
+  """Raw controller type, such as all or track."""
+  suppressionType: String
+
+  """global, source, destination, or both; null if unknown."""
+  scope: String
+
+  """Raw controller direction."""
+  direction: String
+
+  """Raw controller target kind, such as ip or subnet."""
+  mode: String
+
+  """Suppressed address, subnet, or network."""
+  target: String
+}
+
+"""IPS signature suppressions and detection exclusions for a site."""
+type IpsSuppressions {
+  """One entry per signature and target."""
+  suppressions: [IpsSuppression!]!
+
+  """Addresses excluded from all detection."""
+  exclusions: [IpsExclusion!]!
+}
+
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
@@ -2977,6 +3031,9 @@ type NetworkQuery {
   Get site-wide threat management (IDS/IPS) and traffic identification settings.
   """
   threatManagementSettings(controller: ID!, site: String! = "default"): ThreatManagementSettings
+
+  """List IPS signature suppressions and detection exclusions."""
+  ipsSuppressions(controller: ID!, site: String! = "default"): IpsSuppressions!
 
   """
   Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.
@@ -4704,6 +4761,7 @@ Read-only access to UniFi Network resources.
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Network event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
+- `ipsSuppressions: IpsSuppressions!`  — List IPS signature suppressions and detection exclusions.
 - `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
 - `mdnsSettings: MdnsSettings`  — Get site-wide mDNS service settings and read-only network scope.

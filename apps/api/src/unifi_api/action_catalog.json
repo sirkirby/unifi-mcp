@@ -7919,6 +7919,21 @@
       }
     },
     {
+      "name": "unifi_list_ips_suppressions",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "either",
+      "manager_attr": "system_manager",
+      "manager_method": "list_ips_suppressions",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_list_legacy_firewall_rules",
       "product": "network",
       "category": "firewall",

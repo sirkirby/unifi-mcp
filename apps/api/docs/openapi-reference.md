@@ -1227,6 +1227,20 @@ Collect bounded, read-only Network event evidence for one incident window. Retur
 **Returns:** `Detail_dict_`
 
 
+## network/ips_suppression
+
+### `GET /v1/sites/{site_id}/ips-suppressions` — List Ips Suppressions
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_IpsSuppressionsModel_`
+
+
 ## network/lldp
 
 ### `GET /v1/sites/{site_id}/lldp-neighbors` — List Lldp Neighbors

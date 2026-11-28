@@ -134,6 +134,7 @@ from unifi_api.routes.resources.network import (
     gateway_settings as net_gateway_settings_routes,
 )
 from unifi_api.routes.resources.network import incident_evidence as net_incident_evidence_routes
+from unifi_api.routes.resources.network import ips_suppression as net_ips_suppression_routes
 from unifi_api.routes.resources.network import (
     legacy_firewall_rules as net_legacy_firewall_rules_routes,
 )
@@ -704,6 +705,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_mdns_routes,
         net_teleport_routes,
         net_mgmt_routes,
+        net_ips_suppression_routes,
         net_threat_management_routes,
         net_threat_posture_routes,
         net_incident_evidence_routes,
