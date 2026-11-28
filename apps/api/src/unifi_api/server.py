@@ -77,9 +77,13 @@ from unifi_api.routes.resources.access import (
     visitors as access_visitors_routes,
 )
 from unifi_api.routes.resources.drive import file_services as drive_file_services_routes
+from unifi_api.routes.resources.drive import logs as drive_logs_routes
+from unifi_api.routes.resources.drive import performance as drive_performance_routes
 from unifi_api.routes.resources.drive import shared_drives as drive_shared_drives_routes
+from unifi_api.routes.resources.drive import snapshots as drive_snapshots_routes
 from unifi_api.routes.resources.drive import storage as drive_storage_routes
 from unifi_api.routes.resources.drive import system as drive_system_routes
+from unifi_api.routes.resources.drive import users as drive_users_routes
 from unifi_api.routes.resources.innerspace import devices as innerspace_devices_routes
 from unifi_api.routes.resources.innerspace import floor_plans as innerspace_floor_plans_routes
 from unifi_api.routes.resources.innerspace import project as innerspace_project_routes
@@ -751,9 +755,13 @@ def create_app(config: ApiConfig) -> FastAPI:
         app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (
         drive_system_routes,
+        drive_logs_routes,
         drive_storage_routes,
+        drive_performance_routes,
         drive_shared_drives_routes,
+        drive_snapshots_routes,
         drive_file_services_routes,
+        drive_users_routes,
     ):
         app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (

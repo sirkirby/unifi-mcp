@@ -1,6 +1,7 @@
-"""UniFi Drive storage pools and disks.
+"""UniFi Drive storage pools, their usage, and disks.
 
 - ``GET /sites/{site_id}/drive/storage-pools`` → ``drive_list_storage_pools``
+- ``GET /sites/{site_id}/drive/storage-usage`` → ``drive_get_storage_usage``
 - ``GET /sites/{site_id}/drive/disks`` → ``drive_list_disks``
 """
 
@@ -31,6 +32,23 @@ async def list_drive_storage_pools(request: Request, site_id: str, controller=De
     operation = "list Drive storage pools"
     result = await read(request, controller, manager_attr="storage_manager", method="list_pools", operation=operation)
     return items(request, "drive_list_storage_pools", result, operation=operation)
+
+
+@router.get(
+    "/sites/{site_id}/drive/storage-usage",
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["drive/storage"],
+    summary="Get Drive storage usage",
+    description=(
+        "Each storage pool's capacity, used and free space, and what the used space is used by: personal "
+        "drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id "
+        f"is the id the storage pool list reports. {SITE_NOTE}"
+    ),
+)
+async def get_drive_storage_usage(request: Request, site_id: str, controller=Depends(resolve_controller)) -> dict:
+    operation = "get Drive storage usage"
+    result = await read(request, controller, manager_attr="storage_manager", method="get_usage", operation=operation)
+    return items(request, "drive_get_storage_usage", result, operation=operation)
 
 
 @router.get(

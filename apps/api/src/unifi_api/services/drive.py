@@ -105,3 +105,29 @@ async def read_drive(
         return await getattr(manager, method)(*args, **(kwargs or {}))
     except Exception as exc:
         raise map_drive_error(exc, operation) from None
+
+
+def disk_stats_view(stats: Any, *, include_samples: bool = False) -> dict[str, Any]:
+    """Disk stats as every surface answers them: each disk's per-bucket samples only when asked for.
+
+    The samples run to about 12 KB per disk per day at 15-minute buckets, so the
+    summary is the default, as the Drive MCP tool returns it.
+    """
+    data = stats.model_dump()
+    if not include_samples:
+        for disk in data["disks"]:
+            disk.pop("samples", None)
+    return data
+
+
+def log_query(operation: str, **filters: Any) -> Any:
+    """The core log query from a read surface's filters; an invalid filter maps like any other read failure.
+
+    Unset filters are left out, so the query's own defaults apply.
+    """
+    from unifi_core.drive.models.logs import DriveLogQuery
+
+    try:
+        return DriveLogQuery(**{key: value for key, value in filters.items() if value is not None})
+    except ValidationError as exc:
+        raise map_drive_error(exc, operation) from None

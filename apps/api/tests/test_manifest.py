@@ -65,7 +65,7 @@ def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 330
+    assert len(registry) == 352
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")
@@ -265,13 +265,24 @@ def test_innerspace_catalog_accepts_session_reads_and_writes(monkeypatch, action
 
 
 DRIVE_READS = {
+    "drive_get_disk_stats",
+    "drive_get_fan_profile",
     "drive_get_file_services",
+    "drive_get_network_throughput",
+    "drive_get_rsync_settings",
     "drive_get_shared_drive",
+    "drive_get_smb_advanced_settings",
+    "drive_get_snapshot_overview",
+    "drive_get_storage_usage",
     "drive_get_system_info",
     "drive_list_disks",
+    "drive_list_groups",
+    "drive_list_logs",
     "drive_list_nfs_connections",
     "drive_list_shared_drives",
+    "drive_list_snapshots",
     "drive_list_storage_pools",
+    "drive_list_users",
 }
 DRIVE_WRITES = {
     "drive_set_file_service": ("file_service", "update", "set_file_service"),

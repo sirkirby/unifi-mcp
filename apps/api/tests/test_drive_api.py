@@ -20,7 +20,9 @@ from tests.drive_data import (
     BIG_CAPACITY,
     CLIENT,
     DRIVE_ID,
+    GROUP_ID,
     HOSTNAME_CHECK,
+    LOG_CURSOR,
     MISSING_DRIVE_ID,
     NAS_HOST,
     NEW_CLIENT,
@@ -29,7 +31,10 @@ from tests.drive_data import (
     OTHER_DRIVE_ID,
     PERSONAL_DRIVE_ID,
     POOL_ID,
+    RSYNC_PASSWORD,
+    USER_ID,
     V1,
+    V2,
     FakeDrive,
     bootstrap,
     drive_cm,
@@ -194,6 +199,270 @@ async def test_rest_controller_without_drive_is_a_capability_mismatch(tmp_path):
     assert response.json()["detail"]["missing_product"] == "drive"
 
 
+def _sent(nas: FakeDrive, prefix: str) -> list[str]:
+    return [path for method, path, _body in nas.requests if method == "GET" and path.startswith(prefix)]
+
+
+@pytest.mark.asyncio
+async def test_rest_logs_are_one_page_with_a_cursor_and_the_filters_reach_drive(tmp_path):
+    nas = FakeDrive()
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    first = await _get(
+        app, headers, f"{BASE}/logs", category="storage", severities=["very_high", "low"], keyword="Bay", limit=2
+    )
+    cursor = first.json()["data"]["next_cursor"]
+    last = await _get(app, headers, f"{BASE}/logs", category="storage", cursor=cursor)
+
+    assert first.status_code == 200, first.text
+    page = first.json()["data"]
+    assert [entry["title"] for entry in page["entries"]] == ["Storage Pool Array at Risk", "Drive Inserted"]
+    assert page["entries"][0]["message"] == "Storage Pool 1 is degraded. Bay 3 is showing pre-failure indicators."
+    # The cursor is named next_cursor: a key holding "token" would be masked by redaction and break paging.
+    assert cursor == LOG_CURSOR
+    assert first.json()["render_hint"]["kind"] == "detail"
+    assert last.json()["data"]["next_cursor"] is None
+    sent_first, sent_last = _sent(nas, f"{V2}/systems/logs")
+    # The category becomes its types; the cursor goes back as Drive's nextToken.
+    assert "types=storagePool%2Cdrive" in sent_first and "severities=very_high%2Clow" in sent_first
+    assert "keywords=Bay" in sent_first and "limit=2" in sent_first
+    assert f"nextToken={LOG_CURSOR}" in sent_last
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("params", "reaches_drive"),
+    [
+        ({"category": "no-such-category"}, True),
+        ({"types": ["no-such-type"]}, True),
+        ({"scope": "everything"}, False),
+        ({"limit": 501}, False),
+        ({"after": "yesterday"}, False),
+        ({"after": "2026-11-20T00:00:00Z", "before": "2026-11-19T00:00:00Z"}, False),
+    ],
+)
+async def test_rest_invalid_log_filters_are_a_fixed_text_422(tmp_path, params, reaches_drive):
+    nas = FakeDrive()
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    response = await _get(app, headers, f"{BASE}/logs", **params)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == {
+        "kind": "invalid_drive_request",
+        "message": "Failed to list Drive system log entries: invalid arguments.",
+    }
+    for value in params.values():
+        assert str(value) not in response.text
+    # A filter the query refuses is never sent; a category or type is checked against Drive's own definitions.
+    assert _sent(nas, f"{V2}/systems/logs") == []
+    assert bool(_sent(nas, f"{V2}/systems/log-definitions")) is reaches_drive
+
+
+@pytest.mark.asyncio
+async def test_rest_storage_usage_splits_the_used_space(tmp_path):
+    app, headers, _key, _cid = await _app(tmp_path, FakeDrive())
+
+    response = await _get(app, headers, f"{BASE}/storage-usage")
+
+    assert response.status_code == 200, response.text
+    [pool] = response.json()["items"]
+    assert (pool["pool_id"], pool["capacity_bytes"]) == (POOL_ID, BIG_CAPACITY)
+    assert pool["shared_drives_bytes"] == 10825012379648
+    # Used space minus the parts Drive names: system and other data.
+    assert pool["system_bytes"] == 10826060070912 - 10825012379648
+    assert response.json()["render_hint"]["primary_key"] == "pool_id"
+
+
+@pytest.mark.asyncio
+async def test_rest_throughput_and_fan_profile(tmp_path):
+    app, headers, _key, _cid = await _app(tmp_path, FakeDrive())
+
+    throughput = await _get(app, headers, f"{BASE}/network-throughput")
+    fan = await _get(app, headers, f"{BASE}/fan-profile")
+
+    assert throughput.status_code == 200, throughput.text
+    assert throughput.json()["data"] == {
+        "receive_kbps": 6.32,
+        "transmit_kbps": 17.45,
+        "timestamp": "2026-01-02T03:04:05.123456789-05:00",
+    }
+    assert fan.status_code == 200, fan.text
+    assert (fan.json()["data"]["current_profile"], fan.json()["data"]["current_label"]) == ("default", "Balanced")
+    assert fan.json()["data"]["available_profiles"][0] == {"profile": "cooling", "label": "Cooling"}
+
+
+@pytest.mark.asyncio
+async def test_rest_disk_stats_leave_the_samples_out_unless_asked(tmp_path):
+    nas = FakeDrive()
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    summary = await _get(app, headers, f"{BASE}/disk-stats", hours=6)
+    with_samples = await _get(app, headers, f"{BASE}/disk-stats", include_samples="true")
+
+    assert summary.status_code == 200, summary.text
+    data = summary.json()["data"]
+    assert (data["interval_seconds"], data["sample_count"]) == (900, 2)
+    bay, cache = data["disks"]
+    assert (bay["slot_id"], bay["bay_type"], bay["read_kbps_avg"], bay["temperature_c_max"]) == (
+        "1",
+        "disk",
+        200.38,
+        36,
+    )
+    assert bay["bad_sector_count_increase"] == 2
+    assert (cache["bay_type"], cache["samples_with_data"]) == ("cache", 0)
+    assert bay["samples"] is None and cache["samples"] is None
+    assert [sample["write_kbps"] for sample in with_samples.json()["data"]["disks"][0]["samples"]] == [0, 50]
+    # The window is the last six hours, in 15-minute buckets.
+    start, end = (int(part.split("=")[1]) for part in _sent(nas, f"{V2}/systems/disk-stats")[0].split("&")[:2])
+    assert end - start == 6 * 3600
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hours", [0, 2161])
+async def test_rest_disk_stats_window_out_of_range_is_a_422_before_any_request(tmp_path, hours):
+    nas = FakeDrive()
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    response = await _get(app, headers, f"{BASE}/disk-stats", hours=hours)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["message"] == "Failed to get Drive disk stats: invalid arguments."
+    assert _sent(nas, f"{V2}/systems/disk-stats") == []
+
+
+@pytest.mark.asyncio
+async def test_rest_snapshot_overview_and_one_shared_drives_snapshots(tmp_path):
+    app, headers, _key, _cid = await _app(tmp_path, FakeDrive())
+
+    overview = await _get(app, headers, f"{BASE}/snapshot-overview")
+    listed = await _get(app, headers, f"{BASE}/snapshots/shared/Media")
+    none = await _get(app, headers, f"{BASE}/snapshots/shared/Shared_Drive")
+
+    assert overview.status_code == 200, overview.text
+    [shared] = overview.json()["data"]["shared_drives"]
+    assert (shared["shared_drive_id"], shared["shared_drive_name"]) == (OTHER_DRIVE_ID, "Media")
+    assert (shared["configured"], shared["snapshot_limit"], shared["paused"]) == (False, 0, True)
+    [personal] = overview.json()["data"]["personal_drives"]
+    assert (personal["user_id"], personal["coverage_bytes"], personal["locked_count"]) == (USER_ID, BIG_CAPACITY, 1)
+    # The owner's name is not a declared field.
+    assert "Synthetic" not in overview.text
+    assert listed.status_code == 200, listed.text
+    assert [(snap["id"], snap["locked"]) for snap in listed.json()["items"]] == [("snap-2", True), ("snap-1", False)]
+    assert listed.json()["render_hint"]["primary_key"] == "id"
+    assert none.json()["items"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "status", "message"),
+    [
+        ("Missing", 404, "Failed to list Drive snapshots: not found."),
+        ("a..b", 422, "Failed to list Drive snapshots: invalid arguments."),
+    ],
+)
+async def test_rest_snapshots_of_a_missing_or_invalid_name_are_fixed_text(tmp_path, name, status, message):
+    nas = FakeDrive()
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    response = await _get(app, headers, f"{BASE}/snapshots/shared/{name}")
+
+    assert response.status_code == status, response.text
+    assert response.json()["detail"]["message"] == message
+    assert name not in response.text
+    if status == 422:
+        assert _sent(nas, f"{V1}/snapshots") == []
+
+
+@pytest.mark.asyncio
+async def test_rest_smb_advanced_and_rsync_settings_never_carry_the_rsync_password(tmp_path):
+    app, headers, _key, _cid = await _app(tmp_path, FakeDrive())
+
+    smb = await _get(app, headers, f"{BASE}/smb-advanced-settings")
+    rsync = await _get(app, headers, f"{BASE}/rsync-settings")
+
+    assert smb.status_code == 200, smb.text
+    assert smb.json()["data"] == {"personal_drive_recycle_enabled": True, "personal_drive_recycle_status": "optimal"}
+    assert rsync.status_code == 200, rsync.text
+    assert rsync.json()["data"] == {
+        "enabled": True,
+        "account_configured": True,
+        "account_username": "backup",
+        "ssh_enabled": False,
+    }
+    assert RSYNC_PASSWORD not in rsync.text
+
+
+@pytest.mark.asyncio
+async def test_rest_users_and_groups(tmp_path):
+    app, headers, _key, _cid = await _app(tmp_path, FakeDrive())
+
+    users = await _get(app, headers, f"{BASE}/users")
+    groups = await _get(app, headers, f"{BASE}/groups")
+
+    assert users.status_code == 200, users.text
+    owner, member = users.json()["items"]
+    assert (owner["id"], owner["access_level"], owner["roles"], owner["email"]) == (
+        USER_ID,
+        "owner",
+        ["owner"],
+        "owner@example.com",
+    )
+    assert (member["access_level"], member["status"], member["email"], member["last_login"]) == (
+        "user",
+        "deactivated",
+        None,
+        None,
+    )
+    # Avatar URLs and SSO identifiers are not declared fields.
+    assert "avatar" not in users.text and "sso-synthetic" not in users.text
+    assert groups.status_code == 200, groups.text
+    assert groups.json()["items"] == [{"id": GROUP_ID, "name": "Family"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/logs",
+        "/storage-usage",
+        "/network-throughput",
+        "/fan-profile",
+        "/disk-stats",
+        "/snapshot-overview",
+        "/snapshots/shared/Media",
+        "/smb-advanced-settings",
+        "/rsync-settings",
+        "/users",
+        "/groups",
+    ],
+)
+async def test_rest_new_reads_need_a_drive_controller_and_map_a_rejected_login(tmp_path, path):
+    network_app, network_headers, _key, _cid = await _app(tmp_path / "network", products="network")
+    refused_app, refused_headers, _key, _cid = await _app(tmp_path / "refused", FakeDrive(login_status=401))
+
+    mismatch = await _get(network_app, network_headers, f"{BASE}{path}")
+    refused = await _get(refused_app, refused_headers, f"{BASE}{path}")
+
+    assert mismatch.status_code == 409, mismatch.text
+    assert mismatch.json()["detail"]["missing_product"] == "drive"
+    assert refused.status_code == 502, refused.text
+    assert refused.json()["detail"]["kind"] == "drive_upstream_error"
+    assert NAS_HOST not in refused.text
+
+
+@pytest.mark.asyncio
+async def test_rest_refused_user_list_is_403(tmp_path):
+    nas = FakeDrive(faults={("GET", f"{V1}/users?type=detail"): 403})
+    app, headers, _key, _cid = await _app(tmp_path, nas)
+
+    response = await _get(app, headers, f"{BASE}/users")
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["kind"] == "drive_forbidden"
+
+
 # ---------------------------------------------------------------------------
 # GraphQL
 # ---------------------------------------------------------------------------
@@ -209,6 +478,25 @@ async def test_graphql_maps_a_missing_drive_to_not_found(tmp_path):
 
     assert body["errors"][0]["extensions"]["code"] == "NOT_FOUND"
     assert MISSING_DRIVE_ID not in json.dumps(body)
+
+
+@pytest.mark.asyncio
+async def test_graphql_maps_a_missing_snapshot_drive_and_an_invalid_log_filter(tmp_path):
+    app, _headers, key, cid = await _app(tmp_path, FakeDrive())
+
+    missing = await graphql(
+        app, key, f'{{ drive {{ snapshots(controller: "{cid}", sharedDriveName: "Missing") {{ id }} }} }}'
+    )
+    invalid = await graphql(
+        app, key, f'{{ drive {{ logs(controller: "{cid}", scope: "everything") {{ nextCursor }} }} }}'
+    )
+    window = await graphql(app, key, f'{{ drive {{ diskStats(controller: "{cid}", hours: 0) {{ sampleCount }} }} }}')
+
+    assert missing["errors"][0]["extensions"]["code"] == "NOT_FOUND"
+    assert "Missing" not in json.dumps(missing)
+    assert invalid["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert "everything" not in json.dumps(invalid)
+    assert window["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +518,76 @@ async def test_read_actions_use_the_read_projections(tmp_path):
     assert pools["data"][0]["capacity_bytes"] == BIG_CAPACITY
     assert pools["render_hint"]["kind"] == "list"
     assert [d["bay_type"] for d in disks["data"]] == ["disk"]
+
+
+@pytest.mark.asyncio
+async def test_new_read_actions_answer_as_their_routes_do(tmp_path):
+    nas = FakeDrive()
+    app, headers, _key, cid = await _app(tmp_path, nas)
+
+    logs = await _action(app, headers, cid, "drive_list_logs", {"types": ["drive"], "limit": 5})
+    summary = await _action(app, headers, cid, "drive_get_disk_stats", {"hours": 6})
+    samples = await _action(app, headers, cid, "drive_get_disk_stats", {"include_samples": True})
+    snapshots = await _action(app, headers, cid, "drive_list_snapshots", {"shared_drive_name": "Media"})
+    usage = await _action(app, headers, cid, "drive_get_storage_usage", {})
+    fan = await _action(app, headers, cid, "drive_get_fan_profile", {})
+    overview = await _action(app, headers, cid, "drive_get_snapshot_overview", {})
+    rsync = await _action(app, headers, cid, "drive_get_rsync_settings", {})
+    users = await _action(app, headers, cid, "drive_list_users", {})
+    groups = await _action(app, headers, cid, "drive_list_groups", {})
+
+    assert logs["success"] is True, logs
+    assert logs["data"]["next_cursor"] == LOG_CURSOR
+    assert logs["data"]["entries"][0]["event"] == "StoragePoolArrayAtRiskSingle"
+    assert "types=drive" in _sent(nas, f"{V2}/systems/logs")[0]
+    # Samples only when asked for, as the route and the Drive MCP tool answer.
+    assert all(disk["samples"] is None for disk in summary["data"]["disks"])
+    assert len(samples["data"]["disks"][0]["samples"]) == 2
+    first_window, default_window = _sent(nas, f"{V2}/systems/disk-stats")
+    assert "interval=900" in first_window and "interval=900" in default_window
+    assert [snap["id"] for snap in snapshots["data"]] == ["snap-2", "snap-1"]
+    assert snapshots["render_hint"]["primary_key"] == "id"
+    assert usage["data"][0]["capacity_bytes"] == BIG_CAPACITY
+    assert fan["data"]["current_label"] == "Balanced"
+    assert overview["data"]["shared_drives"][0]["shared_drive_name"] == "Media"
+    assert rsync["data"]["account_username"] == "backup"
+    assert RSYNC_PASSWORD not in json.dumps(rsync)
+    assert [user["id"] for user in users["data"]][0] == USER_ID
+    assert groups["data"] == [{"id": GROUP_ID, "name": "Family"}]
+
+
+def test_log_and_disk_stats_translators_pass_the_manager_only_what_it_takes():
+    from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+    from unifi_core.drive.models.logs import DriveLogQuery
+
+    _, logs = DISPATCH_ARG_TRANSLATORS["drive_list_logs"]({"types": ["drive"], "scope": "audit", "limit": 5})
+    _, windowed = DISPATCH_ARG_TRANSLATORS["drive_get_disk_stats"]({"hours": 6, "include_samples": True})
+    _, default = DISPATCH_ARG_TRANSLATORS["drive_get_disk_stats"]({"include_samples": False})
+
+    assert logs == {"query": DriveLogQuery(types=["drive"], scope="audit", limit=5)}
+    # include_samples shapes the result; the manager reads the window only.
+    assert (windowed, default) == ({"hours": 6}, {})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("drive_list_logs", {"after": "2026-11-20T00:00:00Z", "before": "2026-11-19T00:00:00Z"}),
+        ("drive_list_logs", {"category": "no-such-category"}),
+        ("drive_list_snapshots", {"shared_drive_name": "Missing"}),
+    ],
+)
+async def test_new_read_actions_fail_without_echoing_the_value(tmp_path, tool, args):
+    nas = FakeDrive()
+    app, headers, _key, cid = await _app(tmp_path, nas)
+
+    result = await _action(app, headers, cid, tool, args)
+
+    assert result["success"] is False
+    for value in args.values():
+        assert value not in result["error"]
+    assert nas.changes == []
 
 
 @pytest.mark.asyncio

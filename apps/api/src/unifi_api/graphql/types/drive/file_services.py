@@ -1,4 +1,4 @@
-"""UniFi Drive file services (SMB, NFS, Time Machine) and NFS client connections."""
+"""UniFi Drive file services (SMB, NFS, Time Machine, rsync), SMB advanced settings and NFS client connections."""
 
 from __future__ import annotations
 
@@ -57,3 +57,32 @@ class DriveNfsConnection(Projection):
     _nested = {"shared_drives": (DriveNfsSharedDriveGrant, True)}
     _identity = "client"
     _columns = ["client", "async_writes"]
+
+
+@strawberry.type(description=DESCRIPTION)
+class DriveSmbAdvancedSettings(Projection):
+    personal_drive_recycle_enabled: bool | None = strawberry.field(
+        description="Whether files removed over SMB from personal drives go to Trash (SMB Trash for Personal Drives)"
+    )
+    personal_drive_recycle_status: str | None = strawberry.field(
+        description=(
+            "optimal when every personal drive can move removed files to Trash; migrateFirstFailed or "
+            "migrateFailed when one or more cannot yet"
+        )
+    )
+
+    _columns = ["personal_drive_recycle_enabled", "personal_drive_recycle_status"]
+
+
+@strawberry.type(description=DESCRIPTION)
+class DriveRsyncSettings(Projection):
+    enabled: bool | None = strawberry.field(description="Whether the rsync service is on")
+    account_configured: bool | None = strawberry.field(
+        description="Whether a dedicated rsync account is set; its password is never returned"
+    )
+    account_username: str | None = strawberry.field(description="Username of that account, if Drive reports it")
+    ssh_enabled: bool | None = strawberry.field(
+        description="Whether the console's SSH is on; rsync runs over SSH and does not work without it"
+    )
+
+    _columns = ["enabled", "account_configured", "ssh_enabled"]

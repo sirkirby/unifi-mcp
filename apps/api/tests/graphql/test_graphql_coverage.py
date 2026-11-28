@@ -109,7 +109,7 @@ def test_every_read_tool_has_graphql_field() -> None:
     fields = _query_field_names()
     by_product = _read_tools_by_product()
     assert len(by_product["innerspace"]) == 9
-    assert len(by_product["drive"]) == 7
+    assert len(by_product["drive"]) == 18
 
     missing: list[str] = []
     for product, tools in by_product.items():

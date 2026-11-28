@@ -756,6 +756,47 @@
       }
     },
     {
+      "name": "drive_get_disk_stats",
+      "product": "drive",
+      "category": "performance",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "performance_manager",
+      "manager_method": "get_disk_stats",
+      "input_schema": {
+        "properties": {
+          "hours": {
+            "description": "How far back to read, in hours (default 24, up to 90 days)",
+            "maximum": 2160,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "include_samples": {
+            "description": "Also return every bucket's values for each disk (default false). Adds one entry per bucket per disk, about 12 KB per disk per day at 15-minute buckets and up to about 1 MB for a full NAS over a week or more; use a short window",
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_fan_profile",
+      "product": "drive",
+      "category": "performance",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "performance_manager",
+      "manager_method": "get_fan_profile",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "drive_get_file_services",
       "product": "drive",
       "category": "file_service",
@@ -764,6 +805,36 @@
       "auth_method": "local_only",
       "manager_attr": "file_service_manager",
       "manager_method": "get_file_services",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_network_throughput",
+      "product": "drive",
+      "category": "performance",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "performance_manager",
+      "manager_method": "get_network_throughput",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_rsync_settings",
+      "product": "drive",
+      "category": "file_service",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "get_rsync_settings",
       "input_schema": {
         "properties": {},
         "type": "object",
@@ -789,6 +860,51 @@
         "required": [
           "drive_id"
         ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_smb_advanced_settings",
+      "product": "drive",
+      "category": "file_service",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "file_service_manager",
+      "manager_method": "get_smb_advanced_settings",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_snapshot_overview",
+      "product": "drive",
+      "category": "snapshot",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "snapshot_manager",
+      "manager_method": "get_snapshot_overview",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_get_storage_usage",
+      "product": "drive",
+      "category": "storage",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "storage_manager",
+      "manager_method": "get_usage",
+      "input_schema": {
+        "properties": {},
         "type": "object",
         "additionalProperties": false
       }
@@ -833,6 +949,80 @@
       }
     },
     {
+      "name": "drive_list_groups",
+      "product": "drive",
+      "category": "user",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "user_manager",
+      "manager_method": "list_groups",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_logs",
+      "product": "drive",
+      "category": "log",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "log_manager",
+      "manager_method": "list_logs",
+      "input_schema": {
+        "properties": {
+          "after": {
+            "description": "Only entries after this ISO 8601 time with offset, e.g. 2026-11-20T00:00:00Z",
+            "type": "string"
+          },
+          "before": {
+            "description": "Only entries before this ISO 8601 time with offset",
+            "type": "string"
+          },
+          "category": {
+            "description": "Only entries in this category: activity, storage or settings on current firmware.",
+            "type": "string"
+          },
+          "cursor": {
+            "description": "next_cursor from the previous page",
+            "type": "string"
+          },
+          "keyword": {
+            "description": "Only entries whose text matches this keyword",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Most entries per page, 1-500 (default 50)",
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "scope": {
+            "description": "audit: user and admin actions; flow: file activity; all (default): everything",
+            "enum": [
+              "all",
+              "audit",
+              "flow"
+            ],
+            "type": "string"
+          },
+          "severities": {
+            "description": "Only entries at these severities. Omit for all.",
+            "type": "array"
+          },
+          "types": {
+            "description": "Only entries of these types, such as storagePool, drive, hotSpare, userAccess or fanMode. An unknown type is an error that lists the valid ones.",
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "drive_list_nfs_connections",
       "product": "drive",
       "category": "nfs_connection",
@@ -863,6 +1053,29 @@
       }
     },
     {
+      "name": "drive_list_snapshots",
+      "product": "drive",
+      "category": "snapshot",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "snapshot_manager",
+      "manager_method": "list_snapshots",
+      "input_schema": {
+        "properties": {
+          "shared_drive_name": {
+            "description": "Shared drive name, not its id (from drive_list_shared_drives)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shared_drive_name"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "drive_list_storage_pools",
       "product": "drive",
       "category": "storage",
@@ -871,6 +1084,21 @@
       "auth_method": "local_only",
       "manager_attr": "storage_manager",
       "manager_method": "list_pools",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "drive_list_users",
+      "product": "drive",
+      "category": "user",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "user_manager",
+      "manager_method": "list_users",
       "input_schema": {
         "properties": {},
         "type": "object",

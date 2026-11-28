@@ -162,6 +162,191 @@ SERVICE_SETTINGS = {
 }
 
 
+# System log, shaped as UniFi OS 6.0.18 / Drive 4.4.31 answers it; names, addresses and ids are synthetic.
+LOG_CURSOR = "synthetic-next-page"
+LOGS = {
+    "logs": [
+        {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "category": "storage",
+            "type": "storagePool",
+            "name": "StoragePoolArrayAtRiskSingleV1",
+            "severity": "very_high",
+            "data": {"storagePool": "Storage Pool 1", "drive": "Bay 3"},
+            "panels": {},
+            "createdAt": "2026-11-20T10:00:00.000000-05:00",
+        },
+        {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "category": "storage",
+            "type": "drive",
+            "name": "DriveInsertedV1",
+            "severity": "low",
+            "data": {"drive": "Bay 1"},
+            "panels": {"drive": {"data": {"type": "hardDrive", "data": {"id": "1"}}}},
+            "createdAt": "2026-11-18T14:57:11.757183-05:00",
+        },
+    ]
+}
+LOG_DEFINITIONS = {
+    "categories": {"activity": "Activity", "settings": "Settings", "storage": "Storage"},
+    "types": {"drive": "Drive", "fanMode": "Fan Mode", "storagePool": "Storage Pool", "userAccess": "User Access"},
+    "categoryTypes": {"activity": ["userAccess"], "settings": ["fanMode"], "storage": ["storagePool", "drive"]},
+    "events": {
+        "StoragePoolArrayAtRiskSingleV1": {
+            "title": "Storage Pool Array at Risk",
+            "description": "{storagePool} is degraded. {drive} is showing pre-failure indicators.",
+        },
+        "DriveInsertedV1": {"title": "Drive Inserted", "description": "{drive} was inserted and is ready to use."},
+    },
+}
+
+# Pool usage keyed by pool id, as storage/usage answers it.
+STORAGE_USAGE = {
+    POOL_ID: {
+        "poolId": POOL_ID,
+        "used": 10826060070912,
+        "available": 5166108049408,
+        "capacity": BIG_CAPACITY,
+        "usedByPersonalDrives": 0,
+        "usedBySharedDrives": 10825012379648,
+        "usedByM365": 0,
+    }
+}
+
+NETWORK_IO = {"receiveKBPS": 6.319893, "transmitKBPS": 17.447551, "timestamp": "2026-01-02T03:04:05.123456789-05:00"}
+FAN_CONTROL = {"availableProfiles": ["cooling", "default", "quiet"], "currentProfile": "default"}
+# Two 15-minute buckets for one bay and the cache slot, which has no data.
+DISK_STATS = {
+    "series": {
+        "disks": [
+            {
+                "slotId": "1",
+                "type": "HDD",
+                "serial": "SYNTHETIC-SERIAL-1",
+                "temperatures": [34, 36],
+                "readKBPS": [100.5, 300.25],
+                "writeKBPS": [0, 50],
+                "badSectorCount": [0, 2],
+            }
+        ],
+        "cacheSlots": [
+            {
+                "slotId": "1",
+                "type": "SSD",
+                "temperatures": [None, None],
+                "readKBPS": [None, None],
+                "writeKBPS": [None, None],
+                "badSectorCount": [None, None],
+            }
+        ],
+    },
+    "window": {"samples": 2, "start": 1767225600, "end": 1767227400, "interval": 900},
+}
+
+SMB_ADVANCED = {"personalDriveRecycleEnabled": True, "personalDriveRecycleStatus": "optimal"}
+RSYNC_PASSWORD = "synthetic-rsync-password"
+RSYNC = {"enable": True, "rsyncAccount": {"username": "backup", "password": RSYNC_PASSWORD}}
+SYSTEMS_INFO = {"sshEnabled": False, "remoteAccessEnabled": False, "firmwareVersion": "6.0.18"}
+
+USER_ID = "99999999-9999-4999-8999-999999999999"
+SNAPSHOT_OVERVIEW = {
+    "personal": [
+        {
+            "coverageSize": BIG_CAPACITY,
+            "deletionCount": 0,
+            "lastSnapshotTime": "2026-01-02T03:00:00Z",
+            "lockedCount": 1,
+            "maxCount": 10,
+            "nextSnapshotTime": "2026-01-03T03:00:00Z",
+            "paused": False,
+            "restoringDrive": False,
+            "schedule": {
+                "interval": 60,
+                "weekdays": "",
+                "monthdays": "1,15,L",
+                "firstRunTime": "3:00",
+                "lastRunTime": "3:00",
+                "enable": True,
+            },
+            "settingId": "setting-personal-1",
+            "user": {"id": USER_ID, "firstName": "Synthetic", "lastName": "Person"},
+            "encryptionStatus": "unencrypted",
+            "totalCount": 3,
+        }
+    ],
+    "shared": [
+        {
+            "coverageSize": 0,
+            "deletionCount": 0,
+            "lastSnapshotTime": None,
+            "lockedCount": 0,
+            "maxCount": 0,
+            "nextSnapshotTime": None,
+            "paused": True,
+            "pauseReason": "ErrSnapshotStorageLow",
+            "restoringDrive": False,
+            "schedule": {
+                "interval": 0,
+                "weekdays": "",
+                "monthdays": "",
+                "firstRunTime": "",
+                "lastRunTime": "",
+                "enable": False,
+            },
+            "settingId": None,
+            "sharedDrive": {"id": OTHER_DRIVE_ID, "name": "Media", "status": "active"},
+            "totalCount": 0,
+        }
+    ],
+}
+SNAPSHOTS = {
+    "Media": [
+        {
+            "id": "snap-2",
+            "name": "",
+            "description": "Scheduled Snapshot",
+            "createdAt": "2026-01-02T03:00:00Z",
+            "locked": True,
+        },
+        {"id": "snap-1", "name": "before upgrade", "createdAt": "2026-01-01T03:00:00Z", "locked": False},
+    ],
+    "Shared_Drive": [],
+}
+
+USERS = [
+    {
+        "id": USER_ID,
+        "username": "owner",
+        "fullName": "Synthetic Owner",
+        "email": "owner@example.com",
+        "status": "active",
+        "isOwner": True,
+        "roles": [{"level": 1, "systemKey": "owner"}],
+        "appliedStorageProfile": {"enable": True, "id": "profile-1"},
+        "mustChangePassword": False,
+        "linkedToAD": False,
+        "hasUniFiSsoId": False,
+        "createdAt": "2026-01-01T00:00:00+00:00",
+        "lastLogin": "2026-01-02T03:04:05+00:00",
+        "avatar": "https://192.0.2.10/avatar/synthetic.png",
+        "ssoId": "sso-synthetic",
+    },
+    {
+        "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "username": "member",
+        "fullName": "Synthetic Member",
+        "email": "",
+        "status": "deactivated",
+        "isOwner": False,
+        "roles": [],
+        "lastLogin": "1970-01-01T00:00:00Z",
+    },
+]
+GROUP_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+GROUPS = {"groups": [{"id": GROUP_ID, "name": "Family", "unknownField": 1}]}
+
+
 def connection(client: str, *grants: tuple[str, str, str], async_writes: bool = False) -> dict[str, Any]:
     """A connection as Drive returns it on read; ``grants`` are ``(id, name, permission)``."""
     return {
@@ -261,7 +446,47 @@ class FakeDrive:
             return 200, {}, _envelope({})
         if (method, path) == ("POST", HOSTNAME_CHECK):
             return 200, {}, _envelope({"hostnames": [{"hostname": name} for name in json_body["hostnames"]]})
+        if method == "GET":
+            found = self._read(path)
+            if found is not None:
+                return found
         return 599, {}, {"err": {"msg": "unscripted"}}
+
+    def _read(self, path: str) -> tuple[int, dict[str, str], Any] | None:
+        """The read-only endpoints; ``path`` may carry a query string."""
+        route, _, query = path.partition("?")
+        if route == f"{V2}/systems/log-definitions":
+            return 200, {}, copy.deepcopy(LOG_DEFINITIONS)
+        if route == f"{V2}/systems/logs":
+            # The first page names a next page; the page after it is the last.
+            if "nextToken=" in query:
+                return 200, {}, {"logs": copy.deepcopy(LOGS["logs"][1:])}
+            return 200, {}, {**copy.deepcopy(LOGS), "nextToken": LOG_CURSOR}
+        reads = {
+            f"{V2}/storage/usage": STORAGE_USAGE,
+            f"{V2}/systems/network-io": NETWORK_IO,
+            f"{V2}/systems/fan-control": FAN_CONTROL,
+            f"{V2}/systems/disk-stats": DISK_STATS,
+            f"{V2}/services/rsync/settings": RSYNC,
+            f"{V2}/groups": GROUPS,
+        }
+        if route in reads:
+            return 200, {}, copy.deepcopy(reads[route])
+        enveloped = {
+            f"{V1}/services/smb/advanced-settings": SMB_ADVANCED,
+            f"{V1}/systems/info": SYSTEMS_INFO,
+            f"{V1}/systems/snapshot": SNAPSHOT_OVERVIEW,
+            f"{V1}/users": USERS,
+        }
+        if route in enveloped:
+            return 200, {}, _envelope(copy.deepcopy(enveloped[route]))
+        if route.startswith(f"{V1}/snapshots/shared/"):
+            name = route.rsplit("/", 1)[1]
+            if name not in SNAPSHOTS:
+                # Drive answers 403, not 404, for a name no shared drive has.
+                return 403, {}, {"err": {"msg": "Forbidden"}, "type": "single", "data": []}
+            return 200, {}, _envelope(copy.deepcopy(SNAPSHOTS[name]))
+        return None
 
 
 def transport_failure(method: str, path: str) -> UniFiConnectionError:

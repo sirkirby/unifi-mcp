@@ -223,17 +223,26 @@ def _build_innerspace_managers() -> dict[str, Callable[..., Any]]:
 
 def _build_drive_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.drive.managers.file_service_manager import FileServiceManager
+    from unifi_core.drive.managers.log_manager import DriveLogManager
+    from unifi_core.drive.managers.performance_manager import PerformanceManager
     from unifi_core.drive.managers.shared_drive_manager import SharedDriveManager
+    from unifi_core.drive.managers.snapshot_manager import SnapshotManager
     from unifi_core.drive.managers.storage_manager import StorageManager
     from unifi_core.drive.managers.system_manager import DriveSystemManager
+    from unifi_core.drive.managers.user_manager import DriveUserManager
 
-    # The file service manager checks NFS grants against the shared drives on the
-    # same connection, as the Drive MCP runtime builds it.
+    # The file service manager checks NFS grants, and the snapshot manager tells a
+    # missing shared drive from a refused one, against the shared drives on the
+    # same connection, as the Drive MCP runtime builds them.
     return {
         "file_service_manager": lambda cm: FileServiceManager(cm, SharedDriveManager(cm)),
+        "log_manager": lambda cm: DriveLogManager(cm),
+        "performance_manager": lambda cm: PerformanceManager(cm),
         "shared_drive_manager": lambda cm: SharedDriveManager(cm),
+        "snapshot_manager": lambda cm: SnapshotManager(cm, SharedDriveManager(cm)),
         "storage_manager": lambda cm: StorageManager(cm),
         "system_manager": lambda cm: DriveSystemManager(cm),
+        "user_manager": lambda cm: DriveUserManager(cm),
     }
 
 

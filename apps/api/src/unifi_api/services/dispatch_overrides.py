@@ -1790,7 +1790,16 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
     "protect_get_snapshot": _snapshot_direct_result,
 }
 
+
+def _drive_disk_stats_result(result: Any, args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    """Disk stats without each disk's samples unless include_samples asks for them, as REST answers them."""
+    from unifi_api.services.drive import disk_stats_view
+
+    return disk_stats_view(result, include_samples=args.get("include_samples") is True)
+
+
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
+    "drive_get_disk_stats": _drive_disk_stats_result,
     "innerspace_list_walls": _innerspace_page_result,
     "innerspace_list_placed_devices": _innerspace_page_result,
     "protect_get_snapshot": _snapshot_result,
@@ -1900,7 +1909,21 @@ def _translate_drive_update_nfs(args: dict[str, Any]) -> tuple[tuple[Any, ...], 
     return (), {"client": args.get("client"), "shared_drives": grants, "async_writes": args.get("async_writes")}
 
 
+def _translate_drive_list_logs(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate the filters into the manager's log query, as the Drive MCP tool does."""
+    from unifi_core.drive.models.logs import DriveLogQuery
+
+    return (), {"query": DriveLogQuery(**args)}
+
+
+def _translate_drive_disk_stats(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """The window goes to the manager; include_samples only shapes the result."""
+    return (), {"hours": args["hours"]} if "hours" in args else {}
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    "drive_list_logs": _spec(_translate_drive_list_logs, "query"),
+    "drive_get_disk_stats": _spec(_translate_drive_disk_stats, "hours"),
     # Drive NFS writes: the preview echoes the caller's request, not the validated models.
     "drive_add_nfs_connection": _spec(_translate_drive_add_nfs, "connection", preserve_public_preview=True),
     "drive_update_nfs_connection": _spec(

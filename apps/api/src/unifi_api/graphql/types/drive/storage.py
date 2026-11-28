@@ -1,4 +1,4 @@
-"""UniFi Drive storage pools, their RAID groups, and the disks in the NAS's bays."""
+"""UniFi Drive storage pools, their RAID groups, what their used space is used by, and the disks in the bays."""
 
 from __future__ import annotations
 
@@ -76,3 +76,25 @@ class DriveDisk(Projection):
     )
 
     _columns = ["slot_id", "bay_type", "state", "model", "temperature_c"]
+
+
+@strawberry.type(description=DESCRIPTION)
+class DriveStoragePoolUsage(Projection):
+    pool_id: str | None = strawberry.field(description="Storage pool id, the same id the storage pool list reports")
+    capacity_bytes: BigInt | None = strawberry.field(description="Usable capacity in bytes")
+    used_bytes: BigInt | None = strawberry.field(description="Used space in bytes")
+    available_bytes: BigInt | None = strawberry.field(description="Free space in bytes")
+    used_percent: float | None = strawberry.field(description="Used space as a percentage of capacity")
+    personal_drives_bytes: BigInt | None = strawberry.field(description="Used by personal drives")
+    shared_drives_bytes: BigInt | None = strawberry.field(description="Used by shared drives")
+    snapshots_bytes: BigInt | None = strawberry.field(description="Used by snapshots, when Drive reports it")
+    m365_bytes: BigInt | None = strawberry.field(description="Used by Microsoft 365 backups, when Drive reports it")
+    system_bytes: BigInt | None = strawberry.field(
+        description=(
+            "Used by everything else (system and other data): used space minus the parts above, as the Drive UI "
+            "shows it. Absent when the pool has iSCSI or deduplication data, which Drive counts differently."
+        )
+    )
+
+    _identity = "pool_id"
+    _columns = ["pool_id", "used_percent", "available_bytes", "shared_drives_bytes", "system_bytes"]
