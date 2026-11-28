@@ -1,7 +1,7 @@
 """DriveQuery: read-only GraphQL fields for UniFi Drive.
 
 Each field calls the same core manager method as the REST route and the
-action, through :func:`unifi_api.services.drive.read_drive`, so a failure maps
+action, through :func:`unifi_api.services.console_product.read`, so a failure maps
 to the same fixed text; here it surfaces as a GraphQL error code. Drive lists
 are returned whole: Drive does not page them, except the system log, which
 pages by cursor. Disk stats carry each disk's samples, which a query selects
@@ -10,14 +10,12 @@ only when it needs them. Writes are actions only.
 
 from __future__ import annotations
 
-from typing import Any
-
 import strawberry
 from strawberry.types import Info
 from unifi_core.drive.models.logs import DEFAULT_LOG_LIMIT
 
-from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.resolvers._console_product import ConsoleQueries
 from unifi_api.graphql.types.drive._base import DESCRIPTION
 from unifi_api.graphql.types.drive.file_services import (
     DriveFileServices,
@@ -32,49 +30,11 @@ from unifi_api.graphql.types.drive.snapshots import DriveSnapshot, DriveSnapshot
 from unifi_api.graphql.types.drive.storage import DriveDisk, DriveStoragePool, DriveStoragePoolUsage
 from unifi_api.graphql.types.drive.system import DriveSystemInfo
 from unifi_api.graphql.types.drive.users import DriveGroup, DriveUser
-from unifi_api.services.controllers import get_controller
-from unifi_api.services.drive import ID_FAMILY, PRODUCT, log_query, map_drive_error, read_drive
-from unifi_api.services.incident_evidence import require_product
+from unifi_api.services.drive import DRIVE, ID_FAMILY, log_query
 
-
-async def _read(
-    info: Info,
-    controller: str,
-    *,
-    manager_attr: str,
-    method: str,
-    operation: str,
-    args: tuple[Any, ...] = (),
-    **kwargs: Any,
-) -> Any:
-    ctx: GraphQLContext = info.context
-    async with ctx.sessionmaker() as session:
-        row = await get_controller(session, str(controller))
-    require_product(row, PRODUCT)
-    key = f"drive/{controller}/{manager_attr}.{method}/{args!r}/{sorted(kwargs.items())!r}"
-
-    async def _fetch() -> Any:
-        return await read_drive(
-            sessionmaker=ctx.sessionmaker,
-            factory=ctx.manager_factory,
-            controller_id=str(controller),
-            manager_attr=manager_attr,
-            method=method,
-            operation=operation,
-            args=args,
-            kwargs=kwargs,
-        )
-
-    return await ctx.cache.get_or_fetch(key, _fetch)
-
-
-def _project(info: Info, type_class: type, obj: Any, operation: str) -> Any:
-    """Project one result; a result it cannot project maps like any other read failure."""
-    ctx: GraphQLContext = info.context
-    try:
-        return type_class.from_manager_output(obj, redact_sensitive=ctx.redact_sensitive_fields)
-    except Exception as exc:
-        raise map_drive_error(exc, operation) from None
+_queries = ConsoleQueries(DRIVE)
+_read = _queries.read
+_project = _queries.project
 
 
 @strawberry.type(description=f"Read-only access to UniFi Drive resources. {ID_FAMILY}")

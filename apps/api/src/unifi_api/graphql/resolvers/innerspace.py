@@ -1,7 +1,7 @@
 """InnerSpaceQuery: read-only GraphQL fields for UniFi InnerSpace.
 
 Each field calls the same core manager method as the REST route and the
-action, through :func:`unifi_api.services.innerspace.read_innerspace`, so a
+action, through :func:`unifi_api.services.console_product.read`, so a
 failure maps to the same fixed text; here it surfaces as a GraphQL error code.
 Lists are returned whole (InnerSpace does not page them); walls and placed
 devices come as pages with their limit, total and truncation flag. No field
@@ -10,13 +10,11 @@ returns plan image bytes.
 
 from __future__ import annotations
 
-from typing import Any
-
 import strawberry
 from strawberry.types import Info
 
-from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.resolvers._console_product import ConsoleQueries
 from unifi_api.graphql.types.innerspace._base import DESCRIPTION
 from unifi_api.graphql.types.innerspace.devices import (
     InnerSpaceAccessPoint,
@@ -30,56 +28,11 @@ from unifi_api.graphql.types.innerspace.project import (
     InnerSpaceWallPage,
 )
 from unifi_api.graphql.types.innerspace.system import InnerSpaceStatus
-from unifi_api.services.controllers import get_controller
-from unifi_api.services.incident_evidence import require_product
-from unifi_api.services.innerspace import (
-    DEFAULT_LIMIT,
-    ID_FAMILY,
-    PRODUCT,
-    map_innerspace_error,
-    page_with_limit,
-    read_innerspace,
-)
+from unifi_api.services.innerspace import DEFAULT_LIMIT, ID_FAMILY, INNERSPACE, page_with_limit
 
-
-async def _read(
-    info: Info,
-    controller: str,
-    *,
-    manager_attr: str,
-    method: str,
-    operation: str,
-    args: tuple[Any, ...] = (),
-    **kwargs: Any,
-) -> Any:
-    ctx: GraphQLContext = info.context
-    async with ctx.sessionmaker() as session:
-        row = await get_controller(session, str(controller))
-    require_product(row, PRODUCT)
-    key = f"innerspace/{controller}/{manager_attr}.{method}/{args!r}/{sorted(kwargs.items())!r}"
-
-    async def _fetch() -> Any:
-        return await read_innerspace(
-            sessionmaker=ctx.sessionmaker,
-            factory=ctx.manager_factory,
-            controller_id=str(controller),
-            manager_attr=manager_attr,
-            method=method,
-            operation=operation,
-            args=args,
-            kwargs=kwargs,
-        )
-
-    return await ctx.cache.get_or_fetch(key, _fetch)
-
-
-def _project(info: Info, type_class: type, obj: Any, operation: str) -> Any:
-    """Project one result; a result it cannot project maps like any other read failure."""
-    ctx: GraphQLContext = info.context
-    try:
-        return type_class.from_manager_output(obj, redact_sensitive=ctx.redact_sensitive_fields)
-    except Exception as exc:
-        raise map_innerspace_error(exc, operation) from None
+_queries = ConsoleQueries(INNERSPACE)
+_read = _queries.read
+_project = _queries.project
 
 
 @strawberry.type(description=f"Read-only access to UniFi InnerSpace resources. {ID_FAMILY}")
