@@ -1,6 +1,6 @@
 {
   "name": "unifi-drive",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "UniFi Drive MCP server \u2014 read NAS storage pools, disk health and shared drives, and manage file services and NFS clients",
   "author": {
     "name": "sirkirby",

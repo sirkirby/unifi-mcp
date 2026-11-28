@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-28 — unifi-network 1.15.0, unifi-drive 1.1.0
+
+- Pins `unifi-network-mcp` [0.51.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.51.0) and `unifi-drive-mcp` [0.2.0](https://github.com/sirkirby/unifi-mcp/releases/tag/drive/v0.2.0).
+
+
 ## 2026-11-28 — unifi-drive 1.0.1
 
 - Prepares the Drive tool reference for the log, performance, snapshot and user tools that the next Drive server release adds. Nothing changes in what the plugin does until that release moves its pin.
