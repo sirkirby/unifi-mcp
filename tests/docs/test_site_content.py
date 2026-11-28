@@ -1390,7 +1390,7 @@ class ContentReconciliationTests(unittest.TestCase):
     def test_api_readme_documents_every_drive_route(self):
         spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))
         paths = sorted(path for path in spec["paths"] if "/drive/" in path)
-        self.assertEqual(len(paths), 7)
+        self.assertEqual(len(paths), 18)
         readme = Path("apps/api/README.md").read_text(encoding="utf-8")
         section = " ".join(readme.split("## UniFi Drive console product", 1)[1].split("\n## ", 1)[0].split())
         for path in paths:

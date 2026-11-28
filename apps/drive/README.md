@@ -144,7 +144,7 @@ Write (preview first; `confirm=true` applies):
 
 See [docs/tools.md](docs/tools.md) for parameters and behavior. IDs returned here belong to the Drive tool family; do not pass them to the Network, Protect, Access, Site Manager or InnerSpace servers.
 
-The same eleven tools are also available through [`unifi-api-server`](../api/README.md#unifi-drive-console-product): REST and GraphQL for the reads, catalog actions for all of them. Its write preview is request-only, and it honours `UNIFI_DRIVE_READ_ONLY` but not the `UNIFI_POLICY_DRIVE_*` gates.
+The same twenty-two tools are also available through [`unifi-api-server`](../api/README.md#unifi-drive-console-product): REST and GraphQL for the reads, catalog actions for all of them. Its write preview is request-only, and it honours `UNIFI_DRIVE_READ_ONLY` but not the `UNIFI_POLICY_DRIVE_*` gates.
 
 ### No support bundle
 

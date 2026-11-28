@@ -477,7 +477,7 @@ MAC addresses, serial numbers and plan geometry are not redacted.
 
 ## UniFi Drive console product
 
-The API server serves the seven reads and the four preview-first writes of the
+The API server serves the eighteen reads and the four preview-first writes of the
 [Drive MCP server](../drive/) for a controller that declares the `drive`
 product. A UNAS is its own UniFi OS console, so its controller record points
 at the NAS, not the gateway. It reads and writes the NAS's UniFi Drive
@@ -519,15 +519,53 @@ query parameter, and call the same manager methods:
 
 | Surface | Paths |
 |---|---|
-| REST | `GET /v1/sites/{site_id}/drive/system`, `GET /v1/sites/{site_id}/drive/storage-pools`, `GET /v1/sites/{site_id}/drive/disks`, `GET /v1/sites/{site_id}/drive/shared-drives`, `GET /v1/sites/{site_id}/drive/shared-drives/{drive_id}`, `GET /v1/sites/{site_id}/drive/file-services`, `GET /v1/sites/{site_id}/drive/nfs-connections` |
-| GraphQL | The `drive` namespace: `systemInfo`, `storagePools`, `disks`, `sharedDrives`, `sharedDrive`, `fileServices`, `nfsConnections` |
-| Actions | `POST /v1/actions/{tool_name}` for the seven `drive_*` read tools |
+| REST | Under `/v1/sites/{site_id}/drive/`, in the table below |
+| GraphQL | The `drive` namespace, in the table below |
+| Actions | `POST /v1/actions/{tool_name}` for the eighteen `drive_*` read tools |
+
+| Reads | REST `GET` | GraphQL field | Action |
+|---|---|---|---|
+| NAS console | `/v1/sites/{site_id}/drive/system` | `systemInfo` | `drive_get_system_info` |
+| System log, one page | `/v1/sites/{site_id}/drive/logs` | `logs` | `drive_list_logs` |
+| Storage pools | `/v1/sites/{site_id}/drive/storage-pools` | `storagePools` | `drive_list_storage_pools` |
+| What each pool's used space is used by | `/v1/sites/{site_id}/drive/storage-usage` | `storageUsage` | `drive_get_storage_usage` |
+| Disks | `/v1/sites/{site_id}/drive/disks` | `disks` | `drive_list_disks` |
+| Network throughput now | `/v1/sites/{site_id}/drive/network-throughput` | `networkThroughput` | `drive_get_network_throughput` |
+| Fan profile | `/v1/sites/{site_id}/drive/fan-profile` | `fanProfile` | `drive_get_fan_profile` |
+| Per-disk activity over a window | `/v1/sites/{site_id}/drive/disk-stats` | `diskStats` | `drive_get_disk_stats` |
+| Shared drives | `/v1/sites/{site_id}/drive/shared-drives` | `sharedDrives` | `drive_list_shared_drives` |
+| One shared drive, by id | `/v1/sites/{site_id}/drive/shared-drives/{drive_id}` | `sharedDrive` | `drive_get_shared_drive` |
+| Every drive's snapshot settings and state | `/v1/sites/{site_id}/drive/snapshot-overview` | `snapshotOverview` | `drive_get_snapshot_overview` |
+| One shared drive's snapshots, by name | `/v1/sites/{site_id}/drive/snapshots/shared/{shared_drive_name}` | `snapshots` | `drive_list_snapshots` |
+| SMB, NFS and Time Machine | `/v1/sites/{site_id}/drive/file-services` | `fileServices` | `drive_get_file_services` |
+| SMB Trash for personal drives | `/v1/sites/{site_id}/drive/smb-advanced-settings` | `smbAdvancedSettings` | `drive_get_smb_advanced_settings` |
+| rsync service | `/v1/sites/{site_id}/drive/rsync-settings` | `rsyncSettings` | `drive_get_rsync_settings` |
+| NFS clients | `/v1/sites/{site_id}/drive/nfs-connections` | `nfsConnections` | `drive_list_nfs_connections` |
+| Users | `/v1/sites/{site_id}/drive/users` | `users` | `drive_list_users` |
+| User groups | `/v1/sites/{site_id}/drive/groups` | `groups` | `drive_list_groups` |
 
 The path `site_id` is the controller site of the other console products and is
-**ignored** for Drive: a NAS has no sites. `disks` takes `include_empty`
-(default false) and `include_cache` (default true). Drive lists are not paged,
-so there is no cursor. Byte counts are `BigInt` in GraphQL. IDs from these
-routes belong to the Drive family: do not pass them to other products' routes.
+**ignored** for Drive: a NAS has no sites. Byte counts are `BigInt` in GraphQL.
+IDs from these routes belong to the Drive family: do not pass them to other
+products' routes. The arguments are the MCP tools' arguments:
+
+- `disks` takes `include_empty` (default false) and `include_cache` (default
+  true).
+- The system log is the one paged read: each call answers one page, newest
+  first, as `{"entries": [...], "next_cursor": ...}`. Pass `next_cursor` back as
+  `cursor`, with the same filters, for the next page; it is null on the last.
+  The filters are `limit` (1 to 500, default 50), `severities`, `category`,
+  `types`, `keyword`, `scope` (`all`, `audit` or `flow`), and `after` and
+  `before` (ISO 8601 with an offset). Over REST, repeat `severities` and `types`
+  for more than one value. An unknown category or type is a `422`.
+- Disk stats take `hours` (1 to 2160, default 24). The REST route and the action
+  leave out each disk's per-bucket `samples` unless `include_samples` is true:
+  they add about 12 KB per disk per day at 15-minute buckets. GraphQL returns
+  them only when a query selects `samples`.
+- A shared drive's snapshots are addressed by the shared drive's **name**, as
+  Drive addresses them, not by its id: take it from the shared drive list or
+  from `shared_drive_name` in the snapshot overview.
+- The other lists are whole, with no cursor.
 
 ```bash
 curl -s "http://localhost:8080/v1/sites/default/drive/storage-pools?controller=<id>" \
@@ -592,14 +630,16 @@ per-category `UNIFI_POLICY_DRIVE_*` gates are **not** applied by the API.
 
 Read errors are answered with fixed text built from the request path, the HTTP
 status and Drive's own capped message, never the NAS address; invalid arguments
-and a missing shared drive never echo the rejected value. REST answers
+and a missing shared drive never echo the rejected value. The text of a `403`,
+`429` or `502` names the request path, which for the system log includes the
+filters and cursor sent. REST answers
 `{"detail": {"kind": "...", "message": "..."}}`; GraphQL puts the code in the
 error's `extensions`.
 
 | Situation | REST status and `kind` | GraphQL code |
 |---|---|---|
 | Invalid arguments | `422` `invalid_drive_request` | `BAD_REQUEST` |
-| No such shared drive | `404` `drive_not_found` | `NOT_FOUND` |
+| No such shared drive (by id, or by name for snapshots) | `404` `drive_not_found` | `NOT_FOUND` |
 | The NAS refused the account (no access to UniFi Drive) | `403` `drive_forbidden` | `UPSTREAM_FORBIDDEN` |
 | Login rejected, connection, Drive not installed, other HTTP or malformed | `502` `drive_upstream_error` | `UPSTREAM_ERROR` |
 | The NAS rate-limited the request | `429` `drive_rate_limited` | `RATE_LIMITED` |
@@ -613,10 +653,12 @@ HTTP `200` with `success: false`, fixed text, and the error class audited as
 ### What read exposes, and redaction
 
 Every key with the `read` scope can read the NAS's storage layout, disk serial
-numbers, shared drive names and NFS client addresses for any registered Drive
-controller. Response redaction hides secret-looking fields by name and is on by
-default; MAC addresses, serial numbers and NFS client addresses are not
-redacted.
+numbers, shared drive names, NFS client addresses, users (usernames, names,
+email addresses, roles and last login) and the system log, whose messages name
+users, client addresses, drives and pools, for any registered Drive controller.
+The rsync account's password is never returned. Response redaction hides
+secret-looking fields by name and is on by default; MAC addresses, serial
+numbers, client addresses, email addresses and log messages are not redacted.
 
 ## Distribution
 
