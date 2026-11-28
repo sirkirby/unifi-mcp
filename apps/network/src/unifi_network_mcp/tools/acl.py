@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.network.models.acl import (
     MUTABLE_FIELDS,
     build_acl_rule,
@@ -370,3 +370,65 @@ async def delete_acl_rule(
     except Exception as e:
         logger.error("Error deleting ACL rule %s: %s", rule_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to delete ACL rule {rule_id}: {e}"}
+
+
+@server.tool(
+    name="unifi_set_acl_rule_order",
+    description="Reorder the MAC ACL rule chain for one network. Pass every rule ID from "
+    "unifi_list_acl_rules for that network, in the new order. The IDs are checked against a "
+    "fresh read before the write, and the saved order is read back afterwards. "
+    "Requires confirmation.",
+    permission_category="acl_rules",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def set_acl_rule_order(
+    network_id: Annotated[
+        str,
+        Field(description="Network/VLAN ID whose rule chain is reordered (from unifi_list_networks)"),
+    ],
+    ordered_rule_ids: Annotated[
+        List[str],
+        Field(
+            description="Every current ACL rule ID for that network, in the new order (first match first), "
+            "from unifi_list_acl_rules"
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the reorder. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Rewrites the MAC ACL rule chain for one network to the given order."""
+    logger.info(
+        "unifi_set_acl_rule_order called (network_id=%s, rules=%d, confirm=%s)",
+        network_id,
+        len(ordered_rule_ids or []),
+        confirm,
+    )
+    if not network_id:
+        return {"success": False, "error": "network_id is required"}
+
+    try:
+        if not confirm:
+            preview = await acl_manager.preview_acl_rule_order(network_id, list(ordered_rule_ids or []))
+            return update_preview(
+                resource_type="acl_rule_order",
+                resource_id=network_id,
+                resource_name="ACL rule order",
+                current_state={"order": preview["current"]},
+                updates={"order": preview["requested"]},
+            )
+        result = await acl_manager.set_acl_rule_order(network_id, list(ordered_rule_ids or []))
+        return {
+            "success": True,
+            "message": f"ACL rule order for network {network_id} updated.",
+            "network_id": result["network_id"],
+            "ordered_rule_ids": result["ordered_rule_ids"],
+            "acl_indices": result["acl_indices"],
+        }
+    except (ValueError, UniFiOperationError) as e:
+        return {"success": False, "error": f"Failed to set ACL rule order: {e}"}
+    except Exception as e:
+        logger.error("Error setting ACL rule order: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to set ACL rule order: {type(e).__name__}"}

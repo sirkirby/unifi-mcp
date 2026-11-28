@@ -663,3 +663,93 @@ class TestListAclRules:
             assert field in create_params, (
                 f"Mutable field '{field}' in AclRule is not a param on create_acl_rule — field symmetry violation"
             )
+
+
+class TestAclRuleOrderTool:
+    """The whole-chain reorder tool: preview, write and error reporting."""
+
+    CURRENT = [{"rule_id": "rule-a", "name": "A", "acl_index": 0}]
+    REQUESTED = [{"rule_id": "rule-b", "name": "B"}, {"rule_id": "rule-a", "name": "A"}]
+
+    @pytest.mark.asyncio
+    async def test_preview_reports_the_current_and_requested_order(self):
+        with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
+            mock_mgr.preview_acl_rule_order = AsyncMock(
+                return_value={"network_id": "net001", "current": self.CURRENT, "requested": self.REQUESTED}
+            )
+            from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+            result = await set_acl_rule_order(network_id="net001", ordered_rule_ids=["rule-b", "rule-a"], confirm=False)
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"] == {"current": {"order": self.CURRENT}, "proposed": {"order": self.REQUESTED}}
+        mock_mgr.set_acl_rule_order.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_writes_and_reports_the_applied_order(self):
+        applied = {
+            "network_id": "net001",
+            "ordered_rule_ids": ["rule-b", "rule-a"],
+            "acl_indices": {"rule-b": 0, "rule-a": 1},
+        }
+        with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
+            mock_mgr.set_acl_rule_order = AsyncMock(return_value=applied)
+            from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+            result = await set_acl_rule_order(network_id="net001", ordered_rule_ids=["rule-b", "rule-a"], confirm=True)
+
+        assert result["success"] is True
+        assert result["ordered_rule_ids"] == ["rule-b", "rule-a"]
+        assert result["acl_indices"] == {"rule-b": 0, "rule-a": 1}
+        mock_mgr.preview_acl_rule_order.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_missing_network_id_is_rejected(self):
+        from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+        result = await set_acl_rule_order(network_id="", ordered_rule_ids=["rule-a"], confirm=True)
+
+        assert result == {"success": False, "error": "network_id is required"}
+
+    @pytest.mark.asyncio
+    async def test_id_set_mismatch_is_reported(self):
+        with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
+            mock_mgr.preview_acl_rule_order = AsyncMock(
+                side_effect=ValueError("Reorder payload must preserve the exact current ACL rule ID set.")
+            )
+            from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+            result = await set_acl_rule_order(network_id="net001", ordered_rule_ids=["rule-a"], confirm=False)
+
+        assert result["success"] is False
+        assert "must preserve the exact current ACL rule ID set" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_read_back_mismatch_is_reported(self):
+        from unifi_core.exceptions import UniFiOperationError
+
+        with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
+            mock_mgr.set_acl_rule_order = AsyncMock(
+                side_effect=UniFiOperationError(
+                    "The controller accepted the ACL rule order but reports a different chain."
+                )
+            )
+            from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+            result = await set_acl_rule_order(network_id="net001", ordered_rule_ids=["rule-b", "rule-a"], confirm=True)
+
+        assert result["success"] is False
+        assert "reports a different chain" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_unexpected_failure_returns_only_the_exception_class(self):
+        with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
+            mock_mgr.set_acl_rule_order = AsyncMock(side_effect=RuntimeError("aa:bb:cc:dd:ee:ff leaked"))
+            from unifi_network_mcp.tools.acl import set_acl_rule_order
+
+            result = await set_acl_rule_order(network_id="net001", ordered_rule_ids=["rule-b", "rule-a"], confirm=True)
+
+        assert result["success"] is False
+        assert "RuntimeError" in result["error"]
+        assert "aa:bb" not in result["error"]
