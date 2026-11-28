@@ -508,7 +508,7 @@
       "read_only_hint": true,
       "auth_method": "local_only",
       "manager_attr": "system_manager",
-      "manager_method": "list_users",
+      "manager_method": "list_all_users",
       "input_schema": {
         "properties": {
           "compact": {

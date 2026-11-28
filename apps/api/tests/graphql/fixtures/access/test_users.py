@@ -17,7 +17,7 @@ async def test_access_users_list(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("access", "system_manager", "list_users"): [
+            ("access", "system_manager", "list_all_users"): [
                 {"unique_id": "user1", "full_name": "Alice"},
                 {"unique_id": "user2", "full_name": "Bob"},
             ],
@@ -45,7 +45,7 @@ async def test_access_users_cursor_visits_every_user_once(tmp_path, monkeypatch)
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="access")
     rows = [{"unique_id": f"user{i}", "full_name": f"User {i}"} for i in (3, 1, 2)]
-    stub_managers(monkeypatch, {("access", "system_manager", "list_users"): rows})
+    stub_managers(monkeypatch, {("access", "system_manager", "list_all_users"): rows})
 
     seen: list[str] = []
     cursor = None
