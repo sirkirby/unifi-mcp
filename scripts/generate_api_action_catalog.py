@@ -20,6 +20,7 @@ PRODUCTS: tuple[tuple[str, str], ...] = (
     ("access", "unifi_access_mcp"),
     ("sitemanager", "unifi_sitemanager_mcp"),
     ("innerspace", "unifi_innerspace_mcp"),
+    ("drive", "unifi_drive_mcp"),
 )
 SCHEMA_VERSION = 1
 GENERATED_BY = "scripts/generate_api_action_catalog.py"

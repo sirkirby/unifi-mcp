@@ -100,7 +100,7 @@ def discover_serializers(
     ``type_registry`` is consulted by ``validate_manifest`` so read tools whose
     projection is a Strawberry type (Phase 6 close) count as covered.
     """
-    for product in ("network", "protect", "access", "innerspace"):
+    for product in ("network", "protect", "access", "innerspace", "drive"):
         try:
             product_pkg = importlib.import_module(f"unifi_api.serializers.{product}")
         except ModuleNotFoundError:
@@ -123,7 +123,7 @@ def _reset_registry_for_tests() -> None:
     global _singleton
     _reset_registries_for_tests()
     _singleton = None
-    for product in ("network", "protect", "access", "innerspace"):
+    for product in ("network", "protect", "access", "innerspace", "drive"):
         prefix = f"unifi_api.serializers.{product}"
         for modname in list(sys.modules.keys()):
             if modname == prefix or modname.startswith(prefix + "."):

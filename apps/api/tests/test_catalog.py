@@ -64,6 +64,35 @@ async def test_catalog_tools(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["innerspace", "drive"])
+async def test_catalog_tools_give_projected_product_writes_their_serializer_hint(
+    tmp_path, monkeypatch, product
+) -> None:
+    """InnerSpace and Drive reads are projected by the type registry; their writes keep the serializer's hint."""
+    from unifi_api.graphql.types.drive.registration import REGISTRATIONS as DRIVE_REGISTRATIONS
+    from unifi_api.graphql.types.innerspace.registration import REGISTRATIONS as INNERSPACE_REGISTRATIONS
+    from unifi_api.serializers.drive.writes import WRITE_TOOLS as DRIVE_WRITES
+    from unifi_api.serializers.innerspace.writes import WRITE_TOOLS as INNERSPACE_WRITES
+
+    registrations, writes = {
+        "innerspace": (INNERSPACE_REGISTRATIONS, INNERSPACE_WRITES),
+        "drive": (DRIVE_REGISTRATIONS, DRIVE_WRITES),
+    }[product]
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_with_read_key(tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get("/v1/catalog/tools", headers={"Authorization": f"Bearer {key}"})
+
+    assert r.status_code == 200, r.text
+    hints = {item["name"]: item["render_hint"] for item in r.json()["items"] if item["product"] == product}
+    assert set(hints) == set(registrations) | set(writes)
+    for tool, (_resource, projection, kind) in registrations.items():
+        assert hints[tool] == projection.render_hint(kind)
+    for tool in writes:
+        assert hints[tool] == app.state.serializer_registry.render_hint_for_tool(tool) == {"kind": "detail"}
+
+
+@pytest.mark.asyncio
 async def test_catalog_categories(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_with_read_key(tmp_path)

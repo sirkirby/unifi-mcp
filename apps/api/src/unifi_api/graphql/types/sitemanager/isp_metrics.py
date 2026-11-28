@@ -69,7 +69,7 @@ class SiteManagerIspMetricsQueryResult(Projection):
 
     @classmethod
     def from_manager_output(cls, obj, *, redact_sensitive=True):
-        from unifi_api.graphql.types.sitemanager._base import plain
+        from unifi_api.graphql.types._projection import plain
 
         value = plain(obj)
         if "series" in value:

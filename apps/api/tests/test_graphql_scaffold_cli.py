@@ -25,9 +25,9 @@ def test_scaffold_resource_creates_type_file(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_scaffold_resource_accepts_every_projection_family(tmp_path: Path) -> None:
-    """Each product that has a projection family can be scaffolded, InnerSpace included."""
+    """Each product that has a projection family can be scaffolded, InnerSpace and Drive included."""
     runner = CliRunner()
-    for product in ("network", "protect", "access", "sitemanager", "innerspace"):
+    for product in ("network", "protect", "access", "sitemanager", "innerspace", "drive"):
         result = runner.invoke(
             app,
             ["graphql", "scaffold-resource", product, "widget", "--out-root", str(tmp_path)],

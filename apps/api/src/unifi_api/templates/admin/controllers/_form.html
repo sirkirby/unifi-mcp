@@ -25,6 +25,8 @@
         {% if is_edit and "access" in c.product_kinds %}checked{% endif %} /> Access</label>
       <label><input type="checkbox" name="product_kinds" value="innerspace"
         {% if is_edit and "innerspace" in c.product_kinds %}checked{% endif %} /> InnerSpace</label>
+      <label><input type="checkbox" name="product_kinds" value="drive"
+        {% if is_edit and "drive" in c.product_kinds %}checked{% endif %} /> Drive</label>
     </fieldset>
 
     <fieldset>

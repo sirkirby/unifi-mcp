@@ -89,12 +89,13 @@ async def test_closed_product_set_names_innerspace(tmp_path):
             data={"name": "z", "base_url": "https://192.0.2.22", "product_kinds": ["talk"], "username": "u"},
         )
         form = await c.get("/admin/controllers/_new_form", headers=headers)
-    with pytest.raises(InvalidControllerCredentials, match="network, protect, access, or innerspace"):
+    with pytest.raises(InvalidControllerCredentials, match="network, protect, access, innerspace, or drive"):
         validate_controller_credentials(["talk"], "u", "p", None)
 
     assert unknown.status_code == 422
-    assert "network, protect, access, or innerspace" in unknown.text
+    assert "network, protect, access, innerspace, or drive" in unknown.text
     assert 'value="innerspace"' in form.text
+    assert 'value="drive"' in form.text
 
 
 def test_builder_keys_match_runtime_attributes():

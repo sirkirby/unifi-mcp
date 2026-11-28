@@ -47,6 +47,7 @@ blocked = (
     'unifi_access_mcp',
     'unifi_sitemanager_mcp',
     'unifi_innerspace_mcp',
+    'unifi_drive_mcp',
 )
 
 class BlockSiblingApps(importlib.abc.MetaPathFinder):
@@ -59,7 +60,7 @@ sys.path.insert(0, sys.argv[1])
 sys.meta_path.insert(0, BlockSiblingApps())
 from unifi_api.services.manifest import ManifestRegistry
 registry = ManifestRegistry.load()
-assert len(registry) == 331
+assert len(registry) == 353
 assert registry.has('unifi_list_clients')
 assert registry.has('protect_list_cameras')
 assert registry.has('access_list_doors')

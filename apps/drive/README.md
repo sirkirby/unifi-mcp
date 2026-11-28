@@ -144,6 +144,8 @@ Write (preview first; `confirm=true` applies):
 
 See [docs/tools.md](docs/tools.md) for parameters and behavior. IDs returned here belong to the Drive tool family; do not pass them to the Network, Protect, Access, Site Manager or InnerSpace servers.
 
+The same functionality is also available through [`unifi-api-server`](../api/README.md#unifi-drive-console-product): every one of the eighteen reads over REST, GraphQL and catalog actions, and the four writes as preview-first catalog actions. Its write preview is request-only, and it honours `UNIFI_DRIVE_READ_ONLY` but not the `UNIFI_POLICY_DRIVE_*` gates.
+
 ### No support bundle
 
 The Drive server has no `drive_get_support_bundle` tool. Support bundles are one closed privacy schema shared by the Network, Protect and Access servers (`unifi_core/support_bundle.py`), and Drive isn't part of it. Adding it would change that contract for all three servers. For a Drive problem, run `drive_get_system_info` for the firmware version, use `drive_setup_status` when the server is in setup mode, and fill in the bug form's fields by hand; see [Reporting a problem](docs/troubleshooting.md#reporting-a-problem).

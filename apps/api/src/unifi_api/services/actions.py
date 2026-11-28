@@ -74,7 +74,7 @@ class DispatchEntry:
 
 
 def build_dispatch_table(
-    products: Iterable[str] = ("network", "protect", "access", "innerspace"),
+    products: Iterable[str] = ("network", "protect", "access", "innerspace", "drive"),
 ) -> dict[str, DispatchEntry]:
     """Return a catalog-derived binding view without inspecting sibling app source."""
     selected = set(products)

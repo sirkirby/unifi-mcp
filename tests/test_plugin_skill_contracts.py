@@ -394,6 +394,6 @@ def test_drive_skill_keeps_the_nas_boundary_and_write_caveats() -> None:
     manifest = refs.pinned_manifest(ROOT, "drive")[1]
     names = {tool["name"] for tool in manifest["tools"]}
     reference = (root / "unifi-drive/references/drive-tools.md").read_text()
-    assert len(manifest["module_map"]) == 11
+    assert len(manifest["module_map"]) == refs.tool_count(manifest, "drive")
     assert names == set(re.findall(r"\bdrive_[a-z_]+\b", reference))
     assert not reference_errors(setup, catalog())
