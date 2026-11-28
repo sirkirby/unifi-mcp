@@ -15,10 +15,9 @@ from unifi_core.operation_gate import ControllerBusyError
 
 from unifi_api.graphql.permissions import ScopeDenied
 from unifi_api.services.access_event_key import InvalidAccessEventCursor, InvalidAccessEventTopic
+from unifi_api.services.console_product import ConsoleProductAPIError
 from unifi_api.services.controllers import ControllerNotFound
-from unifi_api.services.drive import DriveAPIError
 from unifi_api.services.incident_evidence import ControllerCapabilityError, IncidentRequestError
-from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.pagination import InvalidCursor
 from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 
@@ -26,8 +25,7 @@ from unifi_api.services.sitemanager_errors import SiteManagerAPIError
 # already sanitized, so they are logged without traceback or query source.
 EXPECTED_ERRORS = (
     SiteManagerAPIError,
-    InnerSpaceAPIError,
-    DriveAPIError,
+    ConsoleProductAPIError,
     ControllerNotFound,
     ControllerCapabilityError,
     IncidentRequestError,
@@ -73,7 +71,7 @@ def is_expected_error(error: GraphQLError) -> bool:
 def _classify(error: GraphQLError) -> str:
     # By exception type only: messages can carry rejected input.
     orig = error.original_error
-    if isinstance(orig, (SiteManagerAPIError, InnerSpaceAPIError, DriveAPIError)):
+    if isinstance(orig, (SiteManagerAPIError, ConsoleProductAPIError)):
         return orig.graphql_code
     if isinstance(orig, ControllerNotFound):
         return "NOT_FOUND"
@@ -103,7 +101,7 @@ def format_graphql_error(error: GraphQLError) -> dict[str, Any]:
     extensions: dict[str, Any] = {"code": code}
     if isinstance(error.original_error, ControllerBusyError):
         extensions["retryAfter"] = error.original_error.retry_after
-    elif isinstance(error.original_error, InnerSpaceAPIError) and error.original_error.retry_after is not None:
+    elif isinstance(error.original_error, ConsoleProductAPIError) and error.original_error.retry_after is not None:
         extensions["retryAfter"] = error.original_error.retry_after
     return {
         "message": safe_message(error),

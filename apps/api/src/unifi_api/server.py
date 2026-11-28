@@ -259,9 +259,8 @@ from unifi_api.serializers._registry import discover_serializers
 from unifi_api.services.audit import write_audit
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
+from unifi_api.services.console_product import ConsoleProductAPIError
 from unifi_api.services.controllers import list_controllers
-from unifi_api.services.drive import DriveAPIError
-from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
@@ -533,16 +532,12 @@ def create_app(config: ApiConfig) -> FastAPI:
     async def _sitemanager_error(request: Request, exc: SiteManagerAPIError):
         return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
 
-    @app.exception_handler(InnerSpaceAPIError)
-    async def _innerspace_error(request: Request, exc: InnerSpaceAPIError):
+    @app.exception_handler(ConsoleProductAPIError)
+    async def _console_product_error(request: Request, exc: ConsoleProductAPIError):
         headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
         return JSONResponse(
             status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}}, headers=headers
         )
-
-    @app.exception_handler(DriveAPIError)
-    async def _drive_error(request: Request, exc: DriveAPIError):
-        return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
 
     @app.middleware("http")
     async def _sitemanager_no_store(request: Request, call_next):
