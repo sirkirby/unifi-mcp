@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 218 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 219 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -111,13 +111,14 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_update_client_group` — Update an existing group
 - `unifi_delete_client_group` — Delete a group (requires delete permission)
 
-## MAC ACL Rules (5 tools)
+## MAC ACL Rules (6 tools)
 
 - `unifi_list_acl_rules` — List MAC ACL rules, optionally filtered by network/VLAN
 - `unifi_get_acl_rule_details` — Get rule details by ID
 - `unifi_create_acl_rule` — Create a Layer 2 access control rule
 - `unifi_update_acl_rule` — Update an existing rule
 - `unifi_delete_acl_rule` — Delete a rule (requires delete permission)
+- `unifi_set_acl_rule_order` — Reorder a network's rule chain
 
 Rule order is each rule's `acl_index`: lower numbers are evaluated first. To reorder rules, read the chain with `unifi_list_acl_rules`, then change the `acl_index` of the rules you want to move with `unifi_update_acl_rule`. Each update previews first and applies only with `confirm=true`. Leave gaps between index values (10, 20, 30) so one rule can move without renumbering the rest.
 

@@ -177,7 +177,7 @@ async def test_list_users_happy_path(tmp_path, monkeypatch) -> None:
 
     from unifi_core.access.managers.system_manager import SystemManager
 
-    monkeypatch.setattr(SystemManager, "list_users", fake_list)
+    monkeypatch.setattr(SystemManager, "list_all_users", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
@@ -206,7 +206,7 @@ async def test_get_user_filter_404(tmp_path, monkeypatch) -> None:
 
     from unifi_core.access.managers.system_manager import SystemManager
 
-    monkeypatch.setattr(SystemManager, "list_users", fake_list)
+    monkeypatch.setattr(SystemManager, "list_all_users", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         ok = await c.get(

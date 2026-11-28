@@ -1,12 +1,16 @@
 {
-  "count": 17,
+  "count": 21,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",
     "drive_get_file_services": "unifi_drive_mcp.tools.file_services",
+    "drive_get_rsync_settings": "unifi_drive_mcp.tools.file_services",
     "drive_get_shared_drive": "unifi_drive_mcp.tools.shared_drives",
+    "drive_get_smb_advanced_settings": "unifi_drive_mcp.tools.file_services",
+    "drive_get_storage_usage": "unifi_drive_mcp.tools.storage",
     "drive_get_system_info": "unifi_drive_mcp.tools.system",
     "drive_list_disks": "unifi_drive_mcp.tools.storage",
+    "drive_list_logs": "unifi_drive_mcp.tools.logs",
     "drive_list_nfs_connections": "unifi_drive_mcp.tools.nfs",
     "drive_list_shared_drives": "unifi_drive_mcp.tools.shared_drives",
     "drive_list_storage_pools": "unifi_drive_mcp.tools.storage",
@@ -514,6 +518,107 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Returns whether the rsync service is on, whether a dedicated rsync account is set and its username (never its password), and whether SSH, which rsync needs, is on.",
+      "name": "drive_get_rsync_settings",
+      "permission_action": "read",
+      "permission_category": "file_service",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Rsync Settings"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Returns one shared drive by ID (from drive_list_shared_drives). This endpoint omits the protection flags and member count that the list includes.",
       "name": "drive_get_shared_drive",
       "permission_action": "read",
@@ -615,6 +720,208 @@
         }
       },
       "title": "Get Shared Drive"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns whether SMB Trash for personal drives is on (files removed over SMB go to Trash instead of being deleted) and whether every personal drive could move to it.",
+      "name": "drive_get_smb_advanced_settings",
+      "permission_action": "read",
+      "permission_category": "file_service",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get SMB Advanced Settings"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns each storage pool's capacity, used and free space, and what the used space is used by: personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id is the id drive_list_storage_pools returns. Storage pool IDs are scoped to the UniFi Drive tool family; do not pass them to other products' storage tools.",
+      "name": "drive_get_storage_usage",
+      "permission_action": "read",
+      "permission_category": "storage",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Storage Usage"
     },
     {
       "annotations": {
@@ -826,6 +1133,151 @@
         }
       },
       "title": "List Disks"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the NAS's system log, newest first, as the Drive UI's System Log shows it: time, severity, category, type, event and message. Messages name the users, client addresses, drives and pools involved. Returns one page; pass next_cursor back as cursor, with the same filters, for more.",
+      "name": "drive_list_logs",
+      "permission_action": "read",
+      "permission_category": "log",
+      "schema": {
+        "input": {
+          "properties": {
+            "after": {
+              "description": "Only entries after this ISO 8601 time with offset, e.g. 2026-11-20T00:00:00Z",
+              "type": "string"
+            },
+            "before": {
+              "description": "Only entries before this ISO 8601 time with offset",
+              "type": "string"
+            },
+            "category": {
+              "description": "Only entries in this category: activity, storage or settings on current firmware.",
+              "type": "string"
+            },
+            "cursor": {
+              "description": "next_cursor from the previous page",
+              "type": "string"
+            },
+            "keyword": {
+              "description": "Only entries whose text matches this keyword",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Most entries per page, 1-500 (default 50)",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "scope": {
+              "description": "audit: user and admin actions; flow: file activity; all (default): everything",
+              "enum": [
+                "all",
+                "audit",
+                "flow"
+              ],
+              "type": "string"
+            },
+            "severities": {
+              "description": "Only entries at these severities. Omit for all.",
+              "type": "array"
+            },
+            "types": {
+              "description": "Only entries of these types, such as storagePool, drive, hotSpare, userAccess or fanMode. An unknown type is an error that lists the valid ones.",
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Logs"
     },
     {
       "annotations": {

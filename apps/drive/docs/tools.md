@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 11 domain tools: seven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 15 domain tools: eleven reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -14,11 +14,15 @@ No parameters. Reads `GET /api/system` and keeps only: `name`, `hostname`, `mode
 
 ## Storage
 
-Both tools read `GET /proxy/drive/api/v2/storage`.
+`drive_list_storage_pools` and `drive_list_disks` read `GET /proxy/drive/api/v2/storage`; `drive_get_storage_usage` reads `GET /proxy/drive/api/v2/storage/usage`.
 
 ### `drive_list_storage_pools`
 
 No parameters. Each pool has `id`, `number`, `status` (for example `noDataProtectionYet` while a RAID 5 pool has a single disk), `prefer_level`, `capacity_bytes`, `used_bytes`, `used_percent`, `initializing_status` and `raid_groups`. Each RAID group has `current_level` and `config_level` (they differ until the pool has enough disks or while it migrates), `current_protection` and `expected_protection` (disk failures survived), `recommended_disk_size`, and Drive's `progress` and `estimate` for a rebuild or expansion.
+
+### `drive_get_storage_usage`
+
+No parameters. Each pool has `pool_id` (the `id` from `drive_list_storage_pools`), `capacity_bytes`, `used_bytes`, `available_bytes`, `used_percent`, and the used space split into `personal_drives_bytes`, `shared_drives_bytes` and `m365_bytes` (Microsoft 365 backups), plus `snapshots_bytes` when Drive reports it. `system_bytes` is the rest (system and other data), worked out the way the Drive web app does; it is left out for a pool with iSCSI or deduplicated data, which the web app counts differently.
 
 ### `drive_list_disks`
 
@@ -48,6 +52,14 @@ Drive's single-drive endpoint does not return the protection flags or member cou
 ### `drive_get_file_services`
 
 No parameters. Returns `smb_enabled`, `nfs_enabled`, `time_machine_enabled`, `custom_domain` and `network_interfaces` (name, port type, link state and speed, address, MAC).
+
+### `drive_get_smb_advanced_settings`
+
+No parameters. Reads `GET /proxy/drive/api/v1/services/smb/advanced-settings` and returns `personal_drive_recycle_enabled`, the web app's SMB Trash for Personal Drives switch (files removed over SMB from a personal drive go to its Trash instead of being deleted), and `personal_drive_recycle_status`: `optimal`, or `migrateFirstFailed` / `migrateFailed` when one or more drives cannot move removed files to Trash yet. Shared drives set SMB Trash per drive, which this tool does not read.
+
+### `drive_get_rsync_settings`
+
+No parameters. Reads `GET /proxy/drive/api/v2/services/rsync/settings` and `GET /proxy/drive/api/v1/systems/info`, and returns `enabled`, `account_configured`, `account_username` and `ssh_enabled`. Rsync runs over SSH, so it does not work while `ssh_enabled` is false; the web app hides its rsync settings then. The account's password is never returned.
 
 ### `drive_set_file_service` (write)
 
@@ -109,3 +121,26 @@ Pass only the fields you want to change — current values are automatically pre
 | `confirm` | `true` removes |
 
 The client can no longer mount anything. No data on the shared drives is touched, and the other clients are kept.
+
+## Logs
+
+### `drive_list_logs`
+
+Reads the system log the Drive web app shows under System Log, newest first, from `GET /proxy/drive/api/v2/systems/logs`. A log entry holds an event name and the values to fill in, so the tool also reads `GET /proxy/drive/api/v2/systems/log-definitions` for each event's title and text.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `limit` | `50` | Most entries per page, 1 to 500 |
+| `severities` | all | Any of `low`, `medium`, `high`, `very_high` |
+| `category` | all | A category such as `activity`, `storage` or `settings` |
+| `types` | all | Types such as `storagePool`, `drive`, `hotSpare`, `userAccess`, `fanMode` |
+| `keyword` | none | Only entries whose text matches it |
+| `scope` | `all` | `audit` for user and admin actions, `flow` for file activity |
+| `after`, `before` | none | ISO 8601 times with an offset, such as `2026-11-20T00:00:00Z` |
+| `cursor` | none | `next_cursor` from the previous page |
+
+Each entry has `time` (ISO 8601 with the NAS's UTC offset), `severity`, `category`, `type`, `event` (such as `DriveInserted`), `title` and `message`. `message` is the sentence the web app shows, so it names the users, client addresses, drives and pools involved. Entry ids and the ids behind the web app's detail panels are left out.
+
+`next_cursor` is set when there are more entries. Pass it back as `cursor` with the same filters: Drive ties a cursor to the filters it was returned with.
+
+A category is sent to Drive as its list of types, because Drive ignores a category filter. Drive answers an unknown category or type with an empty list, so the tool checks both against the firmware's own definitions first and returns an error listing the valid values instead.

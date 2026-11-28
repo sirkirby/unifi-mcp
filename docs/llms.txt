@@ -29,7 +29,7 @@ Ubiquiti's Site Manager API is a fourth, cloud-only surface. The Site Manager se
 - [InnerSpace MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/README.md): Read-only floor plans, walls, and device placements from a console's InnerSpace application, through a console login with no API key.
 - [InnerSpace configuration](https://github.com/sirkirby/unifi-mcp/blob/main/apps/innerspace/docs/configuration.md): The console login, TLS, HTTP transport on port 3005, and runtime settings.
 - [Drive MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/README.md): UniFi Drive on a UniFi NAS: storage pools, RAID state, disk SMART health and shared drives, plus preview-first SMB, NFS and Time Machine toggles and NFS client access, through a local login on the NAS.
-- [Drive tools](https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/docs/tools.md): The eleven tools with parameters, the NFS client list and the write previews.
+- [Drive tools](https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/docs/tools.md): The fifteen tools with parameters, the NFS client list and the write previews.
 - [Drive configuration](https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/docs/configuration.md): The NAS login, TLS, HTTP transport on port 3004, policy gates, and runtime settings.
 - [Drive troubleshooting](https://github.com/sirkirby/unifi-mcp/blob/main/apps/drive/docs/troubleshooting.md): Setup mode, login, permission, TLS, and NFS problems.
 
