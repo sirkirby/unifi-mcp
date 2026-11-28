@@ -1,4 +1,4 @@
-# Network Server Tool Reference (219 tools)
+# Network Server Tool Reference (221 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -593,7 +593,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-17 tools.
+19 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -609,7 +609,9 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_list_backups` | Read | List available backups on the controller. |
 | `unifi_list_ips_suppressions` | Read | List IPS signature suppressions (one entry per signature and target, with scope global, source, destination, or both) and detection exclu... |
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
+| `unifi_create_ips_suppression` | Mutate | Suppress an IPS signature for all traffic, or for one address or CIDR subnet in one direction, and verify persistence. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
+| `unifi_delete_ips_suppression` | Mutate | Remove an IPS signature's suppression, or one of its targets, and verify persistence. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |
 | `unifi_update_mdns_settings` | Mutate | Update site-wide mDNS service mode, predefined services, or custom services. |
 | `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). |
