@@ -61,7 +61,7 @@ No parameters. Reads `GET /proxy/drive/api/v1/systems/snapshot` and returns `sha
 |-----------|-------------|
 | `shared_drive_name` | The shared drive's name, not its id, from `drive_list_shared_drives` or `drive_get_snapshot_overview` |
 
-Reads `GET /proxy/drive/api/v1/snapshots/shared/<name>`. Each snapshot has `id`, `name` (left out when Drive has none), `created_at` and `locked`. A drive with no snapshots returns an empty list.
+Reads `GET /proxy/drive/api/v1/snapshots/shared/<name>`. Snapshots come newest first. Each has `id`, `name` (left out when Drive has none), `description` (Drive's label, such as `Scheduled Snapshot` for one the schedule took), `created_at` and `locked`. A drive with no snapshots returns an empty list.
 
 - Drive allows letters, digits, `_` and single dots in a shared drive name, and that is all this tool accepts. Any other name is refused before a request is sent.
 - Drive answers a name no shared drive has with 403. The tool then checks the shared drive list and reports the drive as not found; a 403 for a listed drive stays a permission error.

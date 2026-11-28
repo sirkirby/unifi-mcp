@@ -1,5 +1,5 @@
 {
-  "count": 24,
+  "count": 26,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",
@@ -10,12 +10,14 @@
     "drive_get_rsync_settings": "unifi_drive_mcp.tools.file_services",
     "drive_get_shared_drive": "unifi_drive_mcp.tools.shared_drives",
     "drive_get_smb_advanced_settings": "unifi_drive_mcp.tools.file_services",
+    "drive_get_snapshot_overview": "unifi_drive_mcp.tools.snapshots",
     "drive_get_storage_usage": "unifi_drive_mcp.tools.storage",
     "drive_get_system_info": "unifi_drive_mcp.tools.system",
     "drive_list_disks": "unifi_drive_mcp.tools.storage",
     "drive_list_logs": "unifi_drive_mcp.tools.logs",
     "drive_list_nfs_connections": "unifi_drive_mcp.tools.nfs",
     "drive_list_shared_drives": "unifi_drive_mcp.tools.shared_drives",
+    "drive_list_snapshots": "unifi_drive_mcp.tools.snapshots",
     "drive_list_storage_pools": "unifi_drive_mcp.tools.storage",
     "drive_remove_nfs_connection": "unifi_drive_mcp.tools.nfs",
     "drive_set_file_service": "unifi_drive_mcp.tools.file_services",
@@ -1146,6 +1148,107 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Returns every shared and personal drive's snapshot settings and state: snapshot limit and count, locked and pending-deletion counts, space held, last and next snapshot time, whether snapshots are paused and why, and the schedule. A drive whose snapshots were never set up is listed with configured false and a zero limit.",
+      "name": "drive_get_snapshot_overview",
+      "permission_action": "read",
+      "permission_category": "snapshot",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Snapshot Overview"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Returns each storage pool's capacity, used and free space, and what the used space is used by: personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id is the id drive_list_storage_pools returns. Storage pool IDs are scoped to the UniFi Drive tool family; do not pass them to other products' storage tools.",
       "name": "drive_get_storage_usage",
       "permission_action": "read",
@@ -1797,6 +1900,115 @@
         }
       },
       "title": "List Shared Drives"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists one shared drive's snapshots, newest first (id, name, Drive's label, creation time, locked), by the shared drive's name from drive_list_shared_drives or drive_get_snapshot_overview. Snapshot IDs are scoped to that shared drive in the UniFi Drive tool family.",
+      "name": "drive_list_snapshots",
+      "permission_action": "read",
+      "permission_category": "snapshot",
+      "schema": {
+        "input": {
+          "properties": {
+            "shared_drive_name": {
+              "description": "Shared drive name, not its id (from drive_list_shared_drives)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "shared_drive_name"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Snapshots"
     },
     {
       "annotations": {

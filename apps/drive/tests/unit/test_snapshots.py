@@ -90,6 +90,26 @@ async def test_list_snapshots_passes_the_name(manager):
     }
 
 
+async def test_list_snapshots_keeps_drives_label(manager):
+    manager.list_snapshots.return_value = [
+        snapshot_from_api(
+            {
+                "id": "snap-2",
+                "name": "",
+                "description": "Scheduled Snapshot",
+                "createdAt": "2026-01-03T03:00:00Z",
+                "locked": False,
+            }
+        )
+    ]
+
+    result = await snapshots.drive_list_snapshots("Media")
+
+    assert result["data"]["snapshots"] == [
+        {"id": "snap-2", "description": "Scheduled Snapshot", "created_at": "2026-01-03T03:00:00Z", "locked": False}
+    ]
+
+
 async def test_a_drive_without_snapshots_is_an_empty_list(manager):
     manager.list_snapshots.return_value = []
 

@@ -36,7 +36,8 @@ async def drive_get_snapshot_overview() -> Dict[str, Any]:
 @server.tool(
     name="drive_list_snapshots",
     description=(
-        "Lists one shared drive's snapshots (id, name, creation time, locked) by the shared drive's name "
+        "Lists one shared drive's snapshots, newest first (id, name, Drive's label, creation time, locked), "
+        "by the shared drive's name "
         "from drive_list_shared_drives or drive_get_snapshot_overview. Snapshot IDs are scoped to that "
         "shared drive in the UniFi Drive tool family."
     ),

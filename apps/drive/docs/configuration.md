@@ -160,6 +160,7 @@ For `UNIFI_ENABLED_CATEGORIES` in eager mode, and the `category` filter of `driv
 | `nfs` | `drive_list_nfs_connections`, `drive_add_nfs_connection`, `drive_update_nfs_connection`, `drive_remove_nfs_connection` |
 | `logs` | `drive_list_logs` |
 | `performance` | `drive_get_network_throughput`, `drive_get_fan_profile`, `drive_get_disk_stats` |
+| `snapshots` | `drive_get_snapshot_overview`, `drive_list_snapshots` |
 
 ```bash
 UNIFI_TOOL_REGISTRATION_MODE=eager UNIFI_ENABLED_CATEGORIES=system,storage
