@@ -290,8 +290,12 @@ they are not accepted.
 2. **The server app.** Follow "Adding a New Server" in
    [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), including every release and
    check registration it lists.
-3. **API parity.** Every tool is also reachable through `unifi-api-server`, and
-   `apps/api/tests/test_resource_route_coverage.py` covers the new product.
+3. **API parity.** The product's functionality is also available through
+   `unifi-api-server`, built on the same `unifi-core` managers and models as the
+   MCP server. MCP tools, API routes and actions, and the controller's own
+   endpoints are separate surfaces over that one implementation, so they don't
+   map one-to-one. `apps/api/tests/test_resource_route_coverage.py` covers the
+   new product.
 4. **Permissions.** Writes register a policy-gate prefix, preview before they
    confirm, and follow the [AGENTS.md](AGENTS.md) permission rules.
 5. **Live evidence.** Add a target in `scripts/live_smoke.py` and post its
