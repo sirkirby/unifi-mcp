@@ -3053,10 +3053,14 @@ def test_api_resources_cover_every_drive_route_with_action_parity():
         assert actions[tool]["read_only_hint"] is True
         shape = live_smoke.API_RESOURCE_SHAPES[path]
         if shape == "detail":
-            assert live_smoke.API_RESOURCE_DETAIL_PARITY_FIELDS[path]
+            assert path in live_smoke.API_RESOURCE_DETAIL_PARITY_FIELDS
         else:
             assert shape == "list" and keys == ("data",)
             assert path in live_smoke.API_RESOURCE_PARITY_ID_KEYS
+    # Only live throughput, whose every value moves, compares field names alone.
+    assert {path for path, fields in live_smoke.API_RESOURCE_DETAIL_PARITY_FIELDS.items() if not fields} == {
+        "/v1/sites/{site}/drive/network-throughput"
+    }
     # A seeded path comes after the resource that lists its seed.
     order = [sample[1] for sample in live_smoke.API_RESOURCES_SAMPLE]
     for name, (seed_path, _key) in live_smoke.API_RESOURCE_SEEDS.items():
@@ -3102,6 +3106,31 @@ def test_seeded_resource_path_fills_from_the_listing_or_skips():
     assert live_smoke._resource_placeholders(template, "default", empty)[1] == listing
 
 
+def test_snapshot_name_seed_comes_from_the_overview_shared_drives():
+    import live_smoke
+
+    template = "/v1/sites/{site}/drive/snapshots/shared/{shared_drive_name}"
+    overview = "/v1/sites/{site}/drive/snapshot-overview"
+    seeds: dict = {}
+
+    assert live_smoke._resource_placeholders(template, "default", seeds)[1] == overview
+    live_smoke._record_resource_seeds(
+        overview, {"shared_drives": [{"shared_drive_id": "x"}, {"shared_drive_name": "Media"}]}, seeds
+    )
+    placeholders, missing = live_smoke._resource_placeholders(template, "default", seeds)
+
+    assert missing is None
+    assert template.format(**placeholders) == "/v1/sites/default/drive/snapshots/shared/Media"
+    assert (
+        live_smoke._first_listed_id(
+            {"success": True, "data": {"shared_drives": [{"shared_drive_name": "Media"}]}},
+            "shared_drives.shared_drive_name",
+        )
+        == "Media"
+    )
+    assert live_smoke._first_listed_id({"success": True, "data": {"personal_drives": []}}, "shared_drives.name") is None
+
+
 def test_detail_parity_compares_only_the_stable_fields():
     import live_smoke
 
@@ -3111,6 +3140,9 @@ def test_detail_parity_compares_only_the_stable_fields():
     assert live_smoke._detail_parity(resource, action, ("mac", "model")) == []
     assert live_smoke._detail_parity(resource, {"data": {"mac": "x", "model": "UNAS"}}, ("mac", "model")) == ["mac"]
     assert live_smoke._detail_parity(resource, {"success": False}, ("mac",)) == ["mac"]
+    # With no stable field, only the field names are compared.
+    assert live_smoke._detail_parity(resource, action, ()) == []
+    assert live_smoke._detail_parity(resource, {"data": {"mac": "m"}}, ()) == ["model", "uptime_seconds"]
 
 
 def test_derived_read_takes_the_first_listed_id():
@@ -3125,8 +3157,12 @@ def test_derived_read_takes_the_first_listed_id():
 class _FakeApi:
     """Answers the API phases' HTTP calls for one registered Drive controller."""
 
-    def __init__(self, *, shared_drives: list[dict]):
+    def __init__(self, *, shared_drives: list[dict], snapshot_drives: list[str] | None = None):
         self.shared_drives = shared_drives
+        # Shared drive names the snapshot overview lists; by default, those of the shared drives.
+        self.snapshot_drives = (
+            [drive.get("name", "Media") for drive in shared_drives] if snapshot_drives is None else snapshot_drives
+        )
         self.calls: list[tuple[str, str, dict | None]] = []
 
     def __call__(self, method, url, *, headers=None, body=None, timeout=60.0):
@@ -3139,13 +3175,36 @@ class _FakeApi:
             return 200, {"items": [{"name": item} for item in _catalog_actions()]}
         if path == "/v1/controllers":
             return 201, {"id": "cid-drive", "name": body["name"], "base_url": body["base_url"]}
-        system = {"mac": "m", "model": "UNAS", "hostname": "nas", "firmware_version": "5.0.12"}
-        services = {"smb_enabled": True, "nfs_enabled": True, "time_machine_enabled": False}
+        details = {
+            "system": {"mac": "m", "model": "UNAS", "hostname": "nas", "firmware_version": "5.0.12"},
+            "logs": {"entries": [{"time": "2026-11-20T10:00:00-05:00", "event": "DriveInserted"}], "next_cursor": None},
+            "network-throughput": {"receive_kbps": 6.32, "transmit_kbps": 17.45, "timestamp": "t"},
+            "fan-profile": {"current_profile": "default", "available_profiles": [{"profile": "default"}]},
+            "disk-stats": {"interval_seconds": 900, "disks": []},
+            "snapshot-overview": {
+                "shared_drives": [{"shared_drive_name": name} for name in self.snapshot_drives],
+                "personal_drives": [],
+            },
+            "file-services": {"smb_enabled": True, "nfs_enabled": True, "time_machine_enabled": False},
+            "smb-advanced-settings": {
+                "personal_drive_recycle_enabled": True,
+                "personal_drive_recycle_status": "optimal",
+            },
+            "rsync-settings": {
+                "enabled": False,
+                "account_configured": False,
+                "account_username": None,
+                "ssh_enabled": False,
+            },
+        }
         lists = {
             "storage-pools": [{"id": "pool-1"}],
+            "storage-usage": [{"pool_id": "pool-1"}],
             "disks": [{"slot_id": "1", "serial": "S1"}],
             "shared-drives": self.shared_drives,
             "nfs-connections": [{"client": "192.0.2.76"}],
+            "users": [{"id": "user-1"}],
+            "groups": [{"id": "group-1"}],
         }
         if path.startswith("/v1/actions/"):
             tool = path.rsplit("/", 1)[1]
@@ -3158,22 +3217,33 @@ class _FakeApi:
                     "tool": tool,
                 }
             data = {
-                "drive_get_system_info": system,
-                "drive_get_file_services": services,
+                "drive_get_system_info": details["system"],
+                "drive_list_logs": details["logs"],
+                "drive_get_network_throughput": {**details["network-throughput"], "receive_kbps": 7.01},
+                "drive_get_fan_profile": details["fan-profile"],
+                "drive_get_disk_stats": details["disk-stats"],
+                "drive_get_snapshot_overview": details["snapshot-overview"],
+                "drive_get_file_services": details["file-services"],
+                "drive_get_smb_advanced_settings": details["smb-advanced-settings"],
+                "drive_get_rsync_settings": details["rsync-settings"],
                 "drive_get_shared_drive": {"id": body["args"].get("drive_id"), "name": "Media"},
+                "drive_list_snapshots": [{"id": f"snap-of-{body['args'].get('shared_drive_name')}"}],
                 "drive_list_storage_pools": lists["storage-pools"],
+                "drive_get_storage_usage": lists["storage-usage"],
                 "drive_list_disks": lists["disks"],
                 "drive_list_shared_drives": lists["shared-drives"],
                 "drive_list_nfs_connections": lists["nfs-connections"],
+                "drive_list_users": lists["users"],
+                "drive_list_groups": lists["groups"],
             }[tool]
             return 200, {"success": True, "data": data, "render_hint": {}}
         resource = path.split("/drive/", 1)[1]
-        if resource == "system":
-            return 200, {"data": system, "render_hint": {}}
-        if resource == "file-services":
-            return 200, {"data": services, "render_hint": {}}
+        if resource in details:
+            return 200, {"data": details[resource], "render_hint": {}}
         if resource.startswith("shared-drives/"):
             return 200, {"data": {"id": resource.split("/", 1)[1], "name": "Media"}, "render_hint": {}}
+        if resource.startswith("snapshots/shared/"):
+            return 200, {"items": [{"id": f"snap-of-{resource.rsplit('/', 1)[1]}"}], "render_hint": {}}
         return 200, {"items": lists[resource], "render_hint": {}}
 
 
@@ -3204,19 +3274,13 @@ def _run_api_phase(monkeypatch, tmp_path, drive_env, phase, fake):
 
 
 def test_api_actions_phase_runs_every_drive_read_and_only_a_preview(monkeypatch, tmp_path, drive_env):
-    fake = _FakeApi(shared_drives=[{"id": "drive-1", "type": "shared"}])
+    fake = _FakeApi(shared_drives=[{"id": "drive-1", "type": "shared", "name": "Media"}])
 
     code, report = _run_api_phase(monkeypatch, tmp_path, drive_env, "api-actions", fake)
 
     assert code == 0, report
     assert {result["tool"] for result in report["results"]} == {
-        "drive_get_system_info",
-        "drive_list_storage_pools",
-        "drive_list_disks",
-        "drive_list_shared_drives",
-        "drive_get_shared_drive",
-        "drive_get_file_services",
-        "drive_list_nfs_connections",
+        name for name, item in _catalog_actions().items() if item["product"] == "drive" and item["read_only_hint"]
     }
     assert all(result["classification"] == "pass" for result in report["results"])
     [preview] = report["confirmation_preview_controls"]
@@ -3224,41 +3288,62 @@ def test_api_actions_phase_runs_every_drive_read_and_only_a_preview(monkeypatch,
     sent = [body for method, path, body in fake.calls if path.startswith("/v1/actions/")]
     assert all(body["confirm"] is False for body in sent)
     assert {"drive_id": "drive-1"} in [body["args"] for body in sent]
+    # Snapshots are listed by the name the snapshot overview reports.
+    assert {"shared_drive_name": "Media"} in [body["args"] for body in sent]
 
 
 def test_api_actions_phase_skips_the_shared_drive_read_without_a_shared_drive(monkeypatch, tmp_path, drive_env):
     code, report = _run_api_phase(monkeypatch, tmp_path, drive_env, "api-actions", _FakeApi(shared_drives=[]))
 
     assert code == 0, report
-    assert "drive_get_shared_drive" not in {result["tool"] for result in report["results"]}
+    assert not {"drive_get_shared_drive", "drive_list_snapshots"} & {result["tool"] for result in report["results"]}
     assert report["skipped_reads"] == [
         {
             "product": "drive",
             "tool": "drive_get_shared_drive",
             "reason": "drive_list_shared_drives listed nothing to read",
-        }
+        },
+        {
+            "product": "drive",
+            "tool": "drive_list_snapshots",
+            "reason": "drive_get_snapshot_overview listed nothing to read",
+        },
     ]
 
 
 def test_api_resources_phase_checks_every_drive_route_against_its_action(monkeypatch, tmp_path, drive_env):
     code, report = _run_api_phase(
-        monkeypatch, tmp_path, drive_env, "api-resources", _FakeApi(shared_drives=[{"id": "drive-1"}])
+        monkeypatch, tmp_path, drive_env, "api-resources", _FakeApi(shared_drives=[{"id": "drive-1", "name": "Media"}])
     )
 
     assert code == 0, report
     drive = [result for result in report["results"] if result["product"] == "drive"]
     assert [result["path"] for result in drive] == [
         "/v1/sites/default/drive/system",
+        "/v1/sites/default/drive/logs",
         "/v1/sites/default/drive/storage-pools",
+        "/v1/sites/default/drive/storage-usage",
         "/v1/sites/default/drive/disks",
+        "/v1/sites/default/drive/network-throughput",
+        "/v1/sites/default/drive/fan-profile",
+        "/v1/sites/default/drive/disk-stats",
         "/v1/sites/default/drive/shared-drives",
         "/v1/sites/default/drive/shared-drives/drive-1",
+        "/v1/sites/default/drive/snapshot-overview",
+        "/v1/sites/default/drive/snapshots/shared/Media",
         "/v1/sites/default/drive/file-services",
+        "/v1/sites/default/drive/smb-advanced-settings",
+        "/v1/sites/default/drive/rsync-settings",
         "/v1/sites/default/drive/nfs-connections",
+        "/v1/sites/default/drive/users",
+        "/v1/sites/default/drive/groups",
     ]
     assert all(result["classification"] == "pass" for result in drive)
     assert all(result["parity"]["resource_subset_of_action"] for result in drive)
-    assert report["summary"]["parity_checked"] == 7
+    # Live throughput moves between the two calls: only its field names are compared.
+    by_path = {result["path"]: result for result in drive}
+    assert by_path["/v1/sites/default/drive/network-throughput"]["parity"]["compared_fields"] == []
+    assert report["summary"]["parity_checked"] == 18
     assert report["summary"]["parity_mismatches"] == 0
 
 
@@ -3278,4 +3363,7 @@ def test_api_resources_phase_flags_a_detail_mismatch_and_skips_an_unseeded_route
     by_path = {result["path"]: result for result in report["results"] if result["product"] == "drive"}
     assert by_path["/v1/sites/default/drive/file-services"]["parity"]["differing_fields"] == ["smb_enabled"]
     assert by_path["/v1/sites/{site}/drive/shared-drives/{drive_id}"]["classification"] == "skipped_no_seed"
-    assert report["summary"]["skipped_no_seed"] == 1
+    assert by_path["/v1/sites/{site}/drive/snapshots/shared/{shared_drive_name}"]["classification"] == (
+        "skipped_no_seed"
+    )
+    assert report["summary"]["skipped_no_seed"] == 2

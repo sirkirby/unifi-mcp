@@ -39,6 +39,9 @@ RUN_PREFIX = "codex-smoke"
 DRIVE_PREVIEW_TOOLS = frozenset({"drive_set_file_service", "drive_add_nfs_connection", "drive_update_nfs_connection"})
 # A documentation address (TEST-NET-1): no real host can mount with it.
 DRIVE_SMOKE_NFS_CLIENT = "192.0.2.123"
+# The API resource phase reads the Drive system log up to the start of today (UTC):
+# entries before it no longer change, so the route and its action answer alike.
+DRIVE_SMOKE_LOG_BEFORE = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00Z")
 # Shown in a recorded call's arguments in place of a value read from the console.
 CONSOLE_VALUE = "<read from the console>"
 # Added to a floor plan's title by the InnerSpace rename lifecycle, then taken off again.
@@ -3466,14 +3469,25 @@ API_ACTIONS_SAMPLE: list[tuple[str, str, dict[str, Any]]] = [
     ("access", "access_list_doors", {}),
     ("access", "access_list_users", {}),
     ("access", "access_list_visitors", {}),
-    # Drive: every read action. drive_get_shared_drive needs a live id, so it is
-    # exercised separately (API_ACTION_DERIVED_READS).
+    # Drive: every read action. drive_get_shared_drive and drive_list_snapshots
+    # need a live id or name, so they are exercised separately
+    # (API_ACTION_DERIVED_READS).
     ("drive", "drive_get_system_info", {}),
+    ("drive", "drive_list_logs", {"limit": 10}),
     ("drive", "drive_list_storage_pools", {}),
+    ("drive", "drive_get_storage_usage", {}),
     ("drive", "drive_list_disks", {"include_empty": True}),
+    ("drive", "drive_get_network_throughput", {}),
+    ("drive", "drive_get_fan_profile", {}),
+    ("drive", "drive_get_disk_stats", {"hours": 1}),
     ("drive", "drive_list_shared_drives", {}),
+    ("drive", "drive_get_snapshot_overview", {}),
     ("drive", "drive_get_file_services", {}),
+    ("drive", "drive_get_smb_advanced_settings", {}),
+    ("drive", "drive_get_rsync_settings", {}),
     ("drive", "drive_list_nfs_connections", {}),
+    ("drive", "drive_list_users", {}),
+    ("drive", "drive_list_groups", {}),
 ]
 
 # Read actions whose argument comes from an earlier sampled read:
@@ -3481,7 +3495,17 @@ API_ACTIONS_SAMPLE: list[tuple[str, str, dict[str, Any]]] = [
 # no shared drive) the read is recorded as skipped, not failed.
 API_ACTION_DERIVED_READS: list[tuple[str, str, str, str]] = [
     ("drive", "drive_get_shared_drive", "drive_list_shared_drives", "drive_id"),
+    ("drive", "drive_list_snapshots", "drive_get_snapshot_overview", "shared_drive_name"),
 ]
+
+# The key a derived read's argument is taken from in its seed's data, when it is
+# not a listed item's "id". "collection.field" reads the field of the items in a
+# detail's collection: snapshots are listed by shared drive name, and only the
+# snapshot overview's shared drives are sure to be shared (the shared drive list
+# also holds personal drives).
+API_ACTION_DERIVED_SEED_KEYS: dict[str, str] = {
+    "drive_list_snapshots": "shared_drives.shared_drive_name",
+}
 
 # Non-default, read-only probes derive a guaranteed match from the corresponding
 # default read. A missing seed is inconclusive and therefore cannot make this
@@ -3545,14 +3569,26 @@ def _classify_confirmation_preview_control(
     return {"passed": passed, "tool_returned": tool, "response": response}
 
 
-def _first_listed_id(response: object) -> str | None:
-    """The first ``id`` in a successful list action's data, or ``None``."""
+def _first_listed_value(listed: object, key: str) -> str | None:
+    """The first non-empty ``key`` of the items in ``listed``.
+
+    ``listed`` is a list of items, or, for a ``"collection.field"`` key, an
+    object whose ``collection`` is that list.
+    """
+    collection, _, field = key.rpartition(".")
+    if collection:
+        listed = listed.get(collection) if isinstance(listed, dict) else None
+    for item in listed if isinstance(listed, list) else []:
+        if isinstance(item, dict) and isinstance(item.get(field), str) and item[field]:
+            return item[field]
+    return None
+
+
+def _first_listed_id(response: object, key: str = "id") -> str | None:
+    """The first ``key`` (default ``id``) in a successful action's data, or ``None``."""
     if not isinstance(response, dict) or response.get("success") is not True:
         return None
-    for item in response.get("data") or []:
-        if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]:
-            return item["id"]
-    return None
+    return _first_listed_value(response.get("data"), key)
 
 
 def _classify_api_action_result(success: bool | None, shape_match: bool) -> str:
@@ -4103,7 +4139,9 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                 continue
             if args.tool and tool_name not in args.tool:
                 continue
-            seed_id = _first_listed_id(live_action_responses.get(seed_tool))
+            seed_id = _first_listed_id(
+                live_action_responses.get(seed_tool), API_ACTION_DERIVED_SEED_KEYS.get(tool_name, "id")
+            )
             if seed_id is None:
                 artifact["skipped_reads"].append(
                     {"product": product, "tool": tool_name, "reason": f"{seed_tool} listed nothing to read"}
@@ -4327,7 +4365,16 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
     # Drive: every read route. Its lists are whole (no cursor) and the action
     # data is the bare list, so the parity collection key is "data".
     ("drive", "/v1/sites/{site}/drive/system", {}, "drive_get_system_info", {}, ()),
+    (
+        "drive",
+        "/v1/sites/{site}/drive/logs",
+        {"limit": "5", "before": DRIVE_SMOKE_LOG_BEFORE},
+        "drive_list_logs",
+        {"limit": 5, "before": DRIVE_SMOKE_LOG_BEFORE},
+        (),
+    ),
     ("drive", "/v1/sites/{site}/drive/storage-pools", {}, "drive_list_storage_pools", {}, ("data",)),
+    ("drive", "/v1/sites/{site}/drive/storage-usage", {}, "drive_get_storage_usage", {}, ("data",)),
     (
         "drive",
         "/v1/sites/{site}/drive/disks",
@@ -4336,6 +4383,9 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
         {"include_empty": True},
         ("data",),
     ),
+    ("drive", "/v1/sites/{site}/drive/network-throughput", {}, "drive_get_network_throughput", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/fan-profile", {}, "drive_get_fan_profile", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/disk-stats", {"hours": "1"}, "drive_get_disk_stats", {"hours": 1}, ()),
     ("drive", "/v1/sites/{site}/drive/shared-drives", {}, "drive_list_shared_drives", {}, ("data",)),
     (
         "drive",
@@ -4345,8 +4395,21 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
         {"drive_id": "{drive_id}"},
         (),
     ),
+    ("drive", "/v1/sites/{site}/drive/snapshot-overview", {}, "drive_get_snapshot_overview", {}, ()),
+    (
+        "drive",
+        "/v1/sites/{site}/drive/snapshots/shared/{shared_drive_name}",
+        {},
+        "drive_list_snapshots",
+        {"shared_drive_name": "{shared_drive_name}"},
+        ("data",),
+    ),
     ("drive", "/v1/sites/{site}/drive/file-services", {}, "drive_get_file_services", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/smb-advanced-settings", {}, "drive_get_smb_advanced_settings", {}, ()),
+    ("drive", "/v1/sites/{site}/drive/rsync-settings", {}, "drive_get_rsync_settings", {}, ()),
     ("drive", "/v1/sites/{site}/drive/nfs-connections", {}, "drive_list_nfs_connections", {}, ("data",)),
+    ("drive", "/v1/sites/{site}/drive/users", {}, "drive_list_users", {}, ("data",)),
+    ("drive", "/v1/sites/{site}/drive/groups", {}, "drive_list_groups", {}, ("data",)),
 ]
 
 # Response shape per resource path; anything not listed is a cursor page
@@ -4354,26 +4417,54 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
 # ({items, render_hint}); "detail" is one object ({data, render_hint}).
 API_RESOURCE_SHAPES: dict[str, str] = {
     "/v1/sites/{site}/drive/system": "detail",
+    # The system log is one page: {data: {entries, next_cursor}, render_hint}.
+    "/v1/sites/{site}/drive/logs": "detail",
     "/v1/sites/{site}/drive/storage-pools": "list",
+    "/v1/sites/{site}/drive/storage-usage": "list",
     "/v1/sites/{site}/drive/disks": "list",
+    "/v1/sites/{site}/drive/network-throughput": "detail",
+    "/v1/sites/{site}/drive/fan-profile": "detail",
+    "/v1/sites/{site}/drive/disk-stats": "detail",
     "/v1/sites/{site}/drive/shared-drives": "list",
     "/v1/sites/{site}/drive/shared-drives/{drive_id}": "detail",
+    "/v1/sites/{site}/drive/snapshot-overview": "detail",
+    "/v1/sites/{site}/drive/snapshots/shared/{shared_drive_name}": "list",
     "/v1/sites/{site}/drive/file-services": "detail",
+    "/v1/sites/{site}/drive/smb-advanced-settings": "detail",
+    "/v1/sites/{site}/drive/rsync-settings": "detail",
     "/v1/sites/{site}/drive/nfs-connections": "list",
+    "/v1/sites/{site}/drive/users": "list",
+    "/v1/sites/{site}/drive/groups": "list",
 }
 
 # Path placeholders filled from an earlier resource's items:
-# placeholder -> (resource path that lists them, item key).
+# placeholder -> (resource path that lists them, item key). A "collection.field"
+# key reads the field of the items in a detail resource's collection: only the
+# snapshot overview's shared drives are sure to be shared (the shared drive list
+# also holds personal drives).
 API_RESOURCE_SEEDS: dict[str, tuple[str, str]] = {
     "drive_id": ("/v1/sites/{site}/drive/shared-drives", "id"),
+    "shared_drive_name": ("/v1/sites/{site}/drive/snapshot-overview", "shared_drives.shared_drive_name"),
 }
 
 # Detail resources compare these fields with the matching action's data; the
-# others (uptime, load, temperatures) move between the two calls.
+# others (uptime, load, temperatures) move between the two calls. An empty tuple
+# compares only the field names: every value moves (live throughput).
 API_RESOURCE_DETAIL_PARITY_FIELDS: dict[str, tuple[str, ...]] = {
     "/v1/sites/{site}/drive/system": ("mac", "model", "hostname", "firmware_version"),
+    # Entries logged before today (UTC) no longer change.
+    "/v1/sites/{site}/drive/logs": ("entries",),
+    "/v1/sites/{site}/drive/network-throughput": (),
+    "/v1/sites/{site}/drive/fan-profile": ("current_profile", "available_profiles"),
+    "/v1/sites/{site}/drive/disk-stats": ("interval_seconds",),
     "/v1/sites/{site}/drive/shared-drives/{drive_id}": ("id", "name", "storage_pool_id"),
+    "/v1/sites/{site}/drive/snapshot-overview": ("shared_drives",),
     "/v1/sites/{site}/drive/file-services": ("smb_enabled", "nfs_enabled", "time_machine_enabled"),
+    "/v1/sites/{site}/drive/smb-advanced-settings": (
+        "personal_drive_recycle_enabled",
+        "personal_drive_recycle_status",
+    ),
+    "/v1/sites/{site}/drive/rsync-settings": ("enabled", "account_configured", "account_username", "ssh_enabled"),
 }
 
 # Network resource types intentionally expose MAC addresses as their public
@@ -4386,8 +4477,12 @@ API_RESOURCE_PARITY_ID_KEYS: dict[str, tuple[str, ...]] = {
     "/v1/sites/{site}/drive/storage-pools": ("id",),
     # An empty bay has no serial; it falls back to its slot number.
     "/v1/sites/{site}/drive/disks": ("serial", "slot_id"),
+    "/v1/sites/{site}/drive/storage-usage": ("pool_id",),
     "/v1/sites/{site}/drive/shared-drives": ("id",),
+    "/v1/sites/{site}/drive/snapshots/shared/{shared_drive_name}": ("id",),
     "/v1/sites/{site}/drive/nfs-connections": ("client",),
+    "/v1/sites/{site}/drive/users": ("id",),
+    "/v1/sites/{site}/drive/groups": ("id",),
 }
 
 
@@ -4405,17 +4500,13 @@ def _resource_placeholders(path_tpl: str, site: str, seeds: dict[str, str | None
 
 
 def _record_resource_seeds(path_tpl: str, items: object, seeds: dict[str, str | None]) -> None:
-    """Keep the first listed value of every placeholder this resource seeds."""
+    """Keep the first listed value of every placeholder this resource seeds.
+
+    ``items`` is a list resource's items, or a detail resource's data.
+    """
     for name, (seed_path, key) in API_RESOURCE_SEEDS.items():
         if seed_path == path_tpl and name not in seeds:
-            seeds[name] = next(
-                (
-                    str(item[key])
-                    for item in (items if isinstance(items, list) else [])
-                    if isinstance(item, dict) and item.get(key)
-                ),
-                None,
-            )
+            seeds[name] = _first_listed_value(items, key)
 
 
 def _resource_shape_ok(status: int, response: object, shape: str) -> bool:
@@ -4434,7 +4525,10 @@ def _detail_parity(resource: object, action: object, fields: tuple[str, ...]) ->
     resource_data = resource.get("data") if isinstance(resource, dict) else None
     action_data = action.get("data") if isinstance(action, dict) else None
     if not isinstance(resource_data, dict) or not isinstance(action_data, dict):
-        return list(fields)
+        return list(fields) or ["data"]
+    if not fields:
+        # Every value moves between the two calls: both answer the same projection, so the field names match.
+        return [] if set(resource_data) == set(action_data) else sorted(set(resource_data) ^ set(action_data))
     return [field for field in fields if resource_data.get(field) != action_data.get(field)]
 
 
@@ -4628,7 +4722,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             shape_match = _resource_shape_ok(status, response, shape)
             items = response.get("items") if isinstance(response, dict) else None
             if shape_match:
-                _record_resource_seeds(path_tpl, items, resource_seeds)
+                _record_resource_seeds(path_tpl, response.get("data") if shape == "detail" else items, resource_seeds)
             item_count = len(items) if isinstance(items, list) else None
 
             classification: str
