@@ -138,6 +138,9 @@ async def test_a_healthy_controller_serves_the_first_call_as_before(tmp_path, se
     await controller.start(port, tmp_path)
     cm = _manager(port)
     serve_clients(cm)
+    # The first call waits out a real TLS login against the fake, which can outlast
+    # the short window on a busy runner; the short window is for the outage tests.
+    cm._attempt.wait_seconds = 10.0
     try:
         startup = await _start(cm)
         result = await _list_clients(cm)

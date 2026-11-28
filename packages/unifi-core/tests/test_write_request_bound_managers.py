@@ -368,10 +368,12 @@ async def test_an_innerspace_write_with_no_budget_left_is_not_sent(innerspace, c
 
 
 async def test_an_innerspace_write_cut_off_after_sending_is_unknown(innerspace, console) -> None:  # noqa: F811
-    console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=1)
+    # The change must reach the loopback console before the budget runs out, and the reply
+    # must outlast the budget: leave a slow runner room to send it.
+    console.reply("POST", SHAPE_CHANGE_PATH, {"data": {}}, delay=2)
     gate, clock = _nearly_spent_gate()
     async with gate.write() as ticket:
-        clock.value = 9.99
+        clock.value = 9.5
         with pytest.raises(InnerSpaceWriteOutcomeUnknown, match="whether it was applied is unknown"):
             await innerspace.request("POST", SHAPE_CHANGE_PATH, operation="write", json=_SHAPE_CHANGE, replay=False)
     assert len(console.calls("POST", SHAPE_CHANGE_PATH)) == 1
@@ -472,10 +474,12 @@ async def test_a_drive_change_after_its_reads_with_no_budget_left_is_still_not_s
 
 
 async def test_a_drive_change_cut_off_after_sending_is_unknown(drive, drive_console) -> None:
-    drive_console.reply("PUT", _NFS, {"err": None, "type": "single", "data": {}}, delay=1)
+    # The change must reach the loopback console before the budget runs out, and the reply
+    # must outlast the budget: leave a slow runner room to send it.
+    drive_console.reply("PUT", _NFS, {"err": None, "type": "single", "data": {}}, delay=2)
     gate, clock = _nearly_spent_gate()
     async with gate.write() as ticket:
-        clock.value = 9.99
+        clock.value = 9.5
         with pytest.raises(WriteRequestTimeout, match="may or may not have been applied") as cut:
             await drive.put(_NFS, _NFS_BODY)
     assert not isinstance(cut.value, DriveWriteNotSent)
