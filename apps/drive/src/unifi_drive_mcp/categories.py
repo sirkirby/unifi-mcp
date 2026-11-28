@@ -26,6 +26,7 @@ DRIVE_CATEGORY_MAP = {
     "nfs_connection": "nfs_connections",
     "log": "logs",
     "performance": "performance",
+    "snapshot": "snapshots",
 }
 
 _MANIFEST_PATH = Path(__file__).parent / "tools_manifest.json"

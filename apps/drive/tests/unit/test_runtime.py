@@ -26,6 +26,8 @@ READ_TOOLS = {
     "drive_get_network_throughput",
     "drive_get_fan_profile",
     "drive_get_disk_stats",
+    "drive_get_snapshot_overview",
+    "drive_list_snapshots",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",
