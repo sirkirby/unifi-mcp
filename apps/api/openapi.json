@@ -1837,6 +1837,31 @@
         "title": "Detail[NetworkModel]",
         "type": "object"
       },
+      "Detail_NetworkReferencesModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NetworkReferencesModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[NetworkReferencesModel]",
+        "type": "object"
+      },
       "Detail_OonPolicyModel_": {
         "additionalProperties": true,
         "properties": {
@@ -6204,6 +6229,41 @@
           }
         },
         "title": "NetworkModel",
+        "type": "object"
+      },
+      "NetworkReferencesModel": {
+        "additionalProperties": true,
+        "properties": {
+          "counts": {
+            "title": "Counts"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "network_id": {
+            "title": "Network Id",
+            "type": "string"
+          },
+          "references": {
+            "title": "References"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable",
+            "type": "array"
+          }
+        },
+        "title": "NetworkReferencesModel",
         "type": "object"
       },
       "OonPolicyModel": {
@@ -23666,6 +23726,86 @@
         "summary": "Get Network",
         "tags": [
           "network/networks"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/networks/{network_id}/references": {
+      "get": {
+        "description": "What references a network: Wi-Fi networks, port profiles, switch-port overrides, V2 firewall policies and clients. network_id is the network's _id from unifi_list_networks. A family whose read failed is listed in unavailable instead of being reported as empty.",
+        "operationId": "get_network_references_v1_sites__site_id__networks__network_id__references_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "network_id",
+            "required": true,
+            "schema": {
+              "title": "Network Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_clients",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include Clients",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_NetworkReferencesModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Network References",
+        "tags": [
+          "network/network_references"
         ]
       }
     },

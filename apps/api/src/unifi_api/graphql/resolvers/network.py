@@ -24,6 +24,7 @@ from typing import Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.incident_collection import (
     DEFAULT_CALLS,
     DEFAULT_ELAPSED_MS,
@@ -72,6 +73,7 @@ from unifi_api.graphql.types.network.ips_suppression import IpsSuppressions
 from unifi_api.graphql.types.network.mdns import MdnsSettings
 from unifi_api.graphql.types.network.nat import NatRule
 from unifi_api.graphql.types.network.network import Network
+from unifi_api.graphql.types.network.network_references import NetworkReferences
 from unifi_api.graphql.types.network.oon import OonPolicy
 from unifi_api.graphql.types.network.port_forward import PortForward
 from unifi_api.graphql.types.network.qos import QosRule
@@ -2335,6 +2337,38 @@ class NetworkQuery:
             items=items,
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "What references a network: Wi-Fi networks, port profiles, switch-port overrides, "
+            "V2 firewall policies and clients. network_id is the network's _id from the networks "
+            "field. Each family is read on its own; a family whose read failed is listed in "
+            "unavailable instead of being reported as empty."
+        ),
+    )
+    async def network_references(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        network_id: strawberry.ID,
+        site: str = "default",
+        include_clients: bool = True,
+    ) -> NetworkReferences | None:
+        ctx: GraphQLContext = info.context
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "network_reference_manager",
+                site=site,
+            )
+            try:
+                references = await mgr.get_network_references(str(network_id), include_clients=include_clients)
+            except UniFiNotFoundError:
+                return None
+        return NetworkReferences.from_manager_output(references, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

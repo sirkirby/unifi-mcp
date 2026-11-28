@@ -146,6 +146,9 @@ from unifi_api.graphql.types.network.nat import (
 from unifi_api.graphql.types.network.network import (
     Network as NetworkNetworkType,
 )
+from unifi_api.graphql.types.network.network_references import (
+    NetworkReferences as NetworkReferencesType,
+)
 from unifi_api.graphql.types.network.oon import (
     OonPolicy as NetworkOonPolicyType,
 )
@@ -383,6 +386,9 @@ def build_type_registry() -> TypeRegistry:
     reg.register_type("network", "networks/{id}", NetworkNetworkType)
     reg.register_tool_type("unifi_list_networks", NetworkNetworkType, "list")
     reg.register_tool_type("unifi_get_network_details", NetworkNetworkType, "detail")
+
+    # network/network_references (tool-keyed only)
+    reg.register_tool_type("unifi_get_network_references", NetworkReferencesType, "detail")
 
     reg.register_type("network", "gateway_settings", NetworkGatewaySettingsType)
     reg.register_tool_type("unifi_get_gateway_settings", NetworkGatewaySettingsType, "detail")

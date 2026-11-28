@@ -152,6 +152,9 @@ from unifi_api.routes.resources.network import (
     nat_rules as net_nat_rules_routes,
 )
 from unifi_api.routes.resources.network import (
+    network_references as net_network_references_routes,
+)
+from unifi_api.routes.resources.network import (
     networks as net_networks_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -672,6 +675,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_clients_routes,
         net_devices_routes,
         net_networks_routes,
+        net_network_references_routes,
         net_firewall_routes,
         net_wlans_routes,
         net_switch_routes,

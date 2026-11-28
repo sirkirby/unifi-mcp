@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.ap_group import (
     from_controller as ap_group_from_controller,
 )
@@ -37,7 +38,12 @@ from unifi_core.network.models.wlans import validate_update as validate_wlan_upd
 from unifi_core.network.read_views import shape_network_details, shape_network_list, shape_wlan_list
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.write_verification import format_tool_payload
-from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
+from unifi_network_mcp.runtime import (
+    network_manager,
+    network_reference_manager,
+    server,
+    should_redact_sensitive_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +247,52 @@ async def get_network_details(
     except Exception as e:
         logger.error("Error getting network details for %s: %s", network_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to get network details for {network_id}: {e}"}
+
+
+@server.tool(
+    name="unifi_get_network_references",
+    auth="either",
+    description=(
+        "Read what references a network: Wi-Fi networks, port profiles, switch-port overrides, "
+        "V2 firewall policies and clients. network_id is the _id from unifi_list_networks. "
+        "Each family is read independently; a family whose read fails is listed in unavailable "
+        "instead of being reported as empty. Set include_clients=false to leave clients out."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def get_network_references(
+    network_id: Annotated[str, Field(description="Network _id from unifi_list_networks")],
+    include_clients: Annotated[
+        bool,
+        Field(description="Include clients currently on the network. When false, the client list is left out"),
+    ] = True,
+) -> Dict[str, Any]:
+    """Read which controller objects reference a network.
+
+    Args:
+        network_id (str): Network _id.
+        include_clients (bool): Whether to read the clients on the network.
+
+    Returns:
+        A dictionary containing:
+        - success (bool): Indicates if the operation was successful.
+        - network_id (str), name (str): The network.
+        - references (dict): Per-family entries, each naming what references the network.
+        - counts (dict): Entry count per family that was read.
+        - unavailable (list): Families whose read failed; absent from references and counts.
+        - error (str, optional): An error message if the operation failed.
+    """
+    if not network_id:
+        return {"success": False, "error": "network_id is required"}
+    redact_sensitive = should_redact_sensitive_fields()
+    try:
+        references = await network_reference_manager.get_network_references(network_id, include_clients=include_clients)
+        return redact_sensitive_fields({"success": True, **references}, redact_sensitive=redact_sensitive)
+    except UniFiNotFoundError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error getting network references: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get network references: {type(e).__name__}"}
 
 
 # WAN fields whose change can interrupt internet connectivity. When any appear in an

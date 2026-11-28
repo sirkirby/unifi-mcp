@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 221 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 222 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -153,10 +153,11 @@ Rule order is each rule's `acl_index`: lower numbers are evaluated first. To reo
 - `unifi_create_simple_qos_rule` — Create with simplified schema
 - `unifi_update_qos_rule` — Update rule fields
 
-## Networks, WLANs & AP Groups (16 tools)
+## Networks, WLANs & AP Groups (17 tools)
 
 - `unifi_list_networks` — List all networks (LAN, WAN, VLAN)
 - `unifi_get_network_details` — Get network details by ID
+- `unifi_get_network_references` — What references a network: WLANs, port profiles, switch-port overrides, firewall policies and clients
 - `unifi_create_network` — Create a network (LAN/VLAN); guest creation requires a verified built-in Hotspot zone
 - `unifi_update_network` — Update network fields with exact post-write verification
 - `unifi_delete_network` — Delete a network after a live-state preview

@@ -58,6 +58,7 @@ from unifi_core.network.managers.gateway_settings_manager import GatewaySettings
 from unifi_core.network.managers.hotspot_manager import HotspotManager
 from unifi_core.network.managers.nat_manager import NatManager
 from unifi_core.network.managers.network_manager import NetworkManager
+from unifi_core.network.managers.network_reference_manager import NetworkReferenceManager
 from unifi_core.network.managers.oon_manager import OonManager
 from unifi_core.network.managers.qos_manager import QosManager
 from unifi_core.network.managers.routing_manager import RoutingManager
@@ -247,6 +248,18 @@ def get_network_manager() -> NetworkManager:
 
 
 @lru_cache
+def get_network_reference_manager() -> NetworkReferenceManager:
+    return NetworkReferenceManager(
+        get_connection_manager(),
+        network_manager=get_network_manager(),
+        switch_manager=get_switch_manager(),
+        device_manager=get_device_manager(),
+        firewall_manager=get_firewall_manager(),
+        client_manager=get_client_manager(),
+    )
+
+
+@lru_cache
 def get_oon_manager() -> OonManager:
     return OonManager(get_connection_manager())
 
@@ -391,6 +404,7 @@ switch_manager = get_switch_manager()
 qos_manager = get_qos_manager()
 vpn_manager = get_vpn_manager()
 network_manager = get_network_manager()
+network_reference_manager = get_network_reference_manager()
 oon_manager = get_oon_manager()
 system_manager = get_system_manager()
 firewall_manager = get_firewall_manager()

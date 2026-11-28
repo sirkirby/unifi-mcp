@@ -2837,6 +2837,11 @@ type NetworkQuery {
   networks(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): NetworkPage!
 
   """
+  What references a network: Wi-Fi networks, port profiles, switch-port overrides, V2 firewall policies and clients. network_id is the network's _id from the networks field. Each family is read on its own; a family whose read failed is listed in unavailable instead of being reported as empty.
+  """
+  networkReferences(controller: ID!, networkId: ID!, site: String! = "default", includeClients: Boolean! = true): NetworkReferences
+
+  """
   Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
   """
   networkDetail(controller: ID!, id: ID!, site: String! = "default"): Network
@@ -3128,6 +3133,17 @@ type NetworkQuery {
 
   """Look up a single QoS user group by id."""
   userGroup(controller: ID!, id: ID!, site: String! = "default"): UserGroup
+}
+
+"""
+What references a network: Wi-Fi networks, port profiles, switch-port overrides, V2 firewall policies and clients. network_id is the network's _id from the networks field. Each family is read on its own; a family whose read failed is listed in unavailable instead of being reported as empty.
+"""
+type NetworkReferences {
+  networkId: String!
+  name: String
+  references: JSON!
+  counts: JSON!
+  unavailable: [String!]!
 }
 
 """An out-of-network (OON) policy entry."""
@@ -4770,6 +4786,7 @@ Read-only access to UniFi Network resources.
 - `natRules: NatRulePage!`  — List V2 NAT rules in descending controller ID order. These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools.
 - `networkDetail: Network`  — Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
 - `networkHealth: [NetworkHealth!]!`  — Get the controller's network-health subsystems list.
+- `networkReferences: NetworkReferences`  — What references a network: Wi-Fi networks, port profiles, switch-port overrides, V2 firewall policies and clients. network_id is the network's _id from the networks field. Each family is read on its own; a family whose read failed is listed in unavailable instead of being reported as empty.
 - `networkStats: [StatPoint!]!`  — Network-wide stats timeseries.
 - `networks: NetworkPage!`  — List configured LAN/VLAN networks on the given controller/site (paginated).
 - `oonPolicies: OonPolicyPage!`  — List OON (out-of-network) policies (paginated).
