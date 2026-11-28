@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from aiounifi.errors import AiounifiException
 from pydantic import ValidationError
+from unifi_core.exceptions import http_status
 from unifi_core.network.models.traffic_flows import TrafficFlowQuery
 
 REJECTED = "the controller rejected the traffic-flow query"
@@ -16,6 +16,13 @@ REJECTED = "the controller rejected the traffic-flow query"
 
 class InvalidTrafficFlowFilter(ValueError):
     """A filter that failed validation before anything was sent."""
+
+
+class TrafficFlowQueryRejected(ValueError):
+    """The controller refused the query, which it does for a filter value it does not accept."""
+
+    def __init__(self) -> None:
+        super().__init__(REJECTED)
 
 
 def build_query(**fields: Any) -> TrafficFlowQuery:
@@ -26,7 +33,6 @@ def build_query(**fields: Any) -> TrafficFlowQuery:
         raise InvalidTrafficFlowFilter(f"invalid traffic-flow filter: {', '.join(names)}") from None
 
 
-def is_rejection(exc: AiounifiException) -> bool:
+def is_rejection(exc: BaseException) -> bool:
     """True for the controller's HTTP 400 answer, which it gives for a filter value it does not accept."""
-    detail = exc.args[0] if exc.args else None
-    return isinstance(detail, dict) and detail.get("errorCode") == 400
+    return http_status(exc) == 400

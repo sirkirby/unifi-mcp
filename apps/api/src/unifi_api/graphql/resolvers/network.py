@@ -23,7 +23,6 @@ import time
 from typing import Any
 
 import strawberry
-from aiounifi.errors import AiounifiException
 from strawberry.types import Info
 from unifi_core.incident_collection import (
     DEFAULT_CALLS,
@@ -123,7 +122,12 @@ from unifi_api.services.incident_evidence import (
     presentation,
     require_product,
 )
-from unifi_api.services.traffic_flow_query import REJECTED, build_query, is_rejection
+from unifi_api.services.traffic_flow_query import (
+    InvalidTrafficFlowFilter,
+    TrafficFlowQueryRejected,
+    build_query,
+    is_rejection,
+)
 
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
@@ -4063,10 +4067,10 @@ class NetworkQuery:
         ctx: GraphQLContext = info.context
         page = _decode_flow_cursor(cursor)
         if (time_from is None) != (time_to is None):
-            raise ValueError("provide both time_from and time_to, or use within_hours")
+            raise InvalidTrafficFlowFilter("provide both time_from and time_to, or use within_hours")
         if time_from is None:
             if within_hours < 1 or within_hours > 8760:
-                raise ValueError("within_hours must be between 1 and 8760")
+                raise InvalidTrafficFlowFilter("within_hours must be between 1 and 8760")
             now_ms = int(time.time() * 1000)
             time_from, time_to = now_ms - within_hours * 3600 * 1000, now_ms
         query = build_query(
@@ -4091,9 +4095,9 @@ class NetworkQuery:
         )
         try:
             result = await _fetch_traffic_flows(ctx, controller, site, query)
-        except AiounifiException as exc:
+        except Exception as exc:
             if is_rejection(exc):
-                raise ValueError(REJECTED) from None
+                raise TrafficFlowQueryRejected() from None
             raise
         items = [TrafficFlow.from_manager_output(f) for f in result.get("flows", [])]
         next_cursor = _encode_flow_cursor(page + 1) if result.get("has_next") else None

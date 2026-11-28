@@ -240,6 +240,7 @@ async def test_graphql_refuses_a_bad_filter_by_name_only(api, args, named):
     body = await _gql(api, args)
     [error] = body["errors"]
     assert error["message"] == f"invalid traffic-flow filter: {named}"
+    assert error["extensions"]["code"] == "BAD_REQUEST"
     assert api.queries == []
 
 
@@ -261,6 +262,24 @@ async def test_controller_rejection_is_a_client_error(api):
     body = await _gql(api, 'risk: ["suspicious"]')
     [error] = body["errors"]
     assert error["message"] == "the controller rejected the traffic-flow query"
+    assert error["extensions"]["code"] == "BAD_REQUEST"
+
+
+@pytest.mark.asyncio
+async def test_a_rejection_folded_into_the_message_is_still_a_client_error(api):
+    # aiounifi folds the status of the errors it maps into the message instead of the decoded body.
+    api.error = AiounifiException("Call https://controller/v2/api/traffic-flows received 400 Bad Request")
+    response = await _get(api, [("risk", "suspicious")])
+    assert response.status_code == 400
+    assert "controller/v2" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_graphql_time_window_errors_are_client_errors(api):
+    body = await _gql(api, f"timeFrom: {NOW_MS}")
+    [error] = body["errors"]
+    assert error["extensions"]["code"] == "BAD_REQUEST"
+    assert api.queries == []
 
 
 @pytest.mark.asyncio

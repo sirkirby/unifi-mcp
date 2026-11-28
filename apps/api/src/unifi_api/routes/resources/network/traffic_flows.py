@@ -12,7 +12,6 @@ import inspect
 import time
 from typing import Annotated
 
-from aiounifi.errors import AiounifiException
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from unifi_core.network.models.traffic_flows import Port
 
@@ -129,7 +128,7 @@ async def get_traffic_flows(
         )
         try:
             result = await mgr.get_traffic_flows(query)
-        except AiounifiException as exc:
+        except Exception as exc:
             if is_rejection(exc):
                 raise HTTPException(status_code=400, detail=REJECTED) from None
             raise
