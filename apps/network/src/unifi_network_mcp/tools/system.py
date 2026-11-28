@@ -5,12 +5,18 @@ This module provides MCP tools to interact with a Unifi Network Controller's sys
 """
 
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field, WithJsonSchema
+from pydantic import Field, ValidationError, WithJsonSchema
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
+from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.ips_suppression import (
+    IpsSuppressionConflict,
+    IpsSuppressionCreate,
+    IpsSuppressionDelete,
+)
 from unifi_core.network.models.mdns import mdns_to_controller_update, validate_mdns_service_selection
 from unifi_core.network.models.system import (
     autobackup_to_controller_update,
@@ -222,6 +228,125 @@ async def list_ips_suppressions() -> Dict[str, Any]:
     except Exception as exc:
         logger.error("Failed to list IPS suppressions: %s", type(exc).__name__)
         return {"success": False, "error": "Failed to list IPS suppressions"}
+
+
+_CREATE_FIELDS = IpsSuppressionCreate.model_fields
+_DELETE_FIELDS = IpsSuppressionDelete.model_fields
+_SUPPRESSION_WARNING = "A suppressed signature raises no IPS event for the traffic it covers."
+
+
+def _validation_text(exc: ValidationError) -> str:
+    """The first problem, without the rejected value."""
+    return exc.errors()[0]["msg"].removeprefix("Value error, ")
+
+
+def _preview_fields(request: IpsSuppressionCreate | IpsSuppressionDelete, prepared: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "resource_type": "ips_suppression",
+        "resource_id": f"{request.gid}:{request.signature_id}",
+        "resource_name": None,
+        "current_state": {"suppressions": prepared["current"]},
+        "updates": {"suppressions": prepared["after"]},
+        "warnings": [_SUPPRESSION_WARNING],
+    }
+
+
+@server.tool(
+    name="unifi_create_ips_suppression",
+    auth="local_only",
+    description=(
+        "Suppress an IPS signature for all traffic, or for one address or CIDR subnet in one direction, and "
+        "verify persistence. Adds to the signature's existing suppression. Suppressing hides real detections and "
+        "requires confirmation; the preview shows the signature's live before/after entries."
+    ),
+    permission_category="system",
+    permission_action="create",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def create_ips_suppression(
+    signature_id: Annotated[int, Field(gt=0, description=_CREATE_FIELDS["signature_id"].description)],
+    scope: Annotated[
+        Literal["global", "source", "destination", "both"], Field(description=_CREATE_FIELDS["scope"].description)
+    ],
+    target: Annotated[Optional[str], Field(description=_CREATE_FIELDS["target"].description)] = None,
+    gid: Annotated[int, Field(gt=0, description=_CREATE_FIELDS["gid"].description)] = 1,
+    signature: Annotated[Optional[str], Field(description=_CREATE_FIELDS["signature"].description)] = None,
+    category: Annotated[Optional[str], Field(description=_CREATE_FIELDS["category"].description)] = None,
+    confirm: Annotated[bool, Field(description="Apply when true; return a live preview when false")] = False,
+) -> Dict[str, Any]:
+    """Suppress an IPS signature."""
+    try:
+        request = IpsSuppressionCreate(
+            signature_id=signature_id, gid=gid, scope=scope, target=target, signature=signature, category=category
+        )
+        if not confirm:
+            prepared = await system_manager.preview_ips_suppression_change(request)
+            result = update_preview(**_preview_fields(request, prepared))
+        else:
+            result = format_tool_payload(
+                await system_manager.create_ips_suppression(request),
+                site=system_manager._connection.site,
+                success_message="IPS suppression created and verified.",
+            )
+        return redact_sensitive_fields(result, redact_sensitive=should_redact_sensitive_fields())
+    except ValidationError as exc:
+        return {"success": False, "error": f"Failed to create IPS suppression: {_validation_text(exc)}"}
+    except IpsSuppressionConflict as exc:
+        return {"success": False, "error": f"Failed to create IPS suppression: {exc}"}
+    except Exception as exc:
+        logger.error("Failed to create IPS suppression: %s", type(exc).__name__)
+        return {
+            "success": False,
+            "error": "Failed to create IPS suppression; check Network session and controller compatibility",
+        }
+
+
+@server.tool(
+    name="unifi_delete_ips_suppression",
+    auth="local_only",
+    description=(
+        "Remove an IPS signature's suppression, or one of its targets, and verify persistence. Removing the last "
+        "target removes the suppression. Requires confirmation; the preview shows the signature's live before/after "
+        "entries."
+    ),
+    permission_category="system",
+    permission_action="delete",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def delete_ips_suppression(
+    signature_id: Annotated[int, Field(gt=0, description=_DELETE_FIELDS["signature_id"].description)],
+    target: Annotated[Optional[str], Field(description=_DELETE_FIELDS["target"].description)] = None,
+    scope: Annotated[
+        Optional[Literal["source", "destination", "both"]], Field(description=_DELETE_FIELDS["scope"].description)
+    ] = None,
+    gid: Annotated[int, Field(gt=0, description=_DELETE_FIELDS["gid"].description)] = 1,
+    confirm: Annotated[bool, Field(description="Apply when true; return a live preview when false")] = False,
+) -> Dict[str, Any]:
+    """Remove an IPS signature suppression or one of its targets."""
+    try:
+        request = IpsSuppressionDelete(signature_id=signature_id, gid=gid, target=target, scope=scope)
+        if not confirm:
+            prepared = await system_manager.preview_ips_suppression_change(request)
+            result = update_preview(**_preview_fields(request, prepared))
+        else:
+            result = format_tool_payload(
+                await system_manager.delete_ips_suppression(request),
+                site=system_manager._connection.site,
+                success_message="IPS suppression removed and verified.",
+            )
+        return redact_sensitive_fields(result, redact_sensitive=should_redact_sensitive_fields())
+    except ValidationError as exc:
+        return {"success": False, "error": f"Failed to delete IPS suppression: {_validation_text(exc)}"}
+    except IpsSuppressionConflict as exc:
+        return {"success": False, "error": f"Failed to delete IPS suppression: {exc}"}
+    except UniFiNotFoundError:
+        return {"success": False, "error": "Failed to delete IPS suppression: no such suppression or target"}
+    except Exception as exc:
+        logger.error("Failed to delete IPS suppression: %s", type(exc).__name__)
+        return {
+            "success": False,
+            "error": "Failed to delete IPS suppression; check Network session and controller compatibility",
+        }
 
 
 @server.tool(

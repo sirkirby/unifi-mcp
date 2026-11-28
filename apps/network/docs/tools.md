@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 219 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 221 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -345,6 +345,21 @@ from the `ips_suppression` settings section (verified on Network 11.0):
 
 The controller records no creation time. A missing or unreadable section is an error,
 never an empty list.
+
+`unifi_create_ips_suppression` suppresses one signature (`signature_id`, with `gid`
+defaulting to 1) for all traffic (`scope: global`) or for one `target` in one direction
+(`source`, `destination`, `both`). A target is an IPv4 or IPv6 address or a CIDR subnet.
+The change merges into the signature's existing suppression, and one already in place
+changes nothing. A target for a signature suppressed for all traffic is refused. An
+optional `signature` name and `category` code are stored with a new suppression, and the
+controller refuses an unknown category.
+
+`unifi_delete_ips_suppression` removes a signature's whole suppression, or one `target`
+(optionally in one `scope`). Removing the last target removes the suppression.
+
+Both preview the signature's live entries before and after, apply with `confirm=true`,
+read the section back to verify, and need a Network session (an API key alone can read
+suppressions but not change them).
 
 `unifi_update_threat_management_settings` accepts partial `update_data`:
 
