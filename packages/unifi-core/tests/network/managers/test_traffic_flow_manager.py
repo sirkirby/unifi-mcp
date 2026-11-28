@@ -431,7 +431,8 @@ async def test_statistics_single_name_match_is_partial_not_resolved(catalog, exp
 # ---------------------------------------------------------------------------
 
 
-def _envelope(total, or_more=False, has_next=False):
+def _envelope(total, or_more=False, has_next=True):
+    # A page with more after it, so only the count and or_more can mark it.
     return {**_EMPTY_RESPONSE, "total_element_count": total, "or_more": or_more, "has_next": has_next}
 
 
@@ -449,7 +450,7 @@ def _envelope(total, or_more=False, has_next=False):
         (_envelope(5953), False),
         # or_more: the count is only a lower bound, so the pages cannot be shown complete
         (_envelope(10000, or_more=True, has_next=True), True),
-        (_envelope(12, or_more=True), True),
+        (_envelope(12, or_more=True, has_next=False), True),
         # a count that is not a number cannot show the cap was reached
         (_envelope(None), False),
         (_envelope("5000"), False),
@@ -458,6 +459,45 @@ def _envelope(total, or_more=False, has_next=False):
 async def test_result_reports_a_capped_query_as_truncated(envelope, truncated):
     mgr = TrafficFlowManager(_make_connection(envelope))
     q = TrafficFlowQuery(time_from=1, time_to=2, page_number=0, page_size=100)
+
+    result = await mgr.get_traffic_flows(q)
+
+    assert result["truncated"] is truncated
+
+
+def _last_page(total, page_number, rows):
+    return {
+        **_EMPTY_RESPONSE,
+        "data": [{"id": f"flow-{i}"} for i in range(rows)],
+        "total_element_count": total,
+        "page_number": page_number,
+        "has_next": False,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("envelope", "page_size", "truncated"),
+    [
+        # Network 11.0.104 at page size 500: rows stop at 5,000 while the count reads 5,126
+        (_last_page(5126, 10, 0), 500, True),
+        (_last_page(5126, 5, 0), 1000, True),
+        # the last page of a complete window ends on the count
+        (_last_page(5126, 10, 126), 500, False),
+        (_last_page(40, 0, 40), 100, False),
+        (_last_page(0, 0, 0), 100, False),
+        # a page asked for past the end is empty, and nothing before it was cut off
+        (_last_page(40, 3, 0), 100, False),
+        # a count or page number that is not a number cannot show the rows ended early
+        (_last_page(None, 10, 0), 500, False),
+        (_last_page("5126", 10, 0), 500, False),
+        (_last_page(5126, "10", 0), 500, False),
+    ],
+)
+async def test_last_page_ending_before_the_count_is_truncated(envelope, page_size, truncated):
+    mgr = TrafficFlowManager(_make_connection(envelope))
+    page_number = envelope["page_number"] if isinstance(envelope["page_number"], int) else 10
+    q = TrafficFlowQuery(time_from=1, time_to=2, page_number=page_number, page_size=page_size)
 
     result = await mgr.get_traffic_flows(q)
 
