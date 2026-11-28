@@ -14,7 +14,9 @@ import json
 import pytest
 from sqlalchemy import select
 from unifi_api.db.models import AuditLog
+from unifi_api.services.managers import ControllerInitializationFailed
 from unifi_core.drive.managers.connection_manager import DriveConnectionManager
+from unifi_core.exceptions import UniFiConnectionError
 
 from tests.drive_data import (
     BIG_CAPACITY,
@@ -556,6 +558,32 @@ async def test_new_read_actions_answer_as_their_routes_do(tmp_path):
     assert groups["data"] == [{"id": GROUP_ID, "name": "Family"}]
 
 
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (
+            ControllerInitializationFailed("Failed to initialize drive controller connection: no login set."),
+            "Failed to list Drive disks: no login set.",
+        ),
+        (
+            ControllerInitializationFailed("Failed to initialize drive controller connection"),
+            "Failed to list Drive disks: the controller connection did not initialize.",
+        ),
+        (UniFiConnectionError("list Drive disks: timed out"), "Failed to list Drive disks: timed out"),
+        (
+            UniFiConnectionError("UniFi Drive request timed out."),
+            "Failed to list Drive disks: UniFi Drive request timed out.",
+        ),
+    ],
+)
+def test_upstream_failures_name_the_failed_action_once(error, message):
+    from unifi_api.services.drive import map_drive_error
+
+    mapped = map_drive_error(error, "list Drive disks")
+
+    assert (mapped.status, mapped.message) == (502, message)
+
+
 def test_log_and_disk_stats_translators_pass_the_manager_only_what_it_takes():
     from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
     from unifi_core.drive.models.logs import DriveLogQuery
@@ -895,10 +923,16 @@ async def test_a_stored_drive_controller_without_a_login_fails_with_api_text(tmp
     probe = await app.state.manager_factory.probe_controller(cid)
 
     assert response.status_code == 502, response.text
-    message = response.json()["detail"]["message"]
-    assert "has no username and password" in message
+    # One failed action, then the API's own fixed reason: never "Failed to ...: Failed to initialize ...".
+    assert response.json()["detail"] == {
+        "kind": "drive_upstream_error",
+        "message": (
+            "Failed to get Drive system info: the controller has no username and password. "
+            "UniFi Drive needs a local UniFi OS account on the NAS; update the controller with one."
+        ),
+    }
     # Never the MCP server's setup text, which names settings the API does not read.
-    assert "UNIFI_DRIVE" not in message
+    assert "UNIFI_DRIVE" not in response.text
     assert probe["products"]["drive"]["ok"] is False
     assert "has no username and password" in probe["products"]["drive"]["error"]
 

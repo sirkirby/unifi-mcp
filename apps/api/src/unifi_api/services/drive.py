@@ -57,6 +57,23 @@ class DriveAPIError(Exception):
         }.get(self.kind, "INTERNAL")
 
 
+def _failed(operation: str, exc: BaseException) -> str:
+    """``Failed to <operation>: <fixed text>``, naming one failed action.
+
+    As for InnerSpace, text that already starts with the operation names it
+    once. The factory's own failure text is a whole ``Failed to <step>: <reason>``
+    sentence (a stored controller without a login), so only its reason follows,
+    or fixed text when it gives none.
+    """
+    text = str(exc)
+    if text.startswith(f"{operation}:"):
+        return f"Failed to {text}"
+    if isinstance(exc, ControllerInitializationFailed) and text.startswith("Failed to "):
+        _step, _separator, reason = text.partition(": ")
+        text = reason or "the controller connection did not initialize."
+    return f"Failed to {operation}: {text}"
+
+
 def map_drive_error(exc: BaseException, operation: str) -> BaseException:
     """Map a failure to a status and fixed text. ``operation`` is a fixed label, never caller input.
 
@@ -75,15 +92,15 @@ def map_drive_error(exc: BaseException, operation: str) -> BaseException:
     if isinstance(exc, UniFiNotFoundError):
         return DriveAPIError(404, "drive_not_found", f"Failed to {operation}: not found.")
     if isinstance(exc, UniFiPermissionError):
-        return DriveAPIError(403, "drive_forbidden", f"Failed to {operation}: {exc}")
+        return DriveAPIError(403, "drive_forbidden", _failed(operation, exc))
     if isinstance(exc, UniFiRateLimitError):
-        return DriveAPIError(429, "drive_rate_limited", f"Failed to {operation}: {exc}")
+        return DriveAPIError(429, "drive_rate_limited", _failed(operation, exc))
     if isinstance(exc, UniFiError):
         # Connection, rejected login, Drive not installed, other HTTP or malformed: fixed core text.
-        return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: {exc}")
+        return DriveAPIError(502, "drive_upstream_error", _failed(operation, exc))
     if isinstance(exc, ControllerInitializationFailed):
         # The factory's text is fixed and names no address or credential.
-        return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: {exc}")
+        return DriveAPIError(502, "drive_upstream_error", _failed(operation, exc))
     return DriveAPIError(502, "drive_upstream_error", f"Failed to {operation}: could not connect to UniFi Drive.")
 
 
