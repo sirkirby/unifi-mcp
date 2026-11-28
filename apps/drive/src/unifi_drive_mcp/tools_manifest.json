@@ -1,10 +1,11 @@
 {
-  "count": 18,
+  "count": 19,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",
     "drive_get_file_services": "unifi_drive_mcp.tools.file_services",
     "drive_get_shared_drive": "unifi_drive_mcp.tools.shared_drives",
+    "drive_get_storage_usage": "unifi_drive_mcp.tools.storage",
     "drive_get_system_info": "unifi_drive_mcp.tools.system",
     "drive_list_disks": "unifi_drive_mcp.tools.storage",
     "drive_list_logs": "unifi_drive_mcp.tools.logs",
@@ -616,6 +617,107 @@
         }
       },
       "title": "Get Shared Drive"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Returns each storage pool's capacity, used and free space, and what the used space is used by: personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id is the id drive_list_storage_pools returns. Storage pool IDs are scoped to the UniFi Drive tool family; do not pass them to other products' storage tools.",
+      "name": "drive_get_storage_usage",
+      "permission_action": "read",
+      "permission_category": "storage",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Storage Usage"
     },
     {
       "annotations": {

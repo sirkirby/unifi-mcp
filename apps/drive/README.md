@@ -116,6 +116,7 @@ Read-only:
 |------|-----------------|
 | `drive_get_system_info` | Console name, model, MAC, firmware and available update, state, uptime, CPU, memory |
 | `drive_list_storage_pools` | Pools with capacity and usage, and RAID groups: level in effect vs. configured, protection, rebuild/expansion progress |
+| `drive_get_storage_usage` | Per pool capacity, used and free space, split into personal drives, shared drives, Microsoft 365 backups, snapshots and system |
 | `drive_list_disks` | Drive bays and cache slots with model, serial, size, temperature, pool, hot-spare flags and SMART counters |
 | `drive_list_shared_drives` | Shared drives with pool, usage, quota, encryption, snapshot and remote-backup flags |
 | `drive_get_shared_drive` | One shared drive |
@@ -171,7 +172,7 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 - [Configuration](docs/configuration.md): the NAS login, TLS, settings, operation gate, HTTP, Docker Compose, registration modes
 - [Permissions](docs/permissions.md): previews, permission mode, policy gates, read-only mode, redaction
-- [Tool catalog](docs/tools.md): the 12 tools, parameters, NFS behavior and write previews
+- [Tool catalog](docs/tools.md): the 13 tools, parameters, NFS behavior and write previews
 - [Troubleshooting](docs/troubleshooting.md): setup mode, login and access errors, file services and NFS, TLS, Docker
 - [MCP discovery and meta-tools](../../docs/tool-index.md): `tools/list`, `drive_tool_index` and `drive_execute`
 

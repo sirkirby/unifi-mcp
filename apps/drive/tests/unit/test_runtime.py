@@ -20,6 +20,7 @@ READ_TOOLS = {
     "drive_get_file_services",
     "drive_list_nfs_connections",
     "drive_list_logs",
+    "drive_get_storage_usage",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",

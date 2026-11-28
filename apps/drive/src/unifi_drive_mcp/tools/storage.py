@@ -1,4 +1,4 @@
-"""Storage tools for the UniFi Drive MCP server: pools, RAID groups and disks. Read-only."""
+"""Storage tools for the UniFi Drive MCP server: pools, RAID groups, disks and pool usage. Read-only."""
 
 import logging
 from typing import Annotated, Any, Dict
@@ -53,3 +53,24 @@ async def drive_list_disks(
         return tool_success({"disks": [disk.model_dump(exclude_none=True) for disk in disks], "count": len(disks)})
     except Exception as exc:
         return tool_failure("list disks", exc)
+
+
+@server.tool(
+    name="drive_get_storage_usage",
+    description=(
+        "Returns each storage pool's capacity, used and free space, and what the used space is used by: "
+        "personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). "
+        "pool_id is the id drive_list_storage_pools returns. Storage pool IDs are scoped to the UniFi Drive tool "
+        "family; do not pass them to other products' storage tools."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    permission_category="storage",
+    permission_action="read",
+)
+async def drive_get_storage_usage() -> Dict[str, Any]:
+    """Get per-pool storage usage."""
+    try:
+        pools = await storage_manager.get_usage()
+        return tool_success({"pools": [pool.model_dump(exclude_none=True) for pool in pools], "count": len(pools)})
+    except Exception as exc:
+        return tool_failure("get storage usage", exc)
