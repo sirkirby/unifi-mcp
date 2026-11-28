@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-28 — unifi-network 1.14.8, unifi-access 1.5.4
+
+- Pins `unifi-network-mcp` [0.50.4](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.50.4) and `unifi-access-mcp` [0.10.2](https://github.com/sirkirby/unifi-mcp/releases/tag/access/v0.10.2).
+
+
 ## 2026-11-25 — unifi-network 1.14.7
 
 - The network skill's tool reference explains how to reorder MAC ACL rules: order is each rule's `acl_index` (lower is evaluated first), changed with `unifi_update_acl_rule`.

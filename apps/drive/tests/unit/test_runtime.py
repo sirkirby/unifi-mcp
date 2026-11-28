@@ -19,6 +19,10 @@ READ_TOOLS = {
     "drive_get_shared_drive",
     "drive_get_file_services",
     "drive_list_nfs_connections",
+    "drive_list_logs",
+    "drive_get_storage_usage",
+    "drive_get_smb_advanced_settings",
+    "drive_get_rsync_settings",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",

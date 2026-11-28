@@ -68,6 +68,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_nat_rule": ("nat_manager", "update_nat_rule_verified"),
     "unifi_delete_nat_rule": ("nat_manager", "delete_nat_rule_verified"),
     "unifi_toggle_nat_rule": ("nat_manager", "toggle_nat_rule_verified"),
+    # ACL ordering previews against the live chain, so the AST walker binds the
+    # read call; dispatch must point at the write.
+    "unifi_set_acl_rule_order": ("acl_manager", "set_acl_rule_order"),
     # =========================================================================
     # Network — lookup-then-act tools whose preview needs current state
     # =========================================================================
@@ -1814,8 +1817,8 @@ DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
 
 def _translate_access_users(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     out = dict(args)
-    limit = out.pop("limit", None)
-    out["page_size"] = limit if isinstance(limit, int) and limit > 0 else 25
+    limit = out.get("limit")
+    out["limit"] = limit if isinstance(limit, int) and limit > 0 else None
     return (), out
 
 
@@ -1993,7 +1996,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_list_alarms": _spec(_translate_list_alarms, "archived"),
     # Access public names and pagination aliases.
     "access_create_credential": _spec(_translate_access_credential, "credential_type", "data"),
-    "access_list_users": _spec(_translate_access_users, "page_num", "page_size", "compact"),
+    "access_list_users": _spec(_translate_access_users, "limit", "compact"),
     # Protect wrapper-only aliases and response-shaping switches.
     "protect_alarm_create_rule": _spec(_translate_alarm_create, "fields"),
     "protect_alarm_update_rule": _spec(_translate_alarm_update, "rule_id", "fields"),

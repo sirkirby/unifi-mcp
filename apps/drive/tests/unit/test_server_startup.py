@@ -26,6 +26,10 @@ DOMAIN_TOOLS = {
     "drive_add_nfs_connection",
     "drive_update_nfs_connection",
     "drive_remove_nfs_connection",
+    "drive_list_logs",
+    "drive_get_storage_usage",
+    "drive_get_smb_advanced_settings",
+    "drive_get_rsync_settings",
 }
 META_TOOLS = {"drive_tool_index", "drive_execute", "drive_batch", "drive_batch_status", "drive_batch_cancel"}
 
@@ -69,7 +73,7 @@ def test_eager_category_filter(tmp_path):
         tmp_path, {**CONFIGURED, "UNIFI_TOOL_REGISTRATION_MODE": "eager", "UNIFI_ENABLED_CATEGORIES": "storage"}
     )
 
-    assert run.tool_names & DOMAIN_TOOLS == {"drive_list_storage_pools", "drive_list_disks"}
+    assert run.tool_names & DOMAIN_TOOLS == {"drive_list_storage_pools", "drive_list_disks", "drive_get_storage_usage"}
 
 
 def test_a_tool_call_reports_an_unreachable_nas_without_its_address_or_password(tmp_path):

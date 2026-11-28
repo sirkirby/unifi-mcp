@@ -415,7 +415,7 @@ async def test_edge_user_credentials(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("access", "system_manager", "list_users"): [
+            ("access", "system_manager", "list_all_users"): [
                 {"unique_id": "user-1", "full_name": "Alice Smith", "status": "ACTIVE"},
             ],
             ("access", "credential_manager", "list_credentials"): [
@@ -512,7 +512,7 @@ async def test_edge_access_event_user(tmp_path, monkeypatch):
                     "result": "denied",
                 },
             ],
-            ("access", "system_manager", "list_users"): [
+            ("access", "system_manager", "list_all_users"): [
                 {"unique_id": "user-42", "full_name": "Bob Jones", "status": "ACTIVE", "roles": [{"name": "employee"}]},
             ],
         },

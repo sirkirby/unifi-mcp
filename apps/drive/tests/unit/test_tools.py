@@ -9,11 +9,17 @@ import pytest
 from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, DriveWriteOutcomeUnknown
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
-from unifi_core.drive.models.services import NfsConnectionInput, nfs_connection_from_api
-from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api
+from unifi_core.drive.models.logs import DriveLogPage, DriveLogQuery, log_entry_from_api
+from unifi_core.drive.models.services import (
+    NfsConnectionInput,
+    nfs_connection_from_api,
+    rsync_settings_from_api,
+    smb_advanced_settings_from_api,
+)
+from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api, storage_pool_usage_from_api
 from unifi_core.drive.models.system import system_info_from_api
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiValidationError
-from unifi_drive_mcp.tools import file_services, nfs, shared_drives, storage, system
+from unifi_drive_mcp.tools import file_services, logs, nfs, shared_drives, storage, system
 
 DRIVE_ID = "22222222-2222-4222-8222-222222222222"
 CLIENT = "192.0.2.76"
@@ -70,6 +76,56 @@ async def test_storage_tools_pass_filters(monkeypatch):
     assert disks["data"]["disks"][0]["temperature_c"] == 30
 
 
+async def test_storage_usage(monkeypatch):
+    manager = AsyncMock()
+    manager.get_usage.return_value = [
+        storage_pool_usage_from_api(
+            {
+                "poolId": "p1",
+                "used": 50,
+                "available": 150,
+                "capacity": 200,
+                "usedByPersonalDrives": 10,
+                "usedBySharedDrives": 30,
+                "usedByM365": 0,
+            }
+        )
+    ]
+    monkeypatch.setattr(storage, "storage_manager", manager)
+
+    result = await storage.drive_get_storage_usage()
+
+    assert result == {
+        "success": True,
+        "data": {
+            "pools": [
+                {
+                    "pool_id": "p1",
+                    "capacity_bytes": 200,
+                    "used_bytes": 50,
+                    "available_bytes": 150,
+                    "used_percent": 25.0,
+                    "personal_drives_bytes": 10,
+                    "shared_drives_bytes": 30,
+                    "m365_bytes": 0,
+                    "system_bytes": 10,
+                }
+            ],
+            "count": 1,
+        },
+    }
+
+
+async def test_storage_usage_failure_names_the_operation(monkeypatch):
+    manager = AsyncMock()
+    manager.get_usage.side_effect = UniFiConnectionError("UniFi Drive request GET /x timed out.")
+    monkeypatch.setattr(storage, "storage_manager", manager)
+
+    result = await storage.drive_get_storage_usage()
+
+    assert result == {"success": False, "error": "Failed to get storage usage: UniFi Drive request GET /x timed out."}
+
+
 async def test_shared_drive_not_found_is_a_plain_error(monkeypatch):
     manager = AsyncMock()
     manager.get_shared_drive.side_effect = UniFiNotFoundError("Shared drive", "x")
@@ -88,6 +144,46 @@ async def test_list_shared_drives(monkeypatch):
     result = await shared_drives.drive_list_shared_drives()
 
     assert result["data"] == {"drives": [{"id": DRIVE_ID, "name": "Shared_Drive"}], "count": 1}
+
+
+async def test_smb_advanced_settings(files):
+    files.get_smb_advanced_settings.return_value = smb_advanced_settings_from_api(
+        {"personalDriveRecycleEnabled": True, "personalDriveRecycleStatus": "optimal"}
+    )
+
+    result = await file_services.drive_get_smb_advanced_settings()
+
+    assert result == {
+        "success": True,
+        "data": {"personal_drive_recycle_enabled": True, "personal_drive_recycle_status": "optimal"},
+    }
+
+
+async def test_rsync_settings_never_carry_the_account_password(files):
+    files.get_rsync_settings.return_value = rsync_settings_from_api(
+        {"enable": True, "rsyncAccount": {"username": "synthetic-rsync", "password": "synthetic-secret-0123"}},
+        {"sshEnabled": False},
+    )
+
+    result = await file_services.drive_get_rsync_settings()
+
+    assert result == {
+        "success": True,
+        "data": {
+            "enabled": True,
+            "account_configured": True,
+            "account_username": "synthetic-rsync",
+            "ssh_enabled": False,
+        },
+    }
+
+
+async def test_rsync_settings_unavailable_is_an_error(files):
+    files.get_rsync_settings.side_effect = UniFiConnectionError("UniFi Drive request GET /x timed out.")
+
+    result = await file_services.drive_get_rsync_settings()
+
+    assert result["success"] is False and result["error"].startswith("Failed to get rsync settings: ")
 
 
 async def test_read_failure_names_the_operation(files):
@@ -113,6 +209,79 @@ async def test_list_nfs_connections(files):
 
     grant = result["data"]["connections"][0]["shared_drives"][0]
     assert grant["export_path"] == "/var/nfs/shared/Shared_Drive" and result["data"]["count"] == 1
+
+
+async def test_list_logs_passes_filters_and_returns_the_cursor(monkeypatch):
+    manager = AsyncMock()
+    entry = log_entry_from_api(
+        {
+            "name": "DriveInsertedV1",
+            "severity": "low",
+            "category": "storage",
+            "type": "drive",
+            "data": {"drive": "Bay 1"},
+        },
+        {"DriveInsertedV1": {"title": "Drive Inserted", "description": "{drive} was inserted."}},
+    )
+    manager.list_logs.return_value = DriveLogPage(entries=[entry], next_cursor="next")
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(
+        limit=10, severities=["low"], category="storage", types=["drive"], after="2026-11-01T00:00:00Z", cursor="c"
+    )
+
+    assert result["data"] == {
+        "entries": [
+            {
+                "severity": "low",
+                "category": "storage",
+                "type": "drive",
+                "event": "DriveInserted",
+                "title": "Drive Inserted",
+                "message": "Bay 1 was inserted.",
+            }
+        ],
+        "count": 1,
+        "next_cursor": "next",
+    }
+    (query,) = manager.list_logs.await_args.args
+    assert query == DriveLogQuery(
+        limit=10, severities=["low"], category="storage", types=["drive"], after="2026-11-01T00:00:00Z", cursor="c"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "where"),
+    [
+        ({"after": "2026-11-01T00:00:00"}, "after"),
+        ({"after": "yesterday"}, "after"),
+        ({"limit": 0}, "limit"),
+        ({"after": "2026-11-02T00:00:00Z", "before": "2026-11-01T00:00:00Z"}, None),
+    ],
+)
+async def test_list_logs_refuses_bad_input_before_reading(monkeypatch, kwargs, where):
+    manager = AsyncMock()
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(**kwargs)
+
+    assert result["success"] is False and result["error"].startswith("Invalid input")
+    if where:
+        assert f"({where})" in result["error"]
+    manager.list_logs.assert_not_awaited()
+
+
+async def test_list_logs_unknown_type_is_an_error(monkeypatch):
+    manager = AsyncMock()
+    manager.list_logs.side_effect = UniFiValidationError("Unknown log type 'bogus'. UniFi Drive defines: drive.")
+    monkeypatch.setattr(logs, "log_manager", manager)
+
+    result = await logs.drive_list_logs(types=["bogus"])
+
+    assert result == {
+        "success": False,
+        "error": "Failed to list logs: Unknown log type 'bogus'. UniFi Drive defines: drive.",
+    }
 
 
 # --- file service toggle -----------------------------------------------------------

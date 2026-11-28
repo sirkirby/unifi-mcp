@@ -24,6 +24,7 @@ DRIVE_CATEGORY_MAP = {
     "shared_drive": "shared_drives",
     "file_service": "file_services",
     "nfs_connection": "nfs_connections",
+    "log": "logs",
 }
 
 _MANIFEST_PATH = Path(__file__).parent / "tools_manifest.json"

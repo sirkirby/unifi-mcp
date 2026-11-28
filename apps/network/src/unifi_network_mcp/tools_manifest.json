@@ -1,5 +1,5 @@
 {
-  "count": 217,
+  "count": 218,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -158,6 +158,7 @@
     "unifi_rename_device": "unifi_network_mcp.tools.devices",
     "unifi_reorder_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_revoke_voucher": "unifi_network_mcp.tools.hotspot",
+    "unifi_set_acl_rule_order": "unifi_network_mcp.tools.acl",
     "unifi_set_client_fixed_ap": "unifi_network_mcp.tools.clients",
     "unifi_set_client_ip_settings": "unifi_network_mcp.tools.clients",
     "unifi_set_device_ip_settings": "unifi_network_mcp.tools.devices",
@@ -18436,6 +18437,125 @@
         }
       },
       "title": "Revoke Voucher"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Reorder the MAC ACL rule chain for one network. Pass every rule ID from unifi_list_acl_rules for that network, in the new order. The IDs are checked against a fresh read before the write, and the saved order is read back afterwards. Requires confirmation.",
+      "name": "unifi_set_acl_rule_order",
+      "permission_action": "update",
+      "permission_category": "acl_rules",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the reorder. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "network_id": {
+              "description": "Network/VLAN ID whose rule chain is reordered (from unifi_list_networks)",
+              "type": "string"
+            },
+            "ordered_rule_ids": {
+              "description": "Every current ACL rule ID for that network, in the new order (first match first), from unifi_list_acl_rules",
+              "type": "array"
+            }
+          },
+          "required": [
+            "network_id",
+            "ordered_rule_ids"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Set ACL Rule Order"
     },
     {
       "annotations": {

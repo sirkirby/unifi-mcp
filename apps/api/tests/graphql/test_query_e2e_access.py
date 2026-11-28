@@ -158,7 +158,7 @@ def _stub_access_managers(
     fake_event_mgr.list_events = _stub_list_events
 
     fake_system_mgr = MagicMock()
-    fake_system_mgr.list_users = _stub_list_users
+    fake_system_mgr.list_all_users = _stub_list_users
 
     domain_mgrs = {
         ("access", "door_manager"): fake_door_mgr,
