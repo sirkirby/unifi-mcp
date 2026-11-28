@@ -3584,6 +3584,21 @@ def _first_listed_value(listed: object, key: str) -> str | None:
     return None
 
 
+def _selected_api_actions(
+    tool_filter: list[str] | None,
+) -> tuple[list[tuple[str, str, dict[str, Any]]], list[tuple[str, str, str, str]]]:
+    """The sampled reads and derived reads an api-actions run calls, for a ``--tool`` filter.
+
+    A derived read needs its seed's answer, so a run that selects it also runs
+    the seed, even when the filter doesn't name the seed.
+    """
+    wanted = set(tool_filter or ())
+    derived = [entry for entry in API_ACTION_DERIVED_READS if not wanted or entry[1] in wanted]
+    seeds = {seed_tool for _product, _tool, seed_tool, _arg in derived}
+    sample = [entry for entry in API_ACTIONS_SAMPLE if not wanted or entry[1] in wanted or entry[1] in seeds]
+    return sample, derived
+
+
 def _first_listed_id(response: object, key: str = "id") -> str | None:
     """The first ``key`` (default ``id``) in a successful action's data, or ``None``."""
     if not isinstance(response, dict) or response.get("success") is not True:
@@ -4126,18 +4141,15 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             if args.delay:
                 time.sleep(args.delay)
 
-        for product, tool_name, tool_args in API_ACTIONS_SAMPLE:
+        sample_reads, derived_reads = _selected_api_actions(args.tool)
+        for product, tool_name, tool_args in sample_reads:
             if product not in product_to_controller_id:
-                continue
-            if args.tool and tool_name not in args.tool:
                 continue
             _exercise_action(product, tool_name, tool_args)
 
         # Reads whose argument comes from a sampled read: an id the seed listed.
-        for product, tool_name, seed_tool, arg_name in API_ACTION_DERIVED_READS:
+        for product, tool_name, seed_tool, arg_name in derived_reads:
             if product not in product_to_controller_id:
-                continue
-            if args.tool and tool_name not in args.tool:
                 continue
             seed_id = _first_listed_id(
                 live_action_responses.get(seed_tool), API_ACTION_DERIVED_SEED_KEYS.get(tool_name, "id")

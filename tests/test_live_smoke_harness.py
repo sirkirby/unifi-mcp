@@ -3367,3 +3367,37 @@ def test_api_resources_phase_flags_a_detail_mismatch_and_skips_an_unseeded_route
         "skipped_no_seed"
     )
     assert report["summary"]["skipped_no_seed"] == 2
+
+
+@pytest.mark.parametrize(
+    ("tool", "seed"),
+    [
+        ("drive_get_shared_drive", "drive_list_shared_drives"),
+        ("drive_list_snapshots", "drive_get_snapshot_overview"),
+    ],
+)
+def test_a_targeted_derived_read_also_runs_its_seed(tool, seed):
+    import live_smoke
+
+    sample, derived = live_smoke._selected_api_actions([tool])
+
+    assert [entry[1] for entry in derived] == [tool]
+    assert [entry[1] for entry in sample] == [seed]
+
+
+def test_a_targeted_sampled_read_runs_alone():
+    import live_smoke
+
+    sample, derived = live_smoke._selected_api_actions(["drive_get_fan_profile"])
+
+    assert [entry[1] for entry in sample] == ["drive_get_fan_profile"]
+    assert derived == []
+
+
+def test_an_untargeted_api_actions_run_selects_everything():
+    import live_smoke
+
+    sample, derived = live_smoke._selected_api_actions([])
+
+    assert sample == live_smoke.API_ACTIONS_SAMPLE
+    assert derived == live_smoke.API_ACTION_DERIVED_READS
