@@ -31,9 +31,10 @@ _FLOWS_CACHE_TTL = 45  # seconds; short-lived, matching the 60s alerts-cache pre
 
 # Network 11.0.104 serves at most this many rows for one query: the page after the
 # last one comes back empty with has_next false and or_more false, and the count
-# reads 5,000 or a few over (5,016 at most in measurement). Network 11.1.56 serves
-# every row of a larger window, so only a count just at the cap marks it. A response
-# with or_more set counts only a lower bound.
+# reads 5,000 or over (5,126 in measurement). Network 11.1.56 serves every row of a
+# larger window, so on a page with more after it only a count just at the cap marks
+# it, and a last page marks it when its rows end before the count. A response with
+# or_more set counts only a lower bound.
 _RESULT_LIMIT = 5000
 _RESULT_LIMIT_MARGIN = 100
 
@@ -250,17 +251,26 @@ class TrafficFlowManager:
         flows = [traffic_flow_from_controller(f).model_dump(exclude_none=True) for f in raw_flows]
         total = response.get("total_element_count", len(flows))
         or_more = response.get("or_more", False)
+        page_number = response.get("page_number", query.page_number)
+        has_next = response.get("has_next", False)
+        counted = isinstance(total, int)
         result = {
             "flows": flows,
-            "page_number": response.get("page_number", query.page_number),
+            "page_number": page_number,
             "total_element_count": total,
             "total_page_count": response.get("total_page_count", 1),
-            "has_next": response.get("has_next", False),
+            "has_next": has_next,
             "or_more": or_more,
             # True when the pages may end before the window's last flow: narrow the
             # window to read the rest.
             "truncated": bool(or_more)
-            or (isinstance(total, int) and _RESULT_LIMIT <= total < _RESULT_LIMIT + _RESULT_LIMIT_MARGIN),
+            or (counted and _RESULT_LIMIT <= total < _RESULT_LIMIT + _RESULT_LIMIT_MARGIN)
+            or (
+                counted
+                and not has_next
+                and isinstance(page_number, int)
+                and page_number * query.page_size + len(raw_flows) < total
+            ),
         }
         self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)
         return result
