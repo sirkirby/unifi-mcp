@@ -503,7 +503,7 @@ async def test_graphql_unexpected_failures_do_not_leak_exception_text(tmp_path, 
 class _ColdFactory:
     """The real get_event_reader over a cache miss: connecting is slow, and every action is recorded."""
 
-    def __init__(self, harness: Harness, *, connect=None) -> None:
+    def __init__(self, harness: Harness, *, connect=None, connect_seconds: float = 0.05) -> None:
         import asyncio
         import types
 
@@ -518,7 +518,7 @@ class _ColdFactory:
             self.actions.append("connection_initialize")
             if connect is not None:
                 connect()
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(connect_seconds)
             return object()
 
         actions = self.actions
@@ -564,12 +564,14 @@ async def test_acquisition_is_charged_to_the_elapsed_budget_and_starts_no_listen
     harness.build = lambda: (
         network_scenario("healthy_empty") if path == NETWORK_PATH else protect_scenario("healthy_empty")
     )
-    cold = _ColdFactory(harness)
-    response = await harness.rest(path, harness.build, max_elapsed_ms=10)
+    # The budget must outlast the work before acquisition on a slow, coverage-traced runner,
+    # and the connection must outlast the budget, so the budget runs out while connecting.
+    cold = _ColdFactory(harness, connect_seconds=2.0)
+    response = await harness.rest(path, harness.build, max_elapsed_ms=500)
     document = response.json()["data"]
     check_document(document)
     assert document["budgets"]["exhausted"] == ["elapsed"]
-    assert document["budgets"]["usage"]["elapsed_ms"] >= 10
+    assert document["budgets"]["usage"]["elapsed_ms"] >= 500
     assert document["overall"] == "failed" and document["coverage_complete"] is False
     assert cold.actions == ["connection_initialize"]
     assert cold.factory._listener_tasks == {} and cold.factory._domain_cache == {}

@@ -10,6 +10,7 @@ from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, Driv
 from unifi_core.drive.managers.file_service_manager import NfsChange, ServiceChange
 from unifi_core.drive.models.drives import shared_drive_from_api
 from unifi_core.drive.models.logs import DriveLogPage, DriveLogQuery, log_entry_from_api
+from unifi_core.drive.models.performance import disk_stats_from_api, fan_profile_from_api, network_throughput_from_api
 from unifi_core.drive.models.services import (
     NfsConnectionInput,
     nfs_connection_from_api,
@@ -19,7 +20,7 @@ from unifi_core.drive.models.services import (
 from unifi_core.drive.models.storage import disk_slot_from_api, storage_pool_from_api, storage_pool_usage_from_api
 from unifi_core.drive.models.system import system_info_from_api
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiValidationError
-from unifi_drive_mcp.tools import file_services, logs, nfs, shared_drives, storage, system
+from unifi_drive_mcp.tools import file_services, logs, nfs, performance, shared_drives, storage, system
 
 DRIVE_ID = "22222222-2222-4222-8222-222222222222"
 CLIENT = "192.0.2.76"
@@ -184,6 +185,62 @@ async def test_rsync_settings_unavailable_is_an_error(files):
     result = await file_services.drive_get_rsync_settings()
 
     assert result["success"] is False and result["error"].startswith("Failed to get rsync settings: ")
+
+
+@pytest.fixture
+def perf(monkeypatch):
+    manager = AsyncMock()
+    monkeypatch.setattr(performance, "performance_manager", manager)
+    return manager
+
+
+async def test_network_throughput(perf):
+    perf.get_network_throughput.return_value = network_throughput_from_api({"receiveKBPS": 1.5, "transmitKBPS": 2})
+
+    result = await performance.drive_get_network_throughput()
+
+    assert result == {"success": True, "data": {"receive_kbps": 1.5, "transmit_kbps": 2}}
+
+
+async def test_fan_profile(perf):
+    perf.get_fan_profile.return_value = fan_profile_from_api(
+        {"availableProfiles": ["cooling", "default", "quiet"], "currentProfile": "quiet"}
+    )
+
+    result = await performance.drive_get_fan_profile()
+
+    assert result["data"]["current_profile"] == "quiet" and result["data"]["current_label"] == "Quiet"
+    assert [p["label"] for p in result["data"]["available_profiles"]] == ["Cooling", "Balanced", "Quiet"]
+
+
+_DISK_STATS = {
+    "series": {
+        "disks": [{"slotId": "1", "type": "HDD", "temperatures": [30, 31], "readKBPS": [1, 3], "writeKBPS": [0, 0]}],
+        "cacheSlots": [],
+    },
+    "window": {"samples": 2, "start": 1767225600, "end": 1767227400, "interval": 900},
+}
+
+
+async def test_disk_stats_leaves_samples_out_unless_asked(perf):
+    perf.get_disk_stats.return_value = disk_stats_from_api(_DISK_STATS)
+
+    summary = await performance.drive_get_disk_stats(hours=48)
+    detailed = await performance.drive_get_disk_stats(include_samples=True)
+
+    assert perf.get_disk_stats.await_args_list[0].kwargs == {"hours": 48}
+    assert perf.get_disk_stats.await_args_list[1].kwargs == {"hours": 24}
+    disk = summary["data"]["disks"][0]
+    assert "samples" not in disk and disk["read_kbps_avg"] == 2.0 and summary["data"]["count"] == 1
+    assert [s["read_kbps"] for s in detailed["data"]["disks"][0]["samples"]] == [1, 3]
+
+
+async def test_disk_stats_failure_names_the_operation(perf):
+    perf.get_disk_stats.side_effect = UniFiValidationError("UniFi Drive rejected GET /x (400): too many sample points")
+
+    result = await performance.drive_get_disk_stats(hours=24)
+
+    assert result["success"] is False and result["error"].startswith("Failed to get disk stats: ")
 
 
 async def test_read_failure_names_the_operation(files):
