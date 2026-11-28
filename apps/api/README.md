@@ -2,7 +2,7 @@
 
 REST + GraphQL HTTP API for UniFi controllers. Run it as a standalone HTTP
 service for desktop apps, web dashboards, Pi extensions, automation services,
-and MCP adapters that need typed access to UniFi Network, Protect, Access, and InnerSpace.
+and MCP adapters that need typed access to UniFi Network, Protect, Access, InnerSpace, and Drive.
 
 ## Quickstart
 
@@ -476,6 +476,191 @@ scale, and the project unit) of any registered InnerSpace controller.
 Response redaction hides secret-looking fields by name and is on by default;
 MAC addresses, serial numbers and plan geometry are not redacted.
 
+## UniFi Drive console product
+
+The API server serves the eighteen reads and the four preview-first writes of the
+[Drive MCP server](../drive/) for a controller that declares the `drive`
+product. A UNAS is its own UniFi OS console, so its controller record points
+at the NAS, not the gateway. It reads and writes the NAS's UniFi Drive
+application through a console login session, through the same `unifi-core`
+managers as the MCP server. Run the API from a source checkout
+([Quickstart A](#a-local-clone-developing-or-testing-changes)) to use it before
+the next API release.
+
+### Register the controller
+
+`POST /v1/controllers` (or the **Controllers** tab, or the CLI) with `"drive"`
+in `product_kinds` and the NAS's address as `base_url`. Drive needs a
+**username and password** for a local UniFi OS account on the NAS, on create
+and on update: a controller that declares it with only an API token is
+refused, and the stored API token, if any, is never passed to the Drive
+connection. A UI.com account with MFA cannot log in. Reads need an account
+with access to UniFi Drive; writes need an administrator of UniFi Drive.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/controllers \
+  -H "Authorization: Bearer $ADMIN_KEY" -H "Content-Type: application/json" \
+  -d '{"name": "Example NAS", "base_url": "https://192.168.1.20",
+       "product_kinds": ["drive"], "username": "drive-api",
+       "password": "<password>", "verify_tls": false}'
+```
+
+The capability probe does not probe Drive: `GET /v1/controllers/{cid}/capabilities`
+lists a declared `drive` under `not_probed`, never under `products`. The Drive
+connection logs in on its first request, not when it is built, and after a
+rejected login it pauses further logins on an escalating cool-down. The admin
+probe (`POST /v1/controllers/{cid}/probe`) logs in and reads the console's
+system endpoint once: it proves the login works, not that UniFi Drive is
+installed.
+
+### Reading Drive
+
+All reads need only the `read` scope, name the controller with the `controller`
+query parameter, and call the same manager methods:
+
+| Surface | Paths |
+|---|---|
+| REST | Under `/v1/sites/{site_id}/drive/`, in the table below |
+| GraphQL | The `drive` namespace, in the table below |
+| Actions | `POST /v1/actions/{tool_name}` for the eighteen `drive_*` read tools |
+
+| Reads | REST `GET` | GraphQL field | Action |
+|---|---|---|---|
+| NAS console | `/v1/sites/{site_id}/drive/system` | `systemInfo` | `drive_get_system_info` |
+| System log, one page | `/v1/sites/{site_id}/drive/logs` | `logs` | `drive_list_logs` |
+| Storage pools | `/v1/sites/{site_id}/drive/storage-pools` | `storagePools` | `drive_list_storage_pools` |
+| What each pool's used space is used by | `/v1/sites/{site_id}/drive/storage-usage` | `storageUsage` | `drive_get_storage_usage` |
+| Disks | `/v1/sites/{site_id}/drive/disks` | `disks` | `drive_list_disks` |
+| Network throughput now | `/v1/sites/{site_id}/drive/network-throughput` | `networkThroughput` | `drive_get_network_throughput` |
+| Fan profile | `/v1/sites/{site_id}/drive/fan-profile` | `fanProfile` | `drive_get_fan_profile` |
+| Per-disk activity over a window | `/v1/sites/{site_id}/drive/disk-stats` | `diskStats` | `drive_get_disk_stats` |
+| Shared drives | `/v1/sites/{site_id}/drive/shared-drives` | `sharedDrives` | `drive_list_shared_drives` |
+| One shared drive, by id | `/v1/sites/{site_id}/drive/shared-drives/{drive_id}` | `sharedDrive` | `drive_get_shared_drive` |
+| Every drive's snapshot settings and state | `/v1/sites/{site_id}/drive/snapshot-overview` | `snapshotOverview` | `drive_get_snapshot_overview` |
+| One shared drive's snapshots, by name | `/v1/sites/{site_id}/drive/snapshots/shared/{shared_drive_name}` | `snapshots` | `drive_list_snapshots` |
+| SMB, NFS and Time Machine | `/v1/sites/{site_id}/drive/file-services` | `fileServices` | `drive_get_file_services` |
+| SMB Trash for personal drives | `/v1/sites/{site_id}/drive/smb-advanced-settings` | `smbAdvancedSettings` | `drive_get_smb_advanced_settings` |
+| rsync service | `/v1/sites/{site_id}/drive/rsync-settings` | `rsyncSettings` | `drive_get_rsync_settings` |
+| NFS clients | `/v1/sites/{site_id}/drive/nfs-connections` | `nfsConnections` | `drive_list_nfs_connections` |
+| Users | `/v1/sites/{site_id}/drive/users` | `users` | `drive_list_users` |
+| User groups | `/v1/sites/{site_id}/drive/groups` | `groups` | `drive_list_groups` |
+
+The path `site_id` is the controller site of the other console products and is
+**ignored** for Drive: a NAS has no sites. Byte counts are `BigInt` in GraphQL.
+IDs from these routes belong to the Drive family: do not pass them to other
+products' routes. The arguments are the MCP tools' arguments:
+
+- `disks` takes `include_empty` (default false) and `include_cache` (default
+  true).
+- The system log is the one paged read: each call answers one page, newest
+  first, as `{"entries": [...], "next_cursor": ...}`. Pass `next_cursor` back as
+  `cursor`, with the same filters, for the next page; it is null on the last.
+  The filters are `limit` (1 to 500, default 50), `severities`, `category`,
+  `types`, `keyword`, `scope` (`all`, `audit` or `flow`), and `after` and
+  `before` (ISO 8601 with an offset). Over REST, repeat `severities` and `types`
+  for more than one value. An unknown category or type is a `422`.
+- Disk stats take `hours` (1 to 2160, default 24). The REST route and the action
+  leave out each disk's per-bucket `samples` unless `include_samples` is true:
+  they add about 12 KB per disk per day at 15-minute buckets. GraphQL returns
+  them only when a query selects `samples`.
+- A shared drive's snapshots are addressed by the shared drive's **name**, as
+  Drive addresses them, not by its id: take it from the shared drive list or
+  from `shared_drive_name` in the snapshot overview.
+- The other lists are whole, with no cursor.
+
+```bash
+curl -s "http://localhost:8080/v1/sites/default/drive/storage-pools?controller=<id>" \
+  -H "Authorization: Bearer $READ_KEY"
+
+curl -s http://localhost:8080/v1/graphql \
+  -H "Authorization: Bearer $READ_KEY" -H "Content-Type: application/json" \
+  -d '{"query":"{ drive { nfsConnections(controller: \"<id>\") { client sharedDrives { name permission exportPath } } } }"}'
+```
+
+### Changing file services and NFS clients
+
+The four writes are catalog actions and need the `write` scope:
+`drive_set_file_service` (SMB, NFS or Time Machine on or off),
+`drive_add_nfs_connection`, `drive_update_nfs_connection` and
+`drive_remove_nfs_connection`. Their arguments are the MCP tools' arguments.
+
+What a toggle does beyond the service you name, which the request-only preview
+does not show:
+
+- **Turning SMB off also turns Time Machine off**, because Time Machine runs over
+  SMB, and turning SMB back on leaves Time Machine off: turn it on again with
+  `drive_set_file_service` (`time_machine`, `true`). Turning Time Machine on
+  while SMB is off is refused.
+- Turning any service off disconnects its clients.
+- Turning NFS off keeps the NFS client list, so those clients can mount again
+  when NFS is turned back on.
+
+- `confirm: false` (the default) validates the request and returns a request-only
+  preview with `requires_confirmation: true`. It calls no manager and sends
+  nothing to the NAS, so it does not show the NAS's current state or the
+  warnings the MCP server's preview adds; use the MCP tool for those.
+- `confirm: true` plans the change from fresh NAS state and applies it in one
+  manager call, then reads it back. The result is the MCP tool's data:
+  `{"service", "enabled", "changed"}` for a toggle, `{"connection": ...}` for an
+  added or updated client, `{"removed": "<client>"}` for a removal. A toggle that
+  changes nothing sends nothing and answers `changed: false`.
+- A write stopped before its change was sent answers `success: false` with
+  `mutation_applied: false`: nothing changed. A change that was sent and never
+  answered answers `success: false` with `mutation_applied: null`: it may be
+  live, so read it back before retrying. Neither is ever a success.
+
+```bash
+curl -s -X POST http://localhost:8080/v1/actions/drive_add_nfs_connection \
+  -H "Authorization: Bearer $WRITE_KEY" -H "Content-Type: application/json" \
+  -d '{"controller": "<id>", "site": "default", "confirm": true,
+       "args": {"client": "192.168.1.50", "shared_drives": [{"id": "<shared drive id>", "permission": "ro"}]}}'
+```
+
+Drive keeps every NFS client in one list and replaces it as a whole. A
+confirmed NFS write reads the list again just before it writes and stops if it
+changed. The API's operation gate runs confirmed writes for one NAS one at a
+time, but only within this API process: the Drive MCP server is a separate
+process, and a write from it that lands between the API's last read and its
+write is overwritten without either reporting it.
+
+`UNIFI_DRIVE_READ_ONLY=true` (or `UNIFI_READ_ONLY=true`) refuses every Drive
+write on this API, previews included, with `403`. The Drive MCP server's
+per-category `UNIFI_POLICY_DRIVE_*` gates are **not** applied by the API.
+
+### Errors
+
+Read errors are answered with fixed text built from the request path, the HTTP
+status and Drive's own capped message, never the NAS address; invalid arguments
+and a missing shared drive never echo the rejected value. The text of a `403`,
+`429` or `502` names the request path, which for the system log includes the
+filters and cursor sent. REST answers
+`{"detail": {"kind": "...", "message": "..."}}`; GraphQL puts the code in the
+error's `extensions`.
+
+| Situation | REST status and `kind` | GraphQL code |
+|---|---|---|
+| Invalid arguments | `422` `invalid_drive_request` | `BAD_REQUEST` |
+| No such shared drive (by id, or by name for snapshots) | `404` `drive_not_found` | `NOT_FOUND` |
+| The NAS refused the account (no access to UniFi Drive) | `403` `drive_forbidden` | `UPSTREAM_FORBIDDEN` |
+| Login rejected, connection, Drive not installed, other HTTP or malformed | `502` `drive_upstream_error` | `UPSTREAM_ERROR` |
+| The NAS rate-limited the request | `429` `drive_rate_limited` | `RATE_LIMITED` |
+| No read slot in time at the operation gate | `503` `controller_busy`, with `Retry-After` | `CONTROLLER_BUSY` |
+| Controller does not declare `drive` | `409` `capability_mismatch` | |
+
+Over the action endpoint, a failure keeps the repository's generic contract:
+HTTP `200` with `success: false`, fixed text, and the error class audited as
+`error_kind`, plus `mutation_applied` for the two write outcomes above.
+
+### What read exposes, and redaction
+
+Every key with the `read` scope can read the NAS's storage layout, disk serial
+numbers, shared drive names, NFS client addresses, users (usernames, names,
+email addresses, roles and last login) and the system log, whose messages name
+users, client addresses, drives and pools, for any registered Drive controller.
+The rsync account's password is never returned. Response redaction hides
+secret-looking fields by name and is on by default; MAC addresses, serial
+numbers, client addresses, email addresses and log messages are not redacted.
+
 ## Distribution
 
 `unifi-api-server` is published to:
@@ -570,7 +755,7 @@ This is the same constraint the MCP servers (`unifi-network-mcp`,
 ## Development
 
 The project uses an `uv` workspace covering `apps/api/` plus the shared
-`packages/unifi-core/` and the five MCP apps. Common development commands:
+`packages/unifi-core/` and the six MCP apps. Common development commands:
 
 ```bash
 # Install everything once

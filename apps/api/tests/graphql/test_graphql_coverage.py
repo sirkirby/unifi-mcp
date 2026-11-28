@@ -31,7 +31,14 @@ def _read_tools_by_product() -> dict[str, list[str]]:
     """
     reg = ManifestRegistry.load()
     type_registry = build_type_registry()
-    out: dict[str, list[str]] = {"network": [], "protect": [], "access": [], "sitemanager": [], "innerspace": []}
+    out: dict[str, list[str]] = {
+        "network": [],
+        "protect": [],
+        "access": [],
+        "sitemanager": [],
+        "innerspace": [],
+        "drive": [],
+    }
     for tool_name in reg.all_tools():
         # Read-tool prefix filter — Phase 6 scope is unifi_list_* / unifi_get_* only.
         if not (
@@ -39,6 +46,7 @@ def _read_tools_by_product() -> dict[str, list[str]]:
             or tool_name.startswith("unifi_get_")
             or tool_name.startswith("sitemanager_")
             or tool_name.startswith("innerspace_")
+            or tool_name.startswith("drive_")
         ):
             continue
         try:
@@ -101,13 +109,14 @@ def test_every_read_tool_has_graphql_field() -> None:
     fields = _query_field_names()
     by_product = _read_tools_by_product()
     assert len(by_product["innerspace"]) == 9
+    assert len(by_product["drive"]) == 18
 
     missing: list[str] = []
     for product, tools in by_product.items():
         if product in EXEMPT_PRODUCTS:
             continue
         for tool_name in tools:
-            if product in ("sitemanager", "innerspace"):
+            if product in ("sitemanager", "innerspace", "drive"):
                 from unifi_api.graphql._naming import tool_to_field_path
 
                 field_name = tool_to_field_path(tool_name, product=product).split(".")[-1]

@@ -7,6 +7,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from unifi_core.drive.managers.connection_manager import DriveWriteNotSent, DriveWriteOutcomeUnknown
 from unifi_core.operation_gate import ControllerBusyError, WriteRequestTimeout
 from unifi_core.redaction import collect_secret_values, redact_sensitive_fields, scrub_secret_values
 
@@ -315,6 +316,24 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             "success": False,
             "error": f"Failed to execute action: {e}",
             "mutation_applied": None if e.request_sent else False,
+        }
+    except (DriveWriteNotSent, DriveWriteOutcomeUnknown) as e:
+        not_sent = isinstance(e, DriveWriteNotSent)
+        await _write_audit_row(
+            sm,
+            key_id_prefix=key_prefix,
+            controller=body.controller,
+            target=tool_name,
+            outcome="error",
+            error_kind="write_not_sent" if not_sent else "write_outcome_unknown",
+        )
+        # Drive's text is fixed: method, request path and the outcome, never the NAS
+        # address or the request body. Not sent, nothing changed; sent and never
+        # answered, the change may be live, so it is never reported as a success.
+        return {
+            "success": False,
+            "error": f"Failed to execute action: {e}",
+            "mutation_applied": False if not_sent else None,
         }
     except actions_svc.CapabilityMismatch:
         await _write_audit_row(

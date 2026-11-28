@@ -79,7 +79,7 @@ def _parse_product_kinds(form_data: list[str]) -> list[str]:
     """FastAPI Form() with the same name multi-yields a list[str]."""
     if any(p not in CONTROLLER_PRODUCTS for p in form_data):
         raise HTTPException(
-            status_code=422, detail="Controller products must be network, protect, access, or innerspace."
+            status_code=422, detail="Controller products must be network, protect, access, innerspace, or drive."
         )
     return form_data
 

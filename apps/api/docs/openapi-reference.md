@@ -352,6 +352,297 @@ Get a UniFi Access Developer API visitor by a UUID returned from the visitor fam
 **Returns:** `object`
 
 
+## drive/file-services
+
+### `GET /v1/sites/{site_id}/drive/file-services` — Get Drive file services
+
+
+Whether SMB, NFS and Time Machine are enabled on the NAS, and the network interfaces clients connect to. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/nfs-connections` — List Drive NFS connections
+
+
+NFS clients allowed to mount shared drives, with the shared drives each may mount and the export path to mount. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/rsync-settings` — Get Drive rsync settings
+
+
+Whether the rsync service is on, whether a dedicated rsync account is set and its username (never its password), and whether SSH, which rsync needs, is on. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/smb-advanced-settings` — Get Drive SMB advanced settings
+
+
+Whether SMB Trash for personal drives is on (files removed over SMB go to Trash instead of being deleted) and whether every personal drive could move to it. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/logs
+
+### `GET /v1/sites/{site_id}/drive/logs` — List Drive system log entries
+
+
+The NAS's system log, newest first, as the Drive UI's System Log shows it: time, severity, category, type, event and message. Messages name the users, client addresses, drives and pools involved. One page per call; pass next_cursor back as cursor, with the same filters, for the next. An unknown category or type is a 422. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `severities` (query)
+- `category` (query)
+- `types` (query)
+- `keyword` (query)
+- `scope` (query)
+- `after` (query)
+- `before` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/performance
+
+### `GET /v1/sites/{site_id}/drive/disk-stats` — Get Drive disk stats
+
+
+Each disk's temperature, read and write throughput (KB/s) and bad sector count over the last hours, summarized per disk. Buckets are 15 minutes under 7 days, 1 hour under 30 days, 6 hours beyond. Per-bucket samples only with include_samples; they are large over long windows. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `hours` (query)
+- `include_samples` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/fan-profile` — Get Drive fan profile
+
+
+The NAS's fan mode and the modes it offers, with the names the Drive web app shows (Cooling, Balanced, Quiet). The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/network-throughput` — Get Drive network throughput
+
+
+The NAS's network throughput right now: data received and sent, in KB/s. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/shared-drives
+
+### `GET /v1/sites/{site_id}/drive/shared-drives` — List Drive shared drives
+
+
+Shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/shared-drives/{drive_id}` — Get a Drive shared drive
+
+
+One shared drive by id. Drive omits the protection flags and member count that the list includes. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `drive_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/snapshots
+
+### `GET /v1/sites/{site_id}/drive/snapshot-overview` — Get Drive snapshot overview
+
+
+Every shared and personal drive's snapshot settings and state: snapshot limit and count, locked and pending-deletion counts, space held, last and next snapshot time, whether snapshots are paused and why, and the schedule. A drive whose snapshots were never set up is listed with configured false and a zero limit. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/snapshots/shared/{shared_drive_name}` — List a Drive shared drive's snapshots
+
+
+One shared drive's snapshots, newest first (id, name, Drive's label, creation time, locked), by the shared drive's name, not its id: the name the shared drive list or the snapshot overview reports. A name no shared drive has is a 404. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `shared_drive_name` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/storage
+
+### `GET /v1/sites/{site_id}/drive/disks` — List Drive disks
+
+
+Drive bays and SSD cache slots with the disk in each, its pool membership and SMART health. Empty bays are left out unless include_empty is true. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `include_empty` (query)
+- `include_cache` (query)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/storage-pools` — List Drive storage pools
+
+
+Storage pools with capacity, usage and status, and each pool's RAID groups: the RAID level in effect versus the configured one, disk-failure protection, and rebuild or expansion progress. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/storage-usage` — Get Drive storage usage
+
+
+Each storage pool's capacity, used and free space, and what the used space is used by: personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id is the id the storage pool list reports. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/system
+
+### `GET /v1/sites/{site_id}/drive/system` — Get Drive system info
+
+
+The NAS console's name, model, MAC, UniFi OS firmware and any available update, device state, uptime, CPU load and temperature, and memory. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
+## drive/users
+
+### `GET /v1/sites/{site_id}/drive/groups` — List Drive user groups
+
+
+The UniFi OS user groups that shared drive access can be granted to, with id and name. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+### `GET /v1/sites/{site_id}/drive/users` — List Drive users
+
+
+The NAS's users with username, full name, email, status, access level (owner, admin or user), console roles, personal drive and Active Directory flags, and last login. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
 ## innerspace/devices
 
 ### `GET /v1/sites/{site_id}/innerspace/access-points` — List InnerSpace access points

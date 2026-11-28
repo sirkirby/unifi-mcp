@@ -1387,6 +1387,29 @@ class ContentReconciliationTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)
 
+    def test_api_readme_documents_every_drive_route(self):
+        spec = json.loads(Path("apps/api/openapi.json").read_text(encoding="utf-8"))
+        paths = sorted(path for path in spec["paths"] if "/drive/" in path)
+        self.assertEqual(len(paths), 18)
+        readme = Path("apps/api/README.md").read_text(encoding="utf-8")
+        section = " ".join(readme.split("## UniFi Drive console product", 1)[1].split("\n## ", 1)[0].split())
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(path, section)
+        for phrase in (
+            "`drive`",
+            "username and password",
+            "mutation_applied: false",
+            "mutation_applied: null",
+            "UNIFI_DRIVE_READ_ONLY",
+            "drive_set_file_service",
+            "drive_remove_nfs_connection",
+            "Turning SMB off also turns Time Machine off",
+            "BAD_REQUEST",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
     def test_server_status_table_lists_drive_as_released(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         homepage = Path("docs/index.html").read_text(encoding="utf-8")

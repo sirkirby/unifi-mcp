@@ -1031,7 +1031,8 @@
                 "network",
                 "protect",
                 "access",
-                "innerspace"
+                "innerspace",
+                "drive"
               ],
               "type": "string"
             },
@@ -1173,7 +1174,8 @@
                     "network",
                     "protect",
                     "access",
-                    "innerspace"
+                    "innerspace",
+                    "drive"
                   ],
                   "type": "string"
                 },
@@ -18050,6 +18052,1386 @@
         "summary": "List Dpi Categories",
         "tags": [
           "network/policy"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/disk-stats": {
+      "get": {
+        "description": "Each disk's temperature, read and write throughput (KB/s) and bad sector count over the last hours, summarized per disk. Buckets are 15 minutes under 7 days, 1 hour under 30 days, 6 hours beyond. Per-bucket samples only with include_samples; they are large over long windows. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_disk_stats_v1_sites__site_id__drive_disk_stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How far back to read, in hours, 1 to 2160 (90 days)",
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "description": "How far back to read, in hours, 1 to 2160 (90 days)",
+              "maximum": 2160,
+              "minimum": 1,
+              "title": "Hours",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Also return every bucket's values for each disk: about 12 KB per disk per day at 15-minute buckets, up to about 1 MB for a full NAS over a week or more",
+            "in": "query",
+            "name": "include_samples",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also return every bucket's values for each disk: about 12 KB per disk per day at 15-minute buckets, up to about 1 MB for a full NAS over a week or more",
+              "title": "Include Samples",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Disk Stats V1 Sites  Site Id  Drive Disk Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive disk stats",
+        "tags": [
+          "drive/performance"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/disks": {
+      "get": {
+        "description": "Drive bays and SSD cache slots with the disk in each, its pool membership and SMART health. Empty bays are left out unless include_empty is true. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_disks_v1_sites__site_id__drive_disks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also list empty bays and slots",
+            "in": "query",
+            "name": "include_empty",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list empty bays and slots",
+              "title": "Include Empty",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include SSD cache slots",
+            "in": "query",
+            "name": "include_cache",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Include SSD cache slots",
+              "title": "Include Cache",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Disks V1 Sites  Site Id  Drive Disks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive disks",
+        "tags": [
+          "drive/storage"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/fan-profile": {
+      "get": {
+        "description": "The NAS's fan mode and the modes it offers, with the names the Drive web app shows (Cooling, Balanced, Quiet). The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_fan_profile_v1_sites__site_id__drive_fan_profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Fan Profile V1 Sites  Site Id  Drive Fan Profile Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive fan profile",
+        "tags": [
+          "drive/performance"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/file-services": {
+      "get": {
+        "description": "Whether SMB, NFS and Time Machine are enabled on the NAS, and the network interfaces clients connect to. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_file_services_v1_sites__site_id__drive_file_services_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive File Services V1 Sites  Site Id  Drive File Services Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive file services",
+        "tags": [
+          "drive/file-services"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/groups": {
+      "get": {
+        "description": "The UniFi OS user groups that shared drive access can be granted to, with id and name. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_groups_v1_sites__site_id__drive_groups_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Groups V1 Sites  Site Id  Drive Groups Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive user groups",
+        "tags": [
+          "drive/users"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/logs": {
+      "get": {
+        "description": "The NAS's system log, newest first, as the Drive UI's System Log shows it: time, severity, category, type, event and message. Messages name the users, client addresses, drives and pools involved. One page per call; pass next_cursor back as cursor, with the same filters, for the next. An unknown category or type is a 422. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_logs_v1_sites__site_id__drive_logs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Most entries per page, 1 to 500",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Most entries per page, 1 to 500",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only entries at these severities; repeat the parameter for more than one. Omit for all.",
+            "in": "query",
+            "name": "severities",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries at these severities; repeat the parameter for more than one. Omit for all.",
+              "items": {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "very_high"
+                ],
+                "type": "string"
+              },
+              "title": "Severities"
+            }
+          },
+          {
+            "description": "Only entries in this category: activity, storage or settings on current firmware",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries in this category: activity, storage or settings on current firmware",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "Only entries of these types, such as storagePool, drive, hotSpare, userAccess or fanMode; repeat the parameter for more than one",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries of these types, such as storagePool, drive, hotSpare, userAccess or fanMode; repeat the parameter for more than one",
+              "title": "Types"
+            }
+          },
+          {
+            "description": "Only entries whose text matches this keyword",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries whose text matches this keyword",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "audit: user and admin actions; flow: file activity; all (default): everything",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "audit: user and admin actions; flow: file activity; all (default): everything",
+              "enum": [
+                "all",
+                "audit",
+                "flow"
+              ],
+              "title": "Scope"
+            }
+          },
+          {
+            "description": "Only entries after this ISO 8601 time with offset, e.g. 2026-11-20T00:00:00Z",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries after this ISO 8601 time with offset, e.g. 2026-11-20T00:00:00Z",
+              "title": "After"
+            }
+          },
+          {
+            "description": "Only entries before this ISO 8601 time with offset",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries before this ISO 8601 time with offset",
+              "title": "Before"
+            }
+          },
+          {
+            "description": "next_cursor from the previous page",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "next_cursor from the previous page",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Logs V1 Sites  Site Id  Drive Logs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive system log entries",
+        "tags": [
+          "drive/logs"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/network-throughput": {
+      "get": {
+        "description": "The NAS's network throughput right now: data received and sent, in KB/s. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_network_throughput_v1_sites__site_id__drive_network_throughput_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Network Throughput V1 Sites  Site Id  Drive Network Throughput Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive network throughput",
+        "tags": [
+          "drive/performance"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/nfs-connections": {
+      "get": {
+        "description": "NFS clients allowed to mount shared drives, with the shared drives each may mount and the export path to mount. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_nfs_connections_v1_sites__site_id__drive_nfs_connections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Nfs Connections V1 Sites  Site Id  Drive Nfs Connections Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive NFS connections",
+        "tags": [
+          "drive/file-services"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/rsync-settings": {
+      "get": {
+        "description": "Whether the rsync service is on, whether a dedicated rsync account is set and its username (never its password), and whether SSH, which rsync needs, is on. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_rsync_settings_v1_sites__site_id__drive_rsync_settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Rsync Settings V1 Sites  Site Id  Drive Rsync Settings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive rsync settings",
+        "tags": [
+          "drive/file-services"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/shared-drives": {
+      "get": {
+        "description": "Shared drives with their storage pool, usage, quota, status, encryption, snapshot and remote-backup flags. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_shared_drives_v1_sites__site_id__drive_shared_drives_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Shared Drives V1 Sites  Site Id  Drive Shared Drives Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive shared drives",
+        "tags": [
+          "drive/shared-drives"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/shared-drives/{drive_id}": {
+      "get": {
+        "description": "One shared drive by id. Drive omits the protection flags and member count that the list includes. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_shared_drive_v1_sites__site_id__drive_shared_drives__drive_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "drive_id",
+            "required": true,
+            "schema": {
+              "title": "Drive Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Shared Drive V1 Sites  Site Id  Drive Shared Drives  Drive Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a Drive shared drive",
+        "tags": [
+          "drive/shared-drives"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/smb-advanced-settings": {
+      "get": {
+        "description": "Whether SMB Trash for personal drives is on (files removed over SMB go to Trash instead of being deleted) and whether every personal drive could move to it. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_smb_advanced_settings_v1_sites__site_id__drive_smb_advanced_settings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Smb Advanced Settings V1 Sites  Site Id  Drive Smb Advanced Settings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive SMB advanced settings",
+        "tags": [
+          "drive/file-services"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/snapshot-overview": {
+      "get": {
+        "description": "Every shared and personal drive's snapshot settings and state: snapshot limit and count, locked and pending-deletion counts, space held, last and next snapshot time, whether snapshots are paused and why, and the schedule. A drive whose snapshots were never set up is listed with configured false and a zero limit. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_snapshot_overview_v1_sites__site_id__drive_snapshot_overview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Snapshot Overview V1 Sites  Site Id  Drive Snapshot Overview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive snapshot overview",
+        "tags": [
+          "drive/snapshots"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/snapshots/shared/{shared_drive_name}": {
+      "get": {
+        "description": "One shared drive's snapshots, newest first (id, name, Drive's label, creation time, locked), by the shared drive's name, not its id: the name the shared drive list or the snapshot overview reports. A name no shared drive has is a 404. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_snapshots_v1_sites__site_id__drive_snapshots_shared__shared_drive_name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shared_drive_name",
+            "required": true,
+            "schema": {
+              "title": "Shared Drive Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Snapshots V1 Sites  Site Id  Drive Snapshots Shared  Shared Drive Name  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a Drive shared drive's snapshots",
+        "tags": [
+          "drive/snapshots"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/storage-pools": {
+      "get": {
+        "description": "Storage pools with capacity, usage and status, and each pool's RAID groups: the RAID level in effect versus the configured one, disk-failure protection, and rebuild or expansion progress. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_storage_pools_v1_sites__site_id__drive_storage_pools_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Storage Pools V1 Sites  Site Id  Drive Storage Pools Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive storage pools",
+        "tags": [
+          "drive/storage"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/storage-usage": {
+      "get": {
+        "description": "Each storage pool's capacity, used and free space, and what the used space is used by: personal drives, shared drives, Microsoft 365 backups, snapshots and the rest (system and other data). pool_id is the id the storage pool list reports. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_storage_usage_v1_sites__site_id__drive_storage_usage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive Storage Usage V1 Sites  Site Id  Drive Storage Usage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive storage usage",
+        "tags": [
+          "drive/storage"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/system": {
+      "get": {
+        "description": "The NAS console's name, model, MAC, UniFi OS firmware and any available update, device state, uptime, CPU load and temperature, and memory. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "get_drive_system_info_v1_sites__site_id__drive_system_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Drive System Info V1 Sites  Site Id  Drive System Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Drive system info",
+        "tags": [
+          "drive/system"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/drive/users": {
+      "get": {
+        "description": "The NAS's users with username, full name, email, status, access level (owner, admin or user), console roles, personal drive and Active Directory flags, and last login. The path site_id is ignored. Read-only, through the NAS console session. These IDs are scoped to the UniFi Drive tool family \u2014 do not pass them to other products' tools.",
+        "operationId": "list_drive_users_v1_sites__site_id__drive_users_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Drive Users V1 Sites  Site Id  Drive Users Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Drive users",
+        "tags": [
+          "drive/users"
         ]
       }
     },

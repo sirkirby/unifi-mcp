@@ -17,6 +17,7 @@ from unifi_api._version import __version__ as _api_version
 from unifi_api.graphql.errors import is_expected_error, safe_message
 from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.resolvers.access import AccessQuery
+from unifi_api.graphql.resolvers.drive import DriveQuery
 from unifi_api.graphql.resolvers.innerspace import InnerSpaceQuery
 from unifi_api.graphql.resolvers.network import NetworkQuery
 from unifi_api.graphql.resolvers.protect import ProtectQuery
@@ -63,6 +64,10 @@ class Query:
     @strawberry.field(permission_classes=[IsRead], description="Read-only access to UniFi InnerSpace resources.")
     def innerspace(self) -> InnerSpaceQuery:
         return InnerSpaceQuery()
+
+    @strawberry.field(permission_classes=[IsRead], description="Read-only access to UniFi Drive resources.")
+    def drive(self) -> DriveQuery:
+        return DriveQuery()
 
 
 _logger = logging.getLogger("strawberry.execution")

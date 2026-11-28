@@ -775,6 +775,882 @@ type DpiStats {
   categories: JSON!
 }
 
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveDisk {
+  """Bay number as printed on the NAS"""
+  slotId: String
+
+  """'disk' for a drive bay, 'cache' for an SSD cache slot"""
+  bayType: String!
+
+  """Disk state, such as optimal, or 'empty' for an empty bay"""
+  state: String
+
+  """Storage pool the disk belongs to"""
+  poolId: String
+
+  """RAID group the disk belongs to"""
+  raidGroupId: String
+
+  """Whether the disk is a global hot spare"""
+  isGlobalHotSpare: Boolean
+
+  """Whether the disk is a hot spare for its pool"""
+  isLocalHotSpare: Boolean
+
+  """Disk type, such as HDD or SSD"""
+  type: String
+
+  """Disk model"""
+  model: String
+
+  """Disk serial number"""
+  serial: String
+
+  """Disk firmware"""
+  firmware: String
+
+  """Raw disk size in bytes"""
+  sizeBytes: BigInt
+
+  """Spindle speed; absent for SSDs"""
+  rpm: Int
+
+  """SATA revision, such as SATA 3.3"""
+  interface: String
+
+  """ATA command set, such as ACS-4"""
+  ataStandard: String
+
+  """NVMe version, for NVMe disks"""
+  nvmeVersion: String
+
+  """Sector format, such as 512E"""
+  sectorFormat: String
+
+  """Disk temperature in degrees Celsius"""
+  temperatureC: Float
+
+  """SMART power-on hours"""
+  powerOnHours: BigInt
+
+  """SMART bad (reallocated) sector count"""
+  badSectorCount: BigInt
+
+  """SMART uncorrectable sector count"""
+  uncorrectableSectorCount: BigInt
+
+  """SMART read error rate"""
+  readErrorRate: BigInt
+
+  """SMART read error count"""
+  smartReadErrorCount: BigInt
+
+  """Why Drive flags the disk as at risk, if it does"""
+  riskReasons: JSON
+
+  """Why Drive considers the disk incompatible, if it does"""
+  incompatibleReasons: JSON
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveDiskActivity {
+  """Bay or cache slot number, as drive_list_disks reports it"""
+  slotId: String
+
+  """'disk' for a drive bay, 'cache' for an SSD cache slot"""
+  bayType: String!
+
+  """Disk type, such as HDD or SSD"""
+  type: String
+
+  """Buckets in the window for which Drive has data for this disk"""
+  samplesWithData: Int!
+
+  """Mean read throughput over those buckets, KB/s"""
+  readKbpsAvg: Float
+
+  """Highest bucket read throughput, KB/s"""
+  readKbpsMax: Float
+
+  """Mean write throughput over those buckets, KB/s"""
+  writeKbpsAvg: Float
+
+  """Highest bucket write throughput, KB/s"""
+  writeKbpsMax: Float
+
+  """Most recent temperature, degrees Celsius"""
+  temperatureCLatest: Float
+
+  """Highest temperature in the window"""
+  temperatureCMax: Float
+
+  """Most recent SMART bad sector count"""
+  badSectorCountLatest: BigInt
+
+  """
+  Change in the bad sector count from the first to the last bucket with data; negative when the counter reset or the disk in the bay was replaced
+  """
+  badSectorCountIncrease: BigInt
+
+  """
+  Per-bucket values, oldest first. The REST route and the action return them only with include_samples: they add about 12 KB per disk per day at 15-minute buckets
+  """
+  samples: [DriveDiskStatsSample!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveDiskStats {
+  """Start of the first bucket, ISO 8601 in UTC"""
+  windowStart: String
+
+  """End of the last bucket, ISO 8601 in UTC"""
+  windowEnd: String
+
+  """Length of each bucket in seconds"""
+  intervalSeconds: Int
+
+  """Buckets in the window"""
+  sampleCount: Int
+
+  """One entry per disk and cache SSD"""
+  disks: [DriveDiskActivity!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveDiskStatsSample {
+  """Start of the bucket, ISO 8601 in UTC"""
+  time: String
+
+  """Disk temperature in degrees Celsius"""
+  temperatureC: Float
+
+  """Average read throughput over the bucket, in KB/s"""
+  readKbps: Float
+
+  """Average write throughput over the bucket, in KB/s"""
+  writeKbps: Float
+
+  """SMART bad sector count"""
+  badSectorCount: BigInt
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveFanProfile {
+  """Profile in effect, as Drive reports it"""
+  currentProfile: String
+
+  """Web app name of that profile, such as Balanced"""
+  currentLabel: String
+
+  """Profiles the NAS offers"""
+  availableProfiles: [DriveFanProfileOption!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveFanProfileOption {
+  """Profile name as Drive reports it, such as default"""
+  profile: String!
+
+  """
+  Name the Drive web app shows: Cooling (maximum cooling, more noise), Balanced (even cooling and noise) or Quiet (minimum noise, higher drive temperatures)
+  """
+  label: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveFileServices {
+  """Whether SMB is enabled"""
+  smbEnabled: Boolean
+
+  """Whether NFS is enabled"""
+  nfsEnabled: Boolean
+
+  """Whether Time Machine (over SMB) is enabled; it requires SMB"""
+  timeMachineEnabled: Boolean
+
+  """Custom domain clients use, if one is set"""
+  customDomain: String
+
+  """Interfaces clients can connect to"""
+  networkInterfaces: [DriveNetworkInterface!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveGroup {
+  """
+  Group id. These IDs are scoped to UniFi Drive user groups; do not pass them as user or shared drive ids.
+  """
+  id: String
+
+  """Group name"""
+  name: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveLogEntry {
+  """When it was logged, ISO 8601 with the NAS's UTC offset"""
+  time: String
+
+  """low, medium, high or very_high"""
+  severity: String
+
+  """Log category, such as activity, storage or settings"""
+  category: String
+
+  """Log type within the category, such as storagePool"""
+  type: String
+
+  """Event name, such as DriveInserted"""
+  event: String
+
+  """Event title, such as Drive Inserted"""
+  title: String
+
+  """
+  The entry as the Drive UI shows it; absent when Drive has no text for the event
+  """
+  message: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveLogPage {
+  """Log entries, newest first"""
+  entries: [DriveLogEntry!]!
+
+  """
+  Pass it back as cursor, with the same filters, for the next page; absent on the last page
+  """
+  nextCursor: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNetworkInterface {
+  """Interface name, such as enp0s0"""
+  name: String
+
+  """Port type, such as ethernet or sfp+"""
+  interface: String
+
+  """Whether the link is up"""
+  connected: Boolean
+
+  """Negotiated link speed, such as 10 GbE"""
+  linkSpeed: String
+
+  """Maximum link speed of the port"""
+  maxSpeed: String
+
+  """IP address clients connect to"""
+  address: String
+
+  """Interface MAC address"""
+  mac: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNetworkThroughput {
+  """Data the NAS is receiving, in KB/s"""
+  receiveKbps: Float
+
+  """Data the NAS is sending, in KB/s"""
+  transmitKbps: Float
+
+  """When Drive took the sample, ISO 8601 with the console's UTC offset"""
+  timestamp: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNfsConnection {
+  """Client IP address or hostname"""
+  client: String
+
+  """Whether the export uses async writes"""
+  asyncWrites: Boolean
+
+  """Shared drives it may mount"""
+  sharedDrives: [DriveNfsSharedDriveGrant!]
+
+  """
+  Problems Drive reports for this connection, such as an unresolvable hostname
+  """
+  errorCodes: JSON
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveNfsSharedDriveGrant {
+  """Shared drive id"""
+  id: String
+
+  """Shared drive name"""
+  name: String
+
+  """Shared drive status"""
+  status: String
+
+  """Shared drive encryption status"""
+  encryptionStatus: String
+
+  """rw (read-write) or ro (read-only)"""
+  permission: String
+
+  """Path a client mounts, <nas>:<export_path>"""
+  exportPath: String
+}
+
+"""
+Read-only access to UniFi Drive resources. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveQuery {
+  """
+  Identity, firmware and health of the NAS console. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  systemInfo(controller: ID!): DriveSystemInfo!
+
+  """
+  One page of the NAS's system log, newest first. Pass nextCursor back as cursor, with the same filters, for the next page. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  logs(controller: ID!, limit: Int! = 50, severities: [String!] = null, category: String = null, types: [String!] = null, keyword: String = null, scope: String = null, after: String = null, before: String = null, cursor: String = null): DriveLogPage!
+
+  """
+  Storage pools and their RAID groups. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  storagePools(controller: ID!): [DriveStoragePool!]!
+
+  """
+  Each storage pool's used space, split by what uses it. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  storageUsage(controller: ID!): [DriveStoragePoolUsage!]!
+
+  """
+  Drive bays and SSD cache slots with the disk in each and its SMART health. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  disks(controller: ID!, includeEmpty: Boolean! = false, includeCache: Boolean! = true): [DriveDisk!]!
+
+  """
+  The NAS's network throughput right now, in KB/s. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  networkThroughput(controller: ID!): DriveNetworkThroughput!
+
+  """
+  The NAS's fan mode and the modes it offers. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  fanProfile(controller: ID!): DriveFanProfile!
+
+  """
+  Each disk's temperature, throughput and bad sectors over the last hours (1 to 2160), summarized per disk, with per-bucket samples a query selects only when it needs them. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  diskStats(controller: ID!, hours: Int! = 24): DriveDiskStats!
+
+  """
+  Shared drives. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  sharedDrives(controller: ID!): [DriveSharedDrive!]!
+
+  """
+  One shared drive by id. Drive omits the protection flags and member count that the list includes. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  sharedDrive(controller: ID!, driveId: String!): DriveSharedDrive!
+
+  """
+  Every shared and personal drive's snapshot settings and state. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  snapshotOverview(controller: ID!): DriveSnapshotOverview!
+
+  """
+  One shared drive's snapshots, newest first, by the shared drive's name, not its id. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  snapshots(controller: ID!, sharedDriveName: String!): [DriveSnapshot!]!
+
+  """
+  Whether SMB, NFS and Time Machine are on, and the interfaces clients connect to. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  fileServices(controller: ID!): DriveFileServices!
+
+  """
+  NFS clients allowed to mount shared drives, with their export paths. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  nfsConnections(controller: ID!): [DriveNfsConnection!]!
+
+  """
+  Whether SMB Trash for personal drives is on, and whether every personal drive could move to it. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  smbAdvancedSettings(controller: ID!): DriveSmbAdvancedSettings!
+
+  """
+  The rsync service, its account (never its password) and whether SSH is on. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  rsyncSettings(controller: ID!): DriveRsyncSettings!
+
+  """
+  The NAS's users. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  users(controller: ID!): [DriveUser!]!
+
+  """
+  The UniFi OS user groups that shared drive access can be granted to. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+  """
+  groups(controller: ID!): [DriveGroup!]!
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveRaidGroup {
+  """RAID group number within the pool"""
+  number: Int
+
+  """RAID group id"""
+  id: String
+
+  """RAID level in effect now, such as raid1"""
+  currentLevel: String
+
+  """RAID level the pool is configured for, such as raid5"""
+  configLevel: String
+
+  """Disk failures the group survives now"""
+  currentProtection: Int
+
+  """Disk failures it survives at its configured level"""
+  expectedProtection: Int
+
+  """Recommended size in bytes for an added disk"""
+  recommendedDiskSize: BigInt
+
+  """Rebuild or expansion progress, as reported by Drive"""
+  progress: Float
+
+  """Estimated time remaining for that work, as reported by Drive"""
+  estimate: Float
+
+  """Whether this group is an SSD cache"""
+  isSsdCache: Boolean
+
+  """Why the group is a remnant, if it is one"""
+  remnantReason: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveRsyncSettings {
+  """Whether the rsync service is on"""
+  enabled: Boolean
+
+  """
+  Whether a dedicated rsync account is set; its password is never returned
+  """
+  accountConfigured: Boolean
+
+  """Username of that account, if Drive reports it"""
+  accountUsername: String
+
+  """
+  Whether the console's SSH is on; rsync runs over SSH and does not work without it
+  """
+  sshEnabled: Boolean
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSharedDrive {
+  """
+  Shared drive id. Pass it as shared_drives[].id to the drive_*_nfs_connection actions.
+  """
+  id: String
+
+  """Shared drive name; NFS exports it as /var/nfs/shared/<name>"""
+  name: String
+
+  """Drive type, such as shared"""
+  type: String
+
+  """Drive status, such as active"""
+  status: String
+
+  """Storage pool the drive lives on"""
+  storagePoolId: String
+
+  """Quota in bytes; absent when unlimited"""
+  quotaBytes: BigInt
+
+  """Space used in bytes"""
+  usedBytes: BigInt
+
+  """The logged-in account's role on the drive"""
+  role: String
+
+  """Number of members with access"""
+  memberCount: Int
+
+  """Encryption status, such as unencrypted"""
+  encryptionStatus: String
+
+  """Whether snapshots are enabled"""
+  snapshotEnabled: Boolean
+
+  """Whether remote backup is enabled"""
+  remoteBackupEnabled: Boolean
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSmbAdvancedSettings {
+  """
+  Whether files removed over SMB from personal drives go to Trash (SMB Trash for Personal Drives)
+  """
+  personalDriveRecycleEnabled: Boolean
+
+  """
+  optimal when every personal drive can move removed files to Trash; migrateFirstFailed or migrateFailed when one or more cannot yet
+  """
+  personalDriveRecycleStatus: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSnapshot {
+  """
+  Snapshot id. These IDs are scoped to one shared drive's snapshots in the UniFi Drive tool family.
+  """
+  id: String
+
+  """Snapshot name; Drive leaves it empty unless one was given"""
+  name: String
+
+  """
+  Drive's label for the snapshot, e.g. Scheduled Snapshot for one the schedule took
+  """
+  description: String
+
+  """When the snapshot was taken"""
+  createdAt: String
+
+  """Whether the snapshot is locked, so Drive never removes it to make room"""
+  locked: Boolean
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSnapshotOverview {
+  """Shared drives"""
+  sharedDrives: [DriveSnapshotStatus!]
+
+  """Personal drives"""
+  personalDrives: [DriveSnapshotStatus!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSnapshotSchedule {
+  """Whether scheduled snapshots are on"""
+  enabled: Boolean
+
+  """
+  daily, weekly or monthly; absent when the schedule is off and has no days set
+  """
+  frequency: String
+
+  """Days of a weekly schedule, 0 (Sunday) to 6; empty otherwise"""
+  weekdays: [Int!]
+
+  """
+  Days of a monthly schedule, 1 to 28, or L for the last day of the month; empty otherwise
+  """
+  monthdays: [String!]
+
+  """Minutes between snapshots inside the daily window; absent when unset"""
+  intervalMinutes: Int
+
+  """Start of the daily window as H:MM, in the NAS console's local time"""
+  startTime: String
+
+  """End of the daily window as H:MM, in the NAS console's local time"""
+  endTime: String
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveSnapshotStatus {
+  """shared or personal"""
+  driveType: String!
+
+  """
+  Shared drive id, the same id drive_list_shared_drives returns. These IDs are scoped to the UniFi Drive tool family.
+  """
+  sharedDriveId: String
+
+  """
+  Shared drive name; pass it to drive_list_snapshots as shared_drive_name
+  """
+  sharedDriveName: String
+
+  """Shared drive status, such as active"""
+  sharedDriveStatus: String
+
+  """
+  User id of a personal drive's owner. These IDs are scoped to UniFi Drive users; do not pass them as shared drive ids.
+  """
+  userId: String
+
+  """Whether snapshot settings were ever saved for this drive"""
+  configured: Boolean
+
+  """
+  Most snapshots Drive keeps for the drive; 0 when snapshots are not set up
+  """
+  snapshotLimit: Int
+
+  """Snapshots the drive has now"""
+  snapshotCount: Int
+
+  """Locked snapshots, which Drive never removes to make room for new ones"""
+  lockedCount: Int
+
+  """Snapshots queued for deletion"""
+  pendingDeletionCount: Int
+
+  """Space the drive's snapshots hold, in bytes"""
+  coverageBytes: BigInt
+
+  """When the last snapshot was taken"""
+  lastSnapshotTime: String
+
+  """When the next scheduled snapshot is due"""
+  nextSnapshotTime: String
+
+  """Whether Drive has paused snapshots of this drive"""
+  paused: Boolean
+
+  """
+  Why snapshots are paused, such as ErrSnapshotStorageLow, ErrSnapshotDeletionQueueFull or ErrSnapshotDeletionQueueStuck
+  """
+  pauseReason: String
+
+  """Whether the drive is being restored from a snapshot"""
+  restoring: Boolean
+
+  """Encryption status, when Drive reports one"""
+  encryptionStatus: String
+
+  """Snapshot schedule"""
+  schedule: DriveSnapshotSchedule
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveStoragePool {
+  """Pool number"""
+  number: Int
+
+  """Storage pool id; shared drives name it as storage_pool_id"""
+  id: String
+
+  """Pool status, such as healthy or noDataProtectionYet"""
+  status: String
+
+  """RAID level chosen for the pool"""
+  preferLevel: String
+
+  """Volume type, such as lvm"""
+  type: String
+
+  """Usable capacity in bytes"""
+  capacityBytes: BigInt
+
+  """Used space in bytes"""
+  usedBytes: BigInt
+
+  """Used space as a percentage of capacity"""
+  usedPercent: Float
+
+  """Initialization status, such as successful"""
+  initializingStatus: String
+
+  """RAID group currently receiving writes"""
+  activeRaidGroupId: String
+
+  """RAID groups in the pool"""
+  raidGroups: [DriveRaidGroup!]
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveStoragePoolUsage {
+  """Storage pool id, the same id the storage pool list reports"""
+  poolId: String
+
+  """Usable capacity in bytes"""
+  capacityBytes: BigInt
+
+  """Used space in bytes"""
+  usedBytes: BigInt
+
+  """Free space in bytes"""
+  availableBytes: BigInt
+
+  """Used space as a percentage of capacity"""
+  usedPercent: Float
+
+  """Used by personal drives"""
+  personalDrivesBytes: BigInt
+
+  """Used by shared drives"""
+  sharedDrivesBytes: BigInt
+
+  """Used by snapshots, when Drive reports it"""
+  snapshotsBytes: BigInt
+
+  """Used by Microsoft 365 backups, when Drive reports it"""
+  m365Bytes: BigInt
+
+  """
+  Used by everything else (system and other data): used space minus the parts above, as the Drive UI shows it. Absent when the pool has iSCSI or deduplication data, which Drive counts differently.
+  """
+  systemBytes: BigInt
+}
+
+"""
+Identity, firmware and health of the UniFi OS console that runs UniFi Drive.
+"""
+type DriveSystemInfo {
+  """Console name"""
+  name: String
+
+  """Console hostname"""
+  hostname: String
+
+  """Hardware model, such as UniFi Network Attached Storage Pro 8"""
+  model: String
+
+  """Hardware short name, such as UNASPRO8"""
+  shortname: String
+
+  """Console MAC address"""
+  mac: String
+
+  """UniFi OS firmware version"""
+  firmwareVersion: String
+
+  """Firmware version available as an update, if any"""
+  firmwareUpdateAvailable: String
+
+  """UniFi Drive application version"""
+  driveVersion: String
+
+  """UniFi Drive application version available as an update, if any"""
+  driveUpdateAvailable: String
+
+  """Console state, such as setup or updateAvailable"""
+  deviceState: String
+
+  """Whether initial setup is complete"""
+  isSetup: Boolean
+
+  """Seconds since the console started"""
+  uptimeSeconds: Float
+
+  """Console timezone"""
+  timezone: String
+
+  """CPU load reported by the console, 0 to 1"""
+  cpuLoad: Float
+
+  """CPU temperature in degrees Celsius"""
+  cpuTemperatureC: Float
+
+  """Total memory in KiB"""
+  memoryTotalKb: BigInt
+
+  """Available memory in KiB"""
+  memoryAvailableKb: BigInt
+}
+
+"""
+UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+"""
+type DriveUser {
+  """
+  User id. These IDs are scoped to UniFi Drive users; do not pass them as shared drive or group ids.
+  """
+  id: String
+
+  """Login name"""
+  username: String
+
+  """Display name"""
+  fullName: String
+
+  """Email address, when one is set"""
+  email: String
+
+  """Account status, such as active, deactivated or pending"""
+  status: String
+
+  """
+  owner, admin or user, worked out as Drive's web app does: the console owner, any account with a role, or everyone else
+  """
+  accessLevel: String
+
+  """Console roles the account holds, such as super_administrator"""
+  roles: [String!]
+
+  """Whether the user's personal drive is on"""
+  personalDriveEnabled: Boolean
+
+  """Whether the user must change the password at next login"""
+  mustChangePassword: Boolean
+
+  """Whether the account comes from Active Directory"""
+  linkedToAd: Boolean
+
+  """Whether the account has a UniFi SSO (UI.com) identity"""
+  hasUiAccount: Boolean
+
+  """When the account was created"""
+  createdAt: String
+
+  """Last login time; absent when the user never logged in"""
+  lastLogin: String
+}
+
 """A Dynamic DNS provider entry configured on the controller."""
 type DynamicDns {
   id: ID
@@ -2525,6 +3401,9 @@ type Query {
 
   """Read-only access to UniFi InnerSpace resources."""
   innerspace: InnerSpaceQuery!
+
+  """Read-only access to UniFi Drive resources."""
+  drive: DriveQuery!
 }
 
 """Radio configuration entry on a UniFi device with radios."""
@@ -3707,6 +4586,34 @@ Read-only access to UniFi Access resources.
 - `users: UserPage!`  — List Access users (employees / cardholders, paginated).
 - `visitor: Visitor`  — Look up one Access Developer API visitor using a UUID returned by the visitor family; IDs from other Access user or credential operations are not accepted.
 - `visitors: VisitorPage!`  — List Access Developer API visitors. Returned UUIDs are scoped to the visitor family and must not be passed to other Access user or credential operations.
+
+
+### `query.drive`
+
+
+Read-only access to UniFi Drive resources.
+
+
+**Fields:**
+
+- `diskStats: DriveDiskStats!`  — Each disk's temperature, throughput and bad sectors over the last hours (1 to 2160), summarized per disk, with per-bucket samples a query selects only when it needs them. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `disks: [DriveDisk!]!`  — Drive bays and SSD cache slots with the disk in each and its SMART health. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `fanProfile: DriveFanProfile!`  — The NAS's fan mode and the modes it offers. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `fileServices: DriveFileServices!`  — Whether SMB, NFS and Time Machine are on, and the interfaces clients connect to. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `groups: [DriveGroup!]!`  — The UniFi OS user groups that shared drive access can be granted to. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `logs: DriveLogPage!`  — One page of the NAS's system log, newest first. Pass nextCursor back as cursor, with the same filters, for the next page. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `networkThroughput: DriveNetworkThroughput!`  — The NAS's network throughput right now, in KB/s. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `nfsConnections: [DriveNfsConnection!]!`  — NFS clients allowed to mount shared drives, with their export paths. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `rsyncSettings: DriveRsyncSettings!`  — The rsync service, its account (never its password) and whether SSH is on. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `sharedDrive: DriveSharedDrive!`  — One shared drive by id. Drive omits the protection flags and member count that the list includes. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `sharedDrives: [DriveSharedDrive!]!`  — Shared drives. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `smbAdvancedSettings: DriveSmbAdvancedSettings!`  — Whether SMB Trash for personal drives is on, and whether every personal drive could move to it. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `snapshotOverview: DriveSnapshotOverview!`  — Every shared and personal drive's snapshot settings and state. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `snapshots: [DriveSnapshot!]!`  — One shared drive's snapshots, newest first, by the shared drive's name, not its id. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `storagePools: [DriveStoragePool!]!`  — Storage pools and their RAID groups. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `storageUsage: [DriveStoragePoolUsage!]!`  — Each storage pool's used space, split by what uses it. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `systemInfo: DriveSystemInfo!`  — Identity, firmware and health of the NAS console. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
+- `users: [DriveUser!]!`  — The NAS's users. UniFi Drive read, through the NAS console session. These IDs are scoped to the UniFi Drive tool family — do not pass them to other products' tools.
 
 
 ### `query.health`

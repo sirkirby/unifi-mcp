@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
+from unifi_api.graphql.types.drive.registration import REGISTRATIONS as DRIVE_REGISTRATIONS
 from unifi_api.graphql.types.innerspace.registration import REGISTRATIONS as INNERSPACE_REGISTRATIONS
 from unifi_api.graphql.types.sitemanager.registration import REGISTRATIONS as SITEMANAGER_REGISTRATIONS
 
@@ -16,7 +17,11 @@ router = APIRouter()
 
 # Products whose reads are projected by the type registry rather than a serializer:
 # product -> {tool: (resource, projection, kind)}.
-_PROJECTION_REGISTRATIONS = {"sitemanager": SITEMANAGER_REGISTRATIONS, "innerspace": INNERSPACE_REGISTRATIONS}
+_PROJECTION_REGISTRATIONS = {
+    "sitemanager": SITEMANAGER_REGISTRATIONS,
+    "innerspace": INNERSPACE_REGISTRATIONS,
+    "drive": DRIVE_REGISTRATIONS,
+}
 
 
 @router.get("/catalog/tools", dependencies=[Depends(require_scope(Scope.READ))])
@@ -26,6 +31,7 @@ async def get_tools(request: Request) -> dict:
     items = []
     for tool_name in manifest.all_tools():
         entry = manifest.resolve(tool_name)
+        # Writes of a projected product (InnerSpace, Drive) have a serializer, not a projection.
         if tool_name in _PROJECTION_REGISTRATIONS.get(entry.product, {}):
             projection, kind = request.app.state.type_registry.lookup_tool(tool_name)
             render_hint = projection.render_hint(kind)

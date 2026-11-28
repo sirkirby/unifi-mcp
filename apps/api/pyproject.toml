@@ -43,6 +43,11 @@ dependencies = [
     # Reading one firewall policy per update requires Core 0.4.101.
     # Manual IPv6 DNS servers on network updates, and InnerSpace reads, require Core 0.4.105.
     # InnerSpace writes, and healing a login-blocked InnerSpace connection, require Core 0.4.108.
+    # UniFi Drive reads and writes, with writes bounded by the operation gate's
+    # budget and NFS client lists written with PATCH, require Core 0.4.109; the
+    # Drive application version and healing a login-paused Drive connection
+    # require Core 0.4.110. Drive needs no product extra: its client is aiohttp,
+    # a Core dependency.
     "unifi-core[network,protect,access]>=0.4.110,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack

@@ -302,8 +302,10 @@ async def test_init_failure_is_502_and_a_refused_login_is_not_retried(tmp_path, 
 
     assert (rest.status_code, again.status_code) == (502, 502)
     message = rest.json()["detail"]["message"]
-    assert message.startswith("Failed to get InnerSpace status: Failed to initialize innerspace controller connection")
+    # The failed action is named once: only the factory's reason follows it.
+    assert message.startswith("Failed to get InnerSpace status: The UniFi OS console rejected")
     assert "rejected the configured username and password" in message
+    assert message.count("Failed to") == 1
     # The kept manager answers later calls inside its cool-down without logging in again.
     assert again.json()["detail"]["message"].startswith(
         "Failed to list InnerSpace floor plans: The UniFi OS console rejected"

@@ -76,6 +76,14 @@ from unifi_api.routes.resources.access import (
 from unifi_api.routes.resources.access import (
     visitors as access_visitors_routes,
 )
+from unifi_api.routes.resources.drive import file_services as drive_file_services_routes
+from unifi_api.routes.resources.drive import logs as drive_logs_routes
+from unifi_api.routes.resources.drive import performance as drive_performance_routes
+from unifi_api.routes.resources.drive import shared_drives as drive_shared_drives_routes
+from unifi_api.routes.resources.drive import snapshots as drive_snapshots_routes
+from unifi_api.routes.resources.drive import storage as drive_storage_routes
+from unifi_api.routes.resources.drive import system as drive_system_routes
+from unifi_api.routes.resources.drive import users as drive_users_routes
 from unifi_api.routes.resources.innerspace import devices as innerspace_devices_routes
 from unifi_api.routes.resources.innerspace import floor_plans as innerspace_floor_plans_routes
 from unifi_api.routes.resources.innerspace import project as innerspace_project_routes
@@ -251,8 +259,8 @@ from unifi_api.serializers._registry import discover_serializers
 from unifi_api.services.audit import write_audit
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
+from unifi_api.services.console_product import ConsoleProductAPIError
 from unifi_api.services.controllers import list_controllers
-from unifi_api.services.innerspace import InnerSpaceAPIError
 from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
@@ -524,8 +532,8 @@ def create_app(config: ApiConfig) -> FastAPI:
     async def _sitemanager_error(request: Request, exc: SiteManagerAPIError):
         return JSONResponse(status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}})
 
-    @app.exception_handler(InnerSpaceAPIError)
-    async def _innerspace_error(request: Request, exc: InnerSpaceAPIError):
+    @app.exception_handler(ConsoleProductAPIError)
+    async def _console_product_error(request: Request, exc: ConsoleProductAPIError):
         headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
         return JSONResponse(
             status_code=exc.status, content={"detail": {"kind": exc.kind, "message": exc.message}}, headers=headers
@@ -738,6 +746,17 @@ def create_app(config: ApiConfig) -> FastAPI:
         innerspace_project_routes,
         innerspace_floor_plans_routes,
         innerspace_devices_routes,
+    ):
+        app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
+    for r in (
+        drive_system_routes,
+        drive_logs_routes,
+        drive_storage_routes,
+        drive_performance_routes,
+        drive_shared_drives_routes,
+        drive_snapshots_routes,
+        drive_file_services_routes,
+        drive_users_routes,
     ):
         app.include_router(r.router, prefix="/v1", dependencies=_CONTROLLER_READ_ROUTE)
     for r in (

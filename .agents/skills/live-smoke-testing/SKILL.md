@@ -587,11 +587,23 @@ in developer workflows; the fourth is automated in the release pipeline.
   not require `--server`.
 
 - **api-actions and api-resources use curated subsets, not auto-discovery.** `API_ACTIONS_SAMPLE`
-  in `scripts/live_smoke.py` is a hardcoded list of 6 tools (network clients/devices, protect
-  cameras/lights, access doors/users). New tools are NOT automatically included in
-  `--phase api-actions` coverage. To add a new tool to the api-actions phase, explicitly
-  append it to `API_ACTIONS_SAMPLE`. Do not assume successful MCP-direct smoke implies
-  api-actions coverage.
+  and `API_RESOURCES_SAMPLE` in `scripts/live_smoke.py` are hardcoded lists. New tools are NOT
+  automatically included in `--phase api-actions` or `--phase api-resources` coverage: append
+  them explicitly. Do not assume successful MCP-direct smoke implies API coverage. A read that
+  needs a live id goes in `API_ACTION_DERIVED_READS` (actions) or uses an `API_RESOURCE_SEEDS`
+  placeholder (resources); with nothing listed it is recorded as skipped. A seed taken from a
+  field other than a listed item's `id`, or from a collection inside a detail, names it as
+  `collection.field` (`API_ACTION_DERIVED_SEED_KEYS`, or the key in `API_RESOURCE_SEEDS`). A
+  resource that is not a cursor page declares its shape (`list` or `detail`) in
+  `API_RESOURCE_SHAPES`; a detail names the fields it compares with its action in
+  `API_RESOURCE_DETAIL_PARITY_FIELDS`, or an empty tuple to compare field names only when every
+  value moves between the two calls.
+
+- **Drive is registered only with a complete local login.** The API phases register a Drive
+  controller (`product_kinds: ["drive"]`) when `UNIFI_DRIVE_HOST`, `UNIFI_DRIVE_USERNAME` and
+  `UNIFI_DRIVE_PASSWORD` are all set, and skip every Drive entry otherwise. They exercise every
+  Drive read plus one request-only write preview, which never reaches the NAS; no API
+  phase applies a Drive write.
 
 - **`--phase safe` exercises default args only — it is a regression detector, not full coverage.**
   The harness calls every tool with its default argument values. New optional parameters added

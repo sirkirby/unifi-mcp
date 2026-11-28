@@ -65,6 +65,28 @@ def tool_to_field_path(tool_name: str, *, product: str, sibling_list_stems: set[
             "innerspace_get_plan_asset": "planAsset",
         }
         return f"query.innerspace.{fields[tool_name]}" if tool_name in fields else ""
+    if product == "drive":
+        fields = {
+            "drive_get_system_info": "systemInfo",
+            "drive_list_logs": "logs",
+            "drive_list_storage_pools": "storagePools",
+            "drive_get_storage_usage": "storageUsage",
+            "drive_list_disks": "disks",
+            "drive_get_network_throughput": "networkThroughput",
+            "drive_get_fan_profile": "fanProfile",
+            "drive_get_disk_stats": "diskStats",
+            "drive_list_shared_drives": "sharedDrives",
+            "drive_get_shared_drive": "sharedDrive",
+            "drive_get_snapshot_overview": "snapshotOverview",
+            "drive_list_snapshots": "snapshots",
+            "drive_get_file_services": "fileServices",
+            "drive_get_smb_advanced_settings": "smbAdvancedSettings",
+            "drive_get_rsync_settings": "rsyncSettings",
+            "drive_list_nfs_connections": "nfsConnections",
+            "drive_list_users": "users",
+            "drive_list_groups": "groups",
+        }
+        return f"query.drive.{fields[tool_name]}" if tool_name in fields else ""
     if tool_name.startswith("unifi_list_"):
         stem = tool_name[len("unifi_list_") :]
         return f"query.{product}.{_to_camel(stem)}"

@@ -11,7 +11,7 @@ from unifi_core.auth import AuthMethod
 
 CATALOG_RESOURCE = "action_catalog.json"
 SUPPORTED_SCHEMA_VERSION = 1
-PRODUCTS = frozenset({"network", "protect", "access", "sitemanager", "innerspace"})
+PRODUCTS = frozenset({"network", "protect", "access", "sitemanager", "innerspace", "drive"})
 MUTATION_ACTIONS = frozenset({"create", "update", "delete"})
 
 
@@ -147,6 +147,9 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
         # InnerSpace is reached only through a console login session; any other auth is refused, not dispatched.
         if product == "innerspace" and auth_method != "local_only":
             raise CatalogLoadError(f"actions[{index}] must be a session InnerSpace operation")
+        # Drive is reached only through a console login session; any other auth is refused, not dispatched.
+        if product == "drive" and auth_method != "local_only":
+            raise CatalogLoadError(f"actions[{index}] must be a session Drive operation")
         manager_method = _require_string(action, "manager_method", index)
         input_schema = action.get("input_schema")
         if not isinstance(input_schema, dict):
