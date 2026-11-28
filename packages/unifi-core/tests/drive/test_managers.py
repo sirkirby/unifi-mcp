@@ -81,6 +81,74 @@ async def test_storage_pools_report_degraded_raid(connection, console):
     assert (group.current_protection, group.expected_protection) == (0, 1)
 
 
+async def test_storage_usage_splits_each_pool(connection, console):
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", fx.storage_usage())
+
+    first, second = await StorageManager(connection).get_usage()
+
+    assert first.model_dump(exclude_none=True) == {
+        "pool_id": fx.POOL_ID,
+        "capacity_bytes": 15992168120320,
+        "used_bytes": 10826060070912,
+        "available_bytes": 5166108049408,
+        "used_percent": 67.7,
+        "personal_drives_bytes": 0,
+        "shared_drives_bytes": 10825012379648,
+        "m365_bytes": 0,
+        "system_bytes": 1047691264,
+    }
+    assert second.pool_id == fx.OTHER_POOL_ID and second.used_percent == pytest.approx(95.22)
+    assert second.system_bytes == 11418377715712 - 1073741824 - 11400000000000
+
+
+async def test_storage_usage_pool_ids_match_the_pool_list(connection, console):
+    console.reply("GET", "/proxy/drive/api/v2/storage", fx.storage())
+    usage = fx.storage_usage()
+    del usage[fx.OTHER_POOL_ID]
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", usage)
+    manager = StorageManager(connection)
+
+    (pool,) = await manager.list_pools()
+    (pool_usage,) = await manager.get_usage()
+
+    assert pool_usage.pool_id == pool.id
+
+
+async def test_storage_usage_reads_optional_parts_and_skips_a_split_it_cannot_make(connection, console):
+    usage = fx.storage_usage()
+    usage[fx.POOL_ID].update({"usedBySnapshots": 1000})
+    del usage[fx.OTHER_POOL_ID]["poolId"]
+    usage[fx.OTHER_POOL_ID]["iscsiInfo"] = {"usedByIscsiThin": 1, "reservedByIscsiThick": 2, "usedByIscsiThick": 3}
+    usage["not-a-pool"] = "garbage"
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", usage)
+
+    first, second = await StorageManager(connection).get_usage()
+
+    assert first.snapshots_bytes == 1000 and first.system_bytes == 1047691264 - 1000
+    assert second.pool_id == fx.OTHER_POOL_ID and second.system_bytes is None
+
+
+async def test_storage_usage_without_pools_is_empty(connection, console):
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", {})
+
+    assert await StorageManager(connection).get_usage() == []
+
+
+@pytest.mark.parametrize("body", [None, [], "x"])
+async def test_unreadable_storage_usage_is_an_error(connection, console, body):
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", body)
+
+    with pytest.raises(UniFiMalformedResponseError):
+        await StorageManager(connection).get_usage()
+
+
+async def test_storage_usage_missing_endpoint_is_an_error(connection, console):
+    console.reply("GET", "/proxy/drive/api/v2/storage/usage", {"err": {"msg": "not found"}}, status=404)
+
+    with pytest.raises(UniFiOperationError, match="no endpoint"):
+        await StorageManager(connection).get_usage()
+
+
 async def test_disks_skip_empty_bays_unless_asked(connection, console):
     console.reply("GET", "/proxy/drive/api/v2/storage", fx.storage(), always=True)
     manager = StorageManager(connection)

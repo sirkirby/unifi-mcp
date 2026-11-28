@@ -1,4 +1,4 @@
-"""Storage pools, RAID groups and disk slots from ``GET /proxy/drive/api/v2/storage``."""
+"""Storage pools, RAID groups and disk slots from ``GET /proxy/drive/api/v2/storage``, and pool usage."""
 
 from __future__ import annotations
 
@@ -90,6 +90,29 @@ class DiskSlot(BaseModel):
     )
 
 
+class StoragePoolUsage(BaseModel):
+    """What a storage pool's used space is used by."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    pool_id: str | None = Field(default=None, description="Storage pool id, the same id the storage pool list reports")
+    capacity_bytes: int | None = Field(default=None, description="Usable capacity in bytes")
+    used_bytes: int | None = Field(default=None, description="Used space in bytes")
+    available_bytes: int | None = Field(default=None, description="Free space in bytes")
+    used_percent: float | None = Field(default=None, description="Used space as a percentage of capacity")
+    personal_drives_bytes: int | None = Field(default=None, description="Used by personal drives")
+    shared_drives_bytes: int | None = Field(default=None, description="Used by shared drives")
+    snapshots_bytes: int | None = Field(default=None, description="Used by snapshots, when Drive reports it")
+    m365_bytes: int | None = Field(default=None, description="Used by Microsoft 365 backups, when Drive reports it")
+    system_bytes: int | None = Field(
+        default=None,
+        description=(
+            "Used by everything else (system and other data): used space minus the parts above, as the Drive UI "
+            "shows it. Absent when the pool has iSCSI or deduplication data, which Drive counts differently."
+        ),
+    )
+
+
 def _int(value: Any) -> int | None:
     found = number(value)
     return int(found) if found is not None else None
@@ -169,4 +192,33 @@ def disk_slot_from_api(raw: Any, *, bay_type: str = "disk") -> DiskSlot:
         smart_read_error_count=present(_int(disk.get("smartReadErrorCount"))),
         risk_reasons=as_list(disk.get("riskReasons")),
         incompatible_reasons=as_list(disk.get("incompatibleReasons")),
+    )
+
+
+def storage_pool_usage_from_api(raw: Any, *, pool_id: str | None = None) -> StoragePoolUsage:
+    """One pool's entry from ``storage/usage``, which is keyed by pool id; ``pool_id`` is that key."""
+    usage = as_dict(raw)
+    capacity = _int(usage.get("capacity"))
+    used = _int(usage.get("used"))
+    personal = _int(usage.get("usedByPersonalDrives"))
+    shared = _int(usage.get("usedBySharedDrives"))
+    snapshots = _int(usage.get("usedBySnapshots"))
+    m365 = _int(usage.get("usedByM365"))
+    system = None
+    if used is not None and personal is not None and shared is not None:
+        # The Drive UI moves iSCSI and deduplicated data around before splitting; leave those pools alone.
+        if usage.get("iscsiInfo") is None and not usage.get("deduplicationEverEnabled"):
+            remainder = used - personal - shared - (snapshots or 0) - (m365 or 0)
+            system = remainder if remainder >= 0 else None
+    return StoragePoolUsage(
+        pool_id=text(usage.get("poolId")) or pool_id,
+        capacity_bytes=capacity,
+        used_bytes=used,
+        available_bytes=_int(usage.get("available")),
+        used_percent=round(used * 100 / capacity, 2) if capacity and used is not None else None,
+        personal_drives_bytes=personal,
+        shared_drives_bytes=shared,
+        snapshots_bytes=snapshots,
+        m365_bytes=m365,
+        system_bytes=system,
     )

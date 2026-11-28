@@ -10,8 +10,10 @@ from unifi_core.drive.models.storage import (
     EMPTY_DISK_STATE,
     DiskSlot,
     StoragePool,
+    StoragePoolUsage,
     disk_slot_from_api,
     storage_pool_from_api,
+    storage_pool_usage_from_api,
 )
 from unifi_core.exceptions import UniFiMalformedResponseError
 
@@ -23,7 +25,7 @@ class StorageOverview:
 
 
 class StorageManager:
-    """Reads ``GET /proxy/drive/api/v2/storage``."""
+    """Reads ``GET /proxy/drive/api/v2/storage`` and ``storage/usage``."""
 
     def __init__(self, connection: DriveConnectionManager) -> None:
         self._connection = connection
@@ -50,4 +52,15 @@ class StorageManager:
             disk
             for disk in disks
             if (include_empty or disk.state != EMPTY_DISK_STATE) and (include_cache or disk.bay_type != "cache")
+        ]
+
+    async def get_usage(self) -> list[StoragePoolUsage]:
+        """Each pool's used space, split by what uses it. Pool ids match :meth:`list_pools`."""
+        raw = await self._connection.get(drive_path(2, "storage", "usage"))
+        if not isinstance(raw, dict):
+            raise UniFiMalformedResponseError("UniFi Drive returned an unreadable storage usage.")
+        return [
+            storage_pool_usage_from_api(usage, pool_id=key or None)
+            for key, usage in raw.items()
+            if isinstance(usage, dict)
         ]

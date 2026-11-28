@@ -403,3 +403,32 @@ def logs(*, next_token: str | None = None) -> dict[str, Any]:
 
 def log_definitions() -> dict[str, Any]:
     return copy.deepcopy(_LOG_DEFINITIONS)
+
+
+# Pool usage, captured from UniFi OS 6.0.18 / Drive 4.4.31; the second pool's id is synthetic.
+OTHER_POOL_ID = "88888888-8888-4888-8888-888888888888"
+
+_STORAGE_USAGE = {
+    POOL_ID: {
+        "poolId": POOL_ID,
+        "used": 10826060070912,
+        "available": 5166108049408,
+        "capacity": 15992168120320,
+        "usedByPersonalDrives": 0,
+        "usedBySharedDrives": 10825012379648,
+        "usedByM365": 0,
+    },
+    OTHER_POOL_ID: {
+        "poolId": OTHER_POOL_ID,
+        "used": 11418377715712,
+        "available": 573028368384,
+        "capacity": 11991406084096,
+        "usedByPersonalDrives": 1073741824,
+        "usedBySharedDrives": 11400000000000,
+        "usedByM365": 0,
+    },
+}
+
+
+def storage_usage() -> dict[str, Any]:
+    return copy.deepcopy(_STORAGE_USAGE)
