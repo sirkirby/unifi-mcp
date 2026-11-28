@@ -1,4 +1,4 @@
-"""File service tools for the UniFi Drive MCP server: SMB, NFS and Time Machine."""
+"""File service tools for the UniFi Drive MCP server: SMB, NFS, Time Machine and rsync."""
 
 import logging
 from typing import Annotated, Any, Dict, Literal
@@ -29,6 +29,44 @@ async def drive_get_file_services() -> Dict[str, Any]:
         return tool_success(services.model_dump(exclude_none=True))
     except Exception as exc:
         return tool_failure("get file services", exc)
+
+
+@server.tool(
+    name="drive_get_smb_advanced_settings",
+    description=(
+        "Returns whether SMB Trash for personal drives is on (files removed over SMB go to Trash instead of "
+        "being deleted) and whether every personal drive could move to it."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    permission_category="file_service",
+    permission_action="read",
+)
+async def drive_get_smb_advanced_settings() -> Dict[str, Any]:
+    """Get the SMB advanced settings."""
+    try:
+        settings = await file_service_manager.get_smb_advanced_settings()
+        return tool_success(settings.model_dump(exclude_none=True))
+    except Exception as exc:
+        return tool_failure("get SMB advanced settings", exc)
+
+
+@server.tool(
+    name="drive_get_rsync_settings",
+    description=(
+        "Returns whether the rsync service is on, whether a dedicated rsync account is set and its username "
+        "(never its password), and whether SSH, which rsync needs, is on."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    permission_category="file_service",
+    permission_action="read",
+)
+async def drive_get_rsync_settings() -> Dict[str, Any]:
+    """Get the rsync service settings."""
+    try:
+        settings = await file_service_manager.get_rsync_settings()
+        return tool_success(settings.model_dump(exclude_none=True))
+    except Exception as exc:
+        return tool_failure("get rsync settings", exc)
 
 
 @server.tool(

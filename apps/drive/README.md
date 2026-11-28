@@ -121,6 +121,8 @@ Read-only:
 | `drive_list_shared_drives` | Shared drives with pool, usage, quota, encryption, snapshot and remote-backup flags |
 | `drive_get_shared_drive` | One shared drive |
 | `drive_get_file_services` | Whether SMB, NFS and Time Machine are on, and the interfaces clients connect to |
+| `drive_get_smb_advanced_settings` | Whether SMB Trash for personal drives is on, and its status |
+| `drive_get_rsync_settings` | Whether rsync is on, whether an rsync account is set (username only), and whether SSH is on |
 | `drive_list_nfs_connections` | NFS clients, the shared drives each may mount (rw/ro) and the export path to mount |
 | `drive_list_logs` | The system log, newest first: time, severity, category, type, event and message, with filters and paging |
 
@@ -172,7 +174,7 @@ UNIFI_POLICY_DRIVE_UPDATE=false                   # no updates of any kind on th
 
 - [Configuration](docs/configuration.md): the NAS login, TLS, settings, operation gate, HTTP, Docker Compose, registration modes
 - [Permissions](docs/permissions.md): previews, permission mode, policy gates, read-only mode, redaction
-- [Tool catalog](docs/tools.md): the 13 tools, parameters, NFS behavior and write previews
+- [Tool catalog](docs/tools.md): the 15 tools, parameters, NFS behavior and write previews
 - [Troubleshooting](docs/troubleshooting.md): setup mode, login and access errors, file services and NFS, TLS, Docker
 - [MCP discovery and meta-tools](../../docs/tool-index.md): `tools/list`, `drive_tool_index` and `drive_execute`
 
