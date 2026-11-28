@@ -111,7 +111,9 @@ async def test_write_outcome_matrix(manager, console, case, walls, applied, succ
         del shapes[0]["position"]
     console.load_project(state)
     if case == "applied_then_timed_out":
-        manager._timeout = aiohttp.ClientTimeout(total=0.05)
+        # The session takes this budget when initialize() opens it, so the login runs
+        # under it too: leave a slow runner room to log in before the write hangs.
+        manager._timeout = aiohttp.ClientTimeout(total=1.0)
         console.apply_then_hang("POST", SHAPE_CHANGE_PATH)
     elif case == "dropped_before_applying":
         console.drop_connection("POST", SHAPE_CHANGE_PATH, apply=False)
