@@ -26,7 +26,7 @@ configured.
 ## Discover and read
 
 It provides 22 domain tools, plus 6 meta-tools.
-Seven domain tools read and four write. In default lazy mode, start with
+Eighteen domain tools read and four write. In default lazy mode, start with
 `drive_tool_index`, filtered by name or search, and request
 `include_schemas=True` for the intended tool. Use `drive_execute` with its
 `tool` and `arguments` fields when the domain tool is not directly listed.
@@ -35,10 +35,22 @@ a time; `drive_batch_status` and
 `drive_batch_cancel` follow and withdraw its jobs, and `drive_load_tools`
 loads selected tools for clients that handle tool-list changes.
 
-Read [the tool reference](references/drive-tools.md) for all eleven tools
+Read [the tool reference](references/drive-tools.md) for all twenty-two tools
 before constructing a call. `drive_list_disks` hides empty bays unless called
 with `include_empty=true`. Shared drive IDs from `drive_list_shared_drives` are
 what the NFS tools take.
+
+- `drive_list_logs` reads newest first. Pass its `next_cursor` back as `cursor`
+  with the same filters for the next page. An unknown category or type is an
+  error, not an empty log.
+- `drive_get_disk_stats` summarizes each disk over the window. Leave
+  `include_samples` off unless per-bucket values are needed: they add about
+  12 KB per disk per day.
+- `drive_list_snapshots` takes a shared drive's name, not its ID. Scheduled
+  snapshots have no name; their `description` (`Scheduled Snapshot`)
+  identifies them.
+- `drive_list_users` gives each user's access level: owner, admin (any role)
+  or user.
 
 ## Writes: preview first
 

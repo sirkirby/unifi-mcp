@@ -371,7 +371,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 **Tips:**
 - This is the only category with a delete tool — requires `UNIFI_POLICY_NETWORK_ACL_RULES_DELETE=true`
-- Order is `acl_index` (lower is evaluated first). To reorder, read the chain with `unifi_list_acl_rules`, then set `acl_index` on the rules that move with `unifi_update_acl_rule`.
+- Order is `acl_index` (lower is evaluated first). To reorder a whole chain, pass every rule ID from `unifi_list_acl_rules` in the new order to `unifi_set_acl_rule_order`; it previews first. To move one rule, set its `acl_index` with `unifi_update_acl_rule`.
 
 ---
 
