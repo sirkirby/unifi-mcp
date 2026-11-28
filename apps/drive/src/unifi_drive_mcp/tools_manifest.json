@@ -420,7 +420,7 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Returns each disk's temperature, read and write throughput (KB/s) and bad sector count over the last `hours`, summarized per disk. Buckets are 15 minutes under 7 days, 1 hour under 30 days, 6 hours beyond. Set include_samples for the per-bucket values.",
+      "description": "Returns each disk's temperature, read and write throughput (KB/s) and bad sector count over the last `hours`, summarized per disk. Buckets are 15 minutes under 7 days, 1 hour under 30 days, 6 hours beyond. Set include_samples for the per-bucket values; they are large over long windows.",
       "name": "drive_get_disk_stats",
       "permission_action": "read",
       "permission_category": "performance",
@@ -434,7 +434,7 @@
               "type": "integer"
             },
             "include_samples": {
-              "description": "Also return every bucket's values for each disk (default false)",
+              "description": "Also return every bucket's values for each disk (default false). Adds one entry per bucket per disk, about 12 KB per disk per day at 15-minute buckets and up to about 1 MB for a full NAS over a week or more; use a short window",
               "type": "boolean"
             }
           },
