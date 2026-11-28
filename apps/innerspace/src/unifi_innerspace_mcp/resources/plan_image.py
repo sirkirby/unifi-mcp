@@ -6,9 +6,8 @@ template declares one MIME type. The image is fetched on demand through the same
 manager call as ``innerspace_get_plan_asset``: only the plan's own image address
 is ever requested, and the size cap and the type and content checks apply here too.
 
-The plan's metadata is read first, and a plan whose image is the other type is
-refused with fixed text naming the template that serves it, before anything is
-downloaded. No tool returns the image inline.
+A plan whose image is the other type is refused with fixed text naming the
+template that serves it, and its image is never downloaded. No tool returns the image inline.
 
 The server registers the template with :func:`register_plan_image_resource`
 only when ``innerspace_get_plan_asset`` is enabled, since both read the same
@@ -60,18 +59,15 @@ class _PlanImageUriFilter(logging.Filter):
 async def _fetch(plan_id: str, content_type: str) -> tuple[str, str | None]:
     """The plan's image type, and its base64 image when that is ``content_type``."""
     try:
-        found = (await floor_plan_manager.get_plan_asset(plan_id))["content_type"]
-        if found != content_type:
-            return found, None
-        asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=True)
-        return asset["content_type"], asset["image_base64"]
+        asset = await floor_plan_manager.get_plan_asset(plan_id, include_image=True, image_type=content_type)
+        return asset["content_type"], asset.get("image_base64")
     except Exception as e:
         # Fixed text, built and logged the way the tools do it: class only.
         raise ResourceError(tool_failure(_OPERATION, e)["error"]) from None
 
 
 async def _read_plan_image(plan_id: str, content_type: str) -> bytes:
-    """Fetch a plan's image bytes, after checking from its metadata that it is ``content_type``.
+    """Fetch a plan's image bytes; the core downloads the image only when it is ``content_type``.
 
     A resource read is not a tool call, so it takes its own read slot at the
     console's operation gate, with a direct call's wait budget.

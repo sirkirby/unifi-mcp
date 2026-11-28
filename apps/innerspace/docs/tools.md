@@ -222,13 +222,13 @@ To place a returned position (`x`, `y`) on the plan image, take W = `width_px`, 
 1. Back to the console's plan units: `plan_x = x*k - W/2` and `plan_y = H/2 - y*k`.
 2. Then to image pixels: `px = (plan_x - ox)/s + W/2` and `py = H/2 - (plan_y - oy)/s`.
 
-With `s = 1` and `(ox, oy) = (0, 0)` this reduces to `px = x*k` and `py = y*k`. When the console sent no image scale or offset, those fields are `null`: do not assume a value, and treat the position as not placeable on the image.
+With `s = 1` and `(ox, oy) = (0, 0)` this reduces to `px = x*k` and `py = y*k`. When the console sent no image scale or offset, or the map scales y differently from x, those fields are `null`: do not assume a value, and treat the position as not placeable on the image.
 
 This is geometry only. It does not show that a device is where the plan says it is, and it says nothing about radio coverage.
 
 ## The plan image resources
 
-Two resource templates return a plan's image, one per image type, since a template declares one MIME type: `innerspace://plans/{plan_id}/image` (`image/png`) and `innerspace://plans/{plan_id}/image.jpg` (`image/jpeg`). `innerspace_get_plan_asset` returns the right URI for each plan. They are fetched on demand and do not support subscriptions. The plan's metadata is read first, and a plan whose image is the other type is refused with fixed text naming the template that serves it, before anything is downloaded.
+Two resource templates return a plan's image, one per image type, since a template declares one MIME type: `innerspace://plans/{plan_id}/image` (`image/png`) and `innerspace://plans/{plan_id}/image.jpg` (`image/jpeg`). `innerspace_get_plan_asset` returns the right URI for each plan. They are fetched on demand and do not support subscriptions. The plan's metadata is read once, and a plan whose image is the other type is refused with fixed text naming the template that serves it, and its image is never downloaded.
 
 The image is capped at 8,000,000 bytes. A larger image, or a response that is not an image of the type the plan's address promises (checked by content type and file header), is refused with fixed text rather than returned. Only the plan's own image address is ever requested, and only when it matches the console's asset address pattern and the plan's map in the project; no file name comes from the caller. Each read takes a read slot at the console's operation gate, like a tool call.
 

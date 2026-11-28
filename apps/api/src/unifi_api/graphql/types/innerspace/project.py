@@ -5,7 +5,7 @@ from __future__ import annotations
 import strawberry
 from strawberry.scalars import JSON
 
-from unifi_api.graphql.types.innerspace._base import DESCRIPTION, Projection
+from unifi_api.graphql.types.innerspace._base import DESCRIPTION, IMAGE_SCALE, Projection
 
 
 @strawberry.type(description=DESCRIPTION)
@@ -25,7 +25,7 @@ class InnerSpacePlanSummary(Projection):
     site_id: str | None = strawberry.field(description="InnerSpace site id")
     scale_per_unit: float | None = strawberry.field(description="Plan units per metre, or per foot when imperial")
     scale_missing: bool = strawberry.field(description="True when the plan has no usable scale")
-    image_scale: float | None = strawberry.field(description="The plan map's horizontal image scale, if sent")
+    image_scale: float | None = strawberry.field(description=IMAGE_SCALE)
     image_offset: list[float] | None = strawberry.field(description="The plan map's image offset (x, y)")
     shape_counts: JSON = strawberry.field(description="Number of shapes on the plan, by shape type")
 
