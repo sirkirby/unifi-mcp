@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_core.exceptions import UniFiAuthError
-from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
+from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager, UnknownSourceHost
 from unifi_core.network.models.traffic_flows import TrafficFlowQuery
 
 _EMPTY_RESPONSE = {
@@ -523,9 +523,11 @@ async def test_source_name_with_no_matching_host_raises():
     conn = _make_connection_with_filter_data()
     mgr = TrafficFlowManager(conn)
 
-    with pytest.raises(ValueError, match="No-Such-Host"):
+    with pytest.raises(UnknownSourceHost, match="No-Such-Host") as caught:
         await mgr.get_traffic_flows(TrafficFlowQuery(time_from=1, time_to=2, source_host=["No-Such-Host"]))
 
+    assert caught.value.name == "No-Such-Host"
+    assert isinstance(caught.value, ValueError)
     assert all(call.args[0].method == "get" for call in conn.request.await_args_list)
 
 

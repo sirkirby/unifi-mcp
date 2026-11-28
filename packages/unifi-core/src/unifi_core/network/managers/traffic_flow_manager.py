@@ -41,6 +41,19 @@ _RESULT_LIMIT_MARGIN = 100
 _STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
 
 
+class UnknownSourceHost(ValueError):
+    """A ``source_host`` filter name that matched no host in filter data or the client list.
+
+    A ``ValueError``, so callers that already catch one keep working. ``name`` is
+    the caller's own value; a surface that answers with fixed text names only
+    the filter.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
+        self.name = name
+
+
 class DpiCatalogProvider(Protocol):
     """Narrow dependency used for read-only traffic-flow DPI annotation."""
 
@@ -217,7 +230,7 @@ class TrafficFlowManager:
                     for client in client_matches:
                         add(self._client_raw(client).get("mac"))
                     continue
-            raise ValueError(f"source_host {name!r} matched no host in traffic-flow filter data or the client list")
+            raise UnknownSourceHost(name)
         return resolved
 
     async def get_traffic_flows(self, query: TrafficFlowQuery) -> Dict[str, Any]:
