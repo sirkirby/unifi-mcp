@@ -26,13 +26,17 @@ Drive is for a UniFi NAS (UNAS). The NAS is its own console, not the gateway, so
 it needs its own host and a local account on the NAS; see
 [Drive (UniFi NAS)](#drive-unifi-nas).
 
+InnerSpace is a console server for the floor-plan application on a UniFi OS
+console. Offer it when the user wants to read or edit floor plans, walls or
+device placements; see [InnerSpace (console login)](#innerspace-console-login).
+
 ## Instructions for the installing agent
 
 Before changing anything:
 
 1. Identify the user's operating system and agent client.
-2. Ask whether they need Network, Protect, Access, Site Manager, Drive, or more
-   than one product.
+2. Ask whether they need Network, Protect, Access, Site Manager, Drive,
+   InnerSpace, or more than one product.
 3. Check that `uvx` is available. If it is missing, explain the official
    [uv installation options](https://docs.astral.sh/uv/getting-started/installation/)
    and wait before installing software globally.
@@ -228,6 +232,7 @@ npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-pro
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-access
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-sitemanager
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-drive
+npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-innerspace
 npx skills add https://github.com/sirkirby/unifi-mcp/tree/main/plugins/unifi-intelligence
 ```
 
@@ -413,6 +418,45 @@ first tool call logs in. Without a host the server lists only
 `drive_setup_status`, which explains what to set. See
 [Drive configuration](../apps/drive/docs/configuration.md).
 
+## InnerSpace (console login)
+
+Install the `unifi-innerspace` plugin from the same marketplace
+(`/plugin install unifi-innerspace@unifi-plugins` in Claude Code, `/plugins` in
+Codex, `openclaw plugins install unifi-innerspace --marketplace
+https://github.com/sirkirby/unifi-mcp` in OpenClaw) and run its setup skill, or
+register the `unifi-innerspace-mcp` package manually. Setup differs from the
+other console servers:
+
+- It uses the console login only: a host, a local username and one password
+  provider. Never offer `UNIFI_API_KEY` or any API key; the server has no API
+  key setting.
+- Pin the console's certificate with `UNIFI_INNERSPACE_SSL_FINGERPRINT` before
+  asking for a password provider. Without verification or a pin, anyone on the
+  network path can read the password at login.
+- Give the password as `UNIFI_INNERSPACE_PASSWORD_FILE` (a file only the user
+  can read) or `UNIFI_INNERSPACE_PASSWORD_COMMAND`, exactly one of them. Do not
+  ask for the password in chat. The console port is 443 unless the user says
+  otherwise; 3005 is the server's own HTTP port, not the console's.
+- Its writes preview first and apply only with `confirm=true`.
+
+For a manual install, register a local stdio server whose command is `uvx`
+with the arguments `--python-preference`, `system`, and
+`unifi-innerspace-mcp@latest`. In OpenCode, for example:
+
+```bash
+opencode mcp add unifi-innerspace \
+  --env 'UNIFI_INNERSPACE_HOST=192.168.1.1' \
+  --env 'UNIFI_INNERSPACE_SSL_FINGERPRINT=<sha256 fingerprint>' \
+  --env 'UNIFI_INNERSPACE_USERNAME=<local username>' \
+  --env 'UNIFI_INNERSPACE_PASSWORD_FILE=/absolute/path/to/innerspace-password' \
+  -- uvx --python-preference system unifi-innerspace-mcp@latest
+```
+
+Verify with `innerspace_get_status`, which says whether InnerSpace is
+installed and running. Without a host the server lists only
+`innerspace_setup_status`. See
+[InnerSpace configuration](../apps/innerspace/docs/configuration.md).
+
 ## Server names and variables
 
 | Product | MCP name | Package | Minimum connection variables |
@@ -422,6 +466,7 @@ first tool call logs in. Without a host the server lists only
 | Access | `unifi-access` | `unifi-access-mcp@latest` | `UNIFI_ACCESS_HOST`, plus a supported local credential or API-key provider |
 | Site Manager | `unifi-sitemanager` | `unifi-sitemanager-mcp@latest` | One `UNIFI_SITEMANAGER_API_KEY*` provider; no host |
 | Drive | `unifi-drive` | `unifi-drive-mcp@latest` | `UNIFI_DRIVE_HOST` (the NAS), `UNIFI_DRIVE_USERNAME`, one `UNIFI_DRIVE_PASSWORD*` provider |
+| InnerSpace | `unifi-innerspace` | `unifi-innerspace-mcp@latest` | `UNIFI_INNERSPACE_HOST`, `UNIFI_INNERSPACE_USERNAME`, one `UNIFI_INNERSPACE_PASSWORD*` provider; no API key |
 
 See each product's configuration documentation for ports, sites, API-key
 limitations, TLS verification, and policy gates:
@@ -431,6 +476,7 @@ limitations, TLS verification, and policy gates:
 - [Access configuration](../apps/access/docs/configuration.md)
 - [Site Manager configuration](../apps/sitemanager/docs/configuration.md)
 - [Drive configuration](../apps/drive/docs/configuration.md)
+- [InnerSpace configuration](../apps/innerspace/docs/configuration.md)
 
 ## Verification checklist
 

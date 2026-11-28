@@ -7,7 +7,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for UniFi Inn
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 
-The InnerSpace server is in beta. There is no plugin for it yet: add it to your MCP client with `uvx` or Docker, as described below.
+The InnerSpace server is in beta. In Claude Code, `/plugin install unifi-innerspace@unifi-plugins` installs it with a setup skill; or add it to your MCP client with `uvx` or Docker, as described below.
 
 ## How it connects
 
@@ -28,7 +28,7 @@ uvx unifi-innerspace-mcp@latest
 docker pull ghcr.io/sirkirby/unifi-innerspace-mcp:latest
 ```
 
-There is no Claude Code, Codex or OpenClaw plugin for this server yet. Register it with your MCP client as shown in [Claude Desktop](#claude-desktop).
+In Claude Code, Codex and OpenClaw, install the `unifi-innerspace` plugin (see above). For other clients, register it as shown in [Claude Desktop](#claude-desktop).
 
 ### Claude Desktop
 

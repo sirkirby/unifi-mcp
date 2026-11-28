@@ -276,7 +276,7 @@ class Fixtures:
     def check_script_parity(self):
         """Keep shipped setup implementations byte-identical across products."""
         reference = self.repo / "plugins/unifi-network/scripts"
-        for product in ("network", "protect", "access", "sitemanager", "drive"):
+        for product in ("network", "protect", "access", "sitemanager", "drive", "innerspace"):
             scripts = self.repo / f"plugins/unifi-{product}/scripts"
             for filename in (
                 "set-env.sh",
@@ -302,6 +302,7 @@ class Fixtures:
         for target in ("claude", "codex", "openclaw"):
             self.sitemanager_scenario(target)
             self.drive_scenario(target)
+            self.innerspace_scenario(target)
 
     def drive_scenario(self, target):
         """NAS setup through each shipped wrapper: Drive-scoped settings only, using synthetic secrets."""
@@ -714,6 +715,288 @@ class Fixtures:
                     "cloud shadowing entry gives the explicit refusal",
                 )
                 self.check(state() == before, "cloud shadow refusal preserves entry and settings file")
+
+    def innerspace_scenario(self, target):
+        """Console-login and write-gate setup through each shipped wrapper, using synthetic secrets."""
+        plugin = self.repo / "plugins/unifi-innerspace"
+        scripts = plugin / "scripts"
+        workspace = self.root / ("innerspace-" + target)
+        bindir = workspace / "bin"
+        bindir.mkdir(parents=True)
+        for name in ("uvx", target):
+            client_executable(bindir, name)
+        provider_marker = workspace / "provider-ran"
+        executable(
+            bindir, "fixture-provider", "from pathlib import Path\nPath(" + repr(str(provider_marker)) + ").touch()\n"
+        )
+        password = 'FAKE-innerspace-only "quoted" Ω'
+        provider_file = workspace / "provider-password"
+        provider_file.write_text(password, encoding="utf-8")
+        output_marker = workspace / "output-marker"
+        output_marker.write_text(password, encoding="utf-8")
+        config = workspace / "client"
+        config.mkdir()
+        environment = {
+            k: v for k, v in os.environ.items() if not k.startswith(("UNIFI_", "CODEX_", "CLAUDE_", "OPENCLAW_"))
+        }
+        environment.update(
+            HOME=str(workspace),
+            USERPROFILE=str(workspace),
+            CODEX_HOME=str(config),
+            CLAUDE_CONFIG_DIR=str(config),
+            OPENCLAW_CONFIG_PATH=str(config / "openclaw.json"),
+            OPENCLAW_STATE_DIR=str(config),
+            PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+            FIXTURE_PLUGIN_ROOT=str(plugin),
+            FIXTURE_ARGV=str(workspace / "argv.jsonl"),
+            FIXTURE_OUTPUT_MARKER_FILE=str(output_marker),
+            PYTHONIOENCODING="cp1252",
+        )
+        # Shared and other-product values that must never become InnerSpace settings.
+        shared = {"UNIFI_HOST": "192.0.2.99", "UNIFI_ACCESS_HOST": "192.0.2.1"}
+        for name, value in (("PASSWORD", "FAKE-shared-console-password"), ("API_KEY", "FAKE-shared-console")):
+            shared["UNIFI_" + name] = value
+        environment.update(shared)
+        (config / "config.toml").write_text('model = "fixture"\n', encoding="utf-8")
+        (config / "openclaw.json").write_text('{"keep":true}\n', encoding="utf-8")
+        settings = workspace / ".config/unifi-mcp/innerspace.env"
+        legacy_path = workspace / ".claude/settings.local.json"
+        (workspace / "argv.jsonl").touch()
+        base = "UNIFI_INNERSPACE_PASSWORD"
+        login = {"UNIFI_INNERSPACE_HOST": "192.0.2.10", "UNIFI_INNERSPACE_USERNAME": "fixture-user"}
+        # A command provider's arguments can name a vault item; setup never prints them.
+        command = "fixture-provider FAKE-innerspace-vault-item"
+        module = setup_module(scripts)
+
+        def run(name, patch=None, extra=(), env=None):
+            if self.powershell:
+                invocation = [
+                    self.powershell,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(scripts / (name + ".ps1")),
+                    "-Target",
+                    target,
+                ]
+                if patch is not None:
+                    invocation += ["-InputJson"]
+            else:
+                invocation = [self.shell, str(scripts / (name + ".sh")), "--target", target]
+                if patch is not None:
+                    invocation += ["--input-json"]
+            result = subprocess.run(
+                invocation + list(extra),
+                env=env or environment,
+                cwd=workspace,
+                input=json.dumps(patch, ensure_ascii=False).encode("utf-8") if patch is not None else b"",
+                capture_output=True,
+                timeout=60,
+            )
+            output = result.stdout + result.stderr
+            for private in (b"FAKE-innerspace-only", b"FAKE-innerspace-vault-item", b"FAKE-shared-console"):
+                self.check(private not in output, "innerspace values absent from wrapper output")
+            self.check(
+                "FAKE-innerspace" not in (workspace / "argv.jsonl").read_text(encoding="utf-8"),
+                "innerspace values absent from client argv",
+            )
+            return result
+
+        def state():
+            return {
+                str(p): p.read_bytes() if p.exists() else None
+                for p in (
+                    settings,
+                    config / "settings.json",
+                    config / "fake-keychain.json",
+                    config / "config.toml",
+                    config / "openclaw.json",
+                    legacy_path,
+                )
+            }
+
+        def configured():
+            if target == "claude":
+                saved = json.loads((config / "settings.json").read_text(encoding="utf-8"))
+                options = saved["pluginConfigs"]["unifi-innerspace@fixture-market"]["options"]
+                return {
+                    variable: options[option]
+                    for variable, option in (
+                        ("UNIFI_INNERSPACE_HOST", "host"),
+                        ("UNIFI_INNERSPACE_USERNAME", "username"),
+                        (base + "_FILE", "password_file"),
+                        (base + "_COMMAND", "password_command"),
+                        ("UNIFI_POLICY_INNERSPACE_CREATE", "policy_create"),
+                        ("UNIFI_POLICY_INNERSPACE_UPDATE", "policy_update"),
+                        ("UNIFI_POLICY_INNERSPACE_DELETE", "policy_delete"),
+                        ("UNIFI_INNERSPACE_TOOL_PERMISSION_MODE", "permission_mode"),
+                    )
+                    if options.get(option)
+                }
+            return module.read_settings(settings)
+
+        self.check(run("check-prereqs").returncode == 0, "innerspace prerequisites without settings")
+        self.check(not settings.exists(), "innerspace check creates no settings")
+        self.check(run("set-env", {**login, base: password}).returncode == 0, "innerspace raw password via stdin")
+        if target == "claude":
+            chain = json.loads((config / "fake-keychain.json").read_text(encoding="utf-8"))
+            self.check(chain["unifi-innerspace@fixture-market"]["password"] == password, "innerspace keychain")
+            self.check(
+                password not in (config / "settings.json").read_text(encoding="utf-8"),
+                "innerspace raw password absent from ordinary Claude options",
+            )
+            self.check(configured() == login, "innerspace Claude options hold only the login")
+            # Model a future client that supports clearing a keychain value.
+            environment["FIXTURE_CLAUDE_VERSION"] = "99.0.0"
+            environment["FIXTURE_CLAUDE_CLEARS"] = "1"
+        else:
+            # The first bundled setup also saves the writes off and confirmation on.
+            first = module.first_setup_defaults("INNERSPACE")
+            self.check(
+                first.keys()
+                == {"UNIFI_POLICY_INNERSPACE_" + a for a in ("CREATE", "UPDATE", "DELETE")}
+                | {"UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"}
+                and set(first.values()) == {"false", "confirm"},
+                "innerspace first setup turns writes off",
+            )
+            self.check(
+                module.read_settings(settings) == {**login, base: password, **first}, "innerspace settings scoped"
+            )
+            if os.name != "nt":
+                self.check(settings.stat().st_mode & 0o777 == 0o600, "innerspace settings private")
+        self.check(run("set-env", {base + "_FILE": str(provider_file)}).returncode == 0, "innerspace file provider")
+        self.check(configured().get(base + "_FILE") == str(provider_file), "innerspace file provider retained")
+        self.check(run("set-env", {base + "_COMMAND": command}).returncode == 0, "innerspace command provider")
+        first = {} if target == "claude" else module.first_setup_defaults("INNERSPACE")
+        self.check(configured() == {**login, base + "_COMMAND": command, **first}, "innerspace command replaces file")
+        self.check(not provider_marker.exists(), "innerspace setup never executes the provider")
+        values = {base: password, base + "_FILE": str(provider_file), base + "_COMMAND": command}
+        for first, second in ((base, base + "_FILE"), (base, base + "_COMMAND"), (base + "_FILE", base + "_COMMAND")):
+            before = state()
+            self.check(
+                run("set-env", {first: values[first], second: values[second]}).returncode != 0,
+                "innerspace refuses two password forms",
+            )
+            self.check(state() == before, "innerspace ambiguity changes nothing")
+        for rejected in (
+            "UNIFI_INNERSPACE_API_KEY",
+            "UNIFI_INNERSPACE_API_KEY_FILE",
+            "UNIFI_INNERSPACE_API_KEY_COMMAND",
+            "UNIFI_API_KEY",
+            "UNIFI_HOST",
+            "UNIFI_USERNAME",
+            "UNIFI_PASSWORD",
+            "UNIFI_PASSWORD_FILE",
+            "UNIFI_INNERSPACE_SITE",
+            "UNIFI_POLICY_INNERSPACE_WALLS_DELETE",
+            "UNIFI_AUTO_CONFIRM",
+        ):
+            before = state()
+            result = run("set-env", {rejected: "FAKE-rejected"})
+            self.check(result.returncode != 0, "innerspace refuses settings outside its console login")
+            if "API_KEY" in rejected:
+                self.check(b"never an API key" in result.stdout + result.stderr, "innerspace names the API key refusal")
+            self.check(state() == before, "innerspace rejected input changes nothing")
+        # Write gates: valid values, bypass included, are saved; other modes and non-boolean values are refused
+        # unchanged.
+        mode_key = "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE"
+        for key, value in (
+            (mode_key, "FAKE-rejected"),
+            ("UNIFI_POLICY_INNERSPACE_DELETE", "FAKE-rejected"),
+            ("UNIFI_POLICY_INNERSPACE_CREATE", "yes"),
+        ):
+            before = state()
+            self.check(run("set-env", {key: value}).returncode != 0, f"innerspace refuses {key}={value}")
+            self.check(state() == before, "innerspace refused gate value changes nothing")
+        gates = {
+            "UNIFI_POLICY_INNERSPACE_CREATE": "true",
+            "UNIFI_POLICY_INNERSPACE_UPDATE": "false",
+            "UNIFI_POLICY_INNERSPACE_DELETE": "true",
+            mode_key: "confirm",
+        }
+        self.check(run("set-env", gates).returncode == 0, "innerspace accepts write gates and confirm mode")
+        if target == "claude":
+            # Claude stores booleans as booleans and leaves the default (false, confirm) unset.
+            expected = {**login, base + "_COMMAND": command}
+            expected.update(UNIFI_POLICY_INNERSPACE_CREATE=True, UNIFI_POLICY_INNERSPACE_DELETE=True)
+            saved = json.loads((config / "settings.json").read_text(encoding="utf-8"))
+            options = saved["pluginConfigs"]["unifi-innerspace@fixture-market"]["options"]
+            self.check(
+                options.get("policy_update") in (None, False) and options.get("permission_mode") in (None, "confirm"),
+                "innerspace claude keeps update off and confirm mode",
+            )
+        else:
+            expected = {**login, base + "_COMMAND": command, **gates}
+        self.check(configured() == expected, "innerspace saves write gates beside the login and keeps the provider")
+        self.check(run("set-env", {mode_key: "bypass"}).returncode == 0, "innerspace accepts bypass mode")
+        self.check(configured() == {**expected, mode_key: "bypass"}, "innerspace saves bypass mode and nothing else")
+        switches = {"UNIFI_INNERSPACE_READ_ONLY": "true", "UNIFI_INNERSPACE_REQUIRE_PREVIEW_TOKEN": "false"}
+        if target == "claude":
+            # The Claude plugin exposes no option for these two switches, so setup refuses them.
+            before = state()
+            self.check(run("set-env", switches).returncode != 0, "innerspace claude has no read-only option")
+            self.check(state() == before, "innerspace refused switches change nothing")
+        else:
+            self.check(run("set-env", switches).returncode == 0, "innerspace accepts read-only and preview switches")
+            self.check(
+                module.read_settings(settings).items() >= switches.items(),
+                "innerspace saves read-only and preview switches",
+            )
+            before = state()
+            self.check(
+                run("set-env", {"UNIFI_INNERSPACE_READ_ONLY": "FAKE-rejected"}).returncode != 0,
+                "innerspace refuses a non-boolean switch",
+            )
+            self.check(state() == before, "innerspace refused switch changes nothing")
+        if target == "claude":
+            before = state()
+            failure_env = dict(environment, FIXTURE_FAIL="register")
+            self.check(
+                run("set-env", {"UNIFI_INNERSPACE_PORT": "8443"}, env=failure_env).returncode != 0,
+                "innerspace client failure is safe",
+            )
+            self.check(state() == before, "innerspace client failure leaves settings intact")
+            legacy_path.parent.mkdir()
+            legacy_path.write_text(
+                json.dumps({"env": {"UNIFI_INNERSPACE_HOST": "192.0.2.20", **shared}}), encoding="utf-8"
+            )
+        before = state()
+        result = run("set-env", extra=("-Migrate" if self.powershell else "--migrate",))
+        self.check(result.returncode != 0, "innerspace refuses legacy migration")
+        if target == "claude":
+            self.check(
+                b"InnerSpace has no legacy settings to migrate" in result.stdout + result.stderr,
+                "innerspace migration gives its own refusal",
+            )
+        self.check(state() == before, "innerspace migration refusal preserves project, keychain and options")
+        if target != "claude":
+            self.check((config / "config.toml").read_text() == 'model = "fixture"\n', "innerspace leaves Codex config")
+            self.check((config / "openclaw.json").read_text() == '{"keep":true}\n', "innerspace leaves OpenClaw config")
+            # Matching file and entry settings, so the conflict check cannot stand in for the refusal.
+            shared_password = {"UNIFI_PASSWORD": shared["UNIFI_PASSWORD"]}
+            for entry_env in (shared_password, {base: password}, None):
+                module.write_private(settings, module.settings_text(entry_env or {}, "unifi-innerspace").encode())
+                entry = {"command": "fixture"}
+                if entry_env is not None:
+                    entry["env"] = entry_env
+                if target == "codex":
+                    write_toml(config / "config.toml", {"mcp_servers": {"unifi-innerspace": entry}})
+                else:
+                    (config / "openclaw.json").write_text(json.dumps({"mcp": {"servers": {"unifi-innerspace": entry}}}))
+                before = state()
+                result = run("set-env", {base: password})
+                self.check(result.returncode != 0, "innerspace refuses a shadowing entry")
+                self.check(
+                    b"A client entry shadows the bundled InnerSpace server" in result.stdout + result.stderr,
+                    "innerspace shadowing entry gives the explicit refusal",
+                )
+                self.check(state() == before, "innerspace shadow refusal preserves entry and settings file")
+        print(
+            f"  [OK] innerspace/{target}: login, write gates, provider switching, refusals, no migration, argv privacy"
+        )
 
     def check_failure_reporting(self):
         output = io.StringIO()

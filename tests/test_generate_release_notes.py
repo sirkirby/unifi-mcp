@@ -362,6 +362,8 @@ def test_innerspace_tag_parsing() -> None:
     "path,group",
     [
         ("apps/innerspace/src/unifi_innerspace_mcp/main.py", "InnerSpace MCP"),
+        ("plugins/unifi-innerspace/skills/unifi-innerspace/SKILL.md", "InnerSpace MCP"),
+        ("plugins/unifi-innerspace-other/SKILL.md", None),
         ("packages/unifi-core/src/unifi_core/innerspace/models/floor_plans.py", "Shared Libraries"),
         ("packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py", "Shared Libraries"),
         (".github/workflows/release-innerspace.yml", "Release Infrastructure"),
@@ -377,8 +379,9 @@ def test_innerspace_release_path_scope(path: str, group: str | None) -> None:
     assert (classified.group_title if classified else None) == group
 
 
-def test_innerspace_release_notes_name_the_package_and_have_no_bundle_group() -> None:
+def test_innerspace_release_notes_name_the_package_and_its_bundle() -> None:
     config = APP_CONFIGS["innerspace"]
     assert config.display_name == "UniFi InnerSpace MCP"
     assert config.install_command.format(version="0.1.0") == "uvx unifi-innerspace-mcp==0.1.0"
-    assert not any("plugins/" in pattern for group in config.path_groups for pattern in group.patterns)
+    plugins = [pattern for group in config.path_groups for pattern in group.patterns if "plugins/" in pattern]
+    assert plugins == ["plugins/unifi-innerspace/"]

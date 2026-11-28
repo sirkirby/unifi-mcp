@@ -171,7 +171,7 @@ These have writable manifest assets updated on tag:
 - Corresponding `.codex-plugin/plugin.json` and `.mcp.codex.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
 - `plugins/unifi-sitemanager/.claude-plugin/plugin.json` and `plugins/unifi-drive/.claude-plugin/plugin.json`
-- InnerSpace has no plugin bundle yet; only `apps/innerspace/server.json` is written back
+- `plugins/unifi-innerspace/.claude-plugin/plugin.json`
 - `apps/*/server.json` (server package version)
 
 **Rule:** Never expect writeback from a library package tag (core, shared, relay, api). Never accept a missing writeback from an app package tag (network, protect, access, sitemanager, innerspace, drive).

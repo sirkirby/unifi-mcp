@@ -225,3 +225,70 @@ def test_sitemanager_product_bundle_cannot_use_worker_only_tools(cloud_repo: Pat
     (cloud_repo / "plugins/unifi-sitemanager/skills/example/SKILL.md").unlink()
     write(cloud_repo, "plugins/unifi-intelligence/skills/example/SKILL.md", "Call `sitemanager_fixture_tool`.\n")
     assert refs.check(cloud_repo) == 1
+
+
+@pytest.fixture
+def innerspace_repo(repo: Path) -> Path:
+    """The InnerSpace plugin pinning a first release tagged on the workspace manifest."""
+    server = {"unifi-innerspace": {"args": ["unifi-innerspace-mcp==0.1.0"]}}
+    write(
+        repo,
+        "plugins/unifi-innerspace/.claude-plugin/plugin.json",
+        json.dumps({"version": "1.0.0", "mcpServers": server}),
+    )
+    write(repo, "plugins/unifi-innerspace/.mcp.codex.json", json.dumps({"mcpServers": server}))
+    manifest = json.loads((ROOT / refs.manifest_path("innerspace")).read_text())
+    write(repo, refs.manifest_path("innerspace"), json.dumps(manifest))
+    release(repo, "innerspace/v0.1.0")
+    return repo
+
+
+INNERSPACE_SKILL = "plugins/unifi-innerspace/skills/example/SKILL.md"
+
+
+def test_innerspace_names_are_tool_references() -> None:
+    assert refs.PREFIXES["innerspace"] == "innerspace"
+    assert [m[0] for m in refs.TOOL_NAME.finditer("Call `innerspace_list_walls`, not unifi_innerspace_mcp.")] == [
+        "innerspace_list_walls",
+        "unifi_innerspace_mcp",
+    ]
+    assert refs.WORKER_TOOL.findall('  name: "innerspace_fixture_tool",\n') == ["innerspace_fixture_tool"]
+
+
+def test_innerspace_domain_and_meta_tools_resolve_from_own_pin(innerspace_repo: Path) -> None:
+    manifest = json.loads((ROOT / refs.manifest_path("innerspace")).read_text())
+    names = sorted(tool["name"] for tool in manifest["tools"])
+    write(innerspace_repo, INNERSPACE_SKILL, "\n".join(f"`{name}`" for name in names) + "\n")
+    assert refs.check(innerspace_repo) == len(names)
+    # InnerSpace counts its domain tools; the meta-tools, support bundle included, are the rest.
+    assert refs.pinned_tool_count(innerspace_repo, "innerspace") == len(manifest["module_map"])
+    meta = {name for name in names if name not in manifest["module_map"]}
+    assert {f"innerspace_{name}" for name in refs.META_TOOLS} <= meta
+
+
+@pytest.mark.parametrize("name", ["innerspace_list_wallz", "innerspace_list_clients", "innerspace_create_plan"])
+def test_unknown_innerspace_tool_is_reported(innerspace_repo: Path, name: str) -> None:
+    write(innerspace_repo, INNERSPACE_SKILL, f"Call `{name}`.\n")
+    with pytest.raises(ValueError, match=rf"SKILL.md:1: {name} is not a tool in innerspace/v0.1.0"):
+        refs.check(innerspace_repo)
+
+
+def test_innerspace_reference_needs_its_own_plugin_pin(repo: Path) -> None:
+    write(repo, SKILL, "Call `innerspace_list_floor_plans`.\n")
+    with pytest.raises(ValueError, match="no unifi-innerspace plugin pins a innerspace release"):
+        refs.check(repo)
+
+
+def test_innerspace_missing_release_tag_never_uses_workspace(innerspace_repo: Path) -> None:
+    git(innerspace_repo, "tag", "-d", "innerspace/v0.1.0")
+    write(innerspace_repo, INNERSPACE_SKILL, "Call `innerspace_list_floor_plans`.\n")
+    with pytest.raises(ValueError, match=r"innerspace/v0\.1\.0 is missing; fetch tags"):
+        refs.check(innerspace_repo)
+
+
+def test_innerspace_product_bundle_cannot_use_worker_only_tools(innerspace_repo: Path) -> None:
+    write(innerspace_repo, WORKER_TOOLS, 'const FIXTURE = {\n  name: "innerspace_fixture_tool",\n};\n')
+    release(innerspace_repo, "worker/v1.0.0")
+    write(innerspace_repo, INNERSPACE_SKILL, "Call `innerspace_fixture_tool`.\n")
+    with pytest.raises(ValueError, match="innerspace_fixture_tool is not a tool in innerspace/v0.1.0"):
+        refs.check(innerspace_repo)

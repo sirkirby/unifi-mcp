@@ -46,13 +46,16 @@ DIRECTORY_CHECKS = re.compile(
 USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
 # Variables the servers resolve with resolve_env, where an empty value counts as unset.
 EMPTY_IS_UNSET = re.compile(
-    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE|INNERSPACE)_(?:HOST|USERNAME|(?:API_)?SSL_FINGERPRINT|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
 )
-RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:PASSWORD|API_KEY)$")
+RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE|INNERSPACE)_(?:PASSWORD|API_KEY)$")
 # Claude option defaults must match today's closed, preview-first behaviour.
 SAFE_DEFAULTS = (
-    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_(?:CREATE|UPDATE|DELETE)$"), False),
-    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE)_TOOL_PERMISSION_MODE$"), "confirm"),
+    (
+        re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE|INNERSPACE)_(?:CREATE|UPDATE|DELETE)$"),
+        False,
+    ),
+    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS|SITEMANAGER|DRIVE|INNERSPACE)_TOOL_PERMISSION_MODE$"), "confirm"),
     (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
 )
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
@@ -798,7 +801,11 @@ def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     assert pins == expected
 
 
-@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name != "unifi-sitemanager"])
+# Site Manager carries no policy or permission options.
+CONSOLE_POLICY_BUNDLES = [name for name in _mcp_bundles() if name != "unifi-sitemanager"]
+
+
+@pytest.mark.parametrize("name", CONSOLE_POLICY_BUNDLES)
 def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> None:
     root = _copy_packaging_tree(tmp_path)
     _edit_json(_claude_manifest(root, name), lambda d: d["userConfig"]["policy_delete"].update(default=True))
@@ -867,7 +874,7 @@ def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
     return env
 
 
-@pytest.mark.parametrize("name", [name for name in _mcp_bundles() if name not in ("unifi-sitemanager", "unifi-drive")])
+@pytest.mark.parametrize("name", [name for name in CONSOLE_POLICY_BUNDLES if name != "unifi-drive"])
 def test_claude_options_resolve_like_unset_variables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, name: str
 ) -> None:
@@ -1035,3 +1042,121 @@ def test_drive_claude_options_never_fall_back_to_shared_console_settings(
 
     resolve({"policy_update": True})
     assert checker.check("file_services", "update") and not checker.check("nfs_connections", "delete")
+
+
+# Claude Code option -> server variable: the console login, TLS and the registration mode only.
+INNERSPACE_OPTIONS = {
+    option: "UNIFI_INNERSPACE_" + option.upper()
+    for option in (
+        "host",
+        "username",
+        "password_file",
+        "password_command",
+        "password",
+        "port",
+        "verify_ssl",
+        "ssl_fingerprint",
+    )
+} | {
+    # The server-level write gates and permission mode, as in the Access bundle.
+    "policy_create": "UNIFI_POLICY_INNERSPACE_CREATE",
+    "policy_update": "UNIFI_POLICY_INNERSPACE_UPDATE",
+    "policy_delete": "UNIFI_POLICY_INNERSPACE_DELETE",
+    "permission_mode": "UNIFI_INNERSPACE_TOOL_PERMISSION_MODE",
+    "registration_mode": "UNIFI_TOOL_REGISTRATION_MODE",
+}
+
+
+def test_innerspace_is_a_session_only_bundle() -> None:
+    bundle = REPO_ROOT / "plugins/unifi-innerspace"
+    claude = _load(bundle / CLAUDE_MANIFEST)
+    codex = _load(bundle / ".codex-plugin/plugin.json")
+    options = claude["userConfig"]
+    assert set(options) == set(INNERSPACE_OPTIONS)
+    assert [name for name, option in options.items() if option.get("sensitive")] == ["password"]
+    # The console port, never the MCP server's own HTTP port.
+    assert options["port"]["default"] == 443
+    assert options["verify_ssl"]["default"] is False
+    assert options["registration_mode"]["default"] == "lazy"
+    # Writes are off and previewed until the user opts in.
+    assert [options[f"policy_{action}"]["default"] for action in ("create", "update", "delete")] == [False] * 3
+    assert options["permission_mode"]["default"] == "confirm"
+    # The same two modes as the other server plugins; confirm stays the default.
+    assert options["permission_mode"]["options"] == ["confirm", "bypass"]
+    env = claude["mcpServers"]["unifi-innerspace"]["env"]
+    assert env == {variable: f"${{user_config.{option}}}" for option, variable in INNERSPACE_OPTIONS.items()}
+    assert claude["version"] == codex["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", claude["version"])
+    pins = set()
+    for filename in (".mcp.codex.json", ".claude-plugin/plugin.json"):
+        server = _load(bundle / filename)["mcpServers"]["unifi-innerspace"]
+        assert server["args"][:2] == ["--python-preference", "system"] and len(server["args"]) == 3
+        assert re.fullmatch(r"unifi-innerspace-mcp==\d+\.\d+\.\d+", server["args"][2])
+        pins.add(server["args"][2])
+    assert len(pins) == 1
+    access = _load(REPO_ROOT / "plugins/unifi-access/.mcp.codex.json")["mcpServers"]["unifi-access"]
+    assert _load(bundle / ".mcp.codex.json")["mcpServers"]["unifi-innerspace"]["env_vars"] == access["env_vars"]
+    # Session login only: no API key and no MCP HTTP port reaches any client.
+    for filename in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".mcp.codex.json"):
+        text = (bundle / filename).read_text(encoding="utf-8")
+        for word in ("API_KEY", "api_key", "3005"):
+            assert word not in text, (filename, word)
+    assert sorted(p.name for p in (bundle / "skills").iterdir()) == [
+        "unifi-innerspace",
+        "unifi-innerspace-setup",
+    ]
+    for filename in (".mcp.json", "hooks.json", "README.md"):
+        assert not (bundle / filename).exists()
+    assert claude["icon"] == codex["interface"]["logo"] == codex["interface"]["composerIcon"] == "./assets/icon.png"
+    assert (bundle / "assets/icon.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert claude["hooks"]["SessionStart"][0]["hooks"][0]["command"].endswith('claude-session-check.sh" innerspace')
+
+
+@pytest.mark.parametrize("host", ["", "FAKE-SENTINEL-host"])
+def test_innerspace_session_hook_prints_no_option_value(tmp_path: Path, host: str) -> None:
+    hook = REPO_ROOT / "plugins/unifi-innerspace/scripts/claude-session-check.sh"
+    options = _load(_claude_manifest(REPO_ROOT, "unifi-innerspace"))["userConfig"]
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "CLAUDE_PROJECT_DIR": str(tmp_path)}
+    env.update({f"CLAUDE_PLUGIN_OPTION_{option.upper()}": f"FAKE-SENTINEL-{option}" for option in options})
+    env.update({variable: f"FAKE-SENTINEL-env-{variable}" for variable in INNERSPACE_OPTIONS.values()})
+    env["CLAUDE_PLUGIN_OPTION_HOST"] = host
+    result = subprocess.run(
+        ["sh", str(hook), "innerspace"], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0
+    assert "FAKE-SENTINEL" not in result.stdout + result.stderr
+    if host:
+        assert result.stdout == ""
+    else:
+        notice = json.loads(result.stdout)
+        assert "unifi-innerspace-setup" in notice["systemMessage"]
+        assert "never an API key" in notice["hookSpecificOutput"]["additionalContext"]
+
+
+def test_innerspace_claude_options_resolve_like_unset_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
+    monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
+    secret = tmp_path / "password"
+    secret.write_text("FAKE-file-password\n", encoding="utf-8")
+    logger = logging.getLogger("test")
+
+    def resolve(values: dict[str, str]) -> None:
+        for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+            monkeypatch.delenv(key)
+        for key, value in _claude_server_env("unifi-innerspace", values).items():
+            monkeypatch.setenv(key, value)
+
+    resolve(dict(host="192.0.2.10", password_file=str(secret)))
+    assert bootstrap.resolve_env("host", env_prefix="INNERSPACE", logger=logger) == "192.0.2.10"
+    # The option's empty siblings are unset: no ambiguity with the file source.
+    assert bootstrap.resolve_env("password", env_prefix="INNERSPACE", logger=logger) == "FAKE-file-password"
+    assert bootstrap.resolve_env("port", env_prefix="INNERSPACE", logger=logger) == "443"
+    assert bootstrap.resolve_env("ssl_fingerprint", env_prefix="INNERSPACE", logger=logger) is None
+    assert bootstrap.validate_registration_mode(logger) == "lazy"
+
+    resolve(dict(ssl_fingerprint="plugin-pin", registration_mode="eager"))
+    assert bootstrap.resolve_env("ssl_fingerprint", env_prefix="INNERSPACE", logger=logger) == "plugin-pin"
+    assert bootstrap.resolve_env("host", env_prefix="INNERSPACE", logger=logger) is None
+    assert bootstrap.validate_registration_mode(logger) == "eager"

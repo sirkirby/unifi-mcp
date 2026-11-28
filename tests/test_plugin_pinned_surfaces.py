@@ -306,3 +306,80 @@ def test_drive_reference_and_skill_counts_name_domain_tools_without_read_only(dr
     assert "| `drive_set_file_service` | Mutate |" in reference
     assert f"It provides {count} domain tools, plus 6 meta-tools." in (drive_repo / DRIVE_SKILL).read_text()
     assert generator.run(drive_repo, check_mode=True) == 0
+
+
+def _innerspace_pin_tag() -> str:
+    """The release tag the shipped InnerSpace bundle pins."""
+    args = json.loads((ROOT / "plugins/unifi-innerspace/.mcp.codex.json").read_text())["mcpServers"][
+        "unifi-innerspace"
+    ]["args"]
+    return "innerspace/v" + args[-1].removeprefix("unifi-innerspace-mcp==")
+
+
+INNERSPACE_TAG = _innerspace_pin_tag()
+INNERSPACE_MANIFEST = "apps/innerspace/src/unifi_innerspace_mcp/tools_manifest.json"
+INNERSPACE_REFERENCE = "plugins/unifi-innerspace/skills/unifi-innerspace/references/innerspace-tools.md"
+
+
+@pytest.fixture
+def innerspace_repo(tmp_path: Path) -> Path:
+    """The shipped bundle and the pinned tag's manifest under that tag, with workspace-only drift after it."""
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "--local", "user.name", "Fixture")
+    git(tmp_path, "config", "--local", "user.email", "fixture@example.invalid")
+    git(tmp_path, "config", "--local", "commit.gpgsign", "false")
+    git(tmp_path, "config", "--local", "core.hooksPath", str(tmp_path / "no-hooks"))
+    bundle = "plugins/unifi-innerspace"
+    for filename in (
+        ".mcp.codex.json",
+        ".claude-plugin/plugin.json",
+        ".codex-plugin/plugin.json",
+        "skills/unifi-innerspace/SKILL.md",
+        "skills/unifi-innerspace/references/innerspace-tools.md",
+    ):
+        write(tmp_path, f"{bundle}/{filename}", (ROOT / bundle / filename).read_text())
+    source = json.loads(git(ROOT, "show", f"{INNERSPACE_TAG}:{INNERSPACE_MANIFEST}"))
+    write(tmp_path, INNERSPACE_MANIFEST, json.dumps(source))
+    release(tmp_path, INNERSPACE_TAG)
+    source["tools"].append({"name": "innerspace_fixture_future", "schema": {"input": {"properties": {}}}})
+    write(tmp_path, INNERSPACE_MANIFEST, json.dumps(source))
+    return tmp_path
+
+
+def test_innerspace_pinned_surface_counts_domain_and_meta_tools(innerspace_repo: Path) -> None:
+    tag, pinned = refs.pinned_manifest(innerspace_repo, "innerspace")
+    assert tag == INNERSPACE_TAG
+    domain = set(pinned["module_map"])
+    names = {tool["name"] for tool in pinned["tools"]}
+    meta = names - domain
+    assert meta == {f"innerspace_{name}" for name in refs.META_TOOLS} | {"innerspace_batch_cancel"}
+    assert "innerspace_fixture_future" not in names
+    assert refs.pinned_tool_count(innerspace_repo, "innerspace") == len(domain)
+
+
+def test_innerspace_shipped_reference_and_skill_match_the_pinned_release(innerspace_repo: Path) -> None:
+    # The shipped files are already generated from the release the bundle pins.
+    assert generator.run(innerspace_repo, check_mode=True) == 0
+    pinned = refs.pinned_manifest(innerspace_repo, "innerspace")[1]
+    domain = len(pinned["module_map"])
+    phrase = f"{domain} domain tools, plus {len(pinned['tools']) - domain} meta-tools"
+    text = (innerspace_repo / INNERSPACE_REFERENCE).read_text()
+    assert text.startswith(f"# InnerSpace Server Tool Reference ({phrase})\n")
+    assert "innerspace_fixture_future" not in text
+    skill = innerspace_repo / "plugins/unifi-innerspace/skills/unifi-innerspace/SKILL.md"
+    assert f"It provides {phrase}." in skill.read_text()
+
+
+def test_innerspace_reference_generator_restores_a_drifted_count(innerspace_repo: Path) -> None:
+    path = innerspace_repo / INNERSPACE_REFERENCE
+    original = path.read_text()
+    path.write_text(re.sub(r"\(\d+ domain tools, plus \d+ meta-tools\)", "(0 tools)", original, count=1))
+    assert generator.run(innerspace_repo, check_mode=True) == 1
+    assert generator.run(innerspace_repo, check_mode=False) == 0
+    assert path.read_text() == original
+
+
+def test_innerspace_missing_release_tag_never_uses_workspace(innerspace_repo: Path) -> None:
+    git(innerspace_repo, "tag", "-d", INNERSPACE_TAG)
+    with pytest.raises(ValueError, match=f"pinned release tag {re.escape(INNERSPACE_TAG)} is missing; fetch tags"):
+        refs.pinned_manifest(innerspace_repo, "innerspace")

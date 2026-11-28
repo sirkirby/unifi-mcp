@@ -200,3 +200,48 @@ def test_sitemanager_counts_are_derived_from_pinned_module_map(
     assert path.read_text().startswith(f"# Site Manager Server Tool Reference ({phrase})\n")
     assert skill.read_text() == f"It provides {phrase}.\n" + meta_text
     assert generator.run(tmp_path, check_mode=True) == 0
+
+
+INNERSPACE_MANIFEST = json.loads(
+    (ROOT / sys.modules["plugin_tool_refs"].manifest_path("innerspace")).read_text(encoding="utf-8")
+)
+INNERSPACE_CATEGORIES = sorted(set(generator.group_by_category(INNERSPACE_MANIFEST, "unifi_innerspace_mcp.tools.")))
+
+
+def innerspace_reference(root: Path, categories=INNERSPACE_CATEGORIES) -> Path:
+    path = generator.reference_path(root, "innerspace")
+    _write(
+        root,
+        str(path.relative_to(root)),
+        "# InnerSpace Server Tool Reference (0 tools)\n\n" + "".join(map(_section, categories)),
+    )
+    return path
+
+
+def test_innerspace_reference_uses_its_title_and_counts_from_the_pinned_manifest(tmp_path: Path, monkeypatch) -> None:
+    domain = len(INNERSPACE_MANIFEST["module_map"])
+    meta = len(INNERSPACE_MANIFEST["tools"]) - domain
+    monkeypatch.setattr(generator, "pinned_manifest", lambda root, product: ("innerspace/v0.1.0", INNERSPACE_MANIFEST))
+    path = innerspace_reference(tmp_path)
+    skill = generator.skill_dir(tmp_path, "innerspace") / "SKILL.md"
+    skill.write_text("It provides 1 domain tools, plus 1 meta-tools.\n")
+    assert "innerspace" in generator.PRODUCTS
+    assert generator.run(tmp_path, check_mode=True) == 1
+    assert generator.run(tmp_path, check_mode=False) == 0
+    # InnerSpace has write tools, so its domain tools are not called read-only.
+    phrase = f"{domain} domain tools, plus {meta} meta-tools"
+    text = path.read_text()
+    assert text.startswith(f"# InnerSpace Server Tool Reference ({phrase})\n")
+    assert skill.read_text() == f"It provides {phrase}.\n"
+    rows = [line.split("`")[1] for line in text.splitlines() if line.startswith("| `")]
+    assert set(rows) == set(INNERSPACE_MANIFEST["module_map"])
+    assert any(line.startswith("| `") and "| Mutate |" in line for line in text.splitlines())
+    assert generator.run(tmp_path, check_mode=True) == 0
+
+
+@pytest.mark.parametrize("missing", INNERSPACE_CATEGORIES)
+def test_innerspace_check_requires_every_category(tmp_path: Path, monkeypatch, missing: str) -> None:
+    monkeypatch.setattr(generator, "pinned_manifest", lambda root, product: ("innerspace/v0.1.0", INNERSPACE_MANIFEST))
+    innerspace_reference(tmp_path, [category for category in INNERSPACE_CATEGORIES if category != missing])
+    assert generator.run(tmp_path, check_mode=False) == 0
+    assert generator.run(tmp_path, check_mode=True) == 1

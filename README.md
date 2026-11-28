@@ -31,7 +31,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 Network, Protect, Access, InnerSpace and Drive each connect to a console you name on your network. Site Manager is different: it reads Ubiquiti's cloud [Site Manager API](https://developer.ui.com/site-manager-api/) at `https://api.ui.com` with one account-wide key, and has nine read-only tools. It counts its domain tools only, without the meta-tools every server registers.
 
-InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and edits walls, attenuation objects and plan settings with confirmation. It has 24 domain tools (nine reads, 15 writes), counted the same way. It has no plugin yet; add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
+InnerSpace reads the floor plans, walls and device placements of the UniFi InnerSpace application on a console, with a console login rather than an API key, and edits walls, attenuation objects and plan settings with confirmation. It has 24 domain tools (nine reads, 15 writes), counted the same way. Install it with `/plugin install unifi-innerspace@unifi-plugins`, or add it to your MCP client with `uvx` or Docker, as [InnerSpace](#innerspace) shows.
 
 Drive reads and manages UniFi Drive, the storage application on a UniFi NAS (UNAS). The NAS is its own console, so Drive logs in to the NAS itself with a local account and never uses the gateway's `UNIFI_HOST` or login. It has 22 domain tools, counted the same way: eighteen reads (system, storage pools, pool usage, disks, shared drives, file services, NFS clients, system log, SMB Trash for personal drives, rsync, network throughput, fan mode, per-disk activity, snapshot settings, snapshots, users, user groups) and four preview-first writes that turn SMB, NFS or Time Machine on or off and add, change or remove NFS clients. None of them can erase a disk or delete a pool or shared drive. See [Drive](#drive).
 
@@ -183,6 +183,8 @@ For an account-wide view from Ubiquiti's cloud, `/plugin install unifi-sitemanag
 
 For a UniFi NAS, `/plugin install unifi-drive@unifi-plugins`, then run its setup skill to give it the NAS address and a local account on the NAS. It never reuses the gateway's host or login.
 
+For floor plans, walls and device placements, `/plugin install unifi-innerspace@unifi-plugins`, then run its setup skill to give it a console host, a local username and a password file or command. It takes no API key.
+
 For the cross-product skills, `/plugin install unifi-intelligence@unifi-plugins`
 also installs the Network and Protect plugins it needs. Claude Code opens no
 options dialog for plugins it installs as dependencies, so run each product's
@@ -311,7 +313,7 @@ It uses stdio by default; HTTP is opt-in on port 3003. See the [Site Manager REA
 
 ### InnerSpace
 
-The InnerSpace server has no plugin yet; add it to your MCP client directly. It reads InnerSpace through a console login, takes no API key, and never reads `UNIFI_API_KEY`. Keep the password in a file only you can read:
+In Claude Code, `/plugin install unifi-innerspace@unifi-plugins` installs it with a setup skill. To add it to another MCP client directly: it reads InnerSpace through a console login, takes no API key, and never reads `UNIFI_API_KEY`. Keep the password in a file only you can read:
 
 ```jsonc
 {
