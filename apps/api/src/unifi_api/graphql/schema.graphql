@@ -3072,7 +3072,7 @@ type NetworkQuery {
   clientWifiDetails(controller: ID!, mac: ID!, site: String! = "default"): ClientWifiDetails
 
   """Query historical traffic flows (Insights > Flows), paginated."""
-  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: Int = null, timeTo: Int = null, searchText: String = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
+  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: BigInt = null, timeTo: BigInt = null, searchText: String = null, risk: [String!] = null, action: [String!] = null, direction: [String!] = null, protocol: [String!] = null, service: [String!] = null, sourceMac: [String!] = null, sourceIp: [String!] = null, sourceNetworkId: [String!] = null, sourcePort: [Int!] = null, destinationDomain: [String!] = null, destinationIp: [String!] = null, destinationPort: [Int!] = null, destinationRegion: [String!] = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
 
   """
   Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
@@ -4293,14 +4293,15 @@ type TrafficFlow {
   direction: String
   count: Int
   durationMilliseconds: Int
-  time: Int
-  flowStartTime: Int
-  flowEndTime: Int
-  bytesTotal: Int
-  bytesRx: Int
-  bytesTx: Int
+  time: BigInt
+  flowStartTime: BigInt
+  flowEndTime: BigInt
+  bytesTotal: BigInt
+  bytesRx: BigInt
+  bytesTx: BigInt
   source: TrafficFlowEndpoint!
   destination: TrafficFlowEndpoint!
+  policies: [TrafficFlowPolicy!]!
 }
 
 """One side (source or destination) of a traffic flow."""
@@ -4311,6 +4312,11 @@ type TrafficFlowEndpoint {
   port: Int
   networkName: String
   zoneName: String
+
+  """
+  Region (uppercase country code) the controller records for the address; null if none.
+  """
+  region: String
   domains: [String!]!
 }
 
@@ -4318,6 +4324,21 @@ type TrafficFlowEndpoint {
 type TrafficFlowPage {
   items: [TrafficFlow!]!
   nextCursor: String
+}
+
+"""A policy that matched a traffic flow."""
+type TrafficFlowPolicy {
+  id: String
+
+  """Policy type, such as FIREWALL or INTRUSION_PREVENTION."""
+  type: String
+
+  """Policy subtype, such as SIGNATURE or CONNTRACK."""
+  internalType: String
+  name: String
+
+  """IPS category; null unless the policy is an IPS match."""
+  ipsCategory: String
 }
 
 """Aggregated Insights > Flows summary (latest-statistics)."""
@@ -4345,7 +4366,7 @@ type TrafficFlowTopApplication {
   V2 traffic-flow category ID used for one-way name annotation. Scoped to the V2 traffic-flow tool family; do not pass it to Integration API DPI tools.
   """
   categoryId: Int
-  bytes: Int
+  bytes: BigInt
   applicationName: String
   categoryName: String
 }
