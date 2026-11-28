@@ -70,3 +70,23 @@ to the Drive tool family — do not pass them to Network, Protect or Access tool
 | `drive_remove_nfs_connection` | Mutate | Removes an NFS client, so it can no longer mount any shared drive. |
 | `drive_update_nfs_connection` | Mutate | Changes an existing NFS client's shared drives and/or async writes. |
 <!-- /AUTO:tools:nfs -->
+
+## Logs
+
+<!-- AUTO:tools:logs -->
+<!-- /AUTO:tools:logs -->
+
+## Performance
+
+<!-- AUTO:tools:performance -->
+<!-- /AUTO:tools:performance -->
+
+## Snapshots
+
+<!-- AUTO:tools:snapshots -->
+<!-- /AUTO:tools:snapshots -->
+
+## Users and Groups
+
+<!-- AUTO:tools:users -->
+<!-- /AUTO:tools:users -->
