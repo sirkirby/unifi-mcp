@@ -27,6 +27,7 @@ DRIVE_CATEGORY_MAP = {
     "log": "logs",
     "performance": "performance",
     "snapshot": "snapshots",
+    "user": "users",
 }
 
 _MANIFEST_PATH = Path(__file__).parent / "tools_manifest.json"

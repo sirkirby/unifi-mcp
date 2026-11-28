@@ -28,6 +28,8 @@ READ_TOOLS = {
     "drive_get_disk_stats",
     "drive_get_snapshot_overview",
     "drive_list_snapshots",
+    "drive_list_users",
+    "drive_list_groups",
 }
 WRITE_TOOLS = {
     "drive_set_file_service",

@@ -1,5 +1,5 @@
 {
-  "count": 26,
+  "count": 28,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "drive_add_nfs_connection": "unifi_drive_mcp.tools.nfs",
@@ -14,11 +14,13 @@
     "drive_get_storage_usage": "unifi_drive_mcp.tools.storage",
     "drive_get_system_info": "unifi_drive_mcp.tools.system",
     "drive_list_disks": "unifi_drive_mcp.tools.storage",
+    "drive_list_groups": "unifi_drive_mcp.tools.users",
     "drive_list_logs": "unifi_drive_mcp.tools.logs",
     "drive_list_nfs_connections": "unifi_drive_mcp.tools.nfs",
     "drive_list_shared_drives": "unifi_drive_mcp.tools.shared_drives",
     "drive_list_snapshots": "unifi_drive_mcp.tools.snapshots",
     "drive_list_storage_pools": "unifi_drive_mcp.tools.storage",
+    "drive_list_users": "unifi_drive_mcp.tools.users",
     "drive_remove_nfs_connection": "unifi_drive_mcp.tools.nfs",
     "drive_set_file_service": "unifi_drive_mcp.tools.file_services",
     "drive_update_nfs_connection": "unifi_drive_mcp.tools.nfs"
@@ -1561,6 +1563,107 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Lists the UniFi OS user groups that shared drive access can be granted to, with id and name. These group IDs are scoped to UniFi Drive user groups; do not pass them as user or shared drive IDs.",
+      "name": "drive_list_groups",
+      "permission_action": "read",
+      "permission_category": "user",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Groups"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Lists the NAS's system log, newest first, as the Drive UI's System Log shows it: time, severity, category, type, event and message. Messages name the users, client addresses, drives and pools involved. Returns one page; pass next_cursor back as cursor, with the same filters, for more.",
       "name": "drive_list_logs",
       "permission_action": "read",
@@ -2110,6 +2213,107 @@
         }
       },
       "title": "List Storage Pools"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
+      "description": "Lists the NAS's users with username, full name, email, status, access level (owner, admin or user), console roles, personal drive and Active Directory flags, and last login. These user IDs are scoped to UniFi Drive users; do not pass them as shared drive or group IDs, or to other products' tools.",
+      "name": "drive_list_users",
+      "permission_action": "read",
+      "permission_category": "user",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "mutation_applied": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For a confirmed write: true when it took effect, false when it did not, null when the outcome is unknown and the change may be live.",
+              "title": "Mutation Applied"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Users"
     },
     {
       "annotations": {

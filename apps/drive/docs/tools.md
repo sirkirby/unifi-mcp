@@ -1,6 +1,6 @@
 # UniFi Drive MCP tools
 
-The Drive server has 20 domain tools: sixteen reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
+The Drive server has 22 domain tools: eighteen reads and four writes that preview first. The six shared meta-tools (`drive_tool_index`, `drive_execute`, `drive_batch`, `drive_batch_status`, `drive_batch_cancel`, `drive_load_tools`) are described in [MCP discovery and meta-tools](../../../docs/tool-index.md); permissions and policy gates are in [permissions.md](permissions.md).
 
 Every tool returns `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Write tools return a preview (`"requires_confirmation": true`) unless called with `confirm=true`, or the server runs in bypass mode.
 
@@ -65,6 +65,19 @@ Reads `GET /proxy/drive/api/v1/snapshots/shared/<name>`. Snapshots come newest f
 
 - Drive allows letters, digits, `_` and single dots in a shared drive name, and that is all this tool accepts. Any other name is refused before a request is sent.
 - Drive answers a name no shared drive has with 403. The tool then checks the shared drive list and reports the drive as not found; a 403 for a listed drive stays a permission error.
+
+
+## Users and groups
+
+Both tools only read. No tool invites, changes or removes a user or group. User IDs and group IDs are separate families, and neither is a shared drive ID.
+
+### `drive_list_users`
+
+No parameters. Reads `GET /proxy/drive/api/v1/users?type=detail`, which adds the status, roles and owner flag that the plain user list lacks. Each user has `id`, `username`, `full_name`, `email` (left out when unset), `status` (`active`, `deactivated` or `pending`), `access_level`, `roles`, `personal_drive_enabled`, `must_change_password`, `linked_to_ad`, `has_ui_account`, `created_at` and `last_login` (left out when the user never logged in). `access_level` is worked out as Drive's web app does it: `owner` for the console owner, `admin` for any account with a console role, `user` for everyone else. `roles` lists the role keys, such as `super_administrator`; a role without a key, such as a custom one, still makes the user an admin but is not listed. Avatar URLs, SSO identifiers and employee numbers are left out.
+
+### `drive_list_groups`
+
+No parameters. Reads `GET /proxy/drive/api/v2/groups`, the UniFi OS user groups that shared drive access can be granted to. Each group has `id` and `name`. A NAS with no user groups returns an empty list.
 
 ## File services
 
