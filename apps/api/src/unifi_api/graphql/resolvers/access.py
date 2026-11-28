@@ -246,7 +246,7 @@ async def _fetch_users(ctx: GraphQLContext, controller: str) -> list:
                 controller,
                 "access",
             )
-            return list(await mgr.list_users())
+            return list(await mgr.list_all_users())
 
     return await ctx.cache.get_or_fetch(key, _do)
 

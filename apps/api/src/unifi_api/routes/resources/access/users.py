@@ -64,7 +64,7 @@ async def list_users(
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
-        all_users = await mgr.list_users()
+        all_users = await mgr.list_all_users()
 
     cursor_obj = None
     if cursor:
@@ -116,7 +116,7 @@ async def get_user(
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
-        all_users = await mgr.list_users()
+        all_users = await mgr.list_all_users()
 
     match = None
     for user in all_users or []:

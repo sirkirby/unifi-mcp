@@ -4036,7 +4036,14 @@ def test_access_list_users_normalizes_nonpositive_or_omitted_limit(limit: int | 
     positional, kwargs = DISPATCH_ARG_TRANSLATORS["access_list_users"](args)
 
     assert positional == ()
-    assert kwargs == {"page_size": 25}
+    assert kwargs == {"limit": None}
+
+
+def test_access_list_users_passes_a_positive_limit_through() -> None:
+    positional, kwargs = DISPATCH_ARG_TRANSLATORS["access_list_users"]({"limit": 40, "compact": True})
+
+    assert positional == ()
+    assert kwargs == {"limit": 40, "compact": True}
 
 
 def test_simple_port_forward_matches_wrapper_empty_port_and_unknown_protocol_fallback() -> None:

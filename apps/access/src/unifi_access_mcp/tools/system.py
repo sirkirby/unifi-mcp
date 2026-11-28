@@ -94,8 +94,7 @@ async def access_list_users(
     """List users with access."""
     logger.info("access_list_users tool called (limit=%s, compact=%s)", limit, compact)
     try:
-        page_size = limit if limit and limit > 0 else 25
-        raw_users = await system_manager.list_users(page_size=page_size, compact=compact)
+        raw_users = await system_manager.list_all_users(compact=compact, limit=limit)
         users = [user_from_controller(u).model_dump(exclude_none=True) for u in raw_users]
         return {"success": True, "data": {"users": users, "count": len(users)}}
     except Exception as e:
