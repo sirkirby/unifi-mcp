@@ -436,6 +436,7 @@ class SystemManager:
         self, request: IpsSuppressionCreate | IpsSuppressionDelete
     ) -> Dict[str, Any]:
         """The signature's entries now and after the change; never writes."""
+        await self._require_ips_suppression_session()
         before = await self._fresh_threat_record("ips_suppression")
         after = self._apply_suppression_change(before, request)
         return {
@@ -450,6 +451,17 @@ class SystemManager:
     async def delete_ips_suppression(self, request: IpsSuppressionDelete) -> WriteVerificationResult:
         """Remove a signature's suppression or one of its targets, save the section once, then verify."""
         return await self._write_ips_suppressions("delete_ips_suppression", request)
+
+    async def _require_ips_suppression_session(self) -> None:
+        """Writing the section needs a Network session; an API key alone reads it but cannot save it."""
+        message = "Changing IPS suppressions requires Network session authentication"
+        try:
+            ready = await self._connection.ensure_session_connected()
+        except Exception as exc:
+            logger.error("Failed to prepare IPS suppression session: %s", type(exc).__name__)
+            raise RuntimeError(message) from None
+        if not ready:
+            raise RuntimeError(message)
 
     @staticmethod
     def _apply_suppression_change(
@@ -469,6 +481,7 @@ class SystemManager:
         self, operation: str, request: IpsSuppressionCreate | IpsSuppressionDelete
     ) -> WriteVerificationResult:
         """Change one fresh copy of the section, post it whole, and verify the signature's entries read back."""
+        await self._require_ips_suppression_session()
         before = await self._fresh_threat_record("ips_suppression")
         merged = self._apply_suppression_change(before, request)
         public_before = self._signature_entries(before, request)

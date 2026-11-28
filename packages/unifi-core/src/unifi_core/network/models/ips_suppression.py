@@ -190,12 +190,16 @@ def _is_signature(alert: dict[str, Any], signature_id: int, gid: int) -> bool:
 
 
 def apply_suppression_create(record: dict[str, Any], request: IpsSuppressionCreate) -> dict[str, Any]:
-    """The section with the suppression added; equal to ``record`` when it is already in place."""
+    """The section with the suppression added; equal to ``record`` when it is already in place.
+
+    Every alert of the signature counts, since the controller can hold duplicates: one ``all`` alert
+    among them suppresses it for all traffic.
+    """
     updated = deepcopy(record)
     alerts = _records(updated.get("alerts"))
-    existing = next((alert for alert in alerts if _is_signature(alert, request.signature_id, request.gid)), None)
+    matching = [alert for alert in alerts if _is_signature(alert, request.signature_id, request.gid)]
     entry = request.tracking_entry()
-    if existing is None:
+    if not matching:
         alert: dict[str, Any] = {"id": request.signature_id, "gid": request.gid}
         if request.signature is not None:
             alert["signature"] = request.signature
@@ -207,15 +211,16 @@ def apply_suppression_create(record: dict[str, Any], request: IpsSuppressionCrea
         return updated
     if entry is None:
         # Global: the signature's targets stay stored, as the controller keeps them, but no longer narrow it.
-        existing["type"] = "all"
+        for alert in matching:
+            alert["type"] = "all"
         return updated
-    if existing.get("type") == "all":
+    if any(alert.get("type") == "all" for alert in matching):
         raise IpsSuppressionConflict(
             "the signature is already suppressed for all traffic; remove that suppression to suppress it per target"
         )
-    tracking = _records(existing.setdefault("tracking", []))
-    if entry not in tracking:
-        tracking.append(entry)
+    if any(entry in _records(alert.get("tracking", [])) for alert in matching):
+        return updated
+    _records(matching[0].setdefault("tracking", [])).append(entry)
     return updated
 
 

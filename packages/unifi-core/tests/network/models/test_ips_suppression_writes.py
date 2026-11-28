@@ -178,6 +178,30 @@ def test_a_target_for_a_globally_suppressed_signature_is_a_conflict():
         apply_suppression_create(RECORD, _create(signature_id=2000002))
 
 
+@pytest.mark.parametrize("global_first", [True, False])
+def test_a_global_duplicate_in_either_order_makes_a_target_a_conflict(global_first):
+    record = deepcopy(RECORD)
+    duplicate = {**deepcopy(GLOBAL), "id": TRACKED["id"]}
+    record["alerts"] = [duplicate, deepcopy(TRACKED)] if global_first else [deepcopy(TRACKED), duplicate]
+    with pytest.raises(IpsSuppressionConflict):
+        apply_suppression_create(record, _create(signature_id=TRACKED["id"]))
+
+
+def test_a_target_held_by_a_duplicate_alert_changes_nothing():
+    record = deepcopy(RECORD)
+    record["alerts"].append(
+        {**deepcopy(TRACKED), "tracking": [{"mode": "ip", "value": "192.0.2.70", "direction": "both"}]}
+    )
+    assert apply_suppression_create(record, _create(signature_id=TRACKED["id"], target="192.0.2.70")) == record
+
+
+def test_making_a_signature_global_marks_every_duplicate():
+    record = deepcopy(RECORD)
+    record["alerts"].append(deepcopy(TRACKED))
+    after = apply_suppression_create(record, _create(signature_id=TRACKED["id"], scope="global", target=None))
+    assert [a["type"] for a in after["alerts"] if a["id"] == TRACKED["id"]] == ["all", "all"]
+
+
 def test_the_generator_id_tells_signatures_apart():
     after = apply_suppression_create(RECORD, _create(signature_id=2000001, gid=3))
     assert len(after["alerts"]) == 3 and after["alerts"][-1]["gid"] == 3
@@ -243,10 +267,11 @@ def test_a_target_of_a_global_suppression_is_a_conflict():
 # --- manager ----------------------------------------------------------------------------------
 
 
-def _manager(*responses):
+def _manager(*responses, session=True):
     connection = MagicMock()
     connection.site = "default"
     connection.request = AsyncMock(side_effect=list(responses))
+    connection.ensure_session_connected = AsyncMock(return_value=session)
     return SystemManager(connection), connection
 
 
@@ -331,3 +356,21 @@ async def test_conflicts_and_missing_suppressions_fail_before_any_write():
     with pytest.raises(UniFiNotFoundError):
         await manager.delete_ips_suppression(_delete(signature_id=2999999))
     assert _posts(connection) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("session", [False, ConnectionError("no session")])
+async def test_without_a_network_session_nothing_is_read_or_sent(session):
+    manager, connection = _manager([deepcopy(RECORD)])
+    if isinstance(session, Exception):
+        connection.ensure_session_connected = AsyncMock(side_effect=session)
+    else:
+        connection.ensure_session_connected = AsyncMock(return_value=session)
+    for call in (
+        manager.create_ips_suppression(_create()),
+        manager.delete_ips_suppression(_delete()),
+        manager.preview_ips_suppression_change(_create()),
+    ):
+        with pytest.raises(RuntimeError, match="requires Network session authentication"):
+            await call
+    connection.request.assert_not_awaited()
