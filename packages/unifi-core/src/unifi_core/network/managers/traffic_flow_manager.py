@@ -181,11 +181,15 @@ class TrafficFlowManager:
         resolved: list[Dict[str, Any]] = []
         seen: set[str] = set()
 
-        def add(mac: Any) -> None:
+        def add(mac: Any) -> bool:
+            """Add a usable MAC; False when the record carries none."""
             canonical = canonical_mac(mac)
-            if canonical is not None and canonical not in seen:
+            if canonical is None:
+                return False
+            if canonical not in seen:
                 seen.add(canonical)
                 resolved.append({"mac": canonical})
+            return True
 
         hosts: list[Any] | None = None
         clients: list[Any] | None = None
@@ -210,9 +214,9 @@ class TrafficFlowManager:
                     str(host.get("host_name") or "").casefold(),
                 }
             ]
-            if matches:
-                for host in matches:
-                    add(host.get("mac"))
+            # A name resolves only to a usable MAC: matching records without one fall through to the
+            # client list, then fail, because an empty host filter would match every client's flows.
+            if any([add(host.get("mac")) for host in matches]):
                 continue
             if self._client_manager is not None:
                 if clients is None:
@@ -226,9 +230,7 @@ class TrafficFlowManager:
                         str(self._client_raw(client).get("hostname") or "").casefold(),
                     }
                 ]
-                if client_matches:
-                    for client in client_matches:
-                        add(self._client_raw(client).get("mac"))
+                if any([add(self._client_raw(client).get("mac")) for client in client_matches]):
                     continue
             raise UnknownSourceHost(name)
         return resolved
