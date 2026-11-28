@@ -49,8 +49,9 @@ dependencies = [
     # require Core 0.4.110. Drive needs no product extra: its client is aiohttp,
     # a Core dependency.
     # IPS signature suppression writes and the traffic-flow client-name filter's
-    # typed no-match error require Core 0.4.111.
-    "unifi-core[network,protect,access]>=0.4.111,<0.5",
+    # typed no-match error require Core 0.4.111; refusing a name that resolves to
+    # no MAC, rather than sending an empty filter, requires Core 0.4.112.
+    "unifi-core[network,protect,access]>=0.4.112,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
