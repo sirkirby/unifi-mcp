@@ -45,6 +45,7 @@ FILTERS = [
     ("service", "service", "service", ["DNS", "HTTPS"]),
     ("source_mac", "sourceMac", "source_mac", ["aa:bb:cc:00:00:01", "aa:bb:cc:00:00:02"]),
     ("source_ip", "sourceIp", "source_ip", ["192.0.2.10", "192.0.2.11"]),
+    ("source_name", "sourceName", "source_host", ["Office-Laptop", "printer"]),
     ("source_network_id", "sourceNetworkId", "source_network_id", ["net-a", "net-b"]),
     ("source_port", "sourcePort", "source_port", [0, 65535]),
     ("destination_domain", "destinationDomain", "destination_domain", ["a.example", "b.example"]),
@@ -291,14 +292,23 @@ async def test_other_controller_failures_are_not_blamed_on_the_filter(api):
 
 
 @pytest.mark.asyncio
-async def test_client_name_filter_is_not_offered(api):
-    body = await _gql(api, 'sourceName: ["client-a"]')
-    assert body.get("errors"), body
-    assert api.queries == []
+async def test_a_client_name_that_matches_nothing_is_a_client_error_without_the_name(api):
+    from unifi_core.network.managers.traffic_flow_manager import UnknownSourceHost
+
+    api.error = UnknownSourceHost("Private-Laptop")
+    response = await _get(api, [("source_name", "Private-Laptop")])
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid traffic-flow filter: no client matched source_name"
+    assert "Private-Laptop" not in response.text
+    body = await _gql(api, 'sourceName: ["Private-Laptop"]')
+    [error] = body["errors"]
+    assert error["message"] == "invalid traffic-flow filter: no client matched source_name"
+    assert error["extensions"]["code"] == "BAD_REQUEST"
+    assert "Private-Laptop" not in str(body)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("param", ["source_name", "source_host", "destination_regions", "Risk"])
+@pytest.mark.parametrize("param", ["source_host", "client_name", "destination_regions", "Risk"])
 async def test_rest_refuses_an_unknown_parameter_instead_of_returning_everything(api, param):
     response = await _get(api, [(param, "x")])
     assert response.status_code == 422

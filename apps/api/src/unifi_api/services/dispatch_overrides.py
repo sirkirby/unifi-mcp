@@ -105,6 +105,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_snmp_settings": ("system_manager", "update_settings"),
     "unifi_update_mdns_settings": ("system_manager", "update_mdns_settings"),
     "unifi_update_threat_management_settings": ("system_manager", "update_threat_management_settings"),
+    "unifi_create_ips_suppression": ("system_manager", "create_ips_suppression"),
+    "unifi_delete_ips_suppression": ("system_manager", "delete_ips_suppression"),
     # Auto-backup update pre-fetches get_autobackup_settings for the preview.
     "unifi_update_autobackup_settings": ("system_manager", "update_autobackup_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
@@ -1112,6 +1114,35 @@ def _translate_threat_management_update(args: dict[str, Any]) -> tuple[tuple[Any
     from unifi_core.network.models.threat_management import threat_management_to_controller_update
 
     return (), {"update_data": threat_management_to_controller_update(args["update_data"])}
+
+
+def _ips_suppression_request(model: Any, args: dict[str, Any], fields: tuple[str, ...]) -> Any:
+    """Build the core request; a refusal names the field and problem, never the rejected value."""
+    from pydantic import ValidationError
+
+    try:
+        return model(**{key: args[key] for key in fields if key in args})
+    except ValidationError as exc:
+        problems = []
+        for error in exc.errors():
+            where = ".".join(str(part) for part in error["loc"])
+            message = error["msg"].removeprefix("Value error, ")
+            problems.append(f"{where}: {message}" if where else message)
+        raise ValueError(f"Invalid IPS suppression arguments: {'; '.join(problems)}") from None
+
+
+def _translate_ips_suppression_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.ips_suppression import IpsSuppressionCreate
+
+    fields = ("signature_id", "gid", "scope", "target", "signature", "category")
+    return (), {"request": _ips_suppression_request(IpsSuppressionCreate, args, fields)}
+
+
+def _translate_ips_suppression_delete(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.ips_suppression import IpsSuppressionDelete
+
+    fields = ("signature_id", "gid", "target", "scope")
+    return (), {"request": _ips_suppression_request(IpsSuppressionDelete, args, fields)}
 
 
 def _translate_vpn_alternate_address(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -2234,6 +2265,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_update_snmp_settings": _spec(_translate_snmp_update, "section", "settings_data"),
     "unifi_update_mdns_settings": _spec(_translate_mdns_update, "update_data"),
     "unifi_update_threat_management_settings": _spec(_translate_threat_management_update, "update_data"),
+    "unifi_create_ips_suppression": _spec(_translate_ips_suppression_create, "request"),
+    "unifi_delete_ips_suppression": _spec(_translate_ips_suppression_delete, "request"),
     "unifi_update_vpn_server_alternate_address": _spec(_translate_vpn_alternate_address, "server_id", "update_data"),
     "unifi_update_teleport_settings": _spec(_translate_teleport_update, "update_data"),
     "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),

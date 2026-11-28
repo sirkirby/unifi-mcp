@@ -61,7 +61,7 @@ Once you're signed in:
   - Health: `/v1/health`
 
 Current Network and Protect read surfaces include Network Traffic Flows
-(`GET /v1/sites/{site_id}/traffic-flows`, `network.trafficFlows`, with the MCP tool's filters except the client name, e.g.
+(`GET /v1/sites/{site_id}/traffic-flows`, `network.trafficFlows`, with the MCP tool's filters, e.g.
 `?risk=medium&risk=high&destination_region=NL`; each flow carries endpoint regions and matched policies; an unknown parameter is refused) and Protect
 Find Anything detection search (`GET /v1/sites/{site_id}/detection-search`,
 `protect.searchDetections`).

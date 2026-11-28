@@ -1,9 +1,15 @@
-"""Threat management mutation acknowledgement with persistence classification."""
+"""Threat management and IPS suppression mutation acknowledgements with persistence classification."""
 
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
 
 
-@register_serializer(tools={"unifi_update_threat_management_settings": {"kind": RenderKind.DETAIL}})
+@register_serializer(
+    tools={
+        "unifi_update_threat_management_settings": {"kind": RenderKind.DETAIL},
+        "unifi_create_ips_suppression": {"kind": RenderKind.DETAIL},
+        "unifi_delete_ips_suppression": {"kind": RenderKind.DETAIL},
+    }
+)
 class ThreatManagementMutationAckSerializer(Serializer):
     @staticmethod
     def serialize(obj) -> dict:

@@ -4697,6 +4697,58 @@
       }
     },
     {
+      "name": "unifi_create_ips_suppression",
+      "product": "network",
+      "category": "system",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "create_ips_suppression",
+      "input_schema": {
+        "properties": {
+          "category": {
+            "description": "IPS category code to store with a new suppression, such as emerging-webapps; the controller refuses an unknown code",
+            "type": "string"
+          },
+          "gid": {
+            "description": "Signature generator ID; 1 for most signatures",
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "scope": {
+            "description": "global suppresses the signature for all traffic; the others only for target in that direction",
+            "enum": [
+              "global",
+              "source",
+              "destination",
+              "both"
+            ],
+            "type": "string"
+          },
+          "signature": {
+            "description": "Signature name to store with a new suppression",
+            "type": "string"
+          },
+          "signature_id": {
+            "description": "Signature ID, as an IPS event reports it",
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "target": {
+            "description": "IPv4 or IPv6 address, or a CIDR subnet such as 192.0.2.0/24; required unless scope is global",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signature_id",
+          "scope"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_create_nat_rule",
       "product": "network",
       "category": "nat",
@@ -5714,6 +5766,48 @@
         },
         "required": [
           "zone_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_delete_ips_suppression",
+      "product": "network",
+      "category": "system",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "delete_ips_suppression",
+      "input_schema": {
+        "properties": {
+          "gid": {
+            "description": "Signature generator ID; 1 for most signatures",
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "scope": {
+            "description": "With target: only the entry in this direction; omit for any direction",
+            "enum": [
+              "source",
+              "destination",
+              "both"
+            ],
+            "type": "string"
+          },
+          "signature_id": {
+            "description": "Signature ID of the suppression",
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "target": {
+            "description": "IPv4 or IPv6 address, or a CIDR subnet such as 192.0.2.0/24 to stop suppressing; omit to remove the signature's whole suppression",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signature_id"
         ],
         "type": "object",
         "additionalProperties": false

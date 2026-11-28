@@ -60,7 +60,7 @@ sys.path.insert(0, sys.argv[1])
 sys.meta_path.insert(0, BlockSiblingApps())
 from unifi_api.services.manifest import ManifestRegistry
 registry = ManifestRegistry.load()
-assert len(registry) == 353
+assert len(registry) == 355
 assert registry.has('unifi_list_clients')
 assert registry.has('protect_list_cameras')
 assert registry.has('access_list_doors')

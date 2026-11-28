@@ -1992,6 +1992,7 @@ Read CyberSecure posture. Gateway device IDs belong to the legacy Network device
 - `service` (query)
 - `source_mac` (query)
 - `source_ip` (query)
+- `source_name` (query)
 - `source_network_id` (query)
 - `source_port` (query)
 - `destination_domain` (query)
