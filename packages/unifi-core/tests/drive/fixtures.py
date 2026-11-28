@@ -276,6 +276,26 @@ def disk_stats() -> dict[str, Any]:
     return copy.deepcopy(_DISK_STATS)
 
 
+def smb_advanced(enabled: bool = True, status: str = "optimal") -> dict[str, Any]:
+    return {
+        "err": None,
+        "type": "single",
+        "data": {"personalDriveRecycleEnabled": enabled, "personalDriveRecycleStatus": status},
+    }
+
+
+def rsync_settings(enabled: bool = False, account: Any = None) -> dict[str, Any]:
+    return {"enable": enabled, "rsyncAccount": copy.deepcopy(account)}
+
+
+def systems_info(ssh_enabled: bool = False) -> dict[str, Any]:
+    return {
+        "err": None,
+        "type": "single",
+        "data": {"sshEnabled": ssh_enabled, "remoteAccessEnabled": False, "firmwareVersion": "6.0.18"},
+    }
+
+
 def storage() -> dict[str, Any]:
     return copy.deepcopy(_STORAGE)
 

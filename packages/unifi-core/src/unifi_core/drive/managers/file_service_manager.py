@@ -1,4 +1,4 @@
-"""File services (SMB, NFS, Time Machine) and NFS client connections.
+"""File services (SMB, NFS, Time Machine, rsync) and NFS client connections.
 
 Writes follow the preview-then-confirm split: a ``plan_*`` method reads the
 current state and returns what would change without writing; ``apply_*``
@@ -56,6 +56,8 @@ from unifi_core.drive.models.services import (
     NfsConnection,
     NfsConnectionInput,
     NfsSharedDriveAccess,
+    RsyncSettings,
+    SmbAdvancedSettings,
     connection_for_put,
     connection_to_controller,
     connections_for_put,
@@ -64,6 +66,8 @@ from unifi_core.drive.models.services import (
     is_world_client,
     nfs_connection_from_api,
     nfs_connections_from_api,
+    rsync_settings_from_api,
+    smb_advanced_settings_from_api,
     validate_client,
 )
 from unifi_core.exceptions import (
@@ -158,7 +162,7 @@ async def _before_the_change(what: str) -> AsyncIterator[None]:
 
 
 class FileServiceManager:
-    """Reads and changes ``/proxy/drive/api/v1/services/...``."""
+    """Reads and changes ``/proxy/drive/api/v1/services/...``; reads ``v2/services/rsync/settings``."""
 
     def __init__(self, connection: DriveConnectionManager, shared_drives: SharedDriveManager) -> None:
         self._connection = connection
@@ -182,6 +186,22 @@ class FileServiceManager:
             self._connection.get(drive_path(1, "services", "settings")),
         )
         return file_services_from_api(smb, nfs, time_machine, settings)
+
+    async def get_smb_advanced_settings(self) -> SmbAdvancedSettings:
+        raw = await self._connection.get(drive_path(1, "services", "smb", "advanced-settings"))
+        if not isinstance(raw, dict):
+            raise UniFiMalformedResponseError("UniFi Drive returned unreadable SMB advanced settings.")
+        return smb_advanced_settings_from_api(raw)
+
+    async def get_rsync_settings(self) -> RsyncSettings:
+        """The rsync service, its account and whether SSH, which it runs over, is on."""
+        raw, system_info = await asyncio.gather(
+            self._connection.get(drive_path(2, "services", "rsync", "settings")),
+            self._connection.get(drive_path(1, "systems", "info")),
+        )
+        if not isinstance(raw, dict) or not isinstance(system_info, dict):
+            raise UniFiMalformedResponseError("UniFi Drive returned unreadable rsync settings.")
+        return rsync_settings_from_api(raw, system_info)
 
     async def _read_nfs_settings(self) -> dict[str, Any]:
         raw = await self._connection.get(drive_path(1, "services", "nfs", "advanced-settings"))

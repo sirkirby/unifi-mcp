@@ -1,9 +1,12 @@
-"""File services (SMB, NFS, Time Machine) and NFS client connections.
+"""File services (SMB, NFS, Time Machine, rsync) and NFS client connections.
 
 Read from ``/proxy/drive/api/v1/services/...``:
 
 * ``{smb|nfs|time-machine}/settings`` -- ``{"enable": bool}``
 * ``settings`` -- the console's network interfaces, i.e. where clients connect
+* ``smb/advanced-settings`` -- ``{"personalDriveRecycleEnabled": bool,
+  "personalDriveRecycleStatus": str}``, the web app's "SMB Trash for Personal
+  Drives" switch and whether every drive could move to it
 * ``nfs/advanced-settings`` -- the NFS connection list, next to other NFS
   settings (``domainName``, ``maxProtocolVersion``, ``security``). A ``PATCH``
   carrying ``connections`` replaces the whole list and leaves the other
@@ -19,6 +22,11 @@ Field model: :class:`NfsConnection` is the list/read shape;
 connection's mutable fields (``MUTABLE_FIELDS``), plus the read-only
 ``error_codes``, which is accepted and ignored so a connection read from the
 list can be passed back unchanged.
+
+``/proxy/drive/api/v2/services/rsync/settings`` answers ``{"enable": bool,
+"rsyncAccount": null | {...}}``. The web app writes the account as
+``{"username", "password"}`` and only tests whether one is set when it reads it;
+:class:`RsyncSettings` keeps whether it is set and its username, never anything else.
 """
 
 from __future__ import annotations
@@ -78,6 +86,39 @@ class FileServices(BaseModel):
     custom_domain: str | None = Field(default=None, description="Custom domain clients use, if one is set")
     network_interfaces: list[NetworkInterface] = Field(
         default_factory=list, description="Interfaces clients can connect to"
+    )
+
+
+class SmbAdvancedSettings(BaseModel):
+    """SMB Trash for personal drives: whether files removed over SMB go to Trash instead of being deleted."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    personal_drive_recycle_enabled: bool | None = Field(
+        default=None,
+        description="Whether files removed over SMB from personal drives go to Trash (SMB Trash for Personal Drives)",
+    )
+    personal_drive_recycle_status: str | None = Field(
+        default=None,
+        description=(
+            "optimal when every personal drive can move removed files to Trash; migrateFirstFailed or "
+            "migrateFailed when one or more cannot yet"
+        ),
+    )
+
+
+class RsyncSettings(BaseModel):
+    """The rsync-over-SSH service other servers use to back up to or from the NAS."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool | None = Field(default=None, description="Whether the rsync service is on")
+    account_configured: bool | None = Field(
+        default=None, description="Whether a dedicated rsync account is set; its password is never returned"
+    )
+    account_username: str | None = Field(default=None, description="Username of that account, if Drive reports it")
+    ssh_enabled: bool | None = Field(
+        default=None, description="Whether the console's SSH is on; rsync runs over SSH and does not work without it"
     )
 
 
@@ -241,6 +282,28 @@ def file_services_from_api(smb: Any, nfs: Any, time_machine: Any, settings: Any)
         time_machine_enabled=flag(as_dict(time_machine).get("enable")),
         custom_domain=text(as_dict(settings).get("customDomain")),
         network_interfaces=interfaces,
+    )
+
+
+def smb_advanced_settings_from_api(raw: Any) -> SmbAdvancedSettings:
+    body = as_dict(raw)
+    return SmbAdvancedSettings(
+        personal_drive_recycle_enabled=flag(body.get("personalDriveRecycleEnabled")),
+        personal_drive_recycle_status=text(body.get("personalDriveRecycleStatus")),
+    )
+
+
+def rsync_settings_from_api(raw: Any, system_info: Any) -> RsyncSettings:
+    """Build :class:`RsyncSettings` from ``rsync/settings`` and ``v1/systems/info`` (for ``sshEnabled``)."""
+    body = as_dict(raw)
+    account = body.get("rsyncAccount")
+    # As the web app tests it: any account object counts as set, even an empty one.
+    configured = None if "rsyncAccount" not in body else isinstance(account, dict) or bool(account)
+    return RsyncSettings(
+        enabled=flag(body.get("enable")),
+        account_configured=configured,
+        account_username=text(as_dict(account).get("username")),
+        ssh_enabled=flag(as_dict(system_info).get("sshEnabled")),
     )
 
 
