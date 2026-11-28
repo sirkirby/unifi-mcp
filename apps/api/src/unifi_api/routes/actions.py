@@ -99,7 +99,8 @@ def _shape_shared_read_result(
         if sort_field and sort_field not in selected:
             hint.pop("sort_default", None)
 
-    if isinstance(data, list):
+    if isinstance(data, list) and data:
+        # No rows show which fields exist, so an empty page keeps the full hint.
         item_fields = [set(item) for item in data if isinstance(item, dict)]
         available = set().union(*item_fields) if item_fields else set()
         guaranteed = set.intersection(*item_fields) if item_fields else set()

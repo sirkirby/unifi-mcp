@@ -1328,3 +1328,65 @@ async def test_action_endpoint_list_vouchers_shaped_uses_shared_view(tmp_path, m
     assert body["data"][0] == {"code": "1234567890", "note": "Guest voucher"}
     manager.get_vouchers.assert_awaited_once_with()
     await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rows", [1, 0])
+async def test_action_endpoint_keeps_the_traffic_flow_page_fields(tmp_path, monkeypatch, rows) -> None:
+    from unifi_api.graphql.types.network.traffic_flow import TrafficFlow
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="network", scopes="admin")
+    flow = {"id": "flow-1", "risk": "low", "time": 1795330583185, "bytes_total": 3_221_225_472}
+    flows = [flow][:rows]
+    page = {
+        "flows": flows,
+        "page_number": 4,
+        "total_element_count": 5000,
+        "total_page_count": 5,
+        "has_next": False,
+        "or_more": False,
+        "truncated": True,
+    }
+    manager = MagicMock()
+    manager.get_traffic_flows = AsyncMock(return_value=page)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_get_traffic_flows",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"within_hours": 1}, "confirm": False},
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"] == [TrafficFlow.from_manager_output(f).to_dict() for f in flows]
+    assert body["render_hint"] == TrafficFlow.render_hint("list")
+    assert body["meta"] == {key: value for key, value in page.items() if key != "flows"}
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_refuses_a_traffic_flow_result_that_is_not_a_page(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="network", scopes="admin")
+    manager = MagicMock()
+    manager.get_traffic_flows = AsyncMock(return_value=[{"id": "flow-1"}])
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_get_traffic_flows",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"within_hours": 1}, "confirm": False},
+        )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"]["kind"] == "serializer_contract_error"
+    await app.state.engine.dispose()

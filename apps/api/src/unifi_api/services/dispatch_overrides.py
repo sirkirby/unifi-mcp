@@ -1812,6 +1812,18 @@ def _innerspace_page_result(result: Any, args: dict[str, Any], _manager: Any) ->
     return page_with_limit(result, args.get("limit", DEFAULT_LIMIT))
 
 
+def _traffic_flows_result(result: Any, _args: dict[str, Any], _manager: Any) -> ShapedReadResult:
+    """A flow page with its paging fields (truncated among them) kept beside the rows."""
+    from unifi_api.graphql.types.network.traffic_flow import TrafficFlow
+
+    if not isinstance(result, dict):
+        return ShapedReadResult({"success": True}, "flows")
+    page = {key: value for key, value in result.items() if key != "flows"}
+    rows = [TrafficFlow.from_manager_output(flow).to_dict() for flow in result.get("flows") or []]
+    render_hints = {key: value for key, value in TrafficFlow.render_hint("list").items() if key != "kind"}
+    return ShapedReadResult({**page, "success": True, "flows": rows}, "flows", render_hints)
+
+
 UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
@@ -1840,6 +1852,7 @@ DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
     "protect_alarm_update_rule": _alarm_facade_result,
     "protect_alarm_delete_rule": _alarm_facade_result,
     "protect_delete_recording": _delete_recording_result,
+    "unifi_get_traffic_flows": _traffic_flows_result,
     "unifi_list_clients": _list_clients_result,
     "unifi_get_alerts": _alerts_result,
     "unifi_get_client_details": _client_details_result,

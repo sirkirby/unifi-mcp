@@ -4059,7 +4059,11 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="Query historical traffic flows (Insights > Flows), paginated.",
+        description=(
+            "Query historical traffic flows (Insights > Flows), paginated. The controller serves at most "
+            "5,000 per query (see truncated), and a broad query can omit medium/high-risk and blocked "
+            "flows that a single-value query returns: query those on their own."
+        ),
     )
     async def traffic_flows(
         self,
@@ -4127,7 +4131,7 @@ class NetworkQuery:
             raise
         items = [TrafficFlow.from_manager_output(f) for f in result.get("flows", [])]
         next_cursor = _encode_flow_cursor(page + 1) if result.get("has_next") else None
-        return TrafficFlowPage(items=items, next_cursor=next_cursor)
+        return TrafficFlowPage(items=items, next_cursor=next_cursor, truncated=bool(result.get("truncated")))
 
     @strawberry.field(
         permission_classes=[IsRead],

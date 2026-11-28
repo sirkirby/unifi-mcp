@@ -7768,46 +7768,6 @@
         "title": "Page[SmartDetectionModel]",
         "type": "object"
       },
-      "Page_TrafficFlowModel_": {
-        "additionalProperties": true,
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/TrafficFlowModel"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          },
-          "render_hint": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Render Hint"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "Page[TrafficFlowModel]",
-        "type": "object"
-      },
       "Page_TrafficRouteModel_": {
         "additionalProperties": true,
         "properties": {
@@ -10949,6 +10909,52 @@
           }
         },
         "title": "TrafficFlowModel",
+        "type": "object"
+      },
+      "TrafficFlowPage": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          },
+          "truncated": {
+            "description": "True when the controller stopped before the window's last flow; narrow the window to read the rest.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "truncated"
+        ],
+        "title": "TrafficFlowPage",
         "type": "object"
       },
       "TrafficFlowPolicyModel": {
@@ -27466,6 +27472,7 @@
     },
     "/v1/sites/{site_id}/traffic-flows": {
       "get": {
+        "description": "The controller serves at most 5,000 flows per query and may leave rarer records out of a broad one: a query with no risk or action filter, or several risk values, can omit medium/high-risk and blocked flows that a single-value query returns. Query risky and blocked flows on their own.",
         "operationId": "get_traffic_flows_v1_sites__site_id__traffic_flows_get",
         "parameters": [
           {
@@ -27887,7 +27894,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_TrafficFlowModel_"
+                  "$ref": "#/components/schemas/TrafficFlowPage"
                 }
               }
             },
