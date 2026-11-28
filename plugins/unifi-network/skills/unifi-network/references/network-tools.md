@@ -1,4 +1,4 @@
-# Network Server Tool Reference (218 tools)
+# Network Server Tool Reference (219 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -593,7 +593,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-16 tools.
+17 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -607,6 +607,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_threat_management_settings` | Read | Get site-wide threat management (IDS/IPS) and traffic identification settings. |
 | `unifi_get_threat_posture` | Read | Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH, including allowlisted gateway signature status. |
 | `unifi_list_backups` | Read | List available backups on the controller. |
+| `unifi_list_ips_suppressions` | Read | List IPS signature suppressions (one entry per signature and target, with scope global, source, destination, or both) and detection exclu... |
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |

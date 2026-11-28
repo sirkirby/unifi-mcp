@@ -11,6 +11,11 @@ existing install.
 
 <!-- New entries go below this line, newest first; the release writeback inserts here. -->
 
+## 2026-11-28 — unifi-network 1.16.0
+
+- Pins `unifi-network-mcp` [0.52.0](https://github.com/sirkirby/unifi-mcp/releases/tag/network/v0.52.0).
+
+
 ## 2026-11-28 — unifi-drive 1.1.1, unifi-network 1.15.1
 
 - The Drive skill counts its 22 tools and says how to use the new ones: page the system log with `next_cursor`, leave disk-stats samples off unless needed, identify scheduled snapshots by their label, and read a user's access level.
