@@ -1,4 +1,4 @@
-# Network Server Tool Reference (217 tools)
+# Network Server Tool Reference (218 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -357,7 +357,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## MAC ACL Rules
 
 <!-- AUTO:tools:acl -->
-5 tools.
+6 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -365,6 +365,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_list_acl_rules` | Read | List MAC ACL rules (Policy Engine) for Layer 2 access control. |
 | `unifi_create_acl_rule` | Mutate | Create a new MAC ACL rule for Layer 2 access control within a VLAN. |
 | `unifi_delete_acl_rule` | Mutate | Delete a MAC ACL rule. |
+| `unifi_set_acl_rule_order` | Mutate | Reorder the MAC ACL rule chain for one network. |
 | `unifi_update_acl_rule` | Mutate | Update an existing MAC ACL rule. |
 <!-- /AUTO:tools:acl -->
 
